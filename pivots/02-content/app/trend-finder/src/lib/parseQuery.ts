@@ -1,4 +1,5 @@
 import type { Format, Platform, Video } from '../types'
+import { platformName } from './metrics'
 
 // What we understood from the search box. Shown back to the user as chips they can remove.
 export interface Interpretation {
@@ -44,12 +45,14 @@ export function interpretMedia(
       ? 'tiktok'
       : /instagram\.com/i.test(url)
         ? 'instagram'
-        : null
+        : /youtube\.com|youtu\.be/i.test(url)
+          ? 'youtube'
+          : null
     : null
 
   const source: MediaSource = image
     ? { kind: 'image', label: image.name, platform: null, previewUrl: image.url }
-    : { kind: 'link', label: platform ? `${platform === 'tiktok' ? 'TikTok' : 'Instagram'} link` : 'video link', platform }
+    : { kind: 'link', label: platform ? `${platformName[platform]} link` : 'video link', platform }
 
   return {
     text: image ? image.name : url!,

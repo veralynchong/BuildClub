@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { IdeaStatus, Video } from '../types'
-import { agoShort, compact, outlierScore, scoreLine, tierName, tierOf, times } from '../lib/metrics'
+import { agoShort, compact, hasDate, hasScore, outlierScore, scoreLine, tierName, tierOf, times, viewsWord } from '../lib/metrics'
 import { Thumb } from './Thumb'
 
 interface Props {
@@ -29,21 +29,34 @@ export function VideoTile({ video, saved, onOpen, onToggleSave, status }: Props)
   return (
     <article className="tile">
       <button className="tile-main" data-video-id={video.id} onClick={onOpen} aria-label={`Open breakdown: ${video.hook}. ${scoreLine(video)}`}>
-        <Thumb video={video} />
+        <Thumb video={video} preview />
         {status && status !== 'saved' && <span className={`tile-status tile-status-${status}`}>{statusBadge[status]}</span>}
         <div className="tile-body">
-          <div className="tile-compare">
-            <span className="cmp-from">{compact(video.medianViews ?? video.followers)}</span>
-            <span className="cmp-arrow" aria-hidden="true">→</span>
-            <span className={`cmp-to score-${tier}`}>{compact(video.views)}</span>
-          </div>
-          <span className="tile-cap">{byFollowers ? 'followers → views' : 'usual views → this video'}</span>
-          <span className={`tier tier-${tier} tile-tier`}>
-            {tierName[tier]} · {times(score)}
-          </span>
+          {hasScore(video) ? (
+            <>
+              <div className="tile-compare">
+                <span className="cmp-from">{compact(video.medianViews ?? video.followers)}</span>
+                <span className="cmp-arrow" aria-hidden="true">→</span>
+                <span className={`cmp-to score-${tier}`}>{compact(video.views)}</span>
+              </div>
+              <span className="tile-cap">{byFollowers ? 'followers → views' : `usual ${viewsWord(video)} → this video`}</span>
+              <span className={`tier tier-${tier} tile-tier`}>
+                {tierName[tier]} · {times(score)}
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="tile-compare">
+                <span className="cmp-to">{compact(video.views)}</span>
+              </div>
+              <span className="tile-cap">{viewsWord(video)}</span>
+            </>
+          )}
           <span className="tile-hook">{video.hook}</span>
           <span className="tile-meta">
-            {video.handle} · {agoShort(video.daysAgo)}
+            {video.handle}
+            {hasDate(video) && ` · ${agoShort(video.daysAgo)}`}
+            {video.comments !== undefined && ` · ${compact(video.comments)} comments`}
           </span>
         </div>
       </button>

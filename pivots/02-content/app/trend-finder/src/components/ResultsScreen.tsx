@@ -6,7 +6,7 @@ import type { Query, Sort } from '../state'
 import type { FormatTrend } from '../lib/metrics'
 import type { Interpretation } from '../lib/parseQuery'
 import type { Answer } from '../lib/answer'
-import { agoShort, compact, outlierScore, platformName, plural, scoreLine, stageText, tierName, tierOf, times } from '../lib/metrics'
+import { agoShort, compact, hasDate, hasScore, outlierScore, platformName, plural, scoreLine, stageText, tierName, tierOf, times, viewsWord } from '../lib/metrics'
 import { VideoTile } from './VideoTile'
 import { BestVideo } from './BestVideo'
 import { PlatformLogo } from './PlatformToggles'
@@ -244,8 +244,13 @@ export function ResultsScreen(p: Props) {
                 )}
                 <strong className="best-hook">"{best.hook}"</strong>
                 <span className="small muted">
-                  {compact(best.views)} views from an account with {compact(best.followers)} followers ·{' '}
-                  {best.handle} · {agoShort(best.daysAgo)} ago
+                  {hasScore(best) && best.platform !== 'reddit'
+                    ? `${compact(best.views)} views from an account with ${compact(best.followers)} followers`
+                    : `${compact(best.views)} ${viewsWord(best)}`}
+                  {best.comments !== undefined && ` · ${compact(best.comments)} comments`}{' '}
+                  ·{' '}
+                  {best.handle}
+                  {hasDate(best) && ` · ${agoShort(best.daysAgo)} ago`}
                 </span>
                 {/* Usual → this video, so the jump reads without decoding the × score. Keyed so it animates once per pick. */}
                 <BestCompare key={best.id} video={best} />

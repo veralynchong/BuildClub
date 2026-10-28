@@ -3,7 +3,7 @@ import type { Client } from '../types'
 import type { Workspace } from '../state'
 import { AGENCY_NAME } from '../state'
 
-export type View = 'overview' | 'search' | 'results' | 'saved' | 'approvals' | 'review' | 'plans' | 'plan' | 'settings'
+export type View = 'overview' | 'search' | 'results' | 'saved' | 'approvals' | 'review' | 'plans' | 'plan' | 'settings' | 'channel'
 
 const paths: Record<string, string> = {
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4.3-4.3',
@@ -11,6 +11,7 @@ const paths: Record<string, string> = {
   approvals: 'M20 6 9 17l-5-5',
   plans: 'M8 4h11v16H8zM5 4v16M11 8h5M11 12h5M11 16h3',
   settings: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4',
+  channel: 'M4 6h16v10H4zM8 20h8M12 16v4M10 9l5 2.5L10 14z',
   overview: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
   out: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10',
 }
@@ -156,12 +157,14 @@ export function Sidebar(p: Props) {
               {item('saved', 'saved', 'Saved ideas', p.counts.saved)}
               {item('approvals', 'approvals', 'Approvals', p.counts.waiting, p.view === 'approvals' || p.view === 'review')}
               {item('plans', 'plans', 'Plans', p.counts.plans, p.view === 'plans' || p.view === 'plan')}
+              {item('channel', 'channel', 'Channel')}
               <div className="side-sep" />
               {item('settings', 'settings', 'Client settings')}
             </>
           ) : (
             <>
               {item('overview', 'overview', 'Overview')}
+              {item('channel', 'channel', 'Channel')}
               <p className="side-hint">Pick a client above to search and save ideas.</p>
             </>
           )}

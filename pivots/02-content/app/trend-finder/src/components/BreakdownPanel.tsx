@@ -4,6 +4,8 @@ import {
   ago,
   clientFit,
   compact,
+  hasDate,
+  hasScore,
   outlierScore,
   platformName,
   scoreLine,
@@ -12,6 +14,7 @@ import {
   tierOf,
   times,
   viewsPerDay,
+  viewsWord,
 } from '../lib/metrics'
 import { useCountUp } from '../lib/motion'
 import { Thumb } from './Thumb'
@@ -89,14 +92,30 @@ export function BreakdownPanel({ video, format, formatAccounts, client, saved, o
   const tier = tierOf(score)
   // The numbers are the point of this panel, so they get their own row of cards.
   const stats = [
-    { label: 'Views', value: compact(shownViews), note: `${compact(video.followers)} followers` },
     {
-      label: 'Shares + saves',
-      value: `${shareSaveRate(video).toFixed(1)}`,
-      unit: 'per 100 views',
-      note: video.saves === null ? 'Instagram hides saves' : `${compact(video.shares)} shares · ${compact(video.saves)} saves`,
+      label: video.platform === 'reddit' ? 'Upvotes' : 'Views',
+      value: compact(shownViews),
+      note:
+        video.comments !== undefined
+          ? `${compact(video.comments)} comments`
+          : video.followers
+            ? `${compact(video.followers)} followers`
+            : 'Follower count not available',
     },
-    { label: 'Growth', value: compact(viewsPerDay(video)), unit: 'views a day', note: `Posted ${ago(video.daysAgo)}` },
+    // Reddit and YouTube search results have no shares or saves to show.
+    ...(video.platform === 'reddit' || video.platform === 'youtube'
+      ? []
+      : [
+          {
+            label: 'Shares + saves',
+            value: `${shareSaveRate(video).toFixed(1)}`,
+            unit: 'per 100 views',
+            note: video.saves === null ? 'Instagram hides saves' : `${compact(video.shares)} shares · ${compact(video.saves)} saves`,
+          },
+        ]),
+    hasDate(video)
+      ? { label: 'Growth', value: compact(viewsPerDay(video)), unit: `${viewsWord(video)} a day`, note: `Posted ${ago(video.daysAgo)}` }
+      : { label: 'Growth', value: '–', unit: '', note: 'Posting date unknown' },
     {
       label: 'Format used by',
       value: String(formatAccounts),
@@ -140,17 +159,25 @@ export function BreakdownPanel({ video, format, formatAccounts, client, saved, o
           </div>
 
           <section className="stats" aria-label="Video analytics">
-            <div className={`stat-card stat-score stat-${tier}`}>
-              <span className="stat-label">Score</span>
-              <div className="stat-score-row">
-                <span className="stat-big">{times(shownScore)}</span>
-                <span className={`tier tier-${tier}`}>{tierName[tier]}</span>
+            {hasScore(video) ? (
+              <div className={`stat-card stat-score stat-${tier}`}>
+                <span className="stat-label">Score</span>
+                <div className="stat-score-row">
+                  <span className="stat-big">{times(shownScore)}</span>
+                  <span className={`tier tier-${tier}`}>{tierName[tier]}</span>
+                </div>
+                <span className="stat-note">{scoreLine(video)}</span>
+                <span className="stat-compare">
+                  {compact(video.medianViews ?? video.followers)} → <strong>{compact(shownViews)}</strong>
+                </span>
               </div>
-              <span className="stat-note">{scoreLine(video)}</span>
-              <span className="stat-compare">
-                {compact(video.medianViews ?? video.followers)} → <strong>{compact(shownViews)}</strong>
-              </span>
-            </div>
+            ) : (
+              <div className="stat-card stat-score">
+                <span className="stat-label">Score</span>
+                <span className="stat-big">–</span>
+                <span className="stat-note">{scoreLine(video)}</span>
+              </div>
+            )}
             {stats.map((m) => (
               <div key={m.label} className="stat-card">
                 <span className="stat-label">{m.label}</span>
@@ -167,7 +194,7 @@ export function BreakdownPanel({ video, format, formatAccounts, client, saved, o
             <section className="block live-facts">
               {video.url && (
                 <a className="btn btn-ghost watch-link" href={video.url} target="_blank" rel="noreferrer">
-                  Watch on TikTok ↗
+                  Watch on {platformName[video.platform]} ↗
                 </a>
               )}
               {video.caption && <p className="caption">{video.caption}</p>}
@@ -183,7 +210,7 @@ export function BreakdownPanel({ video, format, formatAccounts, client, saved, o
           <section className="block">
             <h3>
               {video.live ? 'What we know' : 'Why it worked'}{' '}
-              <span className="ai-tag">{video.live ? 'From TikTok data' : 'Sample · written by hand'}</span>
+              <span className="ai-tag">{video.live ? `From ${platformName[video.platform]} data` : 'Sample · written by hand'}</span>
             </h3>
             <dl className="why">
               <div>
