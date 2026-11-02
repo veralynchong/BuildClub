@@ -1,18 +1,15 @@
-import { useEffect, useState } from 'react'
 import { t } from '../lib/i18n'
+import { useElapsed } from '../lib/useElapsed'
 
 // Live searches run a real scrape per platform, which usually takes 20–60 seconds (cached repeats are instant).
 // `title` names the platforms, or the step when a pasted link or screenshot is being read.
-export function LiveLoading({ query, title }: { query: string; title?: string }) {
-  const [seconds, setSeconds] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => setSeconds((s) => s + 1), 1000)
-    return () => clearInterval(id)
-  }, [])
+// Searches run in the background, so this is a card on the page, not a blocking overlay.
+export function LiveLoading({ query, title, startedAt }: { query: string; title?: string; startedAt: number }) {
+  const seconds = useElapsed(startedAt)
 
   return (
-    <div className="phone-wrap" role="status" aria-live="polite">
-      <div className="reading reading-live">
+    <div className="search-inline" role="status" aria-live="polite">
+      <div className="reading reading-live reading-inline">
         {/* Shimmer placeholders: the shape of the results that are on their way. */}
         <div className="skeleton-grid" aria-hidden="true">
           {[0, 1, 2].map((i) => (
@@ -37,6 +34,7 @@ export function LiveLoading({ query, title }: { query: string; title?: string })
         <span className="small muted">
           {t('find.loading.footer', { seconds })}
         </span>
+        <span className="small muted">{t('find.bg.inline')}</span>
       </div>
     </div>
   )

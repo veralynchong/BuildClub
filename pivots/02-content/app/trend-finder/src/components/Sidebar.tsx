@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Logo } from './Logo'
 import type { Client } from '../types'
 import type { Workspace } from '../state'
 import { useApp } from '../lib/appContext'
 import { t } from '../lib/i18n'
+import { useElapsed } from '../lib/useElapsed'
 
 export type View =
   | 'overview'
@@ -147,11 +148,22 @@ function ClientSwitcher({ clients, workspace, setWorkspace, onAddClient }: Pick<
   )
 }
 
+// A background search's progress: a spinner and the seconds so far, with the full sentence for screen readers.
+function SearchTicker({ q, startedAt }: { q: string; startedAt: number }) {
+  const seconds = useElapsed(startedAt)
+  return (
+    <span className="side-search" role="status" aria-label={t('find.bg.status', { query: q })}>
+      <span className="spin" aria-hidden="true" />
+      <span aria-hidden="true">{t('find.bg.seconds', { seconds })}</span>
+    </span>
+  )
+}
+
 export function Sidebar(p: Props) {
-  const { agency, role, account } = useApp()
+  const { agency, role, account, searching } = useApp()
   const userName = account?.name || (role === 'manager' ? agency.managerName : t('shell.side.teamMember'))
   const inClient = p.workspace !== 'all'
-  const item = (v: View, icon: keyof typeof paths, label: string, count?: number, active = p.view === v) => (
+  const item = (v: View, icon: keyof typeof paths, label: string, count?: number, active = p.view === v, extra?: ReactNode) => (
     <button
       className={`side-link ${active ? 'side-on' : ''}`}
       aria-current={active ? 'page' : undefined}
@@ -162,6 +174,7 @@ export function Sidebar(p: Props) {
     >
       <Icon name={icon} />
       <span>{label}</span>
+      {extra}
       {count ? <span className="side-count">{count}</span> : null}
     </button>
   )
@@ -202,7 +215,14 @@ export function Sidebar(p: Props) {
           {inClient ? (
             <>
               {item('home', 'home', t('shell.side.home'))}
-              {item('search', 'search', t('shell.side.findIdeas'), undefined, p.view === 'search' || p.view === 'results')}
+              {item(
+                'search',
+                'search',
+                t('shell.side.findIdeas'),
+                undefined,
+                p.view === 'search' || p.view === 'results',
+                searching && searching.clientId === p.workspace ? <SearchTicker q={searching.q} startedAt={searching.startedAt} /> : null,
+              )}
               {/* Plans = the board of saved ideas + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
               <div className="side-sep" />

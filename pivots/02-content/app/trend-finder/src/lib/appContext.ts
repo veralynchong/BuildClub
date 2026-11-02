@@ -17,6 +17,8 @@ export interface AppContextValue {
   setLang: (lang: Lang) => void
   // Adds a manager decision to the client's memory.
   recordEvent: (clientId: string, event: ClientEvent) => void
+  // The search running in the background (one at a time); null when idle.
+  searching: { q: string; clientId: string; startedAt: number } | null
 }
 
 export const AppContext = createContext<AppContextValue | null>(null)
