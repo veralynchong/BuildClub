@@ -58,6 +58,8 @@ interface Props {
   // Plans that need action: waiting for approval plus sent back.
   counts: { plans: number }
   onSignOut: () => void
+  // The Remake logo opens the public landing page (still signed in).
+  onLogo: () => void
   onAddClient: () => void
   open: boolean
   onClose: () => void
@@ -169,7 +171,17 @@ export function Sidebar(p: Props) {
       {p.open && <div className="side-scrim" onClick={p.onClose} />}
       <aside className={`sidebar ${p.open ? 'sidebar-open' : ''}`} aria-label={t('shell.side.main')}>
         <div className="side-brand">
-          <Logo height={22} />
+          <button
+            type="button"
+            className="rk-logo-btn"
+            aria-label={t('shell.side.logo')}
+            onClick={() => {
+              p.onClose()
+              p.onLogo()
+            }}
+          >
+            <Logo height={22} />
+          </button>
         </div>
 
         {/* On phones the sidebar is a slide-out menu: close it after a pick so the new screen isn't hidden behind it. */}
