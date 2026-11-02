@@ -53,10 +53,19 @@ export interface Video {
   contentType?: ContentType
 }
 
+export type Framing = 'wide' | 'medium' | 'close_up' | 'extreme_close_up' | 'overhead' | 'pov'
+export type Angle = 'eye_level' | 'high' | 'low' | 'top_down'
+export type Movement = 'static' | 'pan' | 'tilt' | 'push_in' | 'handheld' | 'tracking'
+
 export interface Shot {
   time: string
   shot: string
   text?: string
+  // Camera direction and a one-line filming tip. Optional: older plans and breakdowns have none.
+  framing?: Framing
+  angle?: Angle
+  movement?: Movement
+  tip?: string
   // Script and storyboard (set once the shot is written and drawn; old plans have neither).
   line?: string
   frameImage?: string

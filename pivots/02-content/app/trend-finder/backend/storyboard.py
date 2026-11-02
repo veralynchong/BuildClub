@@ -166,10 +166,16 @@ def openai_image(prompt: str, key: str) -> str:
         return json.loads(resp.read())["data"][0]["b64_json"]
 
 
+def camera_words(shot: Shot) -> str:
+    """The shot's camera direction as a sentence for the image prompt; empty when none is set."""
+    parts = [v.replace("_", " ") for v in (shot.framing, shot.angle, shot.movement) if v]
+    return f" Camera: {', '.join(parts)}." if parts else ""
+
+
 def frame_prompt(shot: Shot, purpose: str, line: str) -> str:
     return ("Storyboard frame for a vertical 9:16 video: a simple black-and-white pencil sketch of the "
             "scene, clear composition, no text, no captions, no watermark. "
-            f"Shot: {shot.shot}. Purpose: {purpose}. The person says: {line or '(no line)'}")
+            f"Shot: {shot.shot}.{camera_words(shot)} Purpose: {purpose}. The person says: {line or '(no line)'}")
 
 
 # ---- routes ------------------------------------------------------------------------------------

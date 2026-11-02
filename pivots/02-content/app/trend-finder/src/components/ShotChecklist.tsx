@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { IdeaStatus, Shot } from '../types'
 import type { Take } from '../lib/takes'
 import { t } from '../lib/i18n'
+import { CameraTags } from './CameraTags'
 import { canEdit, checkFile, checklistProgress, chooseTake, deleteTake, formatSize, listTakes, takesByShot, uploadTake } from '../lib/takes'
 
 interface Props {
@@ -106,6 +107,7 @@ export function ShotChecklist({ ideaId, status, shots, onProgress }: Props) {
                 <div>
                   {s.time && <span className="shot-time">[{s.time}]</span>} {s.shot}
                   {s.text && <span className="shot-text">{t('plan.takes.textOnScreen', { text: s.text })}</span>}
+                  <CameraTags shot={s} />
                 </div>
               </div>
               {grouped[i].length > 0 && (
