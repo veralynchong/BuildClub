@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 import queue
-import random
 import secrets
 import threading
 import time
@@ -17,7 +16,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 import cutting
-import storyboard
+import gen_providers
 
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS generations (id TEXT PRIMARY KEY, idea_id TEXT NOT NULL, node_id TEXT NOT NULL, "
@@ -28,9 +27,7 @@ SCHEMA = (
 )
 
 MODELS_FILE = Path(__file__).parent / "gen_models.json"
-MOCK_DELAY_S = float(os.environ.get("MOCK_GEN_DELAY_S", 2))
 RESTARTED = "The server restarted before this finished. Try again."
-MOCK_FAILED = "Mock failure (the prompt asked for one)."
 COLUMNS = ("id, idea_id, node_id, kind, model, inputs, input_hash, status, est_usd, actual_usd, file, "
            "source_url, error, created_at, finished_at")
 MAX_PROMPT = 4000
@@ -174,37 +171,26 @@ class GenJobs:
                 raise cutting.CutError("That plan doesn't exist.")
             if model["provider"] != "mock":
                 raise cutting.CutError("This model isn't available yet.")
-            name = self._mock(gen_id, model, inputs, folder)
+            name = self._make_mock(gen_id, model, inputs, folder)
             self._finish(gen_id, "done", file=name, actual_usd=0)
-        except cutting.CutError as e:
+        except (cutting.CutError, gen_providers.ProviderError) as e:
             self._finish(gen_id, "failed", error=str(e))
         except Exception as e:
             print(f"[gen] {gen_id} failed: {e}", flush=True)
             self._finish(gen_id, "failed", error="The generation failed. Try again.")
 
-    def _mock(self, gen_id: str, model: dict, inputs: dict, folder: Path) -> str:
-        time.sleep(MOCK_DELAY_S)
-        prompt = inputs.get("prompt") or ""
-        rate = float(os.environ.get("MOCK_GEN_FAIL_RATE", 0) or 0)
-        if "#fail" in prompt or (rate > 0 and random.random() < rate):
-            raise cutting.CutError(MOCK_FAILED)
+    def _make_mock(self, gen_id: str, model: dict, inputs: dict, folder: Path) -> str:
+        """Run the mock adapter and save its file; the real providers are wired in later."""
         folder.mkdir(parents=True, exist_ok=True)
-        if model["kind"] == "image":
-            name = f"{gen_id}.svg"
-            (folder / name).write_text(storyboard.placeholder_svg("body", prompt, "", 0))
-            return name
-        name = f"{gen_id}.mp4"
-        part = folder / f"{gen_id}.part.mp4"
-        duration = inputs.get("duration") or model["durations"][0]
+        job = gen_providers.Job(model, inputs.get("prompt") or "", None, [], inputs.get("duration"), scratch=folder)
+        adapter = gen_providers.adapter_for(model["provider"])
+        result = adapter.poll(job, adapter.submit(job))
+        if result.state != "done":
+            raise cutting.CutError(result.error or "The generation failed. Try again.")
+        name = f"{gen_id}.{result.ext}"
+        part = folder / f"{gen_id}.part.{result.ext}"
         try:
-            r = cutting.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc2=size=1080x1920:rate=30",
-                             "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", str(duration),
-                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-keyint_min", "30",
-                             "-sc_threshold", "0", "-c:a", "aac", "-b:a", "128k", "-shortest",
-                             "-movflags", "+faststart", str(part)])
-            if r.returncode != 0:
-                print(f"[gen] {gen_id} ffmpeg failed: {r.stderr.strip()[-500:]}", flush=True)
-                raise cutting.CutError("The mock video failed. Try again.")
+            part.write_bytes(result.data)
             os.replace(part, folder / name)
         finally:
             part.unlink(missing_ok=True)

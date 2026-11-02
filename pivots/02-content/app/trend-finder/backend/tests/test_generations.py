@@ -6,6 +6,7 @@ import subprocess
 
 import pytest
 
+import gen_providers
 import generations
 import server
 from test_canvas import plan
@@ -14,7 +15,7 @@ from test_takes import store_ideas
 
 @pytest.fixture
 def gen(client, monkeypatch):
-    monkeypatch.setattr(generations, "MOCK_DELAY_S", 0)
+    monkeypatch.setattr(gen_providers, "MOCK_DELAY_S", 0)
     monkeypatch.setattr(server.gen_jobs, "submit", server.gen_jobs.run)  # run inline, no worker thread
     store_ideas(plan("ia"), plan("ib"), plan("iw", "waiting"))
     for i in ("ia", "ib", "iw"):
