@@ -684,6 +684,72 @@ def test_render_project_refuses_a_deleted_voice_file(client, voice_env, monkeypa
     doc = client.get("/api/ideas/ia/edit").json()
     doc["project"]["voiceover"] = [voiced(vid)]
     assert client.put("/api/ideas/ia/edit", json={"version": doc["version"], "project": doc["project"]}).status_code == 200
-    client.delete(f"/api/ideas/ia/edit/voice/{vid}")
+    voice_file = editing.voice_file(server.MEDIA_DIR, "ia", vid)
+    voice_file.unlink()  # the DELETE route refuses while the project uses it
     with pytest.raises(cutting.CutError, match="voiceover file was deleted"):
         editing.render_project(server.db, server.MEDIA_DIR, "ia", tmp_path / "w", tmp_path / "o.mp4", lambda *a: None)
+
+
+# --- fix round 1 ---
+
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="needs ffmpeg")
+def test_live_webm_recording_without_duration_is_accepted(client, setup, monkeypatch, tmp_path):
+    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: [])
+    live = tmp_path / "live.webm"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=d=3", "-c:a", "libopus", "-live", "1",
+                    "-f", "webm", str(live)], check=True)
+    r = put_voice(client, body=live.read_bytes())
+    assert r.status_code == 200, r.text
+    got = r.json()
+    assert abs(got["duration"] - 3) < 0.3
+    stored = next((server.MEDIA_DIR / "ia" / "edit" / "voice").glob(f"{got['id']}.webm"))
+    assert cutting.probe(stored)["duration"] > 2.5  # the stored file has a duration for the renderer
+    assert [p.name for p in stored.parent.iterdir() if p.name.startswith(".")] == []
+
+
+def test_no_duration_after_remux_stays_415(client, voice_env):
+    voice_env["duration"] = 0
+    assert put_voice(client).status_code == 415
+
+
+def seed_voice_gen(client, duration=3.0):
+    folder = server.MEDIA_DIR / "ia" / "gen"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "v.mp3").write_bytes(b"ID3" + b"\0" * 20)
+    with server.db() as conn:
+        return generations.insert_done(conn, "ia", "editor-voice", "voice", "mock-voice", file="v.mp3")["id"]
+
+
+def test_from_gen_applies_the_upload_checks(client, voice_env):
+    gid = seed_voice_gen(client)
+    ok = client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}")
+    assert ok.status_code == 200 and ok.json()["words"][0]["text"] == "hello"
+    voice_env["duration"] = 121
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 422
+    voice_env["duration"], voice_env["hasAudio"] = 3.0, False
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 415
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    assert len([p for p in folder.iterdir()]) == 2  # only the one good import (audio + words); no part files
+
+
+def test_words_error_is_scrubbed_and_capped(client, voice_env, monkeypatch):
+    def boom(wav, work):
+        raise cutting.CutError("Finding the words failed: cannot open /Users/x/secret/a.wav " + "z" * 400)
+    monkeypatch.setattr(cutting, "transcribe_words", boom)
+    err = put_voice(client).json()["wordsError"]
+    assert "/Users" not in err and "<path>" in err and len(err) <= editing.MAX_ERROR_CHARS
+
+
+def test_delete_voice_in_use_is_409(client, voice_env):
+    vid = put_voice(client).json()["id"]
+    p = {**project(clip()), "voiceover": [voiced(vid)]}
+    assert client.put("/api/ideas/ia/edit", json={"version": 0, "project": p}).status_code == 200
+    r = client.delete(f"/api/ideas/ia/edit/voice/{vid}")
+    assert r.status_code == 409 and r.json()["error"] == editing.VOICE_IN_USE
+    assert client.get(f"/api/ideas/ia/edit/voice/{vid}/file").status_code == 200
+    assert client.put("/api/ideas/ia/edit", json={"version": 1, "project": project(clip())}).status_code == 200
+    assert client.delete(f"/api/ideas/ia/edit/voice/{vid}").status_code == 200

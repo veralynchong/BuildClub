@@ -61,6 +61,7 @@ VOICE_MIME = {ext: mime for mime, ext in VOICE_TYPES.items()}
 VOICE_SOURCES = ("tts", "recording", "upload")
 NOT_AUDIO = "Upload an audio recording: WebM, Ogg, MP3, M4A or WAV."
 VOICE_TOO_BIG = "The audio is over the 20 MB limit."
+VOICE_IN_USE = "Remove this voiceover from the timeline first."
 VOICE_TOO_LONG = f"The audio is longer than {MAX_VOICE_S} seconds."
 
 
@@ -599,23 +600,35 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             path.with_name(f"{vid}.words.json").write_text(json.dumps(words))
             out["words"] = words
         except cutting.CutError as e:
-            out["wordsError"] = str(e)
+            msg = str(e)  # our own NO_WHISPER sentence stays whole; anything else may quote ffmpeg, so scrub paths
+            out["wordsError"] = msg if msg == cutting.NO_WHISPER else PATH_RE.sub("<path>", msg)[:MAX_ERROR_CHARS]
         return out
 
-    def store_voice(idea_id: str, source: Path, ext: str, move: bool):
-        """Put `source` in the plan's voice folder under a new id: (vid, final path), or an error response."""
+    def store_voice(idea_id: str, source: Path, ext: str):
+        """Move `source` into the plan's voice folder under a new id: (vid, final path), or an error response."""
         folder = voice_folder(media_dir(), idea_id)
         if folder is None:
             return error(404, "That plan doesn't exist.")
         folder.mkdir(parents=True, exist_ok=True)
         vid = secrets.token_urlsafe(9)
         final = folder / f"{vid}.{ext}"
-        (os.replace if move else shutil.copyfile)(source, final)
+        os.replace(source, final)
         return vid, final
 
     def finish_upload(idea_id: str, part: Path, ext: str):
         try:
             info = cutting.probe(part)
+            if info.get("hasAudio") and not info["duration"] > 0:
+                # MediaRecorder streams WebM without a duration: copy the audio into a fresh container, which has one
+                fixed = part.with_name(f"{part.name}.remux.{ext}")
+                try:
+                    cutting._ffmpeg(["-i", str(part), "-c", "copy", str(fixed)], "Reading the recording")
+                    info = cutting.probe(fixed)
+                    if not info["duration"] > 0:
+                        raise cutting.CutError(NOT_AUDIO)
+                    os.replace(fixed, part)
+                finally:
+                    fixed.unlink(missing_ok=True)
         except cutting.CutError:
             part.unlink(missing_ok=True)
             return error(415, NOT_AUDIO)
@@ -625,7 +638,7 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         if info["duration"] > MAX_VOICE_S:
             part.unlink(missing_ok=True)
             return error(422, VOICE_TOO_LONG)
-        stored = store_voice(idea_id, part, ext, move=True)
+        stored = store_voice(idea_id, part, ext)
         if isinstance(stored, JSONResponse):
             part.unlink(missing_ok=True)
             return stored
@@ -717,14 +730,18 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         return await run_in_threadpool(import_generated, idea_id, source)
 
     def import_generated(idea_id: str, source: Path):
+        folder = voice_folder(media_dir(), idea_id)
+        if folder is None:
+            return error(404, "That plan doesn't exist.")
+        folder.mkdir(parents=True, exist_ok=True)
+        ext = source.suffix.lstrip(".") or "mp3"
+        part = folder / f".{secrets.token_urlsafe(9)}.part.{ext}"
         try:
-            info = cutting.probe(source)
-        except cutting.CutError:
-            return error(422, "That voiceover's file can't be read.")
-        stored = store_voice(idea_id, source, source.suffix.lstrip(".") or "mp3", move=False)
-        if isinstance(stored, JSONResponse):
-            return stored
-        return voice_response(idea_id, stored[0], stored[1], info["duration"])
+            shutil.copyfile(source, part)
+        except OSError:
+            part.unlink(missing_ok=True)
+            return error(404, "That voiceover's file is gone.")
+        return finish_upload(idea_id, part, ext)  # the same checks as an upload
 
     @router.get("/api/ideas/{idea_id}/edit/voice/{vid}/file")
     def get_voice(idea_id: str, vid: str):
@@ -744,6 +761,10 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         path = voice_file(media_dir(), idea_id, vid)
         if path is None:
             return error(404, "That voiceover doesn't exist.")
+        with db() as conn:
+            saved = read(conn, idea_id)[1]
+        if any(isinstance(v, dict) and v.get("id") == vid for v in saved.get("voiceover") or []):
+            return error(409, VOICE_IN_USE)
         path.unlink(missing_ok=True)
         path.with_name(f"{vid}.words.json").unlink(missing_ok=True)
         return {"ok": True}
