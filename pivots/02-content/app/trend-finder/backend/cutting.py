@@ -106,6 +106,19 @@ def keep_intervals(words: list[Word], silences: list[tuple[float, float]], total
     return keeps
 
 
+def build_clean_graph(keeps: list[tuple[float, float]]) -> str:
+    """filter_complex joining the kept intervals of input 0 (the take itself) into [v] and [a]. Audio gets a
+    short fade at every seam; the picture keeps its size and frame rate."""
+    parts = []
+    for i, (a, b) in enumerate(keeps):
+        fade = f"afade=t=in:d={num(FADE)},afade=t=out:st={num(b - a - FADE)}:d={num(FADE)}"
+        parts.append(f"[0:v]trim=start={num(a)}:end={num(b)},setpts=PTS-STARTPTS[v{i}]")
+        parts.append(f"[0:a]atrim=start={num(a)}:end={num(b)},asetpts=PTS-STARTPTS,{fade}[a{i}]")
+    joined = "".join(f"[v{i}][a{i}]" for i in range(len(keeps)))
+    parts.append(f"{joined}concat=n={len(keeps)}:v=1:a=1[v][a]")
+    return ";\n".join(parts)
+
+
 def describe_trims(keeps: list[tuple[float, float]], words: list[Word], durations: list[float],
                    total: float) -> list[dict]:
     """What the auto-cut removed, per take: [{shot, kind: 'pause'|'filler', start, end}] with start/end in

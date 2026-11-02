@@ -55,6 +55,7 @@ import generations
 import renders
 import shotlist
 import storyboard
+import cleaning
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
 from compare import CompareJobs, compare_id_for
@@ -907,6 +908,7 @@ app.include_router(comments.make_router(load, save))
 app.include_router(google_auth.make_router(db, session_cookie_secure))
 app.include_router(publishing.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(takes.make_router(db, load, lambda: MEDIA_DIR))
+app.include_router(cleaning.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(production.make_router(db))
 def storyboard_budget(wallet: str, usd: float):
     """None when the paid call may go ahead, else the 429 to return. Frame images use the generation wallet."""

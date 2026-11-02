@@ -65,3 +65,15 @@ def test_real_whisper_on_say_audio(tmp_path):
 def test_run_times_out_with_a_human_sentence():
     with pytest.raises(cutting.CutError, match="took too long"):
         cutting.run(["sleep", "5"], timeout=0.2)
+
+
+@need_ffmpeg
+def test_build_clean_graph_cuts_the_gap(tmp_path):
+    src = make_clip(tmp_path / "a.mp4", GAP_CLIP)
+    out = tmp_path / "out.mp4"
+    graph = tmp_path / "g.txt"
+    graph.write_text(cutting.build_clean_graph([(0, 1.12), (2.38, 3.5)]))
+    cutting._ffmpeg(["-i", str(src), "-/filter_complex", str(graph), "-map", "[v]", "-map", "[a]",
+                     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(out)], "clean")
+    info = cutting.probe(out)
+    assert info["duration"] == pytest.approx(2.24, abs=0.05) and info["hasAudio"] and info["acodec"] == "aac"
