@@ -265,7 +265,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
         {tool === 'music' && <MusicTool ideaId={ideaId} project={project} file={musicFile} onFile={setMusicFile} readOnly={locked} onProject={update} />}
         {tool === 'brand' && <BrandTool client={client} project={project} readOnly={locked} onProject={update} />}
       </div>
-      <ExportBar ideaId={ideaId} edit={edit} timeline={timeline} readOnly={locked} />
+      <ExportBar ideaId={ideaId} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} />
       <section className="cv-ed-sources" aria-label={t('editor.sources.title')}>
         <h3>{t('editor.sources.title')}</h3>
         {sourceError && <ErrorText text={sourceError} />}

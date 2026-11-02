@@ -16,12 +16,13 @@ interface Props {
   edit: EditHook
   timeline: TimelineActions
   readOnly: boolean
+  brandKey: string // changes when the client's logo, colour or font does, which also makes a finished video out of date
 }
 
 const isActive = (c: CutState | null) => c?.status === 'queued' || c?.status === 'running'
 
 // Export the timeline as a video, show the render's progress, then preview it and send it for review.
-export function ExportBar({ ideaId, edit, timeline, readOnly }: Props) {
+export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey }: Props) {
   const [cut, setCut] = useState<CutState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pollDead, setPollDead] = useState(false) // the polling failed while the export was active
@@ -71,9 +72,13 @@ export function ExportBar({ ideaId, edit, timeline, readOnly }: Props) {
     }
   }, [ideaId, track])
 
-  // A saved edit can make the finished video out of date (for example after applying a newer version): look again.
+  // A saved edit can make the finished video out of date (for example after applying a newer version), and so can a
+  // new brand kit: look again. The brand kit is saved on its own, so it needs no saved edit.
+  const seenBrand = useRef(brandKey)
   useEffect(() => {
-    if (edit.save !== 'saved') return
+    const brandChanged = seenBrand.current !== brandKey
+    seenBrand.current = brandKey
+    if (edit.save !== 'saved' && !brandChanged) return
     const ac = new AbortController()
     getCut(ideaId).then(
       (state) => {
@@ -84,7 +89,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly }: Props) {
       () => undefined, // the polling and the export button report real failures
     )
     return () => ac.abort()
-  }, [ideaId, edit.save, track])
+  }, [ideaId, edit.save, brandKey, track])
 
   const blockOf = (project: EditProject | null): Key | null =>
     project ? exportBlocked(project, Object.fromEntries(project.clips.map((c) => [c.id, timeline.statusOf(c).state] as [string, ClipStatus['state']]))) : 'editor.export.empty'
