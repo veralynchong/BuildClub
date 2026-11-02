@@ -1,5 +1,6 @@
 import { PlatformLogo, type LogoPlatform } from '../PlatformToggles'
 import { Logo } from '../Logo'
+import { playerUrl } from '../../lib/tiktokPlayer.ts'
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
 
 // Public landing page, built to the conversion flow in docs/landing-page-flow.md (sections 0–10)
@@ -11,8 +12,17 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Synt
 const CTA = 'Try the demo'
 
 // Placeholder for a photo or video that will be supplied later. The label says what goes there.
-function Media({ kind, label, ratio, className = '' }: { kind: 'photo' | 'video'; label: string; ratio: string; className?: string }) {
+function Media({ kind, label, ratio, className = '', cover, tiktokId }: { kind: 'photo' | 'video'; label: string; ratio: string; className?: string; cover?: string; tiktokId?: string }) {
   const name = kind === 'video' ? 'Video' : 'Photo'
+  if (cover) {
+    // A real video: its cover fills the box; with an id, TikTok's own player plays over it.
+    return (
+      <div className={`rk-ph rk-ph-${kind} ${className}`} style={{ aspectRatio: ratio, backgroundImage: `url(${cover})`, backgroundSize: 'cover', backgroundPosition: 'center' }} role="img" aria-label={label}>
+        <span className="rk-ph-tag"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 5.5v13l10-6.5z" fill="currentColor" /></svg></span>
+        {tiktokId && <iframe className="rk-ph-player" src={playerUrl(tiktokId, 'full')} title={label} allow="autoplay; fullscreen" referrerPolicy="origin" loading="lazy" />}
+      </div>
+    )
+  }
   return (
     <div className={`rk-ph rk-ph-${kind} ${className}`} style={{ aspectRatio: ratio }} role="img" aria-label={`${name} placeholder: ${label}`}>
       <span className="rk-ph-tag">
@@ -53,7 +63,7 @@ function Icon({ name }: { name: keyof typeof ICONS }) {
 
 // Section 1b: one search ("tofu") for one sample client. Hovering (or focusing) a pick fades its video in above the card
 // card below it; clicking opens the full preview (PickPreview), whose button opens the demo app.
-// Sample data only: the accounts and numbers are made up for the landing page.
+// The three videos are real TikTok videos from a saved "tofu" search; views are the video's, "usually" is the account's median.
 type Pick = {
   title: string
   score: string
@@ -63,6 +73,9 @@ type Pick = {
   views: string
   // Why it's worth copying for this client, in one or two sentences (preview only).
   reason: string
+  // The real TikTok video: its id (for the player) and a local copy of its cover.
+  tiktokId?: string
+  cover?: string
   // What the agency would film, 3–4 shots with a start time (preview only).
   shots?: [time: string, shot: string][]
   blocked?: string
@@ -74,45 +87,50 @@ const PICKS: Record<ClientKey, { name: string; about: string; picks: Pick[] }> =
     about: 'Plant-based meals · has a test kitchen',
     picks: [
       {
-        title: 'Crispy tofu, three ways',
-        score: '42×',
-        why: 'Easy to film in their kitchen. Fits the weekly recipe slot.',
-        account: '@saucyplants',
-        views: '1.4M views · usually 33K',
-        reason: 'Evergreen already posts a weekly recipe from its test kitchen. This is three quick cooks of one product, so the team can film it in an afternoon with no new gear.',
+        title: 'Eating tofu, 6 ways',
+        score: '52×',
+        why: 'One block, six quick recipes. Easy to film in their kitchen.',
+        account: '@superbenito3',
+        views: '18.1M views · usually 350K',
+        tiktokId: '7671729723533217038',
+        cover: '/landing/tofu-6-ways.jpg',
+        reason: 'One person, one counter and a block of tofu. Evergreen’s test kitchen can film the same “one product, six ways” format in an afternoon with no new gear.',
         shots: [
-          ['0:00', 'Close-up: the tofu block drops onto the board'],
-          ['0:03', 'Press and cube it, sped up'],
-          ['0:08', 'Three pans side by side, one per recipe'],
-          ['0:20', 'Crunch test, then the pack shot'],
+          ['0:00', 'Hook on screen: “Tofu, 6 ways”, block on the board'],
+          ['0:03', 'Cut and prep the block, sped up'],
+          ['0:10', 'Taste each of the six dishes in turn'],
+          ['0:30', 'Pack shot and where to buy it'],
         ],
       },
       {
-        title: 'Tofu blind taste test',
-        score: '18×',
-        why: 'Street interviews. Shows the product in real hands.',
-        account: '@streeteats.syd',
-        views: '410K views · usually 23K',
-        reason: 'Real people tasting the product sells it better than an ad. One person with a phone and a tray of samples can film this outside a shop.',
+        title: 'Welcher Tofu schmeckt euch am besten?',
+        score: '172×',
+        why: 'A first taste of one store product. Shows the pack up close.',
+        account: '@siiielle',
+        views: '84K views · usually 492',
+        tiktokId: '7417826857640332577',
+        cover: '/landing/dm-bio-tofu.jpg',
+        reason: 'A first-taste reaction to a single pack, with the pack held up to the camera. Real people trying the product sells it better than an ad, and one person with a phone can film it.',
         shots: [
-          ['0:00', 'Hook: “Can you tell which one is tofu?”'],
-          ['0:02', 'Three strangers taste, faces close up'],
-          ['0:12', 'The reveal'],
-          ['0:18', 'Pack shot and where to buy it'],
+          ['0:00', 'Hook: “First time buying this tofu”, pack up to the camera'],
+          ['0:03', 'Open the pack and show the tofu'],
+          ['0:10', 'First taste, reaction in close-up'],
+          ['0:20', 'Verdict and where to buy it'],
         ],
       },
       {
-        title: '15-minute tofu meal prep',
-        score: '11×',
-        why: 'Matches their "quick dinners" posts.',
-        account: '@prepwithpri',
-        views: '260K views · usually 24K',
-        reason: 'It fits Evergreen’s “quick dinners” posts. The timer on screen gives people a reason to watch to the end.',
+        title: 'POV: you’re plant-based and too lazy to cook',
+        score: '2,214×',
+        why: 'A short, relatable clip. Matches their “quick dinners” posts.',
+        account: '@margo_miuller',
+        views: '1.9M views · usually 858',
+        tiktokId: '7664114209537412365',
+        cover: '/landing/plant-based-pov.jpg',
+        reason: 'A six-second clip built on one line of on-screen text and a block of tofu. It fits Evergreen’s “quick dinners” posts, and it takes minutes to shoot.',
         shots: [
-          ['0:00', 'Timer starts on screen'],
-          ['0:02', 'Chop and fry, filmed from above'],
-          ['0:15', 'Fill four lunch boxes'],
-          ['0:25', 'Into the fridge, timer stops at 15:00'],
+          ['0:00', 'On-screen text: “POV: you’re plant-based and too lazy to cook”'],
+          ['0:02', 'Tofu straight from the pack, to camera'],
+          ['0:05', 'Reaction, then the pack shot'],
         ],
       },
     ],
@@ -141,6 +159,19 @@ function MiniDemo({ onPreview }: { onPreview: (p: Preview) => void }) {
   const client: ClientKey = 'evergreen'
   const c = PICKS[client]
   const [platform, setPlatform] = useState<LogoPlatform>('tiktok')
+  // Which pick's video is playing in its hover card. Set after a short pause so scrolling past loads nothing; mouse only.
+  const [hover, setHover] = useState<string | null>(null)
+  const hoverTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), [])
+  const startHover = (e: React.PointerEvent, id?: string) => {
+    if (!id || e.pointerType !== 'mouse') return
+    window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = window.setTimeout(() => setHover(id), 300)
+  }
+  const stopHover = () => {
+    window.clearTimeout(hoverTimer.current)
+    setHover(null)
+  }
   return (
     <div className="rk-demo" aria-label={`Example: a search for tofu, picked for ${c.name}`}>
       <div className="rk-demo-bar">
@@ -172,14 +203,14 @@ function MiniDemo({ onPreview }: { onPreview: (p: Preview) => void }) {
         <p className="rk-demo-about">{c.about}</p>
         <ul className="rk-demo-picks">
           {c.picks.map((p, i) => (
-            <li key={p.title} style={{ '--i': i } as CSSProperties}>
+            <li key={p.title} style={{ '--i': i } as CSSProperties} onPointerEnter={(e) => startHover(e, p.tiktokId)} onPointerLeave={stopHover}>
               <button
                 type="button"
                 className={`rk-pick${p.blocked ? ' is-blocked' : ''}`}
                 aria-haspopup="dialog"
                 onClick={(e) => onPreview({ client, index: i, opener: e.currentTarget })}
               >
-                <Media kind="video" label="Trending video" ratio="9 / 16" className="rk-pick-thumb" />
+                <Media kind="video" label={`Trending video: ${p.title}`} ratio="9 / 16" className="rk-pick-thumb" cover={p.cover} />
                 <span className="rk-pick-text">
                   <span className="rk-pick-title">{p.title}</span>
                   <span className="rk-pick-meta">{p.account} · {p.views}</span>
@@ -189,7 +220,8 @@ function MiniDemo({ onPreview }: { onPreview: (p: Preview) => void }) {
               </button>
               {/* On hover or keyboard focus: the video alone, fading in just above its own card. Decorative copy of the thumb. */}
               <div className="rk-hovercard" aria-hidden="true">
-                <div className="rk-hovercard-video">
+                <div className="rk-hovercard-video" style={p.cover ? { backgroundImage: `url(${p.cover})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
+                  {p.tiktokId && hover === p.tiktokId && <iframe className="rk-ph-player" src={playerUrl(p.tiktokId, 'preview')} title="" allow="autoplay" referrerPolicy="origin" tabIndex={-1} aria-hidden="true" />}
                   <span className="rk-hovercard-playing">
                     <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 5.5v13l10-6.5z" fill="currentColor" /></svg>
                     Playing
@@ -261,7 +293,7 @@ function PickPreview({ preview, onClose, onDemo }: { preview: Preview; onClose: 
         onKeyDown={trapTab}
       >
         <div className={`rk-modal-media rk-dots${pick.blocked ? ' is-blocked' : ''}`}>
-          <Media kind="video" label={`Trending video: ${pick.title}`} ratio="9 / 16" className="rk-modal-video" />
+          <Media kind="video" label={`Trending video: ${pick.title}`} ratio="9 / 16" className="rk-modal-video" cover={pick.cover} tiktokId={pick.tiktokId} />
         </div>
         <div className="rk-modal-body">
           <div className="rk-modal-scroll">
