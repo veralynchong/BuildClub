@@ -854,3 +854,102 @@ def test_recover_fails_waiting_row_without_upstream(real):
     assert got["status"] == "failed" and got["error"] == generations.START_FRAME_LOST
     generations.recover(server.db, server.gen_jobs)
     assert real.refunds == [("video", 0.192)]
+
+
+# --- final review fixes: imported frames as inputs (I1), required prompt (I3), rejected references (I2) ---
+
+def video_node(client):
+    c = client.get("/api/ideas/ia/canvas").json()
+    c["doc"]["nodes"].append({"id": "n_vid", "type": "video", "position": {"x": 0, "y": 0}, "data": {}})
+    assert client.put("/api/ideas/ia/canvas", json={"version": c["version"], "doc": c["doc"]}).status_code == 200
+
+
+def imported_row(gid, source_url, idea_id="ia"):
+    with server.db() as conn:
+        conn.execute("INSERT INTO generations (id, idea_id, node_id, kind, model, inputs, input_hash, status, "
+                     "est_usd, source_url, created_at) VALUES (?,?,'n_sb_s1','image','imported','{}','','done',0,?,1)",
+                     (gid, idea_id, source_url))
+
+
+def put_frame(idea_id="ia", name="1-abcdefgh.png"):
+    folder = server.MEDIA_DIR / idea_id / "frames"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / name).write_bytes(PNG_BYTES)
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
+def test_imported_frame_can_start_a_video(gen):
+    video_node(gen)
+    put_frame()
+    imported_row("imp1", "/api/ideas/ia/frames/1-abcdefgh.png")
+    gid = post(gen, nodeId="n_vid", model="mock-video", duration=4, startFrame="imp1").json()["id"]
+    assert row_of_gen(gen, gid)["status"] == "done"
+
+
+def row_of_gen(client, gid, idea_id="ia"):
+    return client.get(f"/api/ideas/{idea_id}/gen/{gid}").json()
+
+
+def test_imported_frame_path_reaches_the_adapter(real):
+    put_frame()
+    imported_row("imp1", "/api/ideas/ia/frames/1-abcdefgh.png")
+    gid = post(real, model="seedream-4.5", reference="imp1").json()["id"]
+    assert row_of(real, gid)["status"] == "done"
+    assert real.adapter.jobs[-1].references == [server.MEDIA_DIR / "ia" / "frames" / "1-abcdefgh.png"]
+
+
+@pytest.mark.parametrize("url", [
+    "/api/ideas/ib/frames/1-abcdefgh.png",          # another plan's frame
+    "/api/ideas/ia/frames/..%2Fx.png",              # bad name
+    "/api/ideas/ia/frames/../gen/x.png",
+    "/api/ideas/ia/frames/bad.png",
+    "https://example.com/api/ideas/ia/frames/1-abcdefgh.png",
+    "/api/ideas/ia/frames/1-abcdefgh.png/extra",
+])
+def test_imported_frame_from_elsewhere_or_bad_name_fails(real, url):
+    put_frame()
+    put_frame("ib")
+    imported_row("imp1", url)
+    row = row_of(real, post(real, model="seedream-4.5", reference="imp1").json()["id"])
+    assert row["status"] == "failed" and row["error"] == "An input image is missing."
+    assert real.adapter.submits == 0
+
+
+def test_text_required_model_rejects_a_blank_prompt(real):
+    for blank in ("", "   \n"):
+        r = post(real, model="seedream-4.5", prompt=blank)
+        assert r.status_code == 422 and r.json()["error"] == "This model needs a prompt."
+    r = post(real, model="mock-image", prompt=" ")
+    assert r.status_code == 422 and r.json()["error"] == "This model needs a prompt."
+    assert real.spent == []
+
+
+def test_text_optional_model_takes_a_blank_prompt(gen):
+    video_node(gen)
+    assert post(gen, nodeId="n_vid", model="mock-video", duration=4, prompt="").status_code == 201
+
+
+def test_chain_blank_video_prompt_falls_back_to_the_image_prompt(real):
+    chain_canvas()
+    for blank in ("", "  "):
+        r = chain(real, videoPrompt=blank)
+        assert r.status_code == 201
+        assert json.loads(json.dumps(r.json()["video"]["inputs"]))["prompt"] == "a tofu bar"
+
+
+def test_chain_blank_image_prompt_is_rejected(real):
+    chain_canvas()
+    r = chain(real, prompt=" ", videoPrompt="move")
+    assert r.status_code == 422 and r.json()["error"] == "This model needs a prompt."
+    assert real.spent == []
+
+
+def test_chain_rejects_references(real):
+    chain_canvas()
+    a = post(real, model="seedream-4.5").json()["id"]
+    real.spent.clear()
+    for field in ("reference", "videoReference"):
+        r = chain(real, **{field: a})
+        assert r.status_code == 422 and "reference" in r.json()["error"]
+    assert chain(real, reference=None, videoReference=None).status_code == 201
+    assert len(real.spent) == 2

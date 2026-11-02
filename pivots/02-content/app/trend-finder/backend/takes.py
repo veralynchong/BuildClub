@@ -164,6 +164,9 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             with db() as conn:
                 ids = shot_ids_of(conn, idea_id)
                 backfill(conn, idea_id, ids)
+                if ids and shot >= len(ids):  # no shot to attach it to: it could never be listed or chosen
+                    part.unlink(missing_ok=True)
+                    return error(422, "That shot isn't on this plan.")
                 shot_id = ids[shot] if shot < len(ids) else None
                 where, args = same_shot(shot_id, shot)
                 count = conn.execute(f"SELECT COUNT(*) FROM takes WHERE idea_id = ? AND {where}",

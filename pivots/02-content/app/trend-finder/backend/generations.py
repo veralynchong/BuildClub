@@ -1,5 +1,5 @@
-"""Generated media for the node canvas: a model list, a job table and a free mock provider.
-Rows only grow: a finished (done or failed) row is never changed, and a new try is a new row.
+"""Generated media for the node canvas: a model list, a job table and three providers (mock, fal, Gemini).
+Rows only grow: a row that has finished (done, failed or unknown) is never changed, and a new try is a new row.
 Files live in <media>/<ideaId>/gen/<genId>.<ext>. Only signed-in staff reach these routes."""
 
 import hashlib
@@ -249,12 +249,26 @@ class GenJobs:
         if not ref_id:
             return None
         with self._db() as conn:
-            row = conn.execute("SELECT file FROM generations WHERE id = ? AND idea_id = ?",
+            row = conn.execute("SELECT file, source_url FROM generations WHERE id = ? AND idea_id = ?",
                                (ref_id, idea_id)).fetchone()
-        path = folder / row[0] if row and row[0] else None
+        path = None
+        if row and row[0]:
+            path = folder / row[0]
+        elif row and row[1]:  # an image imported from the Plan page lives in the plan's frames folder
+            path = self._frame_path(folder.parent / "frames", idea_id, row[1])
         if path is None or not path.is_file():
             raise cutting.CutError("An input image is missing.")
         return path
+
+    @staticmethod
+    def _frame_path(frames: Path, idea_id: str, source_url: str) -> Optional[Path]:
+        import storyboard  # lazily: storyboard imports this module
+        prefix = f"/api/ideas/{idea_id}/frames/"
+        name = source_url[len(prefix):] if source_url.startswith(prefix) else ""
+        if not storyboard.FRAME_NAME.match(name):
+            return None
+        path = (frames / name).resolve()
+        return path if path.parent == frames.resolve() else None
 
     def run(self, gen_id: str) -> None:
         """Make one row's media. Called by the worker thread, and directly by tests. A queued row is claimed and
@@ -269,8 +283,11 @@ class GenJobs:
             resumed = row[5] == "running" and bool(row[6]) and row[6] != SUBMITTING
             if row[5] != "queued" and not resumed:
                 return
-            if row[5] == "queued":
-                conn.execute("UPDATE generations SET status = 'running' WHERE id = ?", (gen_id,))
+            if row[5] == "queued":  # claim it; another caller may have taken it since the SELECT
+                claimed = conn.execute("UPDATE generations SET status = 'running' WHERE id = ? AND status = 'queued'",
+                                       (gen_id,)).rowcount
+                if claimed == 0:
+                    return
         idea_id, model_id, raw, kind, est, _status, request_id = row
         phase = "poll" if resumed else "prepare"  # prepare: nothing sent; submit: may be sent; poll: sent
         try:
@@ -407,6 +424,8 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                 return None, None, error(422, "An input image must be a finished image generated for this plan.")
         if pending_start:  # a chained video: its start frame is the image being made now
             start = PENDING
+        if (model.get("inputs") or {}).get("text") == "required" and not prompt.strip():
+            return None, None, error(422, "This model needs a prompt.")
         for field, given, what in (("startFrame", start, "a start frame"), ("reference", ref, "a reference image")):
             rule = (model.get("inputs") or {}).get(field, "none")
             if rule == "required" and given is None:
@@ -477,8 +496,10 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return error(404, "That plan doesn't exist.")
         if found["status"] != "approved":
             return error(409, "Only an approved plan can generate.")
+        if body.get("reference") is not None or body.get("videoReference") is not None:
+            return error(422, "Run the whole shot doesn't send reference images yet. Use Generate on each node.")
         prompt, video_prompt = body.get("prompt", ""), body.get("videoPrompt")
-        if video_prompt is None:
+        if not isinstance(video_prompt, str) or not video_prompt.strip():
             video_prompt = prompt
         image_node, video_node = body.get("imageNodeId"), body.get("videoNodeId")
         doc = canvas_doc(idea_id)

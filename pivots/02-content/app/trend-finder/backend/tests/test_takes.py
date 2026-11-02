@@ -283,3 +283,11 @@ def test_old_database_gets_the_shot_id_column(tmp_path):
     takes.migrate(conn)
     takes.migrate(conn)  # twice is fine
     assert "shot_id" in {r[1] for r in conn.execute("PRAGMA table_info(takes)")}
+
+
+def test_upload_past_the_shot_list_422(client, setup):
+    store_ideas(with_shots("ia", "s1", "s2"))
+    r = up(client, shot=2)
+    assert r.status_code == 422 and r.json()["error"] == "That shot isn't on this plan."
+    assert client.get("/api/ideas/ia/takes").json() == [] and media_files() == []
+    assert up(client, shot=1).status_code == 200
