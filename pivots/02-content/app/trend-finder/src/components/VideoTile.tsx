@@ -6,6 +6,7 @@ import { t } from '../lib/i18n'
 import { Thumb } from './Thumb'
 import { useManagerName } from '../lib/appContext'
 import { EvidenceChip } from './EvidenceChip'
+import { NumbersSource } from './NumbersSource'
 import { COPY, EVIDENCE_TEXT, BASELINE_PLATFORMS, cachedLabel, evidenceOf, plainLine, type Cohort } from '../lib/evidence'
 
 interface Props {
@@ -72,6 +73,7 @@ export function VideoTile({ video, onOpen, onToggleSave, status, cohort, followe
           {status && status !== 'saved' && <span className="tile-plan">{statusLine(manager)[status]}</span>}
         </div>
       </button>
+      <NumbersSource video={video} />
       {/* Once it's sent, the badge shows where it stands and the shortlist button goes away. */}
       {(!status || saved) && (
         <button
