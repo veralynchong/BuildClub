@@ -353,7 +353,7 @@ export function ResultsScreen(p: Props) {
               </p>
             </div>
             <div className="filters">
-              <FilterButtonPanel filters={filters} setFilters={setFilters} sort={p.sort} setSort={p.setSort} />
+              <FilterButtonPanel filters={filters} setFilters={setFilters} sort={p.sort} setSort={p.setSort} videos={byFormat} />
               {filterControls}
               <ShortcutsHint open={helpOpen} setOpen={setHelpOpen} />
             </div>

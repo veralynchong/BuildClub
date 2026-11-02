@@ -53,7 +53,7 @@ import storyboard
 import subtitles
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
-from models import (AnalyzeJob, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Client,
+from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Client,
                     Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
 
 HERE = Path(__file__).resolve().parent
@@ -116,6 +116,7 @@ ANALYZE_USD = 0.08  # one Claude breakdown
 NEEDS_USD = 0.01  # one small Claude call that fills in a finished breakdown's needs
 IMAGE_USD = 0.02  # one small Claude call that reads a screenshot
 ASK_USD = 0.01  # one small Claude call that answers a search from its results
+CLASSIFY_USD = 0.01  # one small Claude call that sorts a search's results into content types
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # decoded; the base64 request body is about a third bigger
 LIKE_USD = 0.01  # one small Claude call that turns a finished breakdown into search keywords
 
@@ -684,6 +685,53 @@ def search(q: str = "", fresh: str = "", platform: str = "tiktok", cachedOnly: s
         background = copy.deepcopy(payload)  # the reply below must not change while it is filled
         in_background(lambda: fill_medians(background, medians, missing))
     return {**payload, "cached": False}
+
+
+def types_file(query: str, platform: str) -> str:
+    return cache_name(query, platform) + ".types"  # not *.json, so saved_files() never reads it as a search
+
+
+def read_types(query: str, platform: str, fetched_at: int):
+    """Saved content types of this search, or None. Pinned searches keep theirs next to them (in git, for offline
+    demos); the rest sit in the cache folder. Types of an older fetch of the same search are not used."""
+    for folder in (PINNED_DIR, CACHE_DIR):
+        try:
+            saved = json.loads((folder / types_file(query, platform)).read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(saved, dict) and saved.get("fetchedAt") == fetched_at and isinstance(saved.get("types"), dict):
+            return saved["types"]
+    return None
+
+
+@app.get("/api/search/types", response_model=ContentTypes)
+def search_types(q: str = "", platform: str = "tiktok"):
+    """Content type of each video in a saved search. One cheap Claude call the first time, then free.
+    Never starts a search: without a saved search it is a 404. The front end shows the results without types if this fails."""
+    query = q.strip()[:120]
+    if not query or platform not in ("tiktok", "instagram", "youtube", "reddit", "x"):
+        return error(400, "Give a saved search and a platform.")
+    saved = read_cache(query, platform)
+    if not saved:
+        return error(404, "No saved search for that. Search it first.")
+    known = read_types(query, platform, saved["fetchedAt"])
+    if known is not None:
+        return {"types": known}
+    videos = saved["videos"][:60]
+    if not videos:
+        return {"types": {}}
+    if not spend("claude", CLASSIFY_USD, DAILY_CLAUDE_USD):
+        return over_budget("Claude", DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD")
+    try:
+        types = assist.classify_content_types(videos)
+    except Exception as e:
+        return error(502, "Could not sort the videos by type.", str(e))
+    CACHE_DIR.mkdir(exist_ok=True)
+    target = CACHE_DIR / types_file(query, platform)
+    partial = target.with_suffix(f".{threading.get_ident()}.tmp")
+    partial.write_text(json.dumps({"fetchedAt": saved["fetchedAt"], "types": types}))
+    os.replace(partial, target)
+    return {"types": types}
 
 
 # Clients and ideas are saved as whole lists, the way the front end already holds them.
