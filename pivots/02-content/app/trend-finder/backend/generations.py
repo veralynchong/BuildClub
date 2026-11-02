@@ -125,7 +125,8 @@ class GenJobs:
     def _finish(self, gen_id: str, status: str, **fields) -> None:
         names = "".join(f", {k} = ?" for k in fields)
         with self._db() as conn:
-            conn.execute(f"UPDATE generations SET status = ?, finished_at = ?{names} WHERE id = ?",
+            conn.execute(f"UPDATE generations SET status = ?, finished_at = ?{names} "
+                         "WHERE id = ? AND status = 'running'",
                          (status, int(time.time() * 1000), *fields.values(), gen_id))
 
     def run(self, gen_id: str) -> None:
@@ -167,15 +168,18 @@ class GenJobs:
         name = f"{gen_id}.mp4"
         part = folder / f"{gen_id}.part.mp4"
         duration = inputs.get("duration") or model["durations"][0]
-        r = cutting.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc2=size=1080x1920:rate=30",
-                         "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", str(duration),
-                         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-keyint_min", "30",
-                         "-sc_threshold", "0", "-c:a", "aac", "-b:a", "128k", "-shortest",
-                         "-movflags", "+faststart", str(part)])
-        if r.returncode != 0:
+        try:
+            r = cutting.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc2=size=1080x1920:rate=30",
+                             "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", str(duration),
+                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-keyint_min", "30",
+                             "-sc_threshold", "0", "-c:a", "aac", "-b:a", "128k", "-shortest",
+                             "-movflags", "+faststart", str(part)])
+            if r.returncode != 0:
+                print(f"[gen] {gen_id} ffmpeg failed: {r.stderr.strip()[-500:]}", flush=True)
+                raise cutting.CutError("The mock video failed. Try again.")
+            os.replace(part, folder / name)
+        finally:
             part.unlink(missing_ok=True)
-            raise cutting.CutError(f"The mock video failed: {r.stderr.strip()[-200:]}")
-        os.replace(part, folder / name)
         return name
 
 
@@ -235,8 +239,11 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         elif model["kind"] == "video":
             duration = model["durations"][0]
         for ref_id in (start, ref):
-            if ref_id is not None and (not isinstance(ref_id, str) or one(idea_id, ref_id) is None):
-                return error(422, "An input image must be one generated for this plan.")
+            if ref_id is None:
+                continue
+            source = one(idea_id, ref_id) if isinstance(ref_id, str) else None
+            if source is None or source[3] != "image" or source[7] != "done":  # kind, status columns
+                return error(422, "An input image must be a finished image generated for this plan.")
         now = int(time.time() * 1000)
         gid = secrets.token_urlsafe(9)
         inputs = {"prompt": prompt, "startFrame": start, "reference": ref, "duration": duration}

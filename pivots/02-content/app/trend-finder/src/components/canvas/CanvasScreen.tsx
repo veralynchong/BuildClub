@@ -17,7 +17,7 @@ import { t, type Key, type Vars } from '../../lib/i18n'
 import { getCanvas, getModels, NoShots, pollGen, putCanvas, StaleCanvas, startGen, uploadImage } from '../../lib/canvas/api'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '../../lib/canvas/drawer'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import { addNode, freeSpot, genRequest, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
+import { addNode, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, listTakes, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
@@ -183,6 +183,13 @@ function CanvasBoard({
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const blocked = stale || readOnly
   const blockedRef = useRef(blocked)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
   useEffect(() => {
     latest.current = { doc, key }
     blockedRef.current = blocked
@@ -207,7 +214,7 @@ function CanvasBoard({
       return
     }
     inflight.current = false
-    if (latest.current.key !== savedKey.current) void save() // changed while saving
+    if (mounted.current && latest.current.key !== savedKey.current) void save() // changed while saving
   }, [ideaId])
 
   useEffect(() => {
@@ -248,15 +255,7 @@ function CanvasBoard({
   const [gens, setGens] = useState<Generation[]>(initial.generations)
   const gensRef = useRef(gens)
   const polls = useRef(new Map<string, AbortController>())
-  const mounted = useRef(true)
-  const before = useRef(new Map<string, string | null | undefined>()) // generation id -> the version chosen before it started
-  useEffect(() => {
-    mounted.current = true
-    return () => {
-      mounted.current = false
-    }
-  }, [])
-
+  const starting = useRef(new Set<string>()) // nodes whose generation request is on its way
   useEffect(() => {
     let live = true
     getModels().then(
@@ -294,15 +293,9 @@ function CanvasBoard({
         while (!ac.signal.aborted) {
           try {
             const end = await pollGen(ideaId, g.id, upsertGen, { signal: ac.signal })
-            if (end?.status === 'done') {
-              setNodes((ns) =>
-                ns.map((n) => (n.id === end.nodeId ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, selected: end.id, stale: false } } } } : n)),
-              )
-              markFrom(end.nodeId, false)
-            } else if (end?.status === 'failed' && before.current.get(end.id)) {
-              // a failed try leaves the earlier chosen version in place, so the plan's frame doesn't change
-              const prev = before.current.get(end.id)
-              setNodes((ns) => ns.map((n) => (n.id === end.nodeId && !n.data.node.data.selected ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, selected: prev } } } } : n)))
+            if (end) {
+              setNodes((ns) => ns.map((n) => (n.id === end.nodeId ? { ...n, data: { node: { ...n.data.node, data: genFinished(n.data.node.data, end) } } } : n)))
+              if (end.status === 'done') markFrom(end.nodeId, false)
             }
             return
           } catch {
@@ -329,11 +322,12 @@ function CanvasBoard({
     }
   }, [initial, track])
 
-  // A job that finished while the canvas was closed: show it and date what comes after.
+  // A job that finished while the canvas was closed: a finished one is shown and dates what comes after; a failed one
+  // only ends the wait, so the version chosen before stays.
   useEffect(() => {
-    for (const { nodeId, genId } of finishedWhileAway(initial.doc, gensRef.current)) {
-      updateData(nodeId, { selected: genId })
-      markFrom(nodeId, false)
+    for (const { nodeId, genId, select } of finishedWhileAway(initial.doc, gensRef.current)) {
+      setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { node: { ...n.data.node, data: genFinished(n.data.node.data, { id: genId, status: select ? 'done' : 'failed' }) } } } : n)))
+      if (select) markFrom(nodeId, false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial])
@@ -343,20 +337,22 @@ function CanvasBoard({
     const node = d.nodes.find((n) => n.id === nodeId)
     const kind = node?.type === 'video' ? 'video' : 'image'
     const model = models.find((m) => m.id === node?.data.model && m.kind === kind) ?? models.find((m) => m.kind === kind)
-    if (!node || !model || readOnly || pendingGen(nodeId, gensRef.current)) return
+    if (!node || !model || blocked || pendingGen(nodeId, gensRef.current) || starting.current.has(nodeId)) return
     if (missingInput(d, nodeId, model, shots, gensRef.current)) return
     const req = genRequest(d, nodeId, shots, gensRef.current)
     if (kind === 'video' && req.duration === undefined && model.durations) req.duration = model.durations[0]
-    const prev = node.data.selected
-    updateData(nodeId, { selected: null, model: model.id })
+    starting.current.add(nodeId)
     try {
       const g = await startGen(ideaId, { nodeId, model: model.id, ...req })
       if (!mounted.current) return
-      before.current.set(g.id, prev)
+      // the chosen version stays until the new one is done, so a failed try leaves the plan's frame alone
+      setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { node: { ...n.data.node, data: genStarted(n.data.node.data, model.id, g.id) } } } : n)))
       upsertGen(g)
       track(g)
     } catch (e) {
-      showText(e instanceof Error ? e.message : t('canvas.err.start'))
+      if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
+    } finally {
+      starting.current.delete(nodeId)
     }
   }
 
@@ -365,7 +361,7 @@ function CanvasBoard({
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
   const shotIndex = (shotId: string | undefined) => (shotId ? shots.findIndex((s) => s.id === shotId) : -1)
   const working = async (nodeId: string, run: () => Promise<void>, fallback: Key) => {
-    if (readOnly || busy.has(nodeId)) return
+    if (blocked || busy.has(nodeId)) return
     setBusy((b) => new Set(b).add(nodeId))
     try {
       await run()
@@ -388,7 +384,7 @@ function CanvasBoard({
     void working(nodeId, async () => {
       await uploadTake(ideaId, index, file)
       await refreshTakes()
-    }, 'canvas.err.upload')
+    }, 'canvas.err.uploadVideo')
   }
 
   const uploadToNode = (nodeId: string, file: File) => {
@@ -406,7 +402,7 @@ function CanvasBoard({
         if (!mounted.current) return
         dropLinesFrom(nodeId, node.data.media === 'image')
         updateData(nodeId, { media: 'video', takeId: take.id })
-      }, 'canvas.err.upload')
+      }, 'canvas.err.uploadVideo')
       return
     }
     void working(nodeId, async () => {
@@ -427,10 +423,10 @@ function CanvasBoard({
   }
 
   const onUseTake = (takeId: string) => {
-    if (readOnly) return
+    if (blocked) return
     chooseTake(ideaId, takeId).then(
       (next) => mounted.current && setTakes(next),
-      (e) => showText(e instanceof Error ? e.message : t('canvas.err.upload')),
+      (e) => showText(e instanceof Error ? e.message : t('canvas.err.take')),
     )
   }
 
@@ -444,13 +440,13 @@ function CanvasBoard({
   // The chosen storyboard image of each shot goes into the shot list, so the plan shows the same picture.
   const written = useRef('')
   useEffect(() => {
-    if (readOnly) return
+    if (blocked) return
     const diff = primaryFrames(doc, shots, gens)
     const sig = JSON.stringify(diff)
     if (!diff.length || sig === written.current) return
     written.current = sig
     onChange({ shots: diff.reduce((cur, d) => mergeFrame(cur, d.index, d.frameImage), shots) })
-  }, [doc, shots, gens, readOnly, onChange])
+  }, [doc, shots, gens, blocked, onChange])
 
   const check = (c: { source: string; target: string; targetHandle: string }) => canConnect(latest.current.doc, c, models)
 
@@ -505,9 +501,14 @@ function CanvasBoard({
     shots,
     readOnly,
     shotNumbers: useMemo(() => {
-      const order = nodes.filter((n) => n.data.node.type === 'shot').sort((a, b) => a.position.y - b.position.y)
-      return new Map(order.map((n, i) => [n.id, i + 1]))
-    }, [nodes]),
+      // a shot's number is its place in the plan's shot list; a removed row has none
+      const out = new Map<string, number>()
+      for (const n of nodes) {
+        const i = n.data.node.type === 'shot' ? shots.findIndex((s) => s.id === n.data.node.shotId) : -1
+        if (i >= 0) out.set(n.id, i + 1)
+      }
+      return out
+    }, [nodes, shots]),
     updateData,
     models,
     gens,

@@ -65,17 +65,33 @@ export function staleIds(doc: CanvasDoc, nodeId: string, gens: Generation[], sel
     .map((n) => n.id)
 }
 
-// Nodes whose job finished while the canvas was closed: the chosen version is missing or gone and the newest finished
-// one was made here (not a legacy import or an upload). They should show that version and date what follows.
-export function finishedWhileAway(doc: CanvasDoc, gens: Generation[]): { nodeId: string; genId: string }[] {
-  const out: { nodeId: string; genId: string }[] = []
+// A generation was started for the node: the chosen version stays as it is while the job runs; `awaiting` marks the wait.
+export function genStarted(data: NodeData, model: string, genId: string): NodeData {
+  return { ...data, model, awaiting: genId }
+}
+
+// A job the node was waiting for ended. Done: it becomes the chosen version and the node is up to date. Failed: the
+// chosen version stays. Either way the wait ends. A job other than the one awaited changes nothing (a node saved
+// before `awaiting` existed has none, and takes its job's result as before).
+export function genFinished(data: NodeData, end: Pick<Generation, 'id' | 'status'>): NodeData {
+  if (data.awaiting !== undefined && data.awaiting !== end.id) return data // a newer job is the one awaited
+  const rest = { ...data }
+  delete rest.awaiting
+  return end.status === 'done' ? { ...rest, selected: end.id, stale: false } : rest
+}
+
+// Nodes that were waiting for a job (`awaiting`) which ended while the canvas was closed. `select`: it finished, so show
+// it and date what follows; otherwise it failed and only the wait ends. Nodes without `awaiting` (legacy imports,
+// uploads) are never touched.
+export function finishedWhileAway(doc: CanvasDoc, gens: Generation[]): { nodeId: string; genId: string; select: boolean }[] {
+  const out: { nodeId: string; genId: string; select: boolean }[] = []
   for (const n of doc.nodes) {
-    if (n.type !== 'storyboard' && n.type !== 'video') continue
-    const done = versionsOf(n.id, gens).filter((g) => g.status === 'done')
-    const newest = done[done.length - 1]
-    if (!newest || newest.model === 'imported' || newest.model === 'upload') continue
-    if (done.some((g) => g.id === n.data.selected)) continue
-    out.push({ nodeId: n.id, genId: newest.id })
+    const awaiting = n.data.awaiting
+    if (!awaiting) continue
+    const g = versionsOf(n.id, gens).find((x) => x.id === awaiting)
+    if (!g) out.push({ nodeId: n.id, genId: awaiting, select: false })
+    else if (g.status === 'done') out.push({ nodeId: n.id, genId: awaiting, select: true })
+    else if (g.status === 'failed') out.push({ nodeId: n.id, genId: awaiting, select: false })
   }
   return out
 }

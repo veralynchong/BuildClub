@@ -188,3 +188,11 @@ def test_shot_list_change_after_canvas_exists(cv):
     assert by_id["n_shot_s1"]["data"]["removed"] is False
     assert len([g for g in r["generations"] if g["model"] == "imported"]) == 1 and r["version"] == 2
     assert kept["id"] in [g["id"] for g in r["generations"]]
+
+
+def test_long_shot_id_reconciles_and_saves(client):
+    long_id = "s" * 40
+    store_ideas(plan("ia", ids=(long_id, "s2")))
+    r = client.get("/api/ideas/ia/canvas").json()
+    assert any(len(e["id"]) > 80 for e in r["doc"]["edges"])
+    assert put(client, r["version"], r["doc"]).json() == {"version": r["version"] + 1}

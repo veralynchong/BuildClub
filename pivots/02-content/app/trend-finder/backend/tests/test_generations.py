@@ -216,3 +216,44 @@ def test_upload_needs_approved_plan(gen):
 def test_upload_path_safety(gen):
     assert up_img(gen, idea_id="%2e%2e").status_code in (404, 405, 422)
     assert not (server.MEDIA_DIR.parent / "gen").exists()
+
+
+def test_input_must_be_a_finished_image_of_the_plan(gen):
+    failed = post(gen, prompt="x #fail").json()["id"]
+    assert gen.get(f"/api/ideas/ia/gen/{failed}").json()["status"] == "failed"
+    assert post(gen, startFrame=failed).status_code == 422
+    with server.db() as conn:
+        conn.execute("INSERT INTO generations (id, idea_id, node_id, kind, model, inputs, input_hash, status, "
+                     "est_usd, created_at) VALUES ('q1','ia','n_sb_s1','image','mock-image','{}','h','queued',0,1)")
+        conn.execute("INSERT INTO generations (id, idea_id, node_id, kind, model, inputs, input_hash, status, "
+                     "est_usd, created_at) VALUES ('v1','ia','n_vid','video','mock-video','{}','h','done',0,1)")
+    assert post(gen, reference="q1").status_code == 422
+    assert post(gen, reference="v1").status_code == 422
+    assert post(gen, startFrame="q1").status_code == 422
+
+
+def test_finish_only_updates_a_running_row(gen):
+    gid = post(gen).json()["id"]
+    before = gen.get(f"/api/ideas/ia/gen/{gid}").json()
+    assert before["status"] == "done"
+    server.gen_jobs._finish(gid, "failed", error="late")
+    assert gen.get(f"/api/ideas/ia/gen/{gid}").json() == before
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
+def test_mock_video_failure_hides_ffmpeg_output_and_cleans_up(gen, monkeypatch):
+    c = gen.get("/api/ideas/ia/canvas").json()
+    c["doc"]["nodes"].append({"id": "n_vid", "type": "video", "position": {"x": 0, "y": 0}, "data": {}})
+    assert gen.put("/api/ideas/ia/canvas", json={"version": c["version"], "doc": c["doc"]}).status_code == 200
+
+    def broken(cmd, **kw):
+        folder = server.MEDIA_DIR / "ia" / "gen"
+        (folder / f"{cmd[-1].split('/')[-1]}").write_bytes(b"half")
+        return subprocess.CompletedProcess(cmd, 1, "", "/secret/path: Invalid argument")
+
+    monkeypatch.setattr(generations.cutting, "run", broken)
+    gid = post(gen, nodeId="n_vid", model="mock-video", duration=4).json()["id"]
+    row = gen.get(f"/api/ideas/ia/gen/{gid}").json()
+    assert row["status"] == "failed" and row["error"] == "The mock video failed. Try again."
+    assert "secret" not in row["error"]
+    assert list((server.MEDIA_DIR / "ia" / "gen").glob("*.part*")) == []

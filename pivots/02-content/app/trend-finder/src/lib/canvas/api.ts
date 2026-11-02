@@ -16,6 +16,9 @@ export class StaleCanvas extends Error {
   }
 }
 
+// backend/canvas.py check_doc: the saved copy has shot nodes this one lacks
+const SHOT_DELETE = "Shot nodes can't be deleted."
+
 const base = (ideaId: string) => `/api/ideas/${encodeURIComponent(ideaId)}`
 
 async function send<T>(r: Response, fallback: string): Promise<T> {
@@ -38,9 +41,12 @@ export async function putCanvas(ideaId: string, version: number, doc: CanvasDoc)
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ version, doc }),
   })
-  if (r.status === 409) {
+  if (r.status === 409 || r.status === 422) {
     const body = await r.json().catch(() => null)
-    if (typeof body?.version === 'number') throw new StaleCanvas(body.error ?? t('canvas.err.stale'), body.version, body.doc ?? null)
+    // A newer copy exists (409 with its version), the plan is no longer approved (409 without one), or a shot node is
+    // missing (422): in every case this copy can't be saved, so the board must be reloaded.
+    if (r.status === 409) throw new StaleCanvas(body?.error ?? t('canvas.err.stale'), typeof body?.version === 'number' ? body.version : 0, body?.doc ?? null)
+    if (body?.error === SHOT_DELETE) throw new StaleCanvas(t('canvas.err.stale'), 0, null)
     throw new Error(body?.error ?? t('canvas.err.save'))
   }
   return (await send<{ version: number }>(r, t('canvas.err.save'))).version

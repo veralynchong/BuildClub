@@ -12,6 +12,7 @@ export interface NodeData {
   prompt?: string
   text?: string // prompt node
   selected?: string | null // the chosen version (a generation id)
+  awaiting?: string // the generation being waited for; the chosen version stays until it finishes
   stale?: boolean // an input changed after the last version was made
   media?: 'image' | 'video' // upload
   takeId?: string // upload of a video

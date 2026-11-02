@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway } from '../src/lib/canvas/graph.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished } from '../src/lib/canvas/graph.ts'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer, DRAWER_KEY } from '../src/lib/canvas/drawer.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen } from '../src/lib/canvas/api.ts'
 
@@ -183,6 +183,16 @@ test('putCanvas throws StaleCanvas on 409', async () => {
   await assert.rejects(putCanvas('ia', 3, doc), (e) => e instanceof StaleCanvas && e.version === 7 && e.doc === doc)
 })
 
+test('putCanvas treats a 409 without a version and the shot-delete 422 as stale', async () => {
+  const doc = docWith()
+  globalThis.fetch = async () => ({ ok: false, status: 409, json: async () => ({ error: 'Only an approved plan can change the canvas.' }) })
+  await assert.rejects(putCanvas('ia', 3, doc), (e) => e instanceof StaleCanvas)
+  globalThis.fetch = async () => ({ ok: false, status: 422, json: async () => ({ error: "Shot nodes can't be deleted." }) })
+  await assert.rejects(putCanvas('ia', 3, doc), (e) => e instanceof StaleCanvas)
+  globalThis.fetch = async () => ({ ok: false, status: 422, json: async () => ({ error: 'Every node needs a position.' }) })
+  await assert.rejects(putCanvas('ia', 3, doc), (e) => !(e instanceof StaleCanvas) && /position/.test(e.message))
+})
+
 test('getCanvas throws NoShots on 409 no-shots and other errors with the server text', async () => {
   globalThis.fetch = async () => ({ ok: false, status: 409, json: async () => ({ error: 'Save the shot list first.', code: 'no-shots' }) })
   await assert.rejects(getCanvas('ia'), NoShots)
@@ -307,16 +317,56 @@ test('staleIds never includes the node itself unless its own input changed', () 
   assert.deepEqual(staleIds(doc, 'n_sb_s1', [], true), [])
 })
 
-test('finishedWhileAway picks up a new version made while away, not a legacy import', () => {
+test('genStarted keeps the chosen version and marks the wait', () => {
+  const data = { selected: 'v1', stale: true, model: 'mock-image', prompt: 'x' }
+  assert.deepEqual(genStarted(data, 'mock-image', 'g2'), { ...data, awaiting: 'g2' })
+})
+
+test('genFinished: done selects the new version, clears the wait and the stale flag', () => {
+  const data = { selected: 'v1', stale: true, awaiting: 'g2' }
+  const out = genFinished(data, { id: 'g2', status: 'done' })
+  assert.equal(out.selected, 'g2')
+  assert.equal(out.stale, false)
+  assert.equal('awaiting' in out, false)
+})
+
+test('genFinished: failed keeps the chosen version and clears the wait', () => {
+  const out = genFinished({ selected: 'v1', awaiting: 'g2' }, { id: 'g2', status: 'failed' })
+  assert.equal(out.selected, 'v1')
+  assert.equal('awaiting' in out, false)
+  // a node that had nothing chosen stays that way
+  assert.equal(genFinished({ selected: null, awaiting: 'g2' }, { id: 'g2', status: 'failed' }).selected, null)
+})
+
+test('genFinished: an older job ending does not disturb a newer wait', () => {
+  const data = { selected: 'v1', awaiting: 'g3' }
+  assert.deepEqual(genFinished(data, { id: 'g2', status: 'failed' }), data)
+})
+
+test('finishedWhileAway: a done version we were waiting for is selected and dates what follows', () => {
   const doc = docWith()
-  const made = [{ ...gen('a', 'n_sb_s1', 'done', 1), model: 'mock-image' }]
-  assert.deepEqual(finishedWhileAway(doc, made), [{ nodeId: 'n_sb_s1', genId: 'a' }])
-  const imported = [{ ...gen('i', 'n_sb_s1', 'done', 1), model: 'imported' }]
-  assert.deepEqual(finishedWhileAway(doc, imported), [])
-  doc.nodes.find((n) => n.id === 'n_sb_s1').data.selected = 'a'
-  assert.deepEqual(finishedWhileAway(doc, made), [])
-  doc.nodes.find((n) => n.id === 'n_sb_s1').data.selected = 'gone'
-  assert.deepEqual(finishedWhileAway(doc, made), [{ nodeId: 'n_sb_s1', genId: 'a' }])
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.awaiting = 'a'
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.selected = 'v1'
+  const gens = [gen('v1', 'n_sb_s1', 'done', 1), gen('a', 'n_sb_s1', 'done', 2)]
+  assert.deepEqual(finishedWhileAway(doc, gens), [{ nodeId: 'n_sb_s1', genId: 'a', select: true }])
+})
+
+test('finishedWhileAway: a failed job we were waiting for only clears the wait', () => {
+  const doc = docWith()
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.awaiting = 'a'
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.selected = 'v1'
+  const gens = [gen('v1', 'n_sb_s1', 'done', 1), gen('a', 'n_sb_s1', 'failed', 2)]
+  assert.deepEqual(finishedWhileAway(doc, gens), [{ nodeId: 'n_sb_s1', genId: 'a', select: false }])
+})
+
+test('finishedWhileAway: still running is left alone; legacy and imported nodes are untouched', () => {
+  const doc = docWith()
+  const sb = doc.nodes.find((n) => n.id === 'n_sb_s1')
+  sb.data.awaiting = 'a'
+  assert.deepEqual(finishedWhileAway(doc, [gen('a', 'n_sb_s1', 'running', 2)]), [])
+  delete sb.data.awaiting
+  assert.deepEqual(finishedWhileAway(doc, [{ ...gen('i', 'n_sb_s1', 'done', 1), model: 'imported' }]), [])
+  assert.deepEqual(finishedWhileAway(doc, [gen('a', 'n_sb_s1', 'done', 1)]), [])
 })
 
 import { checkImage, imageType, uploadKind } from '../src/lib/canvas/upload.ts'

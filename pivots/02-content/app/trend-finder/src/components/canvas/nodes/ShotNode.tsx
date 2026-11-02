@@ -11,7 +11,7 @@ export function ShotNode({ id, data: { node } }: CvNodeProps) {
   const removed = node.data.removed === true
   return (
     <div className={`cv-node cv-shot${removed ? ' is-removed' : ''}`}>
-      <div className="cv-node-title">{t('canvas.node.shot', { n: shotNumbers.get(id) ?? 1 })}</div>
+      <div className="cv-node-title">{shotNumbers.has(id) ? t('canvas.node.shot', { n: shotNumbers.get(id) ?? 0 }) : t('canvas.node.shotGone')}</div>
       <p className="cv-shot-line">{line || t('canvas.shot.noLine')}</p>
       {removed && <p className="cv-shot-removed small">{t('canvas.shot.removed')}</p>}
       {!readOnly && !removed && (
