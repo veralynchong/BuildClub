@@ -18,7 +18,7 @@ from pathlib import Path
 
 import anthropic
 
-from models import AnalyzeJob, Breakdown
+from models import AnalyzeJob, Breakdown, BreakdownOut
 
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
@@ -51,6 +51,16 @@ any quoted speech or on-screen text.
 - why.hook: what makes people stop scrolling.
 - why.first3s: what happens in the first 3 seconds and why it holds attention.
 - why.length, why.format, why.sound: how the length, filming style and sound help it.
+- why.concept: one short sentence saying what the video is, e.g. "Street interview asking if
+  noodles were invented in China".
+- why.hookType: the one best fit of visual (looks tasty or striking), question_or_text (a question
+  or on-screen text opens it), rage_bait (provokes anger or disagreement), informative (teaches a
+  fact or tip), challenge, other.
+- why.scrollStopper: why a viewer stops scrolling in the first 2 seconds, in one short sentence.
+- why.emotion: the main feeling it triggers, one of curious, excited, craving, funny,
+  angry_comment (makes you want to comment), relatable.
+- why.saveReason: why a viewer would save it, in one short sentence. Think of what saving says
+  about interest in the product or idea shown.
 - shotList: the shots in order, time as "0-2s"; text is on-screen text, if any.
 - props: things the client would need to film it.
 - editorNotes: 2-3 short instructions for an editor matching this style.
@@ -172,7 +182,7 @@ def breakdown(prepared: dict, work: Path, vocab: list[str] | None = None) -> Bre
         max_tokens=AI_MAX_TOKENS,
         thinking={"type": "adaptive"},
         output_config={"effort": "high"},
-        output_format=Breakdown,
+        output_format=BreakdownOut,
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
         messages=[{"role": "user", "content": content}],

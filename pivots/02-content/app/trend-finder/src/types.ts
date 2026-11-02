@@ -60,6 +60,9 @@ export interface Shot {
   palette?: string[]
 }
 
+export type HookType = 'visual' | 'question_or_text' | 'rage_bait' | 'informative' | 'challenge' | 'other'
+export type Emotion = 'curious' | 'excited' | 'craving' | 'funny' | 'angry_comment' | 'relatable'
+
 export interface Format {
   id: string
   name: string
@@ -76,6 +79,12 @@ export interface Format {
     length: string
     format: string
     sound: string
+    // Added later; breakdowns saved before them lack all five.
+    concept?: string
+    hookType?: HookType
+    scrollStopper?: string
+    emotion?: Emotion
+    saveReason?: string
   }
   shotList: Shot[]
   props: string[]
