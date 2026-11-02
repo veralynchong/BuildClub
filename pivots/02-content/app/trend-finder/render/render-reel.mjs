@@ -44,11 +44,16 @@ async function ensureBundle(cacheDir) {
   mkdirSync(path.dirname(serveUrl), { recursive: true })
   const tmp = `${serveUrl}.tmp-${process.pid}`
   const { bundle } = await import('@remotion/bundler')
-  await bundle({ entryPoint: path.join(APP, 'src/remotion/index.ts'), publicDir: path.join(APP, 'public'), outDir: tmp })
+  try {
+    await bundle({ entryPoint: path.join(APP, 'src/remotion/index.ts'), publicDir: path.join(APP, 'public'), outDir: tmp })
+  } catch (err) {
+    rmSync(tmp, { recursive: true, force: true }) // a failed bundle leaves no half-written folder
+    throw err
+  }
   try {
     renameSync(tmp, serveUrl)
   } catch (err) {
-    rmSync(tmp, { recursive: true }) // another process finished first (the target is not empty)
+    rmSync(tmp, { recursive: true, force: true }) // another process finished first (the target is not empty)
     if (!existsSync(path.join(serveUrl, 'index.html'))) throw err
   }
   return serveUrl

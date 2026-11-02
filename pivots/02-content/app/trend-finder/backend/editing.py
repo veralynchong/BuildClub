@@ -246,15 +246,28 @@ def render_input(conn, media: Path, idea: dict, project: dict, sources: dict) ->
     return reel, files
 
 
-PATH_RE = re.compile(r"(?:/[\w.@~+-]+){2,}")
+# Two or more path parts; a path inside a user or system root may also contain spaces, so it goes to the end of the line.
+PATH_RE = re.compile(r"(?:/(?:Users|private|var|tmp|home|Volumes)/[^\n]*)|(?:/[\w.@~+-]+){2,}")
 MAX_ERROR_CHARS = 200
 
 
-def spawn_render(cmd: list, on_progress: Callable[[float], None], timeout: float) -> None:
+_active: set = set()  # live render processes, so a shutdown can kill their groups
+
+
+def kill_active() -> None:
+    for proc in list(_active):
+        _kill_group(proc)
+
+
+def spawn_render(cmd: list, on_progress: Callable[[float], None], timeout: float,
+                 pid_file: Optional[Path] = None) -> None:
     """Run the renderer in its own process group. stdout lines `progress 0.4` feed on_progress. A run past
     `timeout` is killed with everything it started; a failure reports the last stderr line without paths."""
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace",
                             start_new_session=True, cwd=APP_DIR if APP_DIR.is_dir() else None)
+    _active.add(proc)
+    if pid_file is not None:  # outside work/, so a restart can find and kill an orphaned render
+        pid_file.write_text(str(proc.pid))
     tail: collections.deque = collections.deque(maxlen=20)
 
     def read_out() -> None:
@@ -263,7 +276,7 @@ def spawn_render(cmd: list, on_progress: Callable[[float], None], timeout: float
             if word == "progress":
                 try:
                     on_progress(float(value))
-                except ValueError:
+                except Exception:  # a bad line or a failing callback must not stop the pipe being drained
                     pass
 
     def read_err() -> None:
@@ -281,8 +294,10 @@ def spawn_render(cmd: list, on_progress: Callable[[float], None], timeout: float
             _kill_group(proc)
             raise cutting.CutError("The export took too long, so it was stopped.")
     finally:
-        if proc.poll() is None:
-            _kill_group(proc)
+        _kill_group(proc)  # also whatever the renderer left running (Chrome)
+        _active.discard(proc)
+        if pid_file is not None:
+            pid_file.unlink(missing_ok=True)
         for r in readers:
             r.join(5)
     if proc.returncode != 0:
@@ -293,9 +308,21 @@ def spawn_render(cmd: list, on_progress: Callable[[float], None], timeout: float
 def _kill_group(proc) -> None:
     try:
         os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
         pass
     proc.wait()
+
+
+def kill_orphan(pid_file: Path) -> None:
+    """After a restart: kill the render group a dead server left behind, then forget it. Only a process that
+    leads its own group (as spawn_render makes it) is touched."""
+    try:
+        pid = int(pid_file.read_text().strip())
+        if pid > 1 and os.getpgid(pid) == pid:
+            os.killpg(pid, signal.SIGKILL)
+    except (OSError, ValueError):
+        pass
+    pid_file.unlink(missing_ok=True)
 
 
 def render_project(db, media_dir: Path, idea_id: str, work: Path, out: Path, step: Callable) -> dict:
@@ -327,8 +354,11 @@ def render_project(db, media_dir: Path, idea_id: str, work: Path, out: Path, ste
     job.write_text(json.dumps({"input": reel, "mediaDir": str(linked), "out": str(out),
                                "cacheDir": str(APP_DIR / ".remotion-bundle")}))
     spawn_render([NODE, str(APP_DIR / "render" / "render-reel.mjs"), str(job)],
-                 lambda p: step(0.05 + 0.9 * p, "Exporting"), RENDER_TIMEOUT_S)
-    info = cutting.probe(out)
+                 lambda p: step(0.05 + 0.9 * p, "Exporting"), RENDER_TIMEOUT_S, work.parent / "render.pid")
+    try:
+        info = cutting.probe(out)
+    except cutting.CutError:  # its message names a folder
+        raise cutting.CutError(BAD_OUTPUT)
     total = sum(c["out"] - c["in"] for c in project["clips"])
     if (info.get("width"), info.get("height")) != (1080, 1920) or not info.get("hasAudio") \
             or abs(info["duration"] - total) > LENGTH_GUARD_S:

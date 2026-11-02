@@ -187,6 +187,10 @@ def recover(db, media_dir: Optional[Callable[[], Path]] = None) -> None:
                      "WHERE status IN ('queued', 'running')", (RESTARTED, int(time.time() * 1000)))
     if media_dir is not None:
         for idea_id in ids:
+            folder = cut_folder(media_dir().resolve(), idea_id)
+            if folder is not None:
+                import editing
+                editing.kill_orphan(folder / "render.pid")  # a render the old server started may still run
             clear_work(media_dir(), idea_id)
 
 

@@ -137,6 +137,7 @@ async def lifespan(_app):
     renders.recover(db)  # a cut that was running when the server stopped will never finish
     editing.prewarm_bundle()  # builds the Remotion bundle in a background thread; never blocks startup
     yield
+    editing.kill_active()  # no render outlives the server
 
 
 app = FastAPI(title="Trend Finder API", lifespan=lifespan)

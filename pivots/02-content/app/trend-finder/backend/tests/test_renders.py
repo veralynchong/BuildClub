@@ -843,3 +843,19 @@ def test_old_database_gets_source_columns():
     renders.migrate(conn)
     renders.migrate(conn)  # twice is fine
     assert conn.execute("SELECT source, out_source FROM renders").fetchone() == ("auto", "auto")
+
+
+def test_edit_during_export_reads_stale(client, editor, monkeypatch, tmp_path):  # F13 through the real job
+    monkeypatch.setattr(cutting, "probe", lambda path: {"duration": 2.0, "width": 1080, "height": 1920, "hasAudio": True})
+    editing._probe_cache.clear()
+    monkeypatch.setattr(editing, "NODE", "node")
+
+    def spawn(cmd, on_progress, timeout, pid_file=None):
+        put_project(client, editor["id"], (0.0, 1.0))  # the user edits while it renders
+        out = json.loads(open(cmd[2]).read())["out"]
+        open(out, "wb").write(FINAL)
+
+    monkeypatch.setattr(editing, "spawn_render", spawn)
+    assert export(client).status_code == 202
+    state = wait_for(client)
+    assert state["status"] == "done" and state["stale"] is True

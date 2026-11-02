@@ -137,6 +137,7 @@ def test_edit_needs_approved_plan(client, setup):
 
 REAL_PREWARM = editing.prewarm_bundle  # conftest replaces editing.prewarm_bundle for every test
 
+import json  # noqa: E402
 import os  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
@@ -210,17 +211,42 @@ def test_spawn_render_reports_progress():
     assert seen == [0.1, 0.5, 1.0]
 
 
+GRANDCHILD = ("import os, subprocess, sys, time\n"
+              "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+              "open({pids!r}, 'w').write(f'{{os.getpid()}} {{g.pid}}')\n"
+              "time.sleep(60)")
+
+
+def gone(pid):
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        except PermissionError:
+            return False
+        time.sleep(0.1)
+    return False
+
+
+def read_pids(path):
+    for _ in range(100):
+        if path.exists() and len(path.read_text().split()) == 2:
+            return [int(x) for x in path.read_text().split()]
+        time.sleep(0.05)
+    raise AssertionError("render never started")
+
+
 def test_render_timeout_kills_process(tmp_path):
-    pidfile = tmp_path / "pid"
-    code = f"import os, time\nopen({str(pidfile)!r}, 'w').write(str(os.getpid()))\ntime.sleep(30)"
+    pidfile = tmp_path / "pids"
+    code = GRANDCHILD.format(pids=str(pidfile))
     t0 = time.time()
     with pytest.raises(cutting.CutError) as e:
         editing.spawn_render([sys.executable, "-c", code], lambda p: None, 0.5)
     assert str(e.value) == "The export took too long, so it was stopped."
     assert time.time() - t0 < 10
-    pid = int(pidfile.read_text())
-    with pytest.raises(ProcessLookupError):
-        os.kill(pid, 0)
+    child, grandchild = read_pids(pidfile)
+    assert gone(child) and gone(grandchild)  # the whole group, not just the first process
 
 
 def test_spawn_render_failure_message_has_no_paths():
@@ -229,7 +255,7 @@ def test_spawn_render_failure_message_has_no_paths():
     with pytest.raises(cutting.CutError) as e:
         editing.spawn_render([sys.executable, "-c", code], lambda p: None, 10)
     msg = str(e.value)
-    assert msg == "The export failed: Error: cannot open <path> now"
+    assert msg == "The export failed: Error: cannot open <path>"
     assert "/Users" not in msg
 
 
@@ -268,7 +294,7 @@ def test_render_project_builds_job_and_returns_facts(client, setup, monkeypatch,
     put(client, t["id"], (0.0, 1.0), (1.0, 2.0))
     seen = {}
 
-    def spawn(cmd, on_progress, timeout):
+    def spawn(cmd, on_progress, timeout, pid_file=None):
         import json
         seen["cmd"], seen["timeout"] = cmd, timeout
         job = json.loads(Path(cmd[2]).read_text())
@@ -296,7 +322,7 @@ def test_render_project_builds_job_and_returns_facts(client, setup, monkeypatch,
 
 def test_render_project_refuses_empty_and_missing(client, setup, monkeypatch, tmp_path):
     fake_tools(monkeypatch, tmp_path)
-    monkeypatch.setattr(editing, "spawn_render", lambda *a: pytest.fail("must not run"))
+    monkeypatch.setattr(editing, "spawn_render", lambda *a, **k: pytest.fail("must not run"))
     with pytest.raises(cutting.CutError, match="at least one clip"):
         editing.render_project(server.db, server.MEDIA_DIR, "ia", tmp_path, tmp_path / "o.mp4", lambda *a: None)
     t = seed_take(client)
@@ -317,7 +343,7 @@ def test_render_project_rejects_bad_output(client, setup, monkeypatch, tmp_path,
     out = tmp_path / "w" / "next.mp4"
     out.parent.mkdir()
 
-    def spawn(cmd, on_progress, timeout):
+    def spawn(cmd, on_progress, timeout, pid_file=None):
         out.write_bytes(b"mp4")
         # the checks read the output; sources probe fine, the output probe is the bad one
         monkeypatch.setattr(cutting, "probe", lambda path: {"duration": 2.0, "width": 1080, "height": 1920,
@@ -362,3 +388,98 @@ def test_prewarm_swallows_failures_and_skips_without_tools(monkeypatch):
     thread = REAL_PREWARM()
     thread.join(5)
     assert not thread.is_alive()
+
+
+def test_spawn_render_kills_leftovers_after_failure(tmp_path):
+    pidfile = tmp_path / "pids"
+    code = ("import os, subprocess, sys\n"
+            "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+            f"open({str(pidfile)!r}, 'w').write(f'{{os.getpid()}} {{g.pid}}')\n"
+            "sys.exit(2)")
+    with pytest.raises(cutting.CutError):
+        editing.spawn_render([sys.executable, "-c", code], lambda p: None, 10)
+    child, grandchild = read_pids(pidfile)
+    assert gone(child) and gone(grandchild)
+
+
+def test_spawn_render_survives_a_failing_progress_callback():
+    def bad(p):
+        raise RuntimeError("x")
+
+    code = "for i in range(2000): print('progress', i / 2000, flush=True)"
+    editing.spawn_render([sys.executable, "-c", code], bad, 20)  # would hang on a full pipe if the reader died
+
+
+def test_pid_file_written_then_removed(tmp_path):
+    pf = tmp_path / "render.pid"
+    seen = []
+    code = "import time\nprint('progress 0.5', flush=True)\ntime.sleep(0.3)"
+    editing.spawn_render([sys.executable, "-c", code], lambda p: seen.append(pf.exists()), 10, pf)
+    assert seen == [True] and not pf.exists()
+
+
+def test_recover_kills_orphaned_render_group(client, setup, tmp_path):
+    import renders
+    pidfile = tmp_path / "pids"
+    cut = server.MEDIA_DIR / "ia" / "cut"
+    (cut / "work").mkdir(parents=True)
+    proc = subprocess.Popen([sys.executable, "-c", GRANDCHILD.format(pids=str(pidfile))], start_new_session=True)
+    child, grandchild = read_pids(pidfile)
+    (cut / "render.pid").write_text(str(proc.pid))
+    with server.db() as conn:
+        conn.execute("INSERT INTO renders (idea_id, status, progress, step, speed, signature, started_at, source) "
+                     "VALUES ('ia', 'running', 0.4, 'Exporting', 1.0, '', 1, 'editor')")
+    renders.recover(server.db)
+    proc.wait(10)  # reaped here; the grandchild has no parent to reap it
+    assert gone(child) and gone(grandchild)
+    assert not (cut / "render.pid").exists() and not (cut / "work").exists()
+
+
+def test_kill_orphan_ignores_junk_and_foreign_pids(tmp_path):
+    f = tmp_path / "render.pid"
+    f.write_text("not a number")
+    editing.kill_orphan(f)
+    assert not f.exists()
+    f.write_text(str(os.getpid()))  # this test process does not lead its own group: must survive
+    editing.kill_orphan(f)
+    assert not f.exists()
+    editing.kill_orphan(tmp_path / "missing.pid")
+
+
+def test_export_signature_is_from_the_job_start_snapshot(client, setup, monkeypatch, tmp_path):  # F13
+    fake_tools(monkeypatch, tmp_path)
+    t = seed_take(client)
+    put(client, t["id"], (0.0, 1.0), (1.0, 2.0))
+    with server.db() as conn:
+        before = editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, json.loads(
+            conn.execute("SELECT doc FROM edit_projects WHERE idea_id = 'ia'").fetchone()[0]))
+
+    def spawn(cmd, on_progress, timeout, pid_file=None):
+        v = client.get("/api/ideas/ia/edit").json()["version"]
+        edited = project(*[clip(f"c{i}", a, b) for i, (a, b) in enumerate([(0.0, 0.5)])])
+        edited["clips"][0]["source"]["id"] = t["id"]
+        assert client.put("/api/ideas/ia/edit", json={"version": v, "project": edited}).status_code == 200
+        Path(json.loads(Path(cmd[2]).read_text())["out"]).write_bytes(b"mp4")
+
+    monkeypatch.setattr(editing, "spawn_render", spawn)
+    work = tmp_path / "work"
+    work.mkdir()
+    result = editing.render_project(server.db, server.MEDIA_DIR, "ia", work, work / "n.mp4", lambda *a: None)
+    assert result["signature"] == before
+    with server.db() as conn:
+        assert editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, json.loads(
+            conn.execute("SELECT doc FROM edit_projects WHERE idea_id = 'ia'").fetchone()[0])) != before
+
+
+def test_render_project_hides_probe_paths(client, setup, monkeypatch, tmp_path):
+    fake_tools(monkeypatch, tmp_path)
+    t = seed_take(client)
+    put(client, t["id"], (0.0, 1.0), (1.0, 2.0))
+
+    def spawn(cmd, on_progress, timeout, pid_file=None):
+        monkeypatch.setattr(cutting, "probe", lambda p: (_ for _ in ()).throw(cutting.CutError("Could not read /Users/x/y.mp4")))
+
+    monkeypatch.setattr(editing, "spawn_render", spawn)
+    with pytest.raises(cutting.CutError) as e:
+        editing.render_project(server.db, server.MEDIA_DIR, "ia", tmp_path, tmp_path / "n.mp4", lambda *a: None)
+    assert str(e.value) == editing.BAD_OUTPUT
