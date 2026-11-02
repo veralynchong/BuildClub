@@ -44,6 +44,9 @@ export interface Video {
   hashtags?: string[]
   // Reddit only: it shows no views, so `views` holds the upvotes (and medianViews the subreddit's usual upvotes).
   comments?: number
+  // Live results only: the like and comment counts the search returned (comments above is Reddit-only), for re-checking.
+  likes?: number
+  commentCount?: number
   baseline?: Baseline
   // When this search fetched the video, in ms.
   fetchedAt?: number

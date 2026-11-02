@@ -20,6 +20,7 @@ import { useCountUp } from '../lib/motion'
 import { Thumb } from './Thumb'
 import { useManagerName } from '../lib/appContext'
 import { EvidenceChip } from './EvidenceChip'
+import { NumbersSource } from './NumbersSource'
 import { fetchedLine, formulaLine, limitLines, sourceLine, type Cohort } from '../lib/evidence'
 
 interface Props {
@@ -231,6 +232,12 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
               <a className="link-btn" href="/method" target="_blank" rel="noreferrer">
                 {t('find.bd.howCalcLink')}
               </a>
+            </section>
+          )}
+
+          {video.live && (
+            <section className="block">
+              <NumbersSource video={video} open />
             </section>
           )}
 
