@@ -1,4 +1,5 @@
 import { t } from '../i18n.ts'
+import { serverText } from '../serverText.ts'
 import type { CutState } from '../cut.ts'
 import type { Brand } from '../../types'
 import type { Generation } from '../canvas/types.ts'
@@ -12,7 +13,7 @@ const base = (ideaId: string) => `/api/ideas/${encodeURIComponent(ideaId)}/edit`
 async function send<T>(r: Response, fallback: string): Promise<T> {
   if (r.ok) return r.json()
   const body = await r.json().catch(() => null)
-  throw new Error(body?.error ?? fallback)
+  throw new Error(serverText(body?.error) || fallback)
 }
 
 export async function getProject(ideaId: string): Promise<{ version: number; project: EditProject }> {

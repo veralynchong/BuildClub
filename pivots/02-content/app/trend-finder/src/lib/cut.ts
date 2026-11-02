@@ -1,4 +1,5 @@
 import { t } from './i18n.ts'
+import { serverText } from './serverText.ts'
 
 // The cut of an approved plan: its chosen takes joined into one publishable 9:16 MP4. Mirrors backend/renders.py.
 export interface CutReview {
@@ -58,7 +59,7 @@ const base = (ideaId: string) => `/api/ideas/${encodeURIComponent(ideaId)}/cut`
 async function send<T>(r: Response, fallback: string): Promise<T> {
   if (r.ok) return r.json()
   const body = await r.json().catch(() => null)
-  throw new Error(body?.error ?? fallback)
+  throw new Error(serverText(body?.error) || fallback)
 }
 
 export async function getCut(ideaId: string, shotCount?: number): Promise<CutState> {

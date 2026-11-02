@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { t } from '../../lib/i18n'
+import { serverText } from '../../lib/serverText'
 import { useManagerName } from '../../lib/appContext'
 import { formatDay } from '../../lib/dates'
 import { formatDuration, getCut, pollCut, reviewLine, sendCutForReview, type CutState } from '../../lib/cut'
@@ -154,7 +155,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
       {active && cut && (
         <div className="cut-progress" role="status">
           <progress value={cut.progress} max={1} />
-          <span className="muted small">{cut.step}</span>
+          <span className="muted small">{serverText(cut.step)}</span>
         </div>
       )}
       {pollDead && (
@@ -162,7 +163,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
           {t('editor.export.recheck')}
         </button>
       )}
-      {cut?.status === 'failed' && cut.error && <p className="error" role="alert"><ErrorText text={cut.error} /></p>}
+      {cut?.status === 'failed' && cut.error && <p className="error" role="alert"><ErrorText text={serverText(cut.error)} /></p>}
       {error && <p className="error" role="alert"><ErrorText text={error} /></p>}
       {cut?.status === 'done' && cut.source !== 'editor' && !active && (
         <p className="small">

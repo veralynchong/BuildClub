@@ -1,5 +1,6 @@
 import type { IdeaStatus } from '../types'
 import { t } from './i18n.ts'
+import { serverText } from './serverText.ts'
 
 // One uploaded video for a shot of an approved plan. One take per shot is chosen. A take belongs to a shot by its
 // stable id (`shotId`); `shot` is that shot's current 0-based place in the list, null once the shot was removed.
@@ -69,7 +70,7 @@ const base = (ideaId: string) => `/api/ideas/${encodeURIComponent(ideaId)}`
 async function send<T>(r: Response, fallback: string): Promise<T> {
   if (r.ok) return r.json()
   const body = await r.json().catch(() => null)
-  throw new Error(body?.error ?? fallback)
+  throw new Error(serverText(body?.error) || fallback)
 }
 
 export async function listTakes(ideaId: string): Promise<Take[]> {

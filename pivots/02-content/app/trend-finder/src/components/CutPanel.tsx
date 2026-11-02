@@ -4,6 +4,7 @@ import type { CutState } from '../lib/cut'
 import { formatDuration, getCut, pollCut, reviewLine, sendCutForReview } from '../lib/cut'
 import { useManagerName } from '../lib/appContext'
 import { t } from '../lib/i18n'
+import { serverText } from '../lib/serverText'
 import { formatDay } from '../lib/dates'
 import { formatSize } from '../lib/takes'
 import { CutVideo } from './cut/CutVideo'
@@ -91,13 +92,13 @@ export function CutPanel({ ideaId, status, shotCount, takesRevision = 0, onOpenC
       {active && cut && (
         <div className="cut-progress" role="status">
           <progress value={cut.progress} max={1} />
-          <span className="muted small">{cut.step}</span>
+          <span className="muted small">{serverText(cut.step)}</span>
         </div>
       )}
 
       {cut?.status === 'failed' && (
         <p className="error" role="alert">
-          {cut.error}
+          {serverText(cut.error)}
         </p>
       )}
 
