@@ -227,7 +227,11 @@ export function clipStatus(clip: Clip, doc: CanvasDoc, gens: Generation[], takes
     return { state: 'ok' }
   }
   if (!takes.some((x) => x.id === src.id)) return { state: 'missing' }
-  return { state: 'ok' } // a take is a separate piece of footage, never a newer version of another take
+  // A take is a separate piece of footage, not a newer version of another take. The one exception is its own
+  // cleaned version: that is offered as newer (the latest one when there are several).
+  const cleaned = takes.filter((x) => x.cleanedFrom === src.id).sort((a, b) => b.createdAt - a.createdAt)[0]
+  if (cleaned) return { state: 'newer', source: { kind: 'take', id: cleaned.id, shotId: src.shotId } }
+  return { state: 'ok' }
 }
 
 const sameSource = (a: ClipSource | undefined, b: ClipSource): boolean => !!a && a.kind === b.kind && a.id === b.id
@@ -247,10 +251,17 @@ export function repinIfOld(primaries: Record<string, ClipSource>, shotId: string
 }
 
 // Points a clip at a newer version. The trim is kept where it still fits; otherwise the clip restarts at 0
-// with its old length, cut to the new video.
-export function applyNewer(p: EditProject, clipId: string, source: ClipSource, duration: number): EditProject {
+// with its old length, cut to the new video. With `whole` (a cleaned take) the trim is dropped and the clip takes
+// the whole new video; the timeline is left alone when that would pass the length limit.
+export function applyNewer(p: EditProject, clipId: string, source: ClipSource, duration: number, whole = false): EditProject {
   const c = p.clips.find((x) => x.id === clipId)
   if (!c) return p
+  if (whole) {
+    const out = floorFrames(duration)
+    if (out < MIN_F) return p
+    const next = withClips(p, p.clips.map((x) => (x.id === clipId ? { ...x, source, in: 0, out: secs(out) } : x)))
+    return totalFrames(next) > MAX_F ? p : next
+  }
   const cap = floorFrames(duration)
   let nin = frames(c.in)
   let nout = Math.min(frames(c.out), cap)
@@ -293,6 +304,14 @@ export function addText(p: EditProject, at: number, text: string, id: string): E
   const end = Math.min(start + TEXT_SECONDS * FPS, total)
   const item: TextItem = { id, text: body, start: secs(start), end: secs(end), position: 'bottom', color: 'white' }
   return { ...p, texts: [...p.texts, item] }
+}
+
+// A typed number of seconds, or null when it is blank, not a finite number, or negative.
+export function parseSeconds(raw: string): number | null {
+  const s = raw.trim()
+  if (!s) return null
+  const n = Number(s)
+  return Number.isFinite(n) && n >= 0 ? n : null
 }
 
 // Applies a change to one text and keeps it valid: it starts at 0 or later, ends after it starts, and its words

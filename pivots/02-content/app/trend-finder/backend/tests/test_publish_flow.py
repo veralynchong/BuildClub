@@ -3,9 +3,12 @@
 import pytest
 
 import publishers
+import publishing
+import renders
 import server
 from publish_helpers import approved_cut
 from test_auth import add_user, login
+from test_renders import legacy_cut, setup, with_take  # noqa: F401
 
 
 @pytest.fixture(autouse=True)
@@ -163,3 +166,29 @@ def test_review_link_does_not_leak_posts(client):
     assert client.post("/api/ideas/ok/publish", json={"caption": "", "platforms": ["tiktok"]}).status_code == 401
     assert client.post(f"/api/publications/{pid}/metrics", json={"views": 1}).status_code == 401
     assert client.get(f"/api/review/{token}/publications").status_code == 404
+
+
+def test_approved_legacy_auto_cut_can_be_published(client, setup):
+    first = with_take(client)
+    folder = legacy_cut(take_ids=[first["id"]])
+    with server.db() as conn:
+        conn.execute("INSERT INTO cut_reviews (idea_id, version, status, sent_at, decided_at) "
+                     "VALUES ('ia', ?, 'approved', 1, 2)", (renders.final_version(folder),))
+        path = publishing.approved_cut(conn, server.load, server.MEDIA_DIR.resolve(), "ia")
+    assert path is not None and path.name == "final.mp4"
+    other = with_take(client)
+    client.post(f"/api/ideas/ia/takes/{other['id']}/choose")
+    with server.db() as conn:
+        assert publishing.approved_cut(conn, server.load, server.MEDIA_DIR.resolve(), "ia") is None
+
+
+def test_legacy_auto_cut_approved_through_the_review_link_can_be_published(client, setup):
+    first = with_take(client)
+    legacy_cut(take_ids=[first["id"]])
+    token = client.post("/api/share", json={"clientId": "a"}).json()["token"]
+    assert client.post("/api/ideas/ia/cut/review").status_code == 200
+    version = client.get(f"/api/review/{token}").json()["cuts"][0]["cut"]["version"]
+    r = client.post(f"/api/review/{token}/cuts/ia/decide", json={"decision": "approved", "version": version})
+    assert r.status_code == 200
+    r = publish(client, "ia")
+    assert r.status_code == 200 and all(p["status"] == "published" for p in r.json()["posts"])

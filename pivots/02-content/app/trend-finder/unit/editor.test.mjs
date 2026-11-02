@@ -32,6 +32,7 @@ import {
   CLIP_MIME,
   addText,
   updateText,
+  parseSeconds,
   removeText,
   newTextId,
   textsAt,
@@ -629,4 +630,38 @@ test('lineCaptions: a lone closing mark never becomes a page of its own across a
   const pages = captionPages(caps)
   assert.equal(pages.map((pg) => pg.text).join(''), '你好，世界。')
   assert.ok(pages.every((pg) => pg.text.trim() !== '。'))
+})
+
+test('clipStatus: a cleaned version of the take is newer; the newest cleaned one wins; already on it is ok', () => {
+  const d = doc([])
+  const orig = { ...take('t1', 's1'), createdAt: 1, cleanedFrom: null }
+  const c1 = { ...take('t2', 's1', true), createdAt: 2, cleanedFrom: 't1' }
+  const c2 = { ...take('t3', 's1'), createdAt: 3, cleanedFrom: 't1' }
+  const tk = clip('b', 0, 1, { source: { kind: 'take', id: 't1', shotId: 's1' } })
+  assert.deepEqual(clipStatus(tk, d, [], [orig, c1]), { state: 'newer', source: { kind: 'take', id: 't2', shotId: 's1' } })
+  assert.deepEqual(clipStatus(tk, d, [], [orig, c1, c2]), { state: 'newer', source: { kind: 'take', id: 't3', shotId: 's1' } })
+  const onClean = clip('c', 0, 1, { source: { kind: 'take', id: 't2', shotId: 's1' } })
+  assert.deepEqual(clipStatus(onClean, d, [], [orig, c1]), { state: 'ok' })
+})
+
+test('applyNewer whole: takes the whole new take, and refuses when the total would pass the limit', () => {
+  const p = project([clip('a', 1, 4)])
+  const src = { kind: 'take', id: 't2' }
+  const r = applyNewer(p, 'a', src, 5.4, true)
+  assert.equal(r.clips[0].in, 0)
+  assert.equal(r.clips[0].out, 5.4)
+  assert.deepEqual(r.clips[0].source, src)
+  const big = project([clip('a', 0, 1), clip('b', 0, 170)])
+  assert.equal(applyNewer(big, 'a', src, 20, true), big)
+})
+
+test('parseSeconds: a number or null', () => {
+  assert.equal(parseSeconds('1.5'), 1.5)
+  assert.equal(parseSeconds(' 2 '), 2)
+  assert.equal(parseSeconds('0'), 0)
+  assert.equal(parseSeconds(''), null)
+  assert.equal(parseSeconds('  '), null)
+  assert.equal(parseSeconds('abc'), null)
+  assert.equal(parseSeconds('-1'), null)
+  assert.equal(parseSeconds('Infinity'), null)
 })

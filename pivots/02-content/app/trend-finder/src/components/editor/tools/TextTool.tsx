@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { t } from '../../../lib/i18n'
 import type { Key } from '../../../lib/i18n'
-import { MAX_TEXTS, MAX_TEXT_CHARS, addText, newTextId, removeText, totalLength, updateText } from '../../../lib/editor/timeline'
+import { MAX_TEXTS, MAX_TEXT_CHARS, addText, newTextId, parseSeconds, removeText, totalLength, updateText } from '../../../lib/editor/timeline'
 import type { EditProject, TextColor, TextItem, TextPosition } from '../../../lib/editor/types'
 
 const POSITIONS: TextPosition[] = ['top', 'middle', 'bottom']
@@ -69,7 +69,18 @@ export function TextTool({ project, seconds, readOnly, onProject }: Props) {
 function TextFields({ item, project, readOnly, onProject }: { item: TextItem; project: EditProject; readOnly: boolean; onProject: (p: EditProject) => void }) {
   // The words are kept as typed here; an empty box is not saved (the project never holds empty text).
   const [draft, setDraft] = useState(item.text)
+  // Start and end are drafts while typing; they are saved on blur or Enter, and a bad entry goes back to the saved value.
+  const [startDraft, setStartDraft] = useState(String(round1(item.start)))
+  const [endDraft, setEndDraft] = useState(String(round1(item.end)))
   const patch = (p: Partial<Omit<TextItem, 'id'>>) => onProject(updateText(project, item.id, p))
+  const commit = (key: 'start' | 'end', raw: string, setRaw: (v: string) => void) => {
+    const n = parseSeconds(raw)
+    if (n === null) setRaw(String(round1(item[key])))
+    else patch({ [key]: n })
+  }
+  // The project may clamp the value (or change it elsewhere), so show what it holds once it changes.
+  useEffect(() => setStartDraft(String(round1(item.start))), [item.start])
+  useEffect(() => setEndDraft(String(round1(item.end))), [item.end])
   return (
     <div className="cv-ed-fields">
       <label className="cv-ed-field">
@@ -89,11 +100,11 @@ function TextFields({ item, project, readOnly, onProject }: { item: TextItem; pr
       <div className="cv-ed-field-row">
         <label className="cv-ed-field">
           <span>{t('editor.text.start')}</span>
-          <input type="number" min={0} step={0.1} value={round1(item.start)} disabled={readOnly} onChange={(e) => patch({ start: Number(e.target.value) })} />
+          <input type="number" min={0} step={0.1} value={startDraft} disabled={readOnly} onChange={(e) => setStartDraft(e.target.value)} onBlur={() => commit('start', startDraft, setStartDraft)} onKeyDown={(e) => e.key === 'Enter' && commit('start', startDraft, setStartDraft)} />
         </label>
         <label className="cv-ed-field">
           <span>{t('editor.text.end')}</span>
-          <input type="number" min={0} step={0.1} value={round1(item.end)} disabled={readOnly} onChange={(e) => patch({ end: Number(e.target.value) })} />
+          <input type="number" min={0} step={0.1} value={endDraft} disabled={readOnly} onChange={(e) => setEndDraft(e.target.value)} onBlur={() => commit('end', endDraft, setEndDraft)} onKeyDown={(e) => e.key === 'Enter' && commit('end', endDraft, setEndDraft)} />
         </label>
       </div>
       <Choice legend={t('editor.text.position')} values={POSITIONS} labels={POS_LABEL} value={item.position} disabled={readOnly} onPick={(position) => patch({ position })} />

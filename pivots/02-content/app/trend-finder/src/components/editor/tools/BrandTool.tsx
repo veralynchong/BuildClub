@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from '../../../lib/i18n'
 import { useApp } from '../../../lib/appContext'
 import { deleteLogo, putBrand, putLogo } from '../../../lib/editor/api'
@@ -23,6 +23,7 @@ export function BrandTool({ client, project, readOnly, onProject }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState<string | null>(null) // a colour being picked; saved when the picker closes
   const brand = client?.brand
+  const colorRef = useRef<HTMLInputElement>(null)
   const off = readOnly || busy || !client
 
   const save = async (action: () => Promise<Brand>) => {
@@ -40,6 +41,22 @@ export function BrandTool({ client, project, readOnly, onProject }: Props) {
 
   const font = brand?.font ?? 'Noto Sans TC'
   const color = brand?.color ?? null
+  // The native change event fires when the picker closes (React's onChange fires on every drag), so save there;
+  // onBlur stays as the fallback. The same colour is never saved twice.
+  const saveColor = () => {
+    const next = draft
+    setDraft(null)
+    if (next && next !== color) void save(() => putBrand(client!.id, { font, color: next }))
+  }
+  const saveColorRef = useRef(saveColor)
+  saveColorRef.current = saveColor
+  useEffect(() => {
+    const el = colorRef.current
+    if (!el) return
+    const onNative = () => saveColorRef.current()
+    el.addEventListener('change', onNative)
+    return () => el.removeEventListener('change', onNative)
+  }, [])
   return (
     <div className="cv-ed-tool">
       <p className="muted small">{t('editor.brand.shared')}</p>
@@ -87,16 +104,13 @@ export function BrandTool({ client, project, readOnly, onProject }: Props) {
         <span>{t('editor.brand.color')}</span>
         <div className="cv-ed-tool-row">
           <input
+            ref={colorRef}
             type="color"
             aria-label={t('editor.brand.color')}
             value={draft ?? color ?? FALLBACK_COLOR}
             disabled={off}
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => {
-              const next = draft
-              setDraft(null)
-              if (next && next !== color) void save(() => putBrand(client!.id, { font, color: next }))
-            }}
+            onBlur={saveColor}
           />
           <button type="button" className="btn btn-ghost btn-sm" disabled={off || !color} onClick={() => void save(() => putBrand(client!.id, { font, color: null }))}>
             {t('editor.brand.color.clear')}

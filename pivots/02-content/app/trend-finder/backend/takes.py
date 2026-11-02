@@ -18,7 +18,7 @@ from models import Shot, fill_shot_ids
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS takes (id TEXT PRIMARY KEY, idea_id TEXT NOT NULL, shot INTEGER NOT NULL, "
     "ext TEXT NOT NULL, size INTEGER NOT NULL, name TEXT NOT NULL, chosen INTEGER NOT NULL DEFAULT 0, "
-    "created_at INTEGER NOT NULL, shot_id TEXT)",
+    "created_at INTEGER NOT NULL, shot_id TEXT, cleaned_from TEXT)",
     "CREATE INDEX IF NOT EXISTS takes_by_shot ON takes (idea_id, shot)",
 )
 
@@ -34,12 +34,15 @@ NOT_VIDEO = "Upload an .mp4 or .mov video file."
 # Counting a shot's takes and adding one, or moving the pick, take turns.
 takes_lock = threading.Lock()
 
-COLUMNS = "id, idea_id, shot, ext, size, name, chosen, created_at, shot_id"
+COLUMNS = "id, idea_id, shot, ext, size, name, chosen, created_at, shot_id, cleaned_from"
 
 
 def migrate(conn) -> None:
-    if "shot_id" not in {r[1] for r in conn.execute("PRAGMA table_info(takes)")}:
+    have = {r[1] for r in conn.execute("PRAGMA table_info(takes)")}
+    if "shot_id" not in have:
         conn.execute("ALTER TABLE takes ADD COLUMN shot_id TEXT")
+    if "cleaned_from" not in have:
+        conn.execute("ALTER TABLE takes ADD COLUMN cleaned_from TEXT")
 
 
 # A take belongs to a shot by the shot's stable id. The `shot` column is the index the shot had at upload; it
@@ -86,9 +89,9 @@ def chosen_takes(conn, idea_id: str, limit: int) -> list[tuple]:
 
 
 def to_json(row, index: Optional[int]) -> dict:
-    tid, idea_id, _stored, _ext, size, name, chosen, created, shot_id = row
+    tid, idea_id, _stored, _ext, size, name, chosen, created, shot_id, cleaned_from = row
     return {"id": tid, "ideaId": idea_id, "shot": index, "shotId": shot_id, "name": name, "size": size,
-            "chosen": bool(chosen), "createdAt": created, "url": f"/api/ideas/{idea_id}/takes/{tid}/file"}
+            "chosen": bool(chosen), "createdAt": created, "cleanedFrom": cleaned_from, "url": f"/api/ideas/{idea_id}/takes/{tid}/file"}
 
 
 def error(status: int, message: str) -> JSONResponse:
@@ -175,8 +178,8 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
                     part.unlink(missing_ok=True)
                     return error(409, f"This shot has the most takes it can hold ({MAX_TAKES_PER_SHOT}).")
                 os.replace(part, folder / f"{take_id}.{ext}")
-                row = (take_id, idea_id, shot, ext, size, name, int(count == 0), int(time.time() * 1000), shot_id)
-                conn.execute(f"INSERT INTO takes ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
+                row = (take_id, idea_id, shot, ext, size, name, int(count == 0), int(time.time() * 1000), shot_id, None)
+                conn.execute(f"INSERT INTO takes ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
                 index = current_index(row, ids)
         return to_json(row, index)
 

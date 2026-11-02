@@ -50,13 +50,12 @@ import google_auth
 import production
 import publishing
 import cut_review
-import grading
 import recheck
 import generations
 import renders
 import shotlist
 import storyboard
-import subtitles
+import cleaning
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
 from compare import CompareJobs, compare_id_for
@@ -762,7 +761,7 @@ def db() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
     migrate_medians(conn)
-    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + editing.SCHEMA + generations.SCHEMA + renders.SCHEMA + grading.SCHEMA + recheck.SCHEMA:
+    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + editing.SCHEMA + generations.SCHEMA + renders.SCHEMA + recheck.SCHEMA:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
@@ -909,6 +908,7 @@ app.include_router(comments.make_router(load, save))
 app.include_router(google_auth.make_router(db, session_cookie_secure))
 app.include_router(publishing.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(takes.make_router(db, load, lambda: MEDIA_DIR))
+app.include_router(cleaning.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(production.make_router(db))
 def storyboard_budget(wallet: str, usd: float):
     """None when the paid call may go ahead, else the 429 to return. Frame images use the generation wallet."""
@@ -959,9 +959,7 @@ app.include_router(canvas.make_router(db, load))
 app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR, gen_router))
 app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
-app.include_router(grading.make_router(db, lambda: MEDIA_DIR))
 app.include_router(recheck.make_router(db, lambda u: is_video_link(u)))
-app.include_router(subtitles.make_router(lambda: MEDIA_DIR, lambda i: any(x["id"] == i for x in load("ideas") or [])))
 publishing.seed_demo(db)
 
 

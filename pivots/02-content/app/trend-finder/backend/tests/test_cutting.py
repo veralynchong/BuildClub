@@ -3,6 +3,7 @@
 import json
 import random
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,79 @@ def test_parse_words_drops_markers():
     assert cutting.parse_words(data) == [
         (0.12, 0.64, "hello"), (0.65, 1.0, "everyone"), (0.7, 0.9, "out"),
         (1.0, 1.6, "um"), (2.9, 3.5, "world")]
+
+
+def test_parse_words_drops_starred_sound_notes():
+    seg = lambda a, b, text: {"offsets": {"from": a, "to": b}, "text": text}
+    data = {"transcription": [seg(0, 1990, " *phone"), seg(1990, 4000, " rings*"), seg(4000, 4500, " hi")]}
+    assert cutting.parse_words(data) == [(4.0, 4.5, "hi")]
+
+
+def test_parse_words_uses_dtw_token_times():
+    # Real whisper-cli 1.9.5 output: the segment offsets put "of the um" inside the 1.9-3.6 s pause; the
+    # DTW token times (t_dtw, 10 ms units, about where each token ends) do not.
+    data = json.loads((FIXTURES / "whisper_words_dtw.json").read_text())
+    words = cutting.parse_words(data)
+    assert [w[2] for w in words] == ["hello", "um", "this", "is", "a", "test", "of", "the", "um", "video", "tool"]
+    assert words[0] == pytest.approx((0.55, 0.78, "hello"))  # first word starts at its segment offset
+    assert words[1] == pytest.approx((0.78, 1.0, "um"))      # previous token's t_dtw to its own
+    assert words[8] == pytest.approx((3.82, 3.96, "um"))
+    assert words[6] == pytest.approx((1.84, 3.72, "of"))     # swallows the pause; keep_intervals moves it
+
+
+def test_dtw_word_start_skips_the_silence_before_it():
+    # "of" starts where "test" ended, before the pause; the pause must still be cut, the fillers too
+    data = json.loads((FIXTURES / "whisper_words_dtw.json").read_text())
+    sil = [(0.0, 0.53), (1.908, 3.617), (4.881, 5.584)]  # silencedetect=n=-35dB on the same audio
+    keeps = cutting.keep_intervals(cutting.parse_words(data), sil, 5.584)
+    kept = lambda a, b: any(ka < b and kb > a for ka, kb in keeps)
+    assert not kept(0.8, 0.99) and not kept(3.83, 3.95) and not kept(2.1, 3.4)
+    assert kept(0.6, 0.75) and kept(1.2, 1.8) and kept(4.0, 4.8)  # hello, "this is a test", "video tool"
+
+
+def test_pause_inside_a_long_word_is_not_its_start():
+    # a silence that begins well after the word starts is inside the word; only one right at its start counts
+    words = [(0.0, 0.5, "so"), (0.5, 2.0, "really"), (2.0, 2.4, "um")]
+    assert cutting._effective_starts(words, [(1.2, 1.5)]) == [0.0, 0.5, 2.0]
+    assert cutting._effective_starts(words, [(0.6, 1.5)]) == [0.0, 1.5, 2.0]
+    assert cutting.keep_intervals(words, [(1.2, 1.5)], 2.4) == [(0.0, 2.0)]
+
+
+def test_fit_to_silences_trims_both_sides():
+    words = [(0.5, 0.9, "test"), (0.9, 3.7, "of"), (3.7, 3.8, "the")]
+    assert cutting.fit_to_silences(words, [(1.0, 3.6)]) == [(0.5, 0.9, "test"), (3.6, 3.7, "of"), (3.7, 3.8, "the")]
+    assert cutting.fit_to_silences([(0.5, 2.0, "so")], [(1.0, 2.5)]) == [(0.5, 1.0, "so")]
+
+
+def _fake_whisper(tmp_path, monkeypatch, knows_dtw):
+    exe, model = tmp_path / "whisper-cli", tmp_path / "model.bin"
+    exe.write_text(""), model.write_text("")
+    monkeypatch.setattr(analyze, "WHISPER", str(exe))
+    monkeypatch.setattr(analyze, "MODEL", model)
+    calls = []
+
+    def fake_run(cmd, timeout=None):
+        calls.append(cmd)
+        if knows_dtw or "-dtw" not in cmd:  # an old build prints usage and exits 0 without a JSON file
+            base = Path(cmd[cmd.index("-of") + 1])
+            seg = {"offsets": {"from": 100, "to": 400}, "text": " hi", "tokens": [{"text": " hi", "t_dtw": 30 if "-dtw" in cmd else -1}]}
+            base.with_suffix(".json").write_text(json.dumps({"transcription": [seg]}))
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    monkeypatch.setattr(cutting, "run", fake_run)
+    return calls
+
+
+def test_old_whisper_without_dtw_falls_back(tmp_path, monkeypatch, caplog):
+    calls = _fake_whisper(tmp_path, monkeypatch, knows_dtw=False)
+    assert cutting.transcribe_words(tmp_path / "a.wav", tmp_path) == [(0.1, 0.4, "hi")]
+    assert ["-dtw" in c for c in calls] == [True, False] and "-nfa" not in calls[1]
+    assert "without -dtw" in caplog.text
+
+
+def test_whisper_with_dtw_runs_once(tmp_path, monkeypatch):
+    calls = _fake_whisper(tmp_path, monkeypatch, knows_dtw=True)
+    assert cutting.transcribe_words(tmp_path / "a.wav", tmp_path) == [(0.1, 0.3, "hi")]
+    assert len(calls) == 1
 
 
 def test_filler_removed_and_gap_trimmed():
@@ -69,82 +143,14 @@ def test_never_cuts_inside_a_real_word(seed):
         assert any(k[0] <= start + 1e-9 and true_end <= k[1] + 1e-9 for k in keeps), (text, start, true_end, keeps)
 
 
-def test_atempo_chain():
-    assert cutting.atempo_chain(1.1) == "atempo=1.1"
-    assert cutting.atempo_chain(2.5) == "atempo=2.0,atempo=1.25"
-    assert cutting.atempo_chain(1.0) == ""
-
-
-def test_output_duration():
-    assert cutting.output_duration([(0, 1), (2, 3.5)], 1.25) == pytest.approx(2.0)
-
-
-GOLDEN = (
-    "[0:v]trim=start=0:end=1,setpts=PTS-STARTPTS[v0];"
-    "[0:a]atrim=start=0:end=1,asetpts=PTS-STARTPTS,afade=t=in:d=0.012,afade=t=out:st=0.988:d=0.012[a0];"
-    "[0:v]trim=start=2.78:end=3.5,setpts=PTS-STARTPTS[v1];"
-    "[0:a]atrim=start=2.78:end=3.5,asetpts=PTS-STARTPTS,afade=t=in:d=0.012,afade=t=out:st=0.708:d=0.012[a1];"
-    "[v0][a0][v1][a1]concat=n=2:v=1:a=1[vc][ac];"
-    "[vc]setpts=PTS/1.25[v];"
-    "[ac]atempo=1.25[as];"
-    "[as]loudnorm=I=-13:TP=-1.5:LRA=11:print_format=json,aresample=48000[a]"
-)
-
-
-def test_cut_graph_golden_string():
-    graph = cutting.build_cut_graph([(0.0, 1.0), (2.78, 3.5)], 1.25, music=False, audio_only=False, loudnorm=None)
-    assert graph == GOLDEN
-
-
-def test_cut_graph_audio_only_has_no_video():
-    graph = cutting.build_cut_graph([(0.0, 1.0)], 1.0, music=False, audio_only=True, loudnorm=None)
-    assert "trim=" not in graph.replace("atrim", "") and "[v]" not in graph and graph.endswith("[a]")
-
-
-def test_cut_graph_music_and_second_pass():
-    ln = {"input_i": -20.5, "input_tp": -3.1, "input_lra": 7.0, "input_thresh": -31.0, "target_offset": 0.4}
-    graph = cutting.build_cut_graph([(0.0, 1.0), (2.0, 4.0)], 1.1, music=True, audio_only=False, loudnorm=ln)
-    assert "amix=inputs=2:duration=first:normalize=0" in graph
-    assert "linear=true" in graph and "measured_I=-20.5" in graph and "offset=0.4" in graph
-    first = cutting.build_cut_graph([(0.0, 1.0)], 1.0, music=False, audio_only=False, loudnorm=None)
-    assert "print_format=json" in first and "linear=true" not in first and "amix" not in first
-    assert "[1:a]atrim=0:2.727" in graph
-
-
-def test_join_graph_crops_and_fills_silence():
-    graph = cutting.build_join_graph([{"hasAudio": True, "duration": 3.0}, {"hasAudio": False, "duration": 2.5}])
-    assert graph.count("anullsrc=r=48000:cl=stereo") == 1 and "atrim=0:2.5" in graph
-    assert "[1:a]" not in graph and "[0:a]aresample=48000,aformat=channel_layouts=stereo" in graph
-    chains = [c for c in graph.split(";") if c.startswith(("[0:v]", "[1:v]"))]
-    assert len(chains) == 2 and all(c.endswith("format=yuv420p[v%d]" % i) for i, c in enumerate(chains))
-    assert "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30" in graph
-    assert graph.endswith("concat=n=2:v=1:a=1[v][a]")
-
-
-LOUDNORM_ERR = """[Parsed_loudnorm_0 @ 0x1] 
-{
-\t"input_i" : "-20.53",
-\t"input_tp" : "-3.10",
-\t"input_lra" : "7.00",
-\t"input_thresh" : "-31.04",
-\t"output_i" : "-13.2",
-\t"target_offset" : "0.40"
-}
-"""
 SILENCE_ERR = """[silencedetect @ 0x1] silence_start: 1.3
 [silencedetect @ 0x1] silence_end: 2.9 | silence_duration: 1.6
 [silencedetect @ 0x1] silence_start: 4.25
 """
 
 
-def test_parse_loudnorm_and_silences_and_progress():
-    assert cutting.parse_loudnorm("noise {\"a\": 1}\n" + LOUDNORM_ERR) == {
-        "input_i": -20.53, "input_tp": -3.10, "input_lra": 7.0, "input_thresh": -31.04, "target_offset": 0.4}
+def test_parse_silences():
     assert cutting.parse_silences(SILENCE_ERR, 6.0) == [(1.3, 2.9), (4.25, 6.0)]
-    assert cutting.parse_progress("out_time_us=2500000", 10.0) == pytest.approx(0.25)
-    assert cutting.parse_progress("out_time_us=99000000", 10.0) == 1.0
-    assert cutting.parse_progress("out_time_us=N/A", 10.0) is None
-    assert cutting.parse_progress("progress=continue", 10.0) is None
 
 
 def test_missing_tools(monkeypatch, tmp_path):
@@ -207,18 +213,6 @@ def test_protected_boundary_does_not_cut_into_protected_take():
 
 def test_no_words_with_protected_keeps_everything():
     assert cutting.keep_intervals([], [], 5.0, protected=[(0.0, 5.0)]) == [(0.0, 5.0)]
-
-
-def test_wordless_spans_picks_takes_without_words():
-    words = [(0.5, 1.0, "a"), (5.5, 6.0, "b")]
-    spans = cutting.wordless_spans([2.0, 3.0, 3.0], words)
-    assert spans == [(2.0, 5.0)]
-
-
-def test_cut_graph_music_fades_stay_non_negative_for_a_short_output():
-    graph = cutting.build_cut_graph([(0.0, 0.88)], 1.1, music=True, audio_only=False, loudnorm=None)
-    assert "afade=t=out:st=0.4:d=0.4" in graph and "st=-" not in graph
-    assert "afade=t=in:d=0.4" in graph
 
 
 def test_describe_trims_splits_per_take_and_names_fillers():

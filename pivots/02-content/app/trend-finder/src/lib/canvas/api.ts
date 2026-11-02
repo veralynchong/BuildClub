@@ -1,4 +1,5 @@
 import { t } from '../i18n.ts'
+import { serverText } from '../serverText.ts'
 import { imageError, imageType } from './upload.ts'
 import type { Budget, CanvasDoc, CanvasState, ChainBody, GenModel, Generation, Quote } from './types.ts'
 
@@ -24,15 +25,15 @@ const base = (ideaId: string) => `/api/ideas/${encodeURIComponent(ideaId)}`
 async function send<T>(r: Response, fallback: string): Promise<T> {
   if (r.ok) return r.json()
   const body = await r.json().catch(() => null)
-  throw new Error(body?.error ?? fallback)
+  throw new Error(serverText(body?.error) || fallback)
 }
 
 export async function getCanvas(ideaId: string): Promise<CanvasState> {
   const r = await fetch(`${base(ideaId)}/canvas`)
   if (r.ok) return r.json()
   const body = await r.json().catch(() => null)
-  if (r.status === 409 && body?.code === 'no-shots') throw new NoShots(body.error)
-  throw new Error(body?.error ?? t('canvas.err.load'))
+  if (r.status === 409 && body?.code === 'no-shots') throw new NoShots(serverText(body.error))
+  throw new Error(serverText(body?.error) || t('canvas.err.load'))
 }
 
 export async function putCanvas(ideaId: string, version: number, doc: CanvasDoc): Promise<number> {
@@ -45,9 +46,9 @@ export async function putCanvas(ideaId: string, version: number, doc: CanvasDoc)
     const body = await r.json().catch(() => null)
     // A newer copy exists (409 with its version), the plan is no longer approved (409 without one), or a shot node is
     // missing (422): in every case this copy can't be saved, so the board must be reloaded.
-    if (r.status === 409) throw new StaleCanvas(body?.error ?? t('canvas.err.stale'), typeof body?.version === 'number' ? body.version : 0, body?.doc ?? null)
+    if (r.status === 409) throw new StaleCanvas(serverText(body?.error) || t('canvas.err.stale'), typeof body?.version === 'number' ? body.version : 0, body?.doc ?? null)
     if (body?.error === SHOT_DELETE) throw new StaleCanvas(t('canvas.err.stale'), 0, null)
-    throw new Error(body?.error ?? t('canvas.err.save'))
+    throw new Error(serverText(body?.error) || t('canvas.err.save'))
   }
   return (await send<{ version: number }>(r, t('canvas.err.save'))).version
 }

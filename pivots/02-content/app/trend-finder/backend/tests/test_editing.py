@@ -573,6 +573,7 @@ def voice_env(client, setup, monkeypatch):
     monkeypatch.setattr(cutting, "probe", lambda path: dict(info))
     monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
     monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: list(WORDS))
+    monkeypatch.setattr(cutting, "find_silences", lambda wav, total: [])
     editing._probe_cache.clear()
     return info
 
@@ -609,6 +610,21 @@ def test_voice_upload_without_whisper_keeps_file(client, voice_env, monkeypatch)
     assert client.get(got["url"]).status_code == 200
 
 
+def test_transcribe_voice_starts_a_word_after_the_pause(tmp_path, monkeypatch):
+    # Real DTW words: "of" starts where "test" ended (1.84), across the 1.9-3.6 s pause; a caption must not
+    # show it during the pause. Silences are what silencedetect finds on the same audio.
+    import json
+    from test_cutting import FIXTURES
+    data = json.loads((FIXTURES / "whisper_words_dtw.json").read_text())
+    monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
+    monkeypatch.setattr(cutting, "probe", lambda path: {"duration": 5.584})
+    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: cutting.parse_words(data))
+    monkeypatch.setattr(cutting, "find_silences", lambda wav, total: [(0.0, 0.53), (1.908, 3.617), (4.881, 5.584)])
+    words = {w["text"]: w for w in editing.transcribe_voice(tmp_path / "v.webm", tmp_path)}
+    assert words["of"]["start"] == pytest.approx(3.617) and words["of"]["end"] == pytest.approx(3.72)
+    assert words["test"]["end"] == pytest.approx(1.84) and words["tool"]["end"] == pytest.approx(4.68)
+
+
 def test_transcribe_voice_without_whisper_installed(tmp_path, monkeypatch):
     import analyze
     monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
@@ -641,6 +657,23 @@ def test_voice_upload_rejects_non_audio_and_long_files(client, voice_env, monkey
 
 def test_voice_upload_needs_an_approved_plan(client, voice_env):
     assert put_voice(client, idea="iw").status_code == 409
+
+
+def test_delete_voice_takes_the_edit_lock(client, voice_env):
+    import threading
+
+    got = put_voice(client).json()
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    result = {}
+    worker = threading.Thread(target=lambda: result.update(r=client.delete(f"/api/ideas/ia/edit/voice/{got['id']}")))
+    with editing.edit_lock:
+        worker.start()
+        worker.join(0.3)
+        assert worker.is_alive() and "r" not in result  # still waiting for the lock
+        assert any(folder.iterdir())
+    worker.join(5)
+    assert result["r"].status_code == 200
+    assert list(folder.iterdir()) == []
 
 
 def test_voice_delete_removes_both_files(client, voice_env):

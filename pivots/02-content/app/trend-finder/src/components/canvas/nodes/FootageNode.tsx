@@ -1,6 +1,6 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { t } from '../../../lib/i18n'
-import { formatSize } from '../../../lib/takes'
+import { canClean, formatSize } from '../../../lib/takes'
 import { ClipActions, ClipGrip } from './ClipActions'
 import { useCanvas } from './ctx'
 import { PortLabels, Ports } from './Ports'
@@ -9,12 +9,13 @@ import type { CvNodeProps } from './types'
 // The takes of this node's shot (matched by the shot's id): which one is used, add one, use another.
 export function FootageNode({ id, data: { node } }: CvNodeProps) {
   const input = useRef<HTMLInputElement>(null)
-  const { takes, readOnly, shotIndex, uploading, addTake, pickTake } = useCanvas()
+  const { takes, readOnly, shotIndex, uploading, addTake, pickTake, cleanTake, blocked } = useCanvas()
   const index = shotIndex(node.shotId)
   const gone = index < 0
   const mine = gone ? [] : takes.filter((x) => x.shotId === node.shotId)
   const chosen = mine.find((x) => x.chosen)
   const busy = uploading(id)
+  const [cleaning, setCleaning] = useState(false) // the busy state is a clean-up, not an upload
   return (
     <div className="cv-node cv-footage">
       <div className="cv-node-title">{t('canvas.node.footage')}</div>
@@ -22,7 +23,7 @@ export function FootageNode({ id, data: { node } }: CvNodeProps) {
       <div className="cv-preview small muted">
         {busy ? (
           <span role="status">
-            <span className="cv-spin" aria-hidden="true" /> {t('canvas.footage.uploading')}
+            <span className="cv-spin" aria-hidden="true" /> {t(cleaning ? 'canvas.footage.cleaning' : 'canvas.footage.uploading')}
           </span>
         ) : chosen ? (
           <video className="nodrag" src={chosen.url} muted playsInline controls preload="metadata" aria-label={t('canvas.footage.video')} />
@@ -37,6 +38,21 @@ export function FootageNode({ id, data: { node } }: CvNodeProps) {
               <ClipGrip src={{ kind: 'take', id: x.id, shotId: node.shotId }} />
               <span className="cv-take-name small" title={x.name}>{x.name}</span>
               <span className="small muted">{formatSize(x.size)}</span>
+              {x.cleanedFrom && <span className="cv-badge small">{t('canvas.footage.cleanedBadge')}</span>}
+              {!readOnly && !gone && canClean(x, takes) && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={busy || blocked}
+                  title={t('canvas.footage.cleanHint')}
+                  onClick={() => {
+                    setCleaning(true)
+                    void cleanTake(id, x.id).finally(() => setCleaning(false))
+                  }}
+                >
+                  {t('canvas.footage.clean')}
+                </button>
+              )}
               {x.chosen ? (
                 <span className="cv-badge small">{t('canvas.footage.chosen')}</span>
               ) : (

@@ -19,7 +19,7 @@ import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '.
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { addNode, chainBusy, chainPair, isRetired, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { mergeFrame } from '../../lib/storyboard'
-import { chooseTake, checkFile, listTakes, uploadTake, type Take } from '../../lib/takes'
+import { chooseTake, checkFile, cleanTake as cleanTakeRequest, listTakes, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
 import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
 import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
@@ -493,6 +493,15 @@ function CanvasBoard({
     }, 'canvas.err.uploadVideo')
   }
 
+  const cleanTake = (nodeId: string, takeId: string) => {
+    return working(nodeId, async () => {
+      const res = await cleanTakeRequest(ideaId, takeId)
+      if (!mounted.current) return
+      setTakes(res.takes)
+      showNote('canvas.footage.cleanDone', { sec: (res.originalSec - res.cleanSec).toFixed(1) })
+    }, 'canvas.footage.cleanFailed')
+  }
+
   const uploadToNode = (nodeId: string, file: File) => {
     const node = latest.current.doc.nodes.find((n) => n.id === nodeId)
     const kind = uploadKind(file)
@@ -652,6 +661,8 @@ function CanvasBoard({
     uploadToNode,
     addTake,
     pickTake: onUseTake,
+    cleanTake,
+    blocked,
     incomingHandles: (id) => edges.filter((e) => e.target === id).map((e) => e.targetHandle ?? ''),
     missing: (id) => {
       const node = doc.nodes.find((n) => n.id === id)

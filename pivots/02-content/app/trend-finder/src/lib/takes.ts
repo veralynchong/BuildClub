@@ -1,5 +1,6 @@
 import type { IdeaStatus } from '../types'
 import { t } from './i18n.ts'
+import { serverText } from './serverText.ts'
 
 // One uploaded video for a shot of an approved plan. One take per shot is chosen. A take belongs to a shot by its
 // stable id (`shotId`); `shot` is that shot's current 0-based place in the list, null once the shot was removed.
@@ -13,6 +14,7 @@ export interface Take {
   chosen: boolean
   createdAt: number
   url: string
+  cleanedFrom: string | null // the take this one was cleaned from, null for an upload
 }
 
 // Same limits and copy as backend/takes.py.
@@ -68,7 +70,7 @@ const base = (ideaId: string) => `/api/ideas/${encodeURIComponent(ideaId)}`
 async function send<T>(r: Response, fallback: string): Promise<T> {
   if (r.ok) return r.json()
   const body = await r.json().catch(() => null)
-  throw new Error(body?.error ?? fallback)
+  throw new Error(serverText(body?.error) || fallback)
 }
 
 export async function listTakes(ideaId: string): Promise<Take[]> {
@@ -90,4 +92,21 @@ export async function chooseTake(ideaId: string, takeId: string): Promise<Take[]
 
 export async function deleteTake(ideaId: string, takeId: string): Promise<Take[]> {
   return send(await fetch(`${base(ideaId)}/takes/${encodeURIComponent(takeId)}`, { method: 'DELETE' }), t('plan.takes.err.delete'))
+}
+
+export interface CleanResult {
+  take: Take
+  takes: Take[]
+  originalSec: number
+  cleanSec: number
+  trims: { kind: 'pause' | 'filler'; start: number; end: number }[]
+}
+
+// A take can be cleaned once: it is not itself a cleaned version and none was made from it yet.
+export function canClean(take: Take, all: Take[]): boolean {
+  return !take.cleanedFrom && !all.some((x) => x.cleanedFrom === take.id)
+}
+
+export async function cleanTake(ideaId: string, takeId: string): Promise<CleanResult> {
+  return send(await fetch(`${base(ideaId)}/takes/${encodeURIComponent(takeId)}/clean`, { method: 'POST' }), t('canvas.footage.cleanFailed'))
 }

@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { t } from '../../../lib/i18n'
+import { serverText } from '../../../lib/serverText'
 import { budgetLeft, failedGen, isRetired, pendingGen, priceOf, selectedGen, versionsOf } from '../../../lib/canvas/graph'
 import { PORTS } from '../../../lib/canvas/ports'
 import type { GenModel } from '../../../lib/canvas/types'
@@ -117,7 +118,7 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
       </div>
       {failed && !pending && (
         <p className={lost ? 'cv-gen-notice small' : 'cv-gen-error small'} role="alert">
-          {lost ? t('canvas.gen.unknown') : t('canvas.gen.failed', { error: failed.error ?? '' })}
+          {lost ? t('canvas.gen.unknown') : t('canvas.gen.failed', { error: serverText(failed.error) })}
         </p>
       )}
       {retired && (

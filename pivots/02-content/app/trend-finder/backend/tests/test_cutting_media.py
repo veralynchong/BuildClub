@@ -1,9 +1,9 @@
-"""Golden-file tests for the ffmpeg pipeline. Media is generated with lavfi into tmp_path."""
+"""Tests for the ffmpeg / whisper helpers in cutting.py that need the real programs (or their absence)."""
 
 import os
-import re
 import shutil
 import subprocess
+import wave
 
 import pytest
 
@@ -36,189 +36,13 @@ def make_clip(path, parts, size="640x360", with_audio=True):
     return path
 
 
-def cut(tmp_path, takes, *, speed=1.0, words_fn=fake_words, music=None, steps=None, **kw):
-    out = tmp_path / "out.mp4"
-    steps = steps if steps is not None else []
-    info = cutting.render_cut(takes, music, speed, tmp_path / "w", out, lambda p, t: steps.append((p, t)),
-                              words_fn=words_fn, **kw)
-    return info, cutting.probe(out), out
-
-
-def assert_spec(p):
-    assert (p["width"], p["height"], p["fps"]) == (1080, 1920, 30)
-    assert (p["vcodec"], p["acodec"], p["pix_fmt"], p["sample_rate"]) == ("h264", "aac", "yuv420p", 48000)
-
-
 @need_ffmpeg
-def test_silence_removed_and_spec_met(tmp_path):
+def test_gap_clip_is_cut_by_keep_intervals(tmp_path):
     clip = make_clip(tmp_path / "a.mp4", GAP_CLIP)
-    steps = []
-    info, p, out = cut(tmp_path, [{"path": clip}], steps=steps)
-    assert p["duration"] == pytest.approx(2.24, abs=0.15)  # 3.5 s minus the 1.26 s gap
-    assert_spec(p)
-    assert info["size"] == out.stat().st_size and info["durationSec"] == pytest.approx(p["duration"], abs=0.05)
-    loud = cutting.measure_loudness(out)
-    print("loudness", loud)
-    assert loud["I"] == pytest.approx(-13, abs=1.0) and loud["peak"] <= -1.0
-    assert not out.with_suffix(".part").exists()
-    progress = [s[0] for s in steps]
-    assert progress == sorted(progress) and progress[0] == pytest.approx(0.02)
-    assert {t for _, t in steps} >= {"Checking the takes", "Joining the takes", "Listening for words",
-                                     "Finding silences", "Measuring the sound", "Rendering", "Checking the result"}
-
-
-@need_ffmpeg
-def test_speed_shortens(tmp_path):
-    clip = make_clip(tmp_path / "a.mp4", GAP_CLIP)
-    _, p, _ = cut(tmp_path, [{"path": clip}], speed=1.25)
-    assert p["duration"] == pytest.approx(2.24 / 1.25, abs=0.15)
-    assert_spec(p)
-
-
-@need_ffmpeg
-def test_filler_cut(tmp_path):
-    parts = [("tone", 440, 0.8), ("tone", 880, 0.5), ("quiet", None, 0.6), ("tone", 440, 0.8)]
-    clip = make_clip(tmp_path / "a.mp4", parts)
-    words = [(0.0, 0.8, "hello"), (0.8, 1.3, "um"), (1.9, 2.7, "world")]
-    _, p, _ = cut(tmp_path, [{"path": clip}], words_fn=lambda w, d: words)
-    assert p["duration"] == pytest.approx(1.6 + 0.12, abs=0.2)
-
-
-@need_ffmpeg
-def test_no_words_keeps_everything(tmp_path):
-    clip = make_clip(tmp_path / "a.mp4", GAP_CLIP)
-    steps = []
-    _, p, _ = cut(tmp_path, [{"path": clip}], words_fn=lambda w, d: [], steps=steps)
-    assert p["duration"] == pytest.approx(3.5, abs=0.15)
-    assert any(t == "No speech found, so nothing was cut." for _, t in steps)
-
-
-def mean_volume(path, start, dur):
-    """Mean volume (dB) of a slice of the audio; -91 for digital silence."""
-    r = subprocess.run(["ffmpeg", "-nostdin", "-ss", str(start), "-t", str(dur), "-i", str(path), "-vn",
-                        "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True)
-    m = re.search(r"mean_volume: (-?[\d.]+|-inf) dB", r.stderr)
-    return float(m.group(1)) if m else -91.0
-
-
-@need_ffmpeg
-@pytest.mark.parametrize("first,second", [("tone", "quiet"), ("quiet", "tone")])
-def test_two_takes_are_joined_in_order(tmp_path, first, second):
-    def part(kind, dur):
-        return [("tone", 440, dur)] if kind == "tone" else [("quiet", None, dur)]
-    a = make_clip(tmp_path / "a.mp4", part(first, 1.5))
-    b = make_clip(tmp_path / "b.mp4", part(second, 2.0))
-    _, p, out = cut(tmp_path, [{"path": a}, {"path": b}], words_fn=lambda w, d: [])
-    assert p["duration"] == pytest.approx(3.5, abs=0.15)
-    assert_spec(p)
-    head, tail = mean_volume(out, 0.2, 1.0), mean_volume(out, 1.9, 1.0)
-    loud, quiet = (head, tail) if first == "tone" else (tail, head)
-    assert loud > -35 and quiet < -60
-
-
-@need_ffmpeg
-def test_take_without_audio_and_silent_output(tmp_path):
-    clip = make_clip(tmp_path / "a.mp4", [("tone", 440, 2.0)], with_audio=False)
-    _, p, _ = cut(tmp_path, [{"path": clip}], words_fn=lambda w, d: [])
-    assert p["duration"] == pytest.approx(2.0, abs=0.15)
-    assert_spec(p)
-
-
-@need_ffmpeg
-def test_silent_take_joined_with_normal_take(tmp_path):
-    silent = make_clip(tmp_path / "a.mp4", [("tone", 440, 1.5)], with_audio=False)
-    normal = make_clip(tmp_path / "b.mp4", [("tone", 440, 2.0)])
-    _, p, out = cut(tmp_path, [{"path": silent}, {"path": normal}], words_fn=lambda w, d: [])
-    assert p["duration"] == pytest.approx(3.5, abs=0.15)
-    assert_spec(p)
-    streams = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_name",
-                              "-of", "csv=p=0", str(out)], capture_output=True, text=True).stdout.split()
-    assert streams == ["aac"]
-    assert mean_volume(out, 0.2, 1.0) < -60 and mean_volume(out, 2.0, 1.0) > -35  # silence first, then the tone
-
-
-def make_wav(path, seconds, freq=220):
-    r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"sine=f={freq}:d={seconds}:r=44100",
-                        str(path)], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    assert r.returncode == 0, r.stderr
-    return path
-
-
-@need_ffmpeg
-def test_music_is_mixed_low_and_loudness_holds(tmp_path):
-    clip = make_clip(tmp_path / "a.mp4", GAP_CLIP)
-    music = make_wav(tmp_path / "m.wav", 3)
-    _, p, out = cut(tmp_path, [{"path": clip}], music=music)
-    assert p["duration"] == pytest.approx(2.24, abs=0.15)
-    assert_spec(p)
-    assert cutting.measure_loudness(out)["I"] == pytest.approx(-13, abs=1.0)
-
-
-@need_ffmpeg
-def test_music_longer_than_video_is_trimmed(tmp_path):
-    clip = make_clip(tmp_path / "a.mp4", GAP_CLIP)
-    music = make_wav(tmp_path / "m.wav", 20)
-    _, p, _ = cut(tmp_path, [{"path": clip}], music=music)
-    assert p["duration"] == pytest.approx(2.24, abs=0.15)
-    assert_spec(p)
-
-
-@need_ffmpeg
-def test_all_silent_take_renders(tmp_path):
-    clip = make_clip(tmp_path / "a.mp4", [("quiet", None, 2.0)])
-    _, p, out = cut(tmp_path, [{"path": clip}], words_fn=lambda w, d: [])
-    assert p["duration"] == pytest.approx(2.0, abs=0.15)
-    assert_spec(p)
-    assert mean_volume(out, 0.2, 1.5) < -60
-
-
-@need_ffmpeg
-def test_landscape_is_center_cropped(tmp_path):
-    clip = make_clip(tmp_path / "a.mp4", [("tone", 440, 1.5)], size="640x360")
-    _, p, _ = cut(tmp_path, [{"path": clip}], words_fn=lambda w, d: [])
-    assert_spec(p)
-    graph = cutting.build_join_graph([{"hasAudio": True, "duration": 1.5}])
-    assert "crop=1080:1920" in graph and "pad=" not in graph
-
-
-@need_ffmpeg
-def test_portrait_input_passes_through(tmp_path):
-    clip = make_clip(tmp_path / "a.mp4", [("tone", 440, 1.5)], size="360x640")
-    _, p, _ = cut(tmp_path, [{"path": clip}], words_fn=lambda w, d: [])
-    assert_spec(p)
-    assert p["duration"] == pytest.approx(1.5, abs=0.15)
-
-
-def test_render_pass_timeout_is_a_human_sentence(tmp_path, monkeypatch):
-    monkeypatch.setattr(cutting, "FFMPEG_TIMEOUT", 0.3)
-    with pytest.raises(cutting.CutError, match="took too long"):
-        cutting._render_pass(["sleep", "5"], 1.0, lambda f: None, tmp_path / "err.txt")
-
-
-@need_ffmpeg
-def test_music_is_mixed_and_looped(tmp_path):
-    # 0.8 s of speech-like tone then 1.2 s of silence; music is only 0.5 s long, so sound in the tail
-    # proves both that it is mixed and that it loops.
-    clip = make_clip(tmp_path / "a.mp4", [("tone", 440, 0.8), ("quiet", None, 1.2)])
-    music = tmp_path / "m.wav"
-    r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=220:d=0.5:r=44100", str(music)],
-                       capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    assert r.returncode == 0, r.stderr
-    _, p, with_music = cut(tmp_path, [{"path": clip}], words_fn=lambda w, d: [], music=music)
-    assert p["duration"] == pytest.approx(2.0, abs=0.15)
-    assert_spec(p)
-    (tmp_path / "plain").mkdir()
-    _, _, without = cut(tmp_path / "plain", [{"path": clip}], words_fn=lambda w, d: [])
-    assert mean_volume(without, 1.0, 0.8) < -60          # no music: the tail is silent
-    assert mean_volume(with_music, 1.0, 0.8) > -50       # music: still audible after its first 0.5 s
-
-
-@need_ffmpeg
-def test_input_over_limit_is_an_error(tmp_path, monkeypatch):
-    clip = make_clip(tmp_path / "a.mp4", [("tone", 440, 1.5)])
-    monkeypatch.setattr(cutting, "MAX_INPUT_SEC", 1.0)
-    with pytest.raises(cutting.CutError, match="too long"):
-        cut(tmp_path, [{"path": clip}])
+    total = cutting.probe(clip)["duration"]
+    assert total == pytest.approx(3.5, abs=0.2)
+    keeps = cutting.keep_intervals(fake_words(clip, tmp_path), [(1.0, 2.5)], total)
+    assert keeps[0][0] == 0.0 and sum(b - a for a, b in keeps) < total - 1.0
 
 
 @need_ffmpeg
@@ -239,75 +63,57 @@ def test_real_whisper_on_say_audio(tmp_path):
     assert words and all(s < e for s, e, _ in words)
 
 
+def _spoken_words(tmp_path, script):
+    """16 kHz mono wav of words spoken one by one by `say` ("<P>" = 1.5 s pause), with each word's true
+    (start, end) from the trimmed sample counts."""
+    sr, pcm, t, truth = 16000, bytearray(b"\0\0" * 8000), 0.5, []
+    for i, w in enumerate(script.split()):
+        if w == "<P>":
+            pcm += b"\0\0" * int(1.5 * sr)
+            t += 1.5
+            continue
+        aiff = tmp_path / f"w{i}.aiff"
+        subprocess.run(["say", "-o", str(aiff), w], check=True)
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(aiff), "-af",
+                              "silenceremove=start_periods=1:start_threshold=-45dB:stop_periods=-1:"
+                              "stop_threshold=-45dB:stop_duration=0.02", "-ac", "1", "-ar", str(sr),
+                              "-f", "s16le", "-"], capture_output=True, check=True).stdout
+        truth.append((t, t + len(raw) / 2 / sr, w))
+        pcm += raw + b"\0\0" * int(0.06 * sr)
+        t += len(raw) / 2 / sr + 0.06
+    pcm += b"\0\0" * 8000
+    wav = tmp_path / "words.wav"
+    with wave.open(str(wav), "wb") as f:
+        f.setnchannels(1), f.setsampwidth(2), f.setframerate(sr), f.writeframes(bytes(pcm))
+    return wav, truth
+
+
+@pytest.mark.skipif(not os.environ.get("REMAKE_WHISPER_TESTS") or cutting.missing_tools(),
+                    reason="slow: set REMAKE_WHISPER_TESTS=1")
+def test_real_whisper_finds_fillers_after_a_pause(tmp_path):
+    # Without DTW token times whisper put the "uh" after the pause about 1.7 s early, inside the silence.
+    wav, truth = _spoken_words(tmp_path, "So uh today we will <P> uh look at three tips")
+    words = cutting.transcribe_words(wav, tmp_path)
+    fitted = cutting.fit_to_silences(words, cutting.find_silences(wav, truth[-1][1] + 0.5))
+    got = [(s, e) for s, e, w in fitted if cutting.is_filler(w)]
+    real = [(s, e) for s, e, w in truth if w == "uh"]
+    assert len(got) == 2
+    for (gs, ge), (ts, te) in zip(got, real):
+        assert abs(gs - ts) <= 0.15 and abs(ge - te) <= 0.15, (got, real)
+
+
 def test_run_times_out_with_a_human_sentence():
     with pytest.raises(cutting.CutError, match="took too long"):
         cutting.run(["sleep", "5"], timeout=0.2)
 
 
 @need_ffmpeg
-def test_silent_broll_take_is_kept_whole(tmp_path):
-    talk = make_clip(tmp_path / "a.mp4", GAP_CLIP)  # 3.5 s, 2.24 s after trimming
-    broll = make_clip(tmp_path / "b.mp4", [("quiet", None, 2.0)])
-    _, p, _ = cut(tmp_path, [{"path": talk}, {"path": broll}])  # fake words only exist in the first take
-    assert p["duration"] == pytest.approx(2.24 + 2.0, abs=0.2)
-    assert_spec(p)
-
-
-# ---- grade and burned-in subtitles ---------------------------------------------------------------------
-
-SUB_WORDS = [(0.0, 0.5, "你好"), (0.5, 1.0, "world"), (2.5, 3.0, "again")]
-
-
-def sub_words(wav, work):
-    return SUB_WORDS
-
-
-def frame_png(video, at, path):
-    r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", str(at), "-i", str(video), "-frames:v", "1", str(path)],
-                       capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
-    return path
-
-
-@need_ffmpeg
-def test_burn_off_leaves_the_command_unchanged(tmp_path, monkeypatch):
-    clip = make_clip(tmp_path / "a.mp4", GAP_CLIP)
-    seen = []
-    real = cutting._render_pass
-    monkeypatch.setattr(cutting, "_render_pass", lambda cmd, *a: (seen.append(cmd), real(cmd, *a))[1])
-    info, p, out = cut(tmp_path, [{"path": clip}], words_fn=sub_words)
-    cmd = seen[0]
-    assert "concat" not in cmd and cmd.count("-i") == 1 and cmd[cmd.index("-map") + 1] == "[v]"
-    graph = (tmp_path / "w" / "g2.txt").read_text()
-    assert "overlay" not in graph and "colorbalance" not in graph and "eq=" not in graph
-    assert info["cues"][0]["text"].startswith("你好")
-
-
-@need_ffmpeg
-def test_burn_in_and_grade_end_to_end(tmp_path):
-    from PIL import Image, ImageChops
-    import subtitles
-    clip = make_clip(tmp_path / "a.mp4", GAP_CLIP)
-    plain_dir = tmp_path / "plain"
-    plain_dir.mkdir()
-    _, _, plain = cut(plain_dir, [{"path": clip}], words_fn=sub_words, grade="warm")
-    burn_dir = tmp_path / "burn"
-    burn_dir.mkdir()
-    out = burn_dir / "out.mp4"
-    info = cutting.render_cut([{"path": clip}], None, 1.0, burn_dir / "w", out, lambda p, t: None,
-                              words_fn=sub_words, grade="warm", burn=subtitles.BurnStyle(size="L"))
-    p = cutting.probe(out)
-    assert_spec(p)
-    a = Image.open(frame_png(plain, 0.5, tmp_path / "a.png")).convert("RGB")
-    b = Image.open(frame_png(out, 0.5, tmp_path / "b.png")).convert("RGB")
-    diff = ImageChops.difference(a, b).convert("L")
-    top, low = diff.crop((0, 0, 1080, 1000)), diff.crop((0, 1000, 1080, 1920))
-    assert top.getextrema()[1] < 40      # two separate encodes: only compression noise above the subtitle
-    assert low.getextrema()[1] > 150     # the subtitle (white text / dark box) is drawn in the lower part
-    # graded: the warm preset changes the picture against an ungraded cut
-    ungraded_dir = tmp_path / "ungraded"
-    ungraded_dir.mkdir()
-    _, _, ungraded = cut(ungraded_dir, [{"path": clip}], words_fn=sub_words)
-    c = Image.open(frame_png(ungraded, 0.5, tmp_path / "c.png")).convert("RGB")
-    assert ImageChops.difference(a, c).getbbox() is not None
-    assert info["cues"]
+def test_build_clean_graph_cuts_the_gap(tmp_path):
+    src = make_clip(tmp_path / "a.mp4", GAP_CLIP)
+    out = tmp_path / "out.mp4"
+    graph = tmp_path / "g.txt"
+    graph.write_text(cutting.build_clean_graph([(0, 1.12), (2.38, 3.5)]))
+    cutting._ffmpeg(["-i", str(src), "-/filter_complex", str(graph), "-map", "[v]", "-map", "[a]",
+                     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(out)], "clean")
+    info = cutting.probe(out)
+    assert info["duration"] == pytest.approx(2.24, abs=0.05) and info["hasAudio"] and info["acodec"] == "aac"

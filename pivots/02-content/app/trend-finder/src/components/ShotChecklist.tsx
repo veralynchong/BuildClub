@@ -119,6 +119,7 @@ export function ShotChecklist({ ideaId, status, shots, onProgress }: Props) {
                         {tk.name}
                       </span>
                       <span className="muted small">{formatSize(tk.size)}</span>
+                      {tk.cleanedFrom && <span className="take-chosen">{t('canvas.footage.cleanedBadge')}</span>}
                       {tk.chosen && <span className="take-chosen">{t('plan.takes.chosen')}</span>}
                       {editable &&
                         (confirmDelete === tk.id ? (
