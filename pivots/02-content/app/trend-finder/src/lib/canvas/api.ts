@@ -1,6 +1,6 @@
 import { t } from '../i18n.ts'
 import { imageError, imageType } from './upload.ts'
-import type { CanvasDoc, CanvasState, GenModel, Generation } from './types.ts'
+import type { Budget, CanvasDoc, CanvasState, ChainBody, GenModel, Generation, Quote } from './types.ts'
 
 // A plan with no saved shots has no canvas yet.
 export class NoShots extends Error {}
@@ -78,6 +78,29 @@ export async function startGen(ideaId: string, body: StartGenBody): Promise<Gene
   return send(r, t('canvas.err.start'))
 }
 
+export async function getBudget(): Promise<Budget> {
+  return send(await fetch('/api/gen/budget'), t('canvas.err.budget'))
+}
+
+async function chain<T>(ideaId: string, body: ChainBody, confirm: boolean): Promise<T> {
+  const r = await fetch(`${base(ideaId)}/gen/chain`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...body, confirm }),
+  })
+  return send(r, t('canvas.err.start'))
+}
+
+// The price of a storyboard image plus the video that starts from it, and what is left today. Starts nothing.
+export function quoteChain(ideaId: string, body: ChainBody): Promise<Quote> {
+  return chain(ideaId, body, false)
+}
+
+// Starts both: the image now, the video once the image is done. A 429 or 422 throws with the server's sentence.
+export function startChain(ideaId: string, body: ChainBody): Promise<{ image: Generation; video: Generation }> {
+  return chain(ideaId, body, true)
+}
+
 async function getGen(ideaId: string, genId: string): Promise<Generation> {
   return send(await fetch(`${base(ideaId)}/gen/${encodeURIComponent(genId)}`), t('canvas.err.gens'))
 }
@@ -96,7 +119,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
-// Polls one generation, passing every state to onState, until it is done or failed (both resolve with that
+// Polls one generation, passing every state to onState, until it is done, failed or unknown (all resolve with that
 // state). Aborting stops the polling and resolves null. A failed request rejects.
 export async function pollGen(
   ideaId: string,
@@ -108,7 +131,7 @@ export async function pollGen(
     const gen = await getGen(ideaId, genId)
     if (signal?.aborted) return null
     onState(gen)
-    if (gen.status === 'done' || gen.status === 'failed') return gen
+    if (gen.status === 'done' || gen.status === 'failed' || gen.status === 'unknown') return gen
     await sleep(intervalMs, signal)
   }
   return null

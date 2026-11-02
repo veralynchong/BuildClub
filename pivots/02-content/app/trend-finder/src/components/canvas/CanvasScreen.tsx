@@ -14,15 +14,15 @@ import {
 import '@xyflow/react/dist/style.css'
 import type { SavedIdea, Shot } from '../../types'
 import { t, type Key, type Vars } from '../../lib/i18n'
-import { getCanvas, getModels, NoShots, pollGen, putCanvas, StaleCanvas, startGen, uploadImage } from '../../lib/canvas/api'
+import { getBudget, getCanvas, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '../../lib/canvas/drawer'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import { addNode, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
+import { addNode, chainPair, isRetired, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, listTakes, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
 import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
-import type { CanvasDoc, CanvasState, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
+import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
 import { ErrorText } from '../ErrorText'
 import { AddNodeMenu } from './AddNodeMenu'
 import { EditorDrawer } from './EditorDrawer'
@@ -267,6 +267,15 @@ function CanvasBoard({
     }
   }, [showText])
 
+  const [budget, setBudget] = useState<Budget | null>(null)
+  const refreshBudget = useCallback(() => {
+    getBudget().then(
+      (b) => mounted.current && setBudget(b),
+      () => {}, // the price still shows; only "left today" is missing
+    )
+  }, [])
+  useEffect(() => refreshBudget(), [refreshBudget])
+
   const upsertGen = useCallback((g: Generation) => {
     gensRef.current = [...gensRef.current.filter((x) => x.id !== g.id), g]
     setGens(gensRef.current)
@@ -294,6 +303,7 @@ function CanvasBoard({
           try {
             const end = await pollGen(ideaId, g.id, upsertGen, { signal: ac.signal })
             if (end) {
+              refreshBudget()
               setNodes((ns) => ns.map((n) => (n.id === end.nodeId ? { ...n, data: { node: { ...n.data.node, data: genFinished(n.data.node.data, end) } } } : n)))
               if (end.status === 'done') markFrom(end.nodeId, false)
             }
@@ -306,7 +316,7 @@ function CanvasBoard({
         if (polls.current.get(g.id) === ac) polls.current.delete(g.id)
       })
     },
-    [ideaId, upsertGen, setNodes, markFrom],
+    [ideaId, upsertGen, setNodes, markFrom, refreshBudget],
   )
 
   // Coming back to a canvas with jobs still running: keep following them. Leaving stops the polling (the server keeps working).
@@ -337,7 +347,7 @@ function CanvasBoard({
     const node = d.nodes.find((n) => n.id === nodeId)
     const kind = node?.type === 'video' ? 'video' : 'image'
     const model = models.find((m) => m.id === node?.data.model && m.kind === kind) ?? models.find((m) => m.kind === kind)
-    if (!node || !model || blocked || pendingGen(nodeId, gensRef.current) || starting.current.has(nodeId)) return
+    if (!node || !model || !model.available || isRetired(models, kind, node.data.model) || blocked || pendingGen(nodeId, gensRef.current) || starting.current.has(nodeId)) return
     if (missingInput(d, nodeId, model, shots, gensRef.current)) return
     const req = genRequest(d, nodeId, shots, gensRef.current)
     if (kind === 'video' && req.duration === undefined && model.durations) req.duration = model.durations[0]
@@ -349,10 +359,75 @@ function CanvasBoard({
       setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { node: { ...n.data.node, data: genStarted(n.data.node.data, model.id, g.id) } } } : n)))
       upsertGen(g)
       track(g)
+      refreshBudget()
     } catch (e) {
       if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
     } finally {
       starting.current.delete(nodeId)
+    }
+  }
+
+  // ---- run the whole shot: a storyboard image and the video that starts from it, priced together ----
+  const [chaining, setChaining] = useState(false) // a quote or a confirmed start is on its way
+  const [ask, setAsk] = useState<{ body: ChainBody; quote: Quote } | null>(null)
+
+  const onChain = async (nodeId: string) => {
+    const d = latest.current.doc
+    const pair = chainPair(d, nodeId)
+    if (!pair || blocked || chaining) return
+    const image = d.nodes.find((n) => n.id === pair.imageNodeId)
+    const video = d.nodes.find((n) => n.id === pair.videoNodeId)
+    const imageModel = models.find((m) => m.id === image?.data.model && m.kind === 'image')
+    const videoModel = models.find((m) => m.id === video?.data.model && m.kind === 'video')
+    if (!image || !video || !imageModel || !videoModel || !imageModel.available || !videoModel.available) return
+    if (missingInput(d, pair.imageNodeId, imageModel, shots, gensRef.current)) return
+    const videoReq = genRequest(d, pair.videoNodeId, shots, gensRef.current)
+    const body: ChainBody = {
+      imageNodeId: pair.imageNodeId,
+      videoNodeId: pair.videoNodeId,
+      imageModel: imageModel.id,
+      videoModel: videoModel.id,
+      prompt: genRequest(d, pair.imageNodeId, shots, gensRef.current).prompt,
+      videoPrompt: videoReq.prompt,
+      duration: videoReq.duration ?? videoModel.durations?.[0],
+    }
+    setChaining(true)
+    try {
+      const quote = await quoteChain(ideaId, body)
+      if (mounted.current) setAsk({ body, quote })
+    } catch (e) {
+      if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
+    } finally {
+      if (mounted.current) setChaining(false)
+    }
+  }
+
+  const confirmChain = async () => {
+    if (!ask || chaining) return
+    const { body } = ask
+    setChaining(true)
+    try {
+      const { image, video } = await startChain(ideaId, body)
+      if (!mounted.current) return
+      setAsk(null)
+      setNodes((ns) =>
+        ns.map((n) => {
+          const g = n.id === image.nodeId ? image : n.id === video.nodeId ? video : null
+          return g ? { ...n, data: { node: { ...n.data.node, data: genStarted(n.data.node.data, g.model, g.id) } } } : n
+        }),
+      )
+      upsertGen(image)
+      upsertGen(video)
+      track(image)
+      track(video)
+      refreshBudget()
+    } catch (e) {
+      if (mounted.current) {
+        setAsk(null)
+        showText(e instanceof Error ? e.message : t('canvas.err.start'))
+      }
+    } finally {
+      if (mounted.current) setChaining(false)
     }
   }
 
@@ -513,6 +588,10 @@ function CanvasBoard({
     models,
     gens,
     onGenerate: (id) => void onGenerate(id),
+    budget,
+    chainOf: (id) => chainPair(doc, id),
+    onChain: (id) => void onChain(id),
+    chaining,
     onSelectVersion,
     edited: (id) => markFrom(id, latest.current.doc.nodes.find((n) => n.id === id)?.type !== 'prompt'),
     takes,
@@ -612,6 +691,35 @@ function CanvasBoard({
             <Controls showInteractive={false} />
           </ReactFlow>
           </CanvasContext.Provider>
+          {ask && (
+            <div className="cv-modal-back">
+              <div className="cv-modal" role="dialog" aria-modal="true" aria-label={t('canvas.chain.title')}>
+                <h2>{t('canvas.chain.title')}</h2>
+                <ul>
+                  {ask.quote.items.map((it) => {
+                    const m = models.find((x) => x.id === it.model)
+                    const type = doc.nodes.find((n) => n.id === it.nodeId)?.type
+                    return (
+                      <li key={it.nodeId}>
+                        <span>{t('canvas.chain.item', { node: type === 'storyboard' || type === 'video' ? t(`canvas.node.${type}`) : it.nodeId, model: m?.label ?? it.model })}</span>
+                        <span>{t('canvas.gen.cost', { usd: it.usd.toFixed(2) })}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <strong>{t('canvas.chain.total', { total: ask.quote.total.toFixed(2) })}</strong>
+                <span className="small muted">{t('canvas.chain.left', { image: ask.quote.remaining.image.toFixed(2), video: ask.quote.remaining.video.toFixed(2) })}</span>
+                <div className="cv-modal-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={chaining} onClick={() => setAsk(null)}>
+                    {t('canvas.chain.cancel')}
+                  </button>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={chaining} onClick={() => void confirmChain()}>
+                    {t('canvas.chain.confirm')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="cv-conn-note" role="status">
             {note && (note.text ?? (note.key && t(note.key, note.vars)))}
           </div>

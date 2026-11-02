@@ -1,7 +1,7 @@
 import type { Key } from '../i18n.ts'
 import type { Shot } from '../../types.ts'
 import { PORTS } from './ports.ts'
-import type { CanvasDoc, CanvasNode, GenModel, Generation, NodeData, NodeKind } from './types.ts'
+import type { Budget, CanvasDoc, CanvasNode, GenModel, Generation, NodeData, NodeKind } from './types.ts'
 
 // Every node reachable by following lines forward; not the node itself.
 export function downstream(doc: CanvasDoc, nodeId: string): string[] {
@@ -25,15 +25,15 @@ export function versionsOf(nodeId: string, gens: Generation[]): Generation[] {
 }
 
 export function pendingGen(nodeId: string, gens: Generation[]): Generation | null {
-  const open = versionsOf(nodeId, gens).filter((g) => g.status === 'queued' || g.status === 'running')
+  const open = versionsOf(nodeId, gens).filter((g) => g.status === 'queued' || g.status === 'waiting' || g.status === 'running')
   return open[open.length - 1] ?? null
 }
 
-// The node's newest version when it failed (a later finished or running one hides it), else null.
+// The node's newest version when it failed or its result was lost (a later finished or running one hides it), else null.
 export function failedGen(nodeId: string, gens: Generation[]): Generation | null {
   const all = versionsOf(nodeId, gens)
   const last = all[all.length - 1]
-  return last?.status === 'failed' ? last : null
+  return last?.status === 'failed' || last?.status === 'unknown' ? last : null
 }
 
 // The version the node shows: the chosen one if it finished, else the newest finished one.
@@ -91,7 +91,7 @@ export function finishedWhileAway(doc: CanvasDoc, gens: Generation[]): { nodeId:
     const g = versionsOf(n.id, gens).find((x) => x.id === awaiting)
     if (!g) out.push({ nodeId: n.id, genId: awaiting, select: false })
     else if (g.status === 'done') out.push({ nodeId: n.id, genId: awaiting, select: true })
-    else if (g.status === 'failed') out.push({ nodeId: n.id, genId: awaiting, select: false })
+    else if (g.status === 'failed' || g.status === 'unknown') out.push({ nodeId: n.id, genId: awaiting, select: false })
   }
   return out
 }
@@ -211,4 +211,29 @@ export function addNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: numb
     edges.push({ id: `e_${shot.id}_${node.id}`, source: shot.id, sourceHandle: 'out', target: node.id, targetHandle: 'in:text' })
   }
   return { ...doc, nodes: [...doc.nodes, node], edges }
+}
+
+// The storyboard and the video it starts (the storyboard's line into the video's in:start), found from either node.
+export function chainPair(doc: CanvasDoc, nodeId: string): { imageNodeId: string; videoNodeId: string } | null {
+  const type = (id: string) => doc.nodes.find((n) => n.id === id)?.type
+  for (const e of doc.edges) {
+    if (e.targetHandle !== 'in:start' || type(e.source) !== 'storyboard' || type(e.target) !== 'video') continue
+    if (e.source === nodeId || e.target === nodeId) return { imageNodeId: e.source, videoNodeId: e.target }
+  }
+  return null
+}
+
+// What one generation with the model costs in US$: flat per image, or per second times the length (default: the first).
+export function priceOf(m: Pick<GenModel, 'price' | 'durations'>, seconds: number | undefined): number {
+  return m.price.per === 'second' ? m.price.usd * (seconds ?? m.durations?.[0] ?? 0) : m.price.usd
+}
+
+// What is left of today's budget for the kind, or null while it is unknown.
+export function budgetLeft(b: Budget | null, kind: 'image' | 'video'): number | null {
+  return b ? Math.max(0, Math.round((b[kind].cap - b[kind].spent) * 1e4) / 1e4) : null
+}
+
+// The node's saved model is not on the menu for its kind (taken off, or unknown). False while the menu is empty.
+export function isRetired(models: Pick<GenModel, 'id' | 'kind'>[], kind: 'image' | 'video', id: string | undefined): boolean {
+  return !!id && models.length > 0 && !models.some((m) => m.id === id && m.kind === kind)
 }

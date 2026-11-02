@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished } from '../src/lib/canvas/graph.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired } from '../src/lib/canvas/graph.ts'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer, DRAWER_KEY } from '../src/lib/canvas/drawer.ts'
-import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen } from '../src/lib/canvas/api.ts'
+import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen, getBudget, quoteChain, startChain } from '../src/lib/canvas/api.ts'
 
 const models = [
   { id: 'mock-image', kind: 'image', inputs: { text: 'required', reference: 'optional' } },
@@ -396,4 +396,88 @@ test('uploadImage rejects an unsupported file without a request', async () => {
     await assert.rejects(uploadImage('i', 'n', { name: 'a.gif', type: 'image/gif', size: 3 }), /upload/i)
     assert.equal(called, false)
   } finally { globalThis.fetch = real }
+})
+
+test('chainPair finds the video a storyboard feeds, from either end, and null without a line', () => {
+  assert.deepEqual(chainPair(docWith(), 'n_sb_s1'), { imageNodeId: 'n_sb_s1', videoNodeId: 'n_vid' })
+  assert.deepEqual(chainPair(docWith(), 'n_vid'), { imageNodeId: 'n_sb_s1', videoNodeId: 'n_vid' })
+  const bare = docWith()
+  bare.edges = bare.edges.filter((e) => e.targetHandle !== 'in:start')
+  assert.equal(chainPair(bare, 'n_sb_s1'), null)
+  assert.equal(chainPair(bare, 'n_vid'), null)
+  // a video fed by another video's start line is not a chain with a storyboard
+  assert.equal(chainPair(docWith(), 'n_vid2'), null)
+  assert.equal(chainPair(docWith(), 'nope'), null)
+})
+
+test('priceOf: per image is flat, per second multiplies by the length or the first duration', () => {
+  const img = { price: { per: 'image', usd: 0.04 } }
+  const vid = { price: { per: 'second', usd: 0.1 }, durations: [5, 10] }
+  assert.equal(priceOf(img, undefined), 0.04)
+  assert.equal(priceOf(img, 8), 0.04)
+  assert.equal(priceOf(vid, 10), 1)
+  assert.equal(priceOf(vid, undefined), 0.5)
+  assert.equal(priceOf({ price: { per: 'second', usd: 0.1 } }, undefined), 0)
+  assert.equal(priceOf({ price: { per: 'image', usd: 0 } }, undefined), 0)
+})
+
+test('budgetLeft is the cap minus what was spent, never below zero', () => {
+  const b = { image: { spent: 0.2, cap: 0.5 }, video: { spent: 1.5, cap: 1 } }
+  assert.equal(budgetLeft(b, 'image'), 0.3)
+  assert.equal(budgetLeft(b, 'video'), 0)
+  assert.equal(budgetLeft(null, 'image'), null)
+})
+
+test('isRetired: a saved model missing from the menu of its kind', () => {
+  const list = [{ id: 'a', kind: 'image' }, { id: 'b', kind: 'video' }]
+  assert.equal(isRetired(list, 'image', 'a'), false)
+  assert.equal(isRetired(list, 'image', 'gone'), true)
+  assert.equal(isRetired(list, 'image', 'b'), true)
+  assert.equal(isRetired(list, 'image', undefined), false)
+  assert.equal(isRetired([], 'image', 'a'), false) // models not loaded yet
+})
+
+test('waiting counts as in progress; unknown is an ended version that can be retried', () => {
+  const v1 = gen('v1', 'n', 'done', 1)
+  const w = gen('w', 'n', 'waiting', 2)
+  assert.equal(pendingGen('n', [v1, w]).id, 'w')
+  const u = gen('u', 'n', 'unknown', 3)
+  assert.equal(pendingGen('n', [v1, u]), null)
+  assert.equal(failedGen('n', [v1, u]).id, 'u')
+  const doc = docWith()
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.awaiting = 'u'
+  assert.deepEqual(finishedWhileAway(doc, [gen('u', 'n_sb_s1', 'unknown', 2)]), [{ nodeId: 'n_sb_s1', genId: 'u', select: false }])
+  assert.equal(genFinished({ awaiting: 'u', selected: 'v1' }, { id: 'u', status: 'unknown' }).awaiting, undefined)
+})
+
+test('pollGen keeps going while waiting and stops on unknown', async () => {
+  const states = ['waiting', 'running', 'unknown']
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: 'g', status: states.shift() }) })
+  const last = await pollGen('ia', 'g', () => {}, { intervalMs: 1 })
+  assert.equal(last.status, 'unknown')
+  assert.deepEqual(states, [])
+})
+
+test('getBudget, quoteChain and startChain talk to the right routes', async () => {
+  const calls = []
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init })
+    return { ok: true, status: 200, json: async () => ({ ok: 1 }) }
+  }
+  await getBudget()
+  assert.equal(calls[0].url, '/api/gen/budget')
+  const body = { imageNodeId: 'a', videoNodeId: 'b', imageModel: 'm', videoModel: 'v', prompt: 'p' }
+  await quoteChain('i/a', body)
+  assert.equal(calls[1].url, '/api/ideas/i%2Fa/gen/chain')
+  assert.equal(JSON.parse(calls[1].init.body).confirm, false)
+  await startChain('i/a', body)
+  assert.equal(JSON.parse(calls[2].init.body).confirm, true)
+  assert.equal(JSON.parse(calls[2].init.body).imageNodeId, 'a')
+})
+
+test('startChain shows a 429 message from the server as it is', async () => {
+  const msg = "Today's budget has US$0.10 left for images and US$0.00 for videos. Nothing was started."
+  globalThis.fetch = async () => ({ ok: false, status: 429, json: async () => ({ error: msg }) })
+  await assert.rejects(startChain('ia', {}), { message: msg })
+  await assert.rejects(quoteChain('ia', {}), { message: msg })
 })
