@@ -52,9 +52,7 @@ def clean_take(src: Path, work: Path, out: Path) -> dict:
     words = words_fn(wav, work)
     if not words:
         raise CutError(NO_SPEECH)
-    found = cutting._ffmpeg(["-i", str(wav), "-af", "silencedetect=n=-35dB:d=0.15", "-f", "null", "-"],
-                            "Finding the pauses", quiet=False)
-    keeps = cutting.keep_intervals(words, cutting.parse_silences(found.stderr, total), total)
+    keeps = cutting.keep_intervals(words, cutting.find_silences(wav, total), total)
     kept = sum(b - a for a, b in keeps)
     if total - kept < MIN_CUT_S:
         raise CutError(NOTHING)

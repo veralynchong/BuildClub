@@ -94,10 +94,8 @@ def test_real_whisper_finds_fillers_after_a_pause(tmp_path):
     # Without DTW token times whisper put the "uh" after the pause about 1.7 s early, inside the silence.
     wav, truth = _spoken_words(tmp_path, "So uh today we will <P> uh look at three tips")
     words = cutting.transcribe_words(wav, tmp_path)
-    found = cutting._ffmpeg(["-i", str(wav), "-af", "silencedetect=n=-35dB:d=0.15", "-f", "null", "-"],
-                            "pauses", quiet=False)  # as cleaning.clean_take does
-    starts = cutting._effective_starts(words, cutting.parse_silences(found.stderr, truth[-1][1] + 0.5))
-    got = [(s, e) for s, (_, e, w) in zip(starts, words) if cutting.is_filler(w)]
+    fitted = cutting.fit_to_silences(words, cutting.find_silences(wav, truth[-1][1] + 0.5))
+    got = [(s, e) for s, e, w in fitted if cutting.is_filler(w)]
     real = [(s, e) for s, e, w in truth if w == "uh"]
     assert len(got) == 2
     for (gs, ge), (ts, te) in zip(got, real):

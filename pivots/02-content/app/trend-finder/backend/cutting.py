@@ -1,6 +1,7 @@
 """Small ffmpeg / whisper tools and the pause-cutting rules (used to clean up a take)."""
 
 import json
+import logging
 import re
 import shutil
 import string
@@ -9,6 +10,8 @@ from pathlib import Path
 
 import analyze
 
+log = logging.getLogger(__name__)
+
 Word = tuple[float, float, str]  # start, end, text (seconds)
 
 FILLERS = {"um", "umm", "uh", "uhh", "er", "erm", "hm", "hmm"}  # English only; Chinese fillers are unverified
@@ -16,6 +19,7 @@ MIN_FRAGMENT = 0.08  # seconds; shorter keep intervals are dropped
 FADE = 0.012         # seconds of fade at every seam
 WHISPER_TIMEOUT = 900
 DTW_PRESET = "large.v3.turbo"  # alignment heads of analyze.MODEL; DTW needs flash attention off (-nfa)
+DTW_EARLY = 0.2  # seconds; a DTW start (the previous word's end) can sit this far before a silence it swallowed
 FFMPEG_TIMEOUT = 1800  # seconds; any single ffmpeg/ffprobe call, so a hung process can't stall the worker
 
 NO_FFMPEG = ("ffmpeg isn't installed on this computer, so the cut can't be made. "
@@ -69,8 +73,18 @@ def _effective_ends(words: list[Word], silences: list[tuple[float, float]]) -> l
 
 def _effective_starts(words: list[Word], silences: list[tuple[float, float]]) -> list[float]:
     """A DTW word start is the previous word's end (often a little early), so it can swallow the silence
-    before it; start after the latest silence that ends inside the word."""
-    return [max([e for _, e in silences if start < e < end], default=start) for start, end, _ in words]
+    before it; start after a silence that ends inside the word and begins at (or just after) its start.
+    A silence beginning later is a pause inside the word and leaves the start alone."""
+    return [max([e for s, e in silences if start < e < end and s <= start + DTW_EARLY], default=start)
+            for start, end, _ in words]
+
+
+def fit_to_silences(words: list[Word], silences: list[tuple[float, float]]) -> list[Word]:
+    """Sorted word times moved off the silences around them (the same rule the clean-up cut uses), so a
+    word after a pause starts when it is spoken."""
+    words = sorted(words, key=lambda w: w[0])
+    return [(s, max(s, e), w[2]) for s, e, w in
+            zip(_effective_starts(words, silences), _effective_ends(words, silences), words)]
 
 
 def keep_intervals(words: list[Word], silences: list[tuple[float, float]], total: float,
@@ -163,6 +177,13 @@ def describe_trims(keeps: list[tuple[float, float]], words: list[Word], duration
     return out
 
 
+def find_silences(wav: Path, total: float) -> list[tuple[float, float]]:
+    """The pauses in a wav: silencedetect at -35 dB for 0.15 s or longer."""
+    found = _ffmpeg(["-i", str(wav), "-af", "silencedetect=n=-35dB:d=0.15", "-f", "null", "-"],
+                    "Finding the pauses", quiet=False)
+    return parse_silences(found.stderr, total)
+
+
 def parse_silences(stderr: str, total: float) -> list[tuple[float, float]]:
     """silencedetect lines to (start, end); a silence still open at the end runs to total."""
     out, start = [], None
@@ -231,8 +252,13 @@ def transcribe_words(wav: Path, work: Path) -> list[Word]:
         raise CutError(NO_WHISPER)
     base = Path(work) / "words"
     base.with_suffix(".json").unlink(missing_ok=True)
-    r = run([analyze.WHISPER, "-m", str(analyze.MODEL), "-f", str(wav), "-l", "auto", "-ml", "1", "-sow",
-             "-dtw", DTW_PRESET, "-nfa", "-ojf", "-of", str(base), "-np"], timeout=WHISPER_TIMEOUT)
+    cmd = [analyze.WHISPER, "-m", str(analyze.MODEL), "-f", str(wav), "-l", "auto", "-ml", "1", "-sow",
+           "-ojf", "-of", str(base), "-np"]
+    r = run(cmd[:1] + ["-dtw", DTW_PRESET, "-nfa"] + cmd[1:], timeout=WHISPER_TIMEOUT)
+    if r.returncode == 0 and not base.with_suffix(".json").is_file():
+        log.warning("whisper-cli wrote no JSON with -dtw/-nfa (an older build?); running it again without -dtw, "
+                    "so word times after a pause will drift")
+        r = run(cmd, timeout=WHISPER_TIMEOUT)
     if r.returncode != 0:
         raise CutError(f"Finding the words failed: {r.stderr.strip()[-200:]}")
     try:

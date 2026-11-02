@@ -3,6 +3,7 @@
 import json
 import random
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -48,6 +49,51 @@ def test_dtw_word_start_skips_the_silence_before_it():
     kept = lambda a, b: any(ka < b and kb > a for ka, kb in keeps)
     assert not kept(0.8, 0.99) and not kept(3.83, 3.95) and not kept(2.1, 3.4)
     assert kept(0.6, 0.75) and kept(1.2, 1.8) and kept(4.0, 4.8)  # hello, "this is a test", "video tool"
+
+
+def test_pause_inside_a_long_word_is_not_its_start():
+    # a silence that begins well after the word starts is inside the word; only one right at its start counts
+    words = [(0.0, 0.5, "so"), (0.5, 2.0, "really"), (2.0, 2.4, "um")]
+    assert cutting._effective_starts(words, [(1.2, 1.5)]) == [0.0, 0.5, 2.0]
+    assert cutting._effective_starts(words, [(0.6, 1.5)]) == [0.0, 1.5, 2.0]
+    assert cutting.keep_intervals(words, [(1.2, 1.5)], 2.4) == [(0.0, 2.0)]
+
+
+def test_fit_to_silences_trims_both_sides():
+    words = [(0.5, 0.9, "test"), (0.9, 3.7, "of"), (3.7, 3.8, "the")]
+    assert cutting.fit_to_silences(words, [(1.0, 3.6)]) == [(0.5, 0.9, "test"), (3.6, 3.7, "of"), (3.7, 3.8, "the")]
+    assert cutting.fit_to_silences([(0.5, 2.0, "so")], [(1.0, 2.5)]) == [(0.5, 1.0, "so")]
+
+
+def _fake_whisper(tmp_path, monkeypatch, knows_dtw):
+    exe, model = tmp_path / "whisper-cli", tmp_path / "model.bin"
+    exe.write_text(""), model.write_text("")
+    monkeypatch.setattr(analyze, "WHISPER", str(exe))
+    monkeypatch.setattr(analyze, "MODEL", model)
+    calls = []
+
+    def fake_run(cmd, timeout=None):
+        calls.append(cmd)
+        if knows_dtw or "-dtw" not in cmd:  # an old build prints usage and exits 0 without a JSON file
+            base = Path(cmd[cmd.index("-of") + 1])
+            seg = {"offsets": {"from": 100, "to": 400}, "text": " hi", "tokens": [{"text": " hi", "t_dtw": 30 if "-dtw" in cmd else -1}]}
+            base.with_suffix(".json").write_text(json.dumps({"transcription": [seg]}))
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    monkeypatch.setattr(cutting, "run", fake_run)
+    return calls
+
+
+def test_old_whisper_without_dtw_falls_back(tmp_path, monkeypatch, caplog):
+    calls = _fake_whisper(tmp_path, monkeypatch, knows_dtw=False)
+    assert cutting.transcribe_words(tmp_path / "a.wav", tmp_path) == [(0.1, 0.4, "hi")]
+    assert ["-dtw" in c for c in calls] == [True, False] and "-nfa" not in calls[1]
+    assert "without -dtw" in caplog.text
+
+
+def test_whisper_with_dtw_runs_once(tmp_path, monkeypatch):
+    calls = _fake_whisper(tmp_path, monkeypatch, knows_dtw=True)
+    assert cutting.transcribe_words(tmp_path / "a.wav", tmp_path) == [(0.1, 0.3, "hi")]
+    assert len(calls) == 1
 
 
 def test_filler_removed_and_gap_trimmed():

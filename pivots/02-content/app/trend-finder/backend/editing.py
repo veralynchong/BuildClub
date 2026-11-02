@@ -326,7 +326,9 @@ def transcribe_voice(path: Path, work: Path) -> list[dict]:
     cutting.NO_WHISPER when whisper.cpp is not installed)."""
     wav = Path(work) / "voice.wav"
     cutting._ffmpeg(["-i", str(path), "-vn", "-ac", "1", "-ar", "16000", str(wav)], "Reading the voiceover")
-    return [{"text": text, "start": start, "end": end} for start, end, text in cutting.transcribe_words(wav, Path(work))]
+    words = cutting.transcribe_words(wav, Path(work))
+    words = cutting.fit_to_silences(words, cutting.find_silences(wav, cutting.probe(wav)["duration"]))
+    return [{"text": text, "start": start, "end": end} for start, end, text in words]
 
 
 def plan_client(conn, idea_id: str) -> dict:

@@ -573,6 +573,7 @@ def voice_env(client, setup, monkeypatch):
     monkeypatch.setattr(cutting, "probe", lambda path: dict(info))
     monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
     monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: list(WORDS))
+    monkeypatch.setattr(cutting, "find_silences", lambda wav, total: [])
     editing._probe_cache.clear()
     return info
 
@@ -607,6 +608,21 @@ def test_voice_upload_without_whisper_keeps_file(client, voice_env, monkeypatch)
     folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
     assert [p.name for p in folder.iterdir()] == [f"{got['id']}.mp3"]  # the file stays, no words file
     assert client.get(got["url"]).status_code == 200
+
+
+def test_transcribe_voice_starts_a_word_after_the_pause(tmp_path, monkeypatch):
+    # Real DTW words: "of" starts where "test" ended (1.84), across the 1.9-3.6 s pause; a caption must not
+    # show it during the pause. Silences are what silencedetect finds on the same audio.
+    import json
+    from test_cutting import FIXTURES
+    data = json.loads((FIXTURES / "whisper_words_dtw.json").read_text())
+    monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
+    monkeypatch.setattr(cutting, "probe", lambda path: {"duration": 5.584})
+    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: cutting.parse_words(data))
+    monkeypatch.setattr(cutting, "find_silences", lambda wav, total: [(0.0, 0.53), (1.908, 3.617), (4.881, 5.584)])
+    words = {w["text"]: w for w in editing.transcribe_voice(tmp_path / "v.webm", tmp_path)}
+    assert words["of"]["start"] == pytest.approx(3.617) and words["of"]["end"] == pytest.approx(3.72)
+    assert words["test"]["end"] == pytest.approx(1.84) and words["tool"]["end"] == pytest.approx(4.68)
 
 
 def test_transcribe_voice_without_whisper_installed(tmp_path, monkeypatch):
