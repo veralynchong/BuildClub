@@ -10,6 +10,32 @@ export function purposeFor(index: number, total: number): Purpose {
 
 export const purposeLabel = (p: Purpose): string => t(`plan.sb.purpose.${p}`)
 
+// ---- stable shot ids ------------------------------------------------------------------------------------------
+// Same rule as fill_shot_ids in backend/models.py: keep the first use of an id; a shot without one, or repeating
+// an earlier one, gets s{n} (n = position), then s{n}-2, -3, ... until unused.
+export function fillShotIds(shots: Shot[]): Shot[] {
+  const used = new Set(shots.flatMap((s) => (s.id ? [s.id] : [])))
+  const seen = new Set<string>()
+  return shots.map((s, i) => {
+    if (s.id && !seen.has(s.id)) {
+      seen.add(s.id)
+      return s
+    }
+    let id = `s${i + 1}`
+    for (let k = 2; used.has(id); k++) id = `s${i + 1}-${k}`
+    used.add(id)
+    seen.add(id)
+    return { ...s, id }
+  })
+}
+
+export function newShotId(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let id = 'sh_'
+  for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)]
+  return id
+}
+
 // ---- merging what the generate routes return into the plan's shots -------------------------------
 // The routes never save anything. The page merges their answer into the shots it holds now (which may have
 // changed while the request ran) and saves the result through the normal ideas save.

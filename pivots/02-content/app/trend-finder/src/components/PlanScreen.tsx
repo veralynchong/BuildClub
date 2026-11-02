@@ -19,6 +19,7 @@ import { CameraTags } from './CameraTags'
 import { CameraSelects } from './CameraSelects'
 import { FromScript } from './FromScript'
 import { cameraLabels, looksLikeInterview } from '../lib/shots'
+import { newShotId } from '../lib/storyboard'
 import { getActiveLang, t } from '../lib/i18n'
 import { approverNote } from '../lib/approverNote'
 
@@ -334,7 +335,7 @@ export function PlanScreen(p: Props) {
                   className="btn btn-ghost btn-sm"
                   onClick={() => {
                     setAddedAt(shots.length)
-                    setShots([...shots, { time: '', shot: '' }])
+                    setShots([...shots, { id: newShotId(), time: '', shot: '' }])
                   }}
                 >
                   {t('plan.screen.addShot')}

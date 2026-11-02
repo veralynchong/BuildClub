@@ -4,7 +4,7 @@
 import math
 from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 
 class SearchVideo(BaseModel):
@@ -81,6 +81,8 @@ Movement = Literal["static", "pan", "tilt", "push_in", "handheld", "tracking"]
 
 
 class Shot(BaseModel):
+    # Stable id the node canvas keys its rows on. Optional on the wire; SavedIdea fills it in (fill_shot_ids).
+    id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,40}$")
     time: str
     shot: str
     text: Optional[str] = None
@@ -100,6 +102,28 @@ class Shot(BaseModel):
     edited: Optional[bool] = None
     frameImage: Optional[str] = Field(default=None, max_length=500, pattern=r"^(/|https?://)")
     palette: Optional[list[Hex]] = Field(default=None, max_length=8)
+
+
+def fill_shot_ids(shots: list[Shot]) -> list[Shot]:
+    """Give every shot a unique id. Same rule as fillShotIds in src/lib/storyboard.ts: keep the first use of
+    an id; a shot without one, or repeating an earlier one, gets s{n} (n = position), then s{n}-2, -3, ..."""
+    used = {s.id for s in shots if s.id}
+    seen: set[str] = set()
+    out = []
+    for i, s in enumerate(shots):
+        if s.id and s.id not in seen:
+            seen.add(s.id)
+            out.append(s)
+            continue
+        new = f"s{i + 1}"
+        k = 2
+        while new in used:
+            new = f"s{i + 1}-{k}"
+            k += 1
+        used.add(new)
+        seen.add(new)
+        out.append(s.model_copy(update={"id": new}))
+    return out
 
 
 Tag = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
@@ -138,6 +162,12 @@ class SavedIdea(BaseModel):
     history: Optional[list[Decision]] = None
     # When the idea last changed, set by the server on save (never by the client); the board's "Stuck" flag reads it.
     updatedAt: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _fill_shot_ids(self):
+        if self.shots:
+            self.shots = fill_shot_ids(self.shots)
+        return self
 
 
 class NewComment(BaseModel):

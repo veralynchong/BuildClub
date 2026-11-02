@@ -61,6 +61,7 @@ export type Angle = 'eye_level' | 'high' | 'low' | 'top_down'
 export type Movement = 'static' | 'pan' | 'tilt' | 'push_in' | 'handheld' | 'tracking'
 
 export interface Shot {
+  id?: string
   time: string
   shot: string
   text?: string
