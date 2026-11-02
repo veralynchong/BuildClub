@@ -817,3 +817,49 @@ def test_render_input_passes_music_url_only_when_music_is_on(client, setup, tmp_
     assert off["musicUrl"] is None
     assert on["musicUrl"] == "music-m1.mp3" and files["music-m1.mp3"].is_file()
     assert on["project"]["music"] == {"volume": 0.3}
+
+
+# --- Task 11: captions read the shots' lines ---
+
+def with_lines(**lines):
+    from models import SavedIdea
+    shots = [{"id": sid, "time": "0-3s", "shot": f"shot {sid}", "line": line} for sid, line in lines.items()]
+    store_ideas(SavedIdea(id="ia", videoId="v-ia", clientId="a", status="approved", dueDate="2026-11-02", notes="",
+                          shots=shots), idea("iw", "waiting"))
+
+
+def test_signature_changes_when_shot_line_changes(client, setup):
+    p = {**project(clip()), "captions": {"enabled": True}}
+    p["clips"][0]["source"]["shotId"] = "s1"
+
+    def sig(proj=p):
+        with server.db() as conn:
+            return editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, proj)
+
+    with_lines(s1="three days")
+    one = sig()
+    assert one == sig()
+    with_lines(s1="four days")
+    two = sig()
+    assert one != two  # a changed line makes the export stale
+    with_lines(s1="four days", s2="more")
+    assert two != sig()
+    assert sig({**p, "captions": {"enabled": False}}) != sig()
+
+
+def test_render_input_fills_lines_from_the_shots(client, setup, tmp_path):
+    with_lines(s1="第一句", s2="  ", s3="third")
+    f = tmp_path / "a.mp4"
+    f.write_bytes(b"x")
+    with server.db() as conn:
+        reel, _ = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"}, project(clip()), {"take:t1": src("take:t1", f)})
+        assert reel["lines"] == {"s1": "第一句", "s3": "third"}
+        assert editing.render_input(None, tmp_path, {"id": "ia"}, project(clip()), {"take:t1": src("take:t1", f)})[0]["lines"] == {}
+
+
+def test_list_voice_returns_files_with_words(client, voice_env):
+    assert client.get("/api/ideas/ia/edit/voice").json() == {"voices": []}
+    vid = put_voice(client).json()["id"]
+    got = client.get("/api/ideas/ia/edit/voice").json()["voices"]
+    assert [v["id"] for v in got] == [vid] and got[0]["duration"] == 3.0 and got[0]["words"][0]["text"] == "hello"
+    assert client.get("/api/ideas/iw/edit/voice").status_code == 409

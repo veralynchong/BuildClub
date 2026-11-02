@@ -32,6 +32,14 @@ export type TextItem = {
 // The music file is the plan's cut music; the project keeps only how loud it plays (0 to 1).
 export type MusicSetting = { volume: number }
 
+export type VoiceSeg = {
+  id: string
+  source: 'tts' | 'recording' | 'upload'
+  start: number // seconds on the timeline
+  volume: number // 0 to 2
+  edits: Record<string, string> // page index (within this voiceover) to the text shown instead
+}
+
 export type EditProject = {
   fps: 30
   width: 1080
@@ -40,7 +48,7 @@ export type EditProject = {
   texts: TextItem[]
   captions: { enabled: boolean }
   music: MusicSetting | null
-  voiceover: Record<string, unknown>[]
+  voiceover: VoiceSeg[]
   primaries: Record<string, ClipSource>
   showLogo: boolean
 }

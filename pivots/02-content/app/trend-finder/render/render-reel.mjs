@@ -141,8 +141,8 @@ async function main() {
   try {
     const urls = Object.fromEntries(Object.entries(input.urls || {}).map(([k, name]) => [k, `${base}/${encodeURIComponent(name)}`]))
     const served = (name) => (name ? `${base}/${encodeURIComponent(name)}` : null)
-    // fontUrl stays empty: Reel resolves the bundled font with staticFile. Music and the logo are file names in mediaDir too.
-    const inputProps = { ...input, urls, fontUrl: '', musicUrl: served(input.musicUrl), brand: { ...input.brand, logoUrl: served(input.brand && input.brand.logoUrl) } }
+    // fontUrl stays empty: Reel resolves the bundled font with staticFile. Music, voice and the logo are file names in mediaDir too.
+    const inputProps = { ...input, urls, fontUrl: '', musicUrl: served(input.musicUrl), voice: (input.voice || []).map((v) => ({ ...v, url: served(v.url) })), brand: { ...input.brand, logoUrl: served(input.brand && input.brand.logoUrl) } }
     const composition = await selectComposition({ serveUrl, id: 'Reel', inputProps, port: PORT })
     let last = -1
     await renderMedia({

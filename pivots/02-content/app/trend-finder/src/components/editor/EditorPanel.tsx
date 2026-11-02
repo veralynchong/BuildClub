@@ -7,11 +7,15 @@ import { t } from '../../lib/i18n'
 import type { SourcesHook } from '../../lib/editor/useSources'
 import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import type { EditHook } from '../../lib/editor/useEditProject'
+import { getVoices, type VoiceInfo } from '../../lib/editor/api'
+import { fillShotIds } from '../../lib/storyboard'
 import { reelDurationInFrames, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { ReelInput } from '../../lib/editor/types'
 import { Reel } from '../../remotion/Reel'
 import { ToolTabs, type Tool } from './ToolTabs'
 import { TextTool } from './tools/TextTool'
+import { CaptionTool } from './tools/CaptionTool'
+import { VoiceTool } from './tools/VoiceTool'
 import { MusicTool, type MusicFile } from './tools/MusicTool'
 import { BrandTool } from './tools/BrandTool'
 import { Timeline } from './Timeline'
@@ -32,12 +36,13 @@ interface Props {
 const FONT_URL = '/fonts/NotoSansTC-VF.ttf'
 
 export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, readOnly }: Props) {
-  const { project, loadError, save, stale, update, flush, reload } = edit
+  const { project, loadError, save, stale, update, flush, current, reload } = edit
   const { sources, error: sourceError } = footage
   const [skipped, setSkipped] = useState<string[]>([])
   const [frame, setFrame] = useState(0)
   const [tool, setTool] = useState<Tool>('clips')
   const [musicFile, setMusicFile] = useState<MusicFile | undefined>(undefined)
+  const [voices, setVoices] = useState<Record<string, VoiceInfo>>({})
   const { clients } = useApp()
   const client = clients.find((c) => c.id === clientId)
   const kit = client?.brand
@@ -57,6 +62,25 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     }
   }, [ideaId])
 
+  // Voiceover files (with their word times) are looked up once; VoiceTool keeps the list current.
+  useEffect(() => {
+    let cancelled = false
+    getVoices(ideaId).then(
+      (list) => !cancelled && setVoices((cur) => ({ ...Object.fromEntries(list.map((v) => [v.id, v])), ...cur })),
+      () => {},
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [ideaId])
+  const filled = useMemo(() => fillShotIds(shots), [shots])
+  const lines = useMemo(() => Object.fromEntries(filled.flatMap((s) => (s.id && s.line?.trim() ? [[s.id, s.line]] : []))), [filled])
+  const words = useMemo(() => Object.fromEntries(Object.values(voices).flatMap((v) => (v.words ? [[v.id, v.words]] : []))), [voices])
+  const voiceInput = useMemo(
+    () => (project?.voiceover ?? []).flatMap((seg) => (voices[seg.id] ? [{ id: seg.id, url: voices[seg.id].url, words: voices[seg.id].words }] : [])),
+    [project?.voiceover, voices],
+  )
+
   const logo = kit?.logo
   const brand = useMemo(
     () => ({
@@ -68,8 +92,8 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   )
   const musicUrl = musicFile ? `/api/ideas/${encodeURIComponent(ideaId)}/cut/music/file?v=${encodeURIComponent(`${musicFile.name}-${musicFile.size}`)}` : null
   const inputProps = useMemo<ReelInput | null>(
-    () => (project ? { project, urls, lines: {}, musicUrl, voice: [], brand, fontUrl: FONT_URL } : null),
-    [project, urls, musicUrl, brand],
+    () => (project ? { project, urls, lines, musicUrl, voice: voiceInput, brand, fontUrl: FONT_URL } : null),
+    [project, urls, lines, musicUrl, voiceInput, brand],
   )
 
   // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
@@ -154,6 +178,22 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
           </>
         )}
         {tool === 'text' && <TextTool project={project} seconds={frame / 30} readOnly={locked} onProject={update} />}
+        {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} />}
+        {tool === 'voice' && (
+          <VoiceTool
+            ideaId={ideaId}
+            project={project}
+            current={current}
+            flush={flush}
+            voices={voices}
+            onVoice={(v) => setVoices((cur) => ({ ...cur, [v.id]: v }))}
+            onVoiceGone={(id) => setVoices((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => k !== id)))}
+            lineTexts={filled.map((s) => s.line ?? '')}
+            seconds={frame / 30}
+            readOnly={locked}
+            onProject={update}
+          />
+        )}
         {tool === 'music' && <MusicTool ideaId={ideaId} project={project} file={musicFile} onFile={setMusicFile} readOnly={locked} onProject={update} />}
         {tool === 'brand' && <BrandTool client={client} project={project} readOnly={locked} onProject={update} />}
       </div>

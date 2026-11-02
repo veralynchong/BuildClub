@@ -26,6 +26,7 @@ import generations
 import renders
 import takes
 from canvas import ID_RE
+from models import Shot, fill_shot_ids
 
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS edit_projects (idea_id TEXT PRIMARY KEY, version INTEGER NOT NULL, "
@@ -282,7 +283,7 @@ def _source_files(conn, media: Path, idea_id: str) -> dict[str, Path]:
 
 # The project fields that change the rendered video. Anything else in the
 # project (such as the pinned primaries) does not make an export stale.
-RENDER_FIELDS = ("clips", "showLogo", "voiceover", "texts", "music")
+RENDER_FIELDS = ("clips", "showLogo", "voiceover", "texts", "music", "captions")
 
 
 def voice_folder(media: Path, idea_id: str) -> Optional[Path]:
@@ -339,6 +340,17 @@ def plan_client(conn, idea_id: str) -> dict:
     return next((c for c in stored("clients") if idea and c.get("id") == idea.get("clientId")), {})
 
 
+def shot_lines(conn, idea_id: str) -> dict:
+    """{shot id: the shot's script line} for the plan's shots that have a line. The captions read these, so a
+    changed line makes an export stale."""
+    if conn is None:
+        return {}
+    row = conn.execute("SELECT value FROM store WHERE key = 'ideas'").fetchone()
+    idea = next((i for i in json.loads(row[0]) if i.get("id") == idea_id), None) if row else None
+    shots = fill_shot_ids([Shot.model_validate(x) for x in idea.get("shots") or []]) if idea else []
+    return {s.id: s.line for s in shots if s.line and s.line.strip()}
+
+
 def client_brand(conn, idea_id: str) -> dict:
     return plan_client(conn, idea_id).get("brand") or {}
 
@@ -369,7 +381,8 @@ def signature(conn, media: Path, idea: dict, project: dict) -> str:
         except OSError:
             stamps["music"] = f"{row[0]}:0"
     relevant = {k: project.get(k) for k in RENDER_FIELDS}
-    text = json.dumps([relevant, sorted(stamps.items()), client_brand(conn, idea["id"])], sort_keys=True)
+    text = json.dumps([relevant, sorted(stamps.items()), client_brand(conn, idea["id"]), shot_lines(conn, idea["id"])],
+                      sort_keys=True)
     return hashlib.sha1(text.encode()).hexdigest()[:16]
 
 
@@ -407,7 +420,7 @@ def render_input(conn, media: Path, idea: dict, project: dict, sources: dict) ->
             name = f"voice-{v['id']}{path.suffix}"
             files[name] = path
             voice.append({"id": v["id"], "url": name, "words": voice_words(path)})
-    reel = {"project": project, "urls": urls, "lines": {}, "musicUrl": music_url, "voice": voice,
+    reel = {"project": project, "urls": urls, "lines": shot_lines(conn, idea["id"]), "musicUrl": music_url, "voice": voice,
             "brand": {"font": kit.get("font", "Noto Sans TC"), "color": kit.get("color"), "logoUrl": logo},
             "fontUrl": ""}
     return reel, files
@@ -776,6 +789,22 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             part.unlink(missing_ok=True)
             return error(404, "That voiceover's file is gone.")
         return finish_upload(idea_id, part, ext)  # the same checks as an upload
+
+    @router.get("/api/ideas/{idea_id}/edit/voice")
+    def list_voice(idea_id: str):
+        """Every voiceover file of the plan with its length and word times, so a reloaded editor can play and caption them."""
+        refused = gate(idea_id)
+        if refused:
+            return refused
+        out = []
+        for vid in sorted(voice_ids(media_dir(), idea_id)):
+            path = voice_file(media_dir(), idea_id, vid)
+            info = _probe(path) if path else None
+            if path is None or info is None:
+                continue
+            out.append({"id": vid, "url": f"/api/ideas/{idea_id}/edit/voice/{vid}/file", "duration": info["duration"],
+                        "words": voice_words(path)})
+        return {"voices": out}
 
     @router.get("/api/ideas/{idea_id}/edit/voice/{vid}/file")
     def get_voice(idea_id: str, vid: str):

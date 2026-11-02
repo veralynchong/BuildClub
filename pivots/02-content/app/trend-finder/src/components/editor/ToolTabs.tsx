@@ -1,12 +1,14 @@
 import { t } from '../../lib/i18n'
 import type { Key } from '../../lib/i18n'
 
-const TOOLS = ['clips', 'text', 'music', 'brand'] as const
+const TOOLS = ['clips', 'text', 'captions', 'voice', 'music', 'brand'] as const
 export type Tool = (typeof TOOLS)[number]
 
 const LABEL: Record<Tool, Key> = {
   clips: 'editor.tab.clips',
   text: 'editor.tab.text',
+  captions: 'editor.tab.captions',
+  voice: 'editor.tab.voice',
   music: 'editor.tab.music',
   brand: 'editor.tab.brand',
 }

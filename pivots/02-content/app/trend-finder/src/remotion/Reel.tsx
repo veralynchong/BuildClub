@@ -1,5 +1,6 @@
-import type { CSSProperties } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, staticFile } from 'remotion'
+import { pageEnd, projectPages } from '../lib/editor/captions.ts'
 import { clipFrames, reelDurationInFrames, sourceKey, toFrames } from '../lib/editor/timeline.ts'
 import type { ReelInput, TextItem } from '../lib/editor/types.ts'
 import { useReelFont } from './font.ts'
@@ -16,6 +17,9 @@ const POSITION: Record<TextItem['position'], CSSProperties> = {
   bottom: { bottom: 1920 - 1300 },
 }
 
+// Captions: 56 px, white with a black outline, centred in the same column, the bottom edge at y = 1460.
+const CAPTION_BOX: CSSProperties = { position: 'absolute', left: 70, width: 940, bottom: 1920 - 1460, textAlign: 'center', overflowWrap: 'anywhere' }
+
 // White and brand-colour text get a black outline; black text gets a white one (F25).
 function textLook(color: TextItem['color'], brand: string | null): { fill: string; stroke: string } {
   if (color === 'black') return { fill: '#000000', stroke: '#ffffff' }
@@ -24,10 +28,14 @@ function textLook(color: TextItem['color'], brand: string | null): { fill: strin
 }
 
 export function Reel(props: ReelInput) {
-  const { project, urls, fontUrl, brand, musicUrl } = props
+  const { project, urls, fontUrl, brand, musicUrl, lines, voice } = props
   useReelFont(fontUrl || staticFile(BUNDLED_FONT))
   const spans = clipFrames(project)
   const total = reelDurationInFrames(project)
+  const pages = useMemo(() => {
+    const words = Object.fromEntries(voice.flatMap((v) => (v.words ? [[v.id, v.words]] : [])))
+    return projectPages(project, lines, words)
+  }, [project, lines, voice])
   const family = `'${brand.font || 'Noto Sans TC'}', sans-serif`
   return (
     <AbsoluteFill style={{ background: '#000' }}>
@@ -66,9 +74,37 @@ export function Reel(props: ReelInput) {
           </Sequence>
         )
       })}
+      {pages.map((pg, i) => {
+        const from = toFrames(pg.startMs / 1000)
+        if (from >= total) return null
+        const duration = Math.max(1, Math.min(toFrames(pageEnd(pg) / 1000), total) - from)
+        return (
+          <Sequence key={i} from={from} durationInFrames={duration} layout="none">
+            <div style={CAPTION_BOX}>
+              <span
+                style={{
+                  fontFamily: family, fontSize: 56, fontWeight: 700, lineHeight: 1.25, whiteSpace: 'pre-wrap',
+                  color: '#ffffff', WebkitTextStroke: '4px #000000', paintOrder: 'stroke fill',
+                }}
+              >
+                {pg.text}
+              </span>
+            </div>
+          </Sequence>
+        )
+      })}
       {project.showLogo && brand.logoUrl ? (
         <Img src={brand.logoUrl} style={{ position: 'absolute', top: 48, right: 48, width: 180, height: 'auto' }} />
       ) : null}
+      {project.voiceover.map((seg) => {
+        const file = voice.find((v) => v.id === seg.id)
+        if (!file || toFrames(seg.start) >= total) return null
+        return (
+          <Sequence key={seg.id} from={toFrames(seg.start)} layout="none">
+            <Audio src={file.url} volume={seg.volume} />
+          </Sequence>
+        )
+      })}
       {project.music && musicUrl ? <Audio src={musicUrl} volume={project.music.volume} loop={false} /> : null}
     </AbsoluteFill>
   )

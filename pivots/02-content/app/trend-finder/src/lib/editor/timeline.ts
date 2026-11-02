@@ -1,5 +1,5 @@
 // Pure timeline maths for the edit project. No remotion import: the Vite app and the unit tests use it too.
-import type { Clip, ClipSource, EditProject, SourceInfo, TextItem } from './types.ts'
+import type { Clip, ClipSource, EditProject, SourceInfo, TextItem, VoiceSeg } from './types.ts'
 import type { Shot } from '../../types'
 import type { CanvasDoc, CanvasNode, Generation } from '../canvas/types.ts'
 import type { Take } from '../takes.ts'
@@ -326,4 +326,36 @@ export function newTextId(p: EditProject): string {
 // The texts on screen at `t` seconds.
 export function textsAt(p: EditProject, t: number): TextItem[] {
   return p.texts.filter((x) => x.start <= t && t < x.end)
+}
+
+// ---- voiceovers ----
+export const MAX_VOICE = 20 // backend/editing.py MAX_VOICE
+
+export function addVoice(p: EditProject, seg: VoiceSeg): EditProject {
+  if (p.voiceover.length >= MAX_VOICE || p.voiceover.some((v) => v.id === seg.id)) return p
+  return { ...p, voiceover: [...p.voiceover, seg] }
+}
+
+export function updateVoice(p: EditProject, id: string, patch: Partial<Omit<VoiceSeg, 'id'>>): EditProject {
+  if (!p.voiceover.some((v) => v.id === id)) return p
+  return { ...p, voiceover: p.voiceover.map((v) => (v.id === id ? { ...v, ...patch } : v)) }
+}
+
+export function removeVoice(p: EditProject, id: string): EditProject {
+  if (!p.voiceover.some((v) => v.id === id)) return p
+  return { ...p, voiceover: p.voiceover.filter((v) => v.id !== id) }
+}
+
+// Sets (or, with undefined, clears) the caption of a shot: the whole line, kept on the shot's first clip (F27). The
+// shot's other clips lose their own override so this one is the only one.
+export function setShotCaption(p: EditProject, shotId: string, text: string | undefined): EditProject {
+  const first = p.clips.findIndex((c) => c.source.shotId === shotId)
+  if (first < 0) return p
+  const clips = p.clips.map((c, k) => {
+    if (c.source.shotId !== shotId) return c
+    const { caption: _old, ...rest } = c
+    void _old
+    return k === first && text !== undefined ? { ...rest, caption: text } : rest
+  })
+  return { ...p, clips }
 }
