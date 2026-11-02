@@ -157,7 +157,7 @@ def test_restart_fails_unfinished_jobs(gen):
     with server.db() as conn:
         conn.execute("INSERT INTO generations (id, idea_id, node_id, kind, model, inputs, input_hash, status, "
                      "est_usd, created_at) VALUES ('r1','ia','n1','image','mock-image','{}','h','running',0,1)")
-    generations.fail_unfinished(server.db)
+    generations.recover(server.db, server.gen_jobs)
     row = gen.get("/api/ideas/ia/gen/r1").json()
     assert row["status"] == "failed" and row["error"] == "The server restarted before this finished. Try again."
 
@@ -300,3 +300,237 @@ def test_mock_video_failure_hides_ffmpeg_output_and_cleans_up(gen, monkeypatch):
     assert row["status"] == "failed" and row["error"] == "The mock video failed. Try again."
     assert "secret" not in row["error"]
     assert list((server.MEDIA_DIR / "ia" / "gen").glob("*.part*")) == []
+
+
+# --- real providers behind a fake adapter: spend, refund, unknown, resume, input rules ---
+
+PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
+
+
+class FakeAdapter:
+    """submit returns `rid` (or raises); poll walks `polls` (a Poll, an exception, or a list of them)."""
+
+    def __init__(self, rid="req-1", submit_error=None, polls=None):
+        self.rid, self.submit_error = rid, submit_error
+        self.polls = list(polls if polls is not None else [gen_providers.Poll("done", data=PNG_BYTES, ext="png")])
+        self.submits, self.poll_ids, self.jobs = 0, [], []
+
+    def submit(self, job):
+        self.submits += 1
+        self.jobs.append(job)
+        if self.submit_error:
+            raise self.submit_error
+        return self.rid
+
+    def poll(self, job, request_id):
+        self.poll_ids.append(request_id)
+        step = self.polls.pop(0) if len(self.polls) > 1 else self.polls[0]
+        if isinstance(step, Exception):
+            raise step
+        return step
+
+
+@pytest.fixture
+def real(gen, monkeypatch):
+    """fal-backed models with a fake adapter; spends and refunds are recorded, not charged."""
+    monkeypatch.setenv("FAL_KEY", "k")
+    monkeypatch.setattr(generations, "GEN_POLL_S", 0)
+    monkeypatch.setattr(generations, "MOCK_POLL_S", 0)
+    gen.spent, gen.refunds, gen.adapter = [], [], FakeAdapter()
+    monkeypatch.setattr(server.gen_router, "budget", lambda kind, usd: gen.spent.append((kind, usd)))
+    monkeypatch.setattr(server.gen_jobs, "refund", lambda kind, usd: gen.refunds.append((kind, usd)))
+    monkeypatch.setattr(gen_providers, "adapter_for", lambda provider, *a, **k: gen.adapter)
+    return gen
+
+
+def row_of(client, gid, idea_id="ia"):
+    return client.get(f"/api/ideas/{idea_id}/gen/{gid}").json()
+
+
+def request_id(gid):
+    with server.db() as conn:
+        return conn.execute("SELECT provider_request_id FROM generations WHERE id = ?", (gid,)).fetchone()[0]
+
+
+def test_create_spends_estimate(real):
+    r = post(real, model="seedream-4.5")
+    assert r.status_code == 201
+    assert real.spent == [("image", 0.04)]
+    row = row_of(real, r.json()["id"])
+    assert row["status"] == "done" and row["actualUsd"] == 0.04 and row["estUsd"] == 0.04
+    assert row["after"] is None and real.refunds == []
+    assert request_id(row["id"]) == "req-1"
+
+
+def test_over_budget_429_writes_no_row(real, monkeypatch):
+    monkeypatch.setattr(server.gen_router, "budget",
+                        lambda kind, usd: generations.error(429, "Today's image generation budget has US$0.01 left."))
+    r = post(real, model="seedream-4.5")
+    assert r.status_code == 429 and "US$0.01 left" in r.json()["error"]
+    assert real.get("/api/ideas/ia/gen").json() == []
+    assert real.adapter.submits == 0
+
+
+def test_invalid_request_spends_nothing(real):
+    assert post(real, model="seedream-4.5", prompt="x" * 5000).status_code == 422
+    assert post(real, model="nope").status_code == 422
+    assert real.spent == []
+
+
+def test_provider_error_fails_and_refunds(real):
+    real.adapter = FakeAdapter(submit_error=gen_providers.ProviderError("The model provider didn't accept this request."))
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "failed" and row["error"] == "The model provider didn't accept this request."
+    assert real.refunds == [("image", 0.04)]
+    real.adapter = FakeAdapter(polls=[gen_providers.Poll("failed", error="The model reported a failure.")])
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "failed" and row["error"] == "The model reported a failure."
+    assert real.refunds == [("image", 0.04)] * 2
+
+
+def test_result_lost_is_unknown_without_refund(real):
+    msg = "The provider didn't answer in time. It may have charged."
+    real.adapter = FakeAdapter(submit_error=gen_providers.ResultLost("x"))
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "unknown" and row["error"] == msg and row["url"] is None
+    real.adapter = FakeAdapter(polls=[gen_providers.ResultLost("gone")])
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "unknown" and row["error"] == msg
+    assert real.refunds == []
+
+
+def test_poll_timeout_marks_unknown_no_refund(real, monkeypatch):
+    monkeypatch.setattr(generations, "GEN_TIMEOUT_S", {"image": 0.05, "video": 0.05})
+    real.adapter = FakeAdapter(polls=[gen_providers.Poll("running")])
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "unknown" and row["error"] == "The provider didn't answer in time. It may have charged."
+    assert real.refunds == [] and len(real.adapter.poll_ids) >= 2
+    assert generations.GEN_TIMEOUT_S  # defaults are checked below
+
+
+def test_default_timeouts():
+    assert generations.GEN_TIMEOUT_S == {"image": 180, "video": 900}
+    assert generations.GEN_POLL_S == 5 and generations.MOCK_POLL_S == 0.2
+
+
+def test_unusable_file_after_success_fails_without_refund(real):
+    real.adapter = FakeAdapter(polls=[gen_providers.FileUnusable("bad")])
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "failed" and row["url"] is None
+    assert row["error"] == "The model finished but its file couldn't be saved. It may have charged."
+    assert real.refunds == []
+
+
+def test_unexpected_error_after_submit_is_unknown(real):
+    real.adapter = FakeAdapter(polls=[RuntimeError("boom")])
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "unknown" and real.refunds == []
+
+
+def test_unexpected_error_before_submit_refunds(real):
+    real.adapter = FakeAdapter(submit_error=RuntimeError("boom"))
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "failed" and row["error"] == "The generation failed. Try again."
+    assert real.refunds == [("image", 0.04)]
+
+
+def test_done_writes_file_atomically(real):
+    real.adapter = FakeAdapter(polls=[RuntimeError("boom")])
+    post(real, model="seedream-4.5")
+    folder = server.MEDIA_DIR / "ia" / "gen"
+    assert not folder.exists() or list(folder.iterdir()) == []
+    real.adapter = FakeAdapter()
+    gid = post(real, model="seedream-4.5").json()["id"]
+    assert sorted(p.name for p in folder.iterdir()) == [f"{gid}.png"]
+    assert (folder / f"{gid}.png").read_bytes() == PNG_BYTES
+    assert real.get(f"/api/ideas/ia/gen/{gid}/file").headers["content-type"] == "image/png"
+
+
+def insert_row(gid, status, request_id=None, model="seedream-4.5", est=0.04, kind="image"):
+    with server.db() as conn:
+        conn.execute("INSERT INTO generations (id, idea_id, node_id, kind, model, inputs, input_hash, status, "
+                     "est_usd, created_at, provider_request_id) VALUES (?,'ia','n_sb_s1',?,?,?,'h',?,?,1,?)",
+                     (gid, kind, model, json.dumps({"prompt": "p"}), status, est, request_id))
+
+
+def test_restart_resumes_polling_rows_with_request_id(real):
+    insert_row("r1", "running", request_id="req-old")
+    generations.recover(server.db, server.gen_jobs)  # the test fixture runs queued ids inline
+    row = row_of(real, "r1")
+    assert row["status"] == "done" and row["actualUsd"] == 0.04
+    assert real.adapter.submits == 0 and real.adapter.poll_ids == ["req-old"]  # polled, never re-submitted
+    assert real.refunds == []
+
+
+def test_restart_fails_and_refunds_unsubmitted(real):
+    insert_row("q1", "queued")
+    insert_row("r2", "running")  # no request id: never reached the provider
+    insert_row("v1", "running", model="mock-video", est=0.0, kind="video")
+    generations.recover(server.db, server.gen_jobs)
+    for gid in ("q1", "r2", "v1"):
+        row = row_of(real, gid)
+        assert row["status"] == "failed" and row["error"] == generations.RESTARTED
+    assert sorted(real.refunds) == [("image", 0.04), ("image", 0.04), ("video", 0.0)]
+    assert real.adapter.submits == 0
+
+
+def test_restart_does_not_touch_finished_or_unknown_rows(real):
+    insert_row("d1", "done", request_id="x")
+    insert_row("u1", "unknown", request_id="x")
+    generations.recover(server.db, server.gen_jobs)
+    assert row_of(real, "d1")["status"] == "done" and row_of(real, "u1")["status"] == "unknown"
+    assert real.refunds == []
+
+
+def test_resumed_gemini_row_without_result_is_unknown(real):
+    real.adapter = FakeAdapter(polls=[gen_providers.ResultLost("The image is no longer in memory.")])
+    insert_row("g1", "running", request_id="gemini-1")
+    generations.recover(server.db, server.gen_jobs)
+    assert row_of(real, "g1")["status"] == "unknown" and real.refunds == []
+
+
+def test_model_input_rules_enforced(real):
+    a = post(real, model="seedream-4.5").json()["id"]  # a finished image to use as an input
+    real.spent.clear()
+    c = real.get("/api/ideas/ia/canvas").json()
+    c["doc"]["nodes"].append({"id": "n_vid", "type": "video", "position": {"x": 0, "y": 0}, "data": {}})
+    assert real.put("/api/ideas/ia/canvas", json={"version": c["version"], "doc": c["doc"]}).status_code == 200
+    # hailuo needs a start frame and takes no reference image
+    r = post(real, nodeId="n_vid", model="hailuo-2.3-fast", duration=6)
+    assert r.status_code == 422 and r.json()["error"] == "This model needs a start frame."
+    r = post(real, nodeId="n_vid", model="hailuo-2.3-fast", duration=6, startFrame=a, reference=a)
+    assert r.status_code == 422 and r.json()["error"] == "This model doesn't take a reference image."
+    # seedream (image) takes no start frame; a reference is fine
+    r = post(real, model="seedream-4.5", startFrame=a)
+    assert r.status_code == 422 and r.json()["error"] == "This model doesn't take a start frame."
+    assert post(real, model="seedream-4.5", reference=a).status_code == 201
+    assert real.spent == [("image", 0.04)]  # rejected requests spent nothing
+    ok = post(real, nodeId="n_vid", model="hailuo-2.3-fast", duration=6, startFrame=a)
+    assert ok.status_code == 201
+    assert real.spent[-1] == ("video", round(0.032 * 6, 4))
+
+
+def test_worker_passes_input_files_to_the_adapter(real):
+    a = post(real, model="seedream-4.5").json()["id"]
+    gid = post(real, model="seedream-4.5", reference=a).json()["id"]
+    job = real.adapter.jobs[-1]
+    assert job.references == [server.MEDIA_DIR / "ia" / "gen" / f"{a}.png"] and job.start is None
+    assert row_of(real, gid)["status"] == "done"
+
+
+def test_waiting_status_and_after_column(real):
+    insert_row("w1", "waiting")
+    with server.db() as conn:
+        conn.execute("UPDATE generations SET after = 'a1' WHERE id = 'w1'")
+    assert row_of(real, "w1")["after"] == "a1"
+    generations.recover(server.db, server.gen_jobs)
+    assert row_of(real, "w1")["status"] == "waiting"  # chaining is a later task
+
+
+def test_migrate_adds_columns_to_an_old_table():
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE generations (id TEXT PRIMARY KEY, status TEXT)")
+    generations.migrate(conn)
+    generations.migrate(conn)  # twice is fine
+    assert {"provider_request_id", "after"} <= {r[1] for r in conn.execute("PRAGMA table_info(generations)")}

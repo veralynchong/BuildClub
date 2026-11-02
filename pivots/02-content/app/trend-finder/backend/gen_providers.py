@@ -1,7 +1,8 @@
 """Provider adapters for generated media: mock (free), fal (queue API) and Gemini (images), behind one
 interface, plus fetch_media, the safe download helper. All HTTP goes through an injectable `Http`.
 
-Errors: ProviderError means the provider explicitly refused or reported failure (or returned bad media), so
+Errors: FileUnusable means the provider reported success but its file is unusable (no refund, may have
+charged). ProviderError means the provider explicitly refused or reported failure (or returned bad media), so
 the caller may refund. ResultLost means a request was already sent and we lost track of it (no answer to a
 submit, a 4xx or missing key while polling, Gemini's image gone after a restart): it may have been charged,
 so the caller must not refund and must not call it a plain failure. A network error, 5xx, 408 or 429 while
@@ -49,6 +50,11 @@ class ProviderError(Exception):
 
 class ResultLost(Exception):
     """A request that may have been charged has no result any more. Not a ProviderError: do not refund."""
+
+
+class FileUnusable(Exception):
+    """The provider reported success but its file is unusable (download failed, not media, too big, bad data).
+    Not a ProviderError: the provider may have charged, so do not refund."""
 
 
 class _Transient(Exception):
@@ -306,7 +312,10 @@ class FalAdapter:
             if not isinstance(url, str):
                 log_provider("fal result without media", status, data)
                 raise ResultLost("fal completed without a media url.")
-            media, ext = fetch_media(self._http, url, job.model["kind"])
+            try:
+                media, ext = fetch_media(self._http, url, job.model["kind"])
+            except ProviderError:  # fal said COMPLETED, so the file is the problem, not the request
+                raise FileUnusable("The file fal produced can't be used.")
             return Poll("done", data=media, ext=ext)
         except _Transient:
             return Poll("running")
@@ -350,8 +359,11 @@ class GeminiAdapter:
                     try:
                         raw = base64.b64decode(inline["data"], validate=True)
                     except ValueError:
-                        raise ProviderError(NOT_MEDIA)
-                    image, ext = check_media(raw, "image")
+                        raise FileUnusable(NOT_MEDIA)
+                    try:
+                        image, ext = check_media(raw, "image")
+                    except ProviderError:  # Gemini answered with an image part we can't use
+                        raise FileUnusable(NOT_MEDIA)
                     rid = f"gemini-{uuid.uuid4().hex}"
                     self._results[rid] = (image, ext)
                     return rid

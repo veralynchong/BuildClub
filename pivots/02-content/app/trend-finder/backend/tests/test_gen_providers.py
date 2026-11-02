@@ -255,12 +255,31 @@ def test_gemini_image_inline_data(tmp_path):
 def test_gemini_refusal_is_provider_error():
     refusal = jr({"candidates": [{"content": {"parts": [{"text": "I can't draw that."}]}}]})
     for reply in (refusal, jr({"candidates": []}), jr({"promptFeedback": {"blockReason": "SAFETY"}}),
-                  jr({"error": {"message": "bad key"}}, 400), jr({}, 503),
-                  gemini_reply(data=b"<html>not an image</html>")):
+                  jr({"error": {"message": "bad key"}}, 400), jr({}, 503)):
         with pytest.raises(gp.ProviderError) as e:
             gp.adapter_for("gemini", FakeHttp({("POST", GEMINI_URL): reply})).submit(
                 gp.Job(GEMINI_MODEL, "p", None, [], None))
         assert "I can't draw" not in str(e.value) and "bad key" not in str(e.value)
+
+
+def test_gemini_unusable_image_data_is_file_unusable():
+    assert not issubclass(gp.FileUnusable, gp.ProviderError)  # the provider answered: no refund
+    bad_b64 = jr({"candidates": [{"content": {"parts": [{"inlineData": {"mimeType": "image/png", "data": "!!"}}]}}]})
+    for reply in (gemini_reply(data=b"<html>not an image</html>"), gemini_reply(data=MP4), bad_b64):
+        with pytest.raises(gp.FileUnusable):
+            gp.adapter_for("gemini", FakeHttp({("POST", GEMINI_URL): reply})).submit(
+                gp.Job(GEMINI_MODEL, "p", None, [], None))
+
+
+def test_fal_file_problem_after_completed_is_file_unusable():
+    rid = json.dumps({"id": "r1", "status_url": STATUS_URL, "response_url": RESULT_URL})
+    job = gp.Job(VIDEO_MODEL, "p", None, [], 5)
+    media = "https://v3.fal.media/o.mp4"
+    for file_reply in ((404, {}, b""), (200, {}, b"<html>oops</html>"), (200, {}, PNG)):
+        http = FakeHttp({("GET", STATUS_URL): jr({"status": "COMPLETED"}),
+                         ("GET", RESULT_URL): jr({"video": {"url": media}}), ("GET", media): file_reply})
+        with pytest.raises(gp.FileUnusable):
+            gp.adapter_for("fal", http).poll(job, rid)
 
 
 def test_gemini_timeout_is_result_lost_but_http_errors_are_provider_errors():

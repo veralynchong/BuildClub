@@ -133,7 +133,7 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
 
 @contextlib.asynccontextmanager
 async def lifespan(_app):
-    generations.fail_unfinished(db)
+    generations.recover(db, gen_jobs)
     renders.recover(db)  # a cut that was running when the server stopped will never finish
     yield
 
@@ -762,6 +762,7 @@ def db() -> sqlite3.Connection:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
+    generations.migrate(conn)
     return conn
 
 

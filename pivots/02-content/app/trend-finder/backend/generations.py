@@ -22,14 +22,22 @@ SCHEMA = (
     "CREATE TABLE IF NOT EXISTS generations (id TEXT PRIMARY KEY, idea_id TEXT NOT NULL, node_id TEXT NOT NULL, "
     "kind TEXT NOT NULL, model TEXT NOT NULL, inputs TEXT NOT NULL, input_hash TEXT NOT NULL, "
     "status TEXT NOT NULL, est_usd REAL NOT NULL, actual_usd REAL, file TEXT, source_url TEXT, error TEXT, "
-    "created_at INTEGER NOT NULL, finished_at INTEGER)",
+    "created_at INTEGER NOT NULL, finished_at INTEGER, provider_request_id TEXT, after TEXT)",
     "CREATE INDEX IF NOT EXISTS generations_by_node ON generations (idea_id, node_id)",
 )
 
 MODELS_FILE = Path(__file__).parent / "gen_models.json"
 RESTARTED = "The server restarted before this finished. Try again."
+# status: waiting (for an upstream row), queued, running, done, failed, unknown (the provider may have charged)
 COLUMNS = ("id, idea_id, node_id, kind, model, inputs, input_hash, status, est_usd, actual_usd, file, "
-           "source_url, error, created_at, finished_at")
+           "source_url, error, created_at, finished_at, after")
+NCOLUMNS = COLUMNS.count(",") + 1
+GEN_POLL_S = float(os.environ.get("GEN_POLL_S", 5))
+MOCK_POLL_S = 0.2
+GEN_TIMEOUT_S = {"image": 180, "video": 900}
+LOST = "The provider didn't answer in time. It may have charged."
+FILE_LOST = "The model finished but its file couldn't be saved. It may have charged."
+FAILED = "The generation failed. Try again."
 MAX_PROMPT = 4000
 CSP = {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"}
 NODE_FOR_KIND = {"image": "storyboard", "video": "video"}  # the canvas node type each model kind fills
@@ -50,6 +58,13 @@ def image_header_ok(ext: str, head: bytes) -> bool:
 
 
 KEY_ENV = {"fal": "FAL_KEY", "gemini": "GEMINI_API_KEY"}
+
+
+def migrate(conn) -> None:
+    have = {r[1] for r in conn.execute("PRAGMA table_info(generations)")}
+    for column in ("provider_request_id", "after"):
+        if column not in have:
+            conn.execute(f"ALTER TABLE generations ADD COLUMN {column} TEXT")
 
 
 def load_models() -> list[dict]:
@@ -89,11 +104,11 @@ def estimate_usd(model: dict, duration: Optional[float]) -> float:
 
 def to_json(row) -> dict:
     (gid, idea_id, node_id, kind, model, inputs, _hash, status, est, actual, file, source_url, err,
-     created, finished) = row
+     created, finished, after) = row
     url = source_url or (f"/api/ideas/{idea_id}/gen/{gid}/file" if file and status == "done" else None)
     return {"id": gid, "ideaId": idea_id, "nodeId": node_id, "kind": kind, "model": model,
             "inputs": json.loads(inputs), "status": status, "estUsd": est, "actualUsd": actual, "url": url,
-            "error": err, "createdAt": created, "finishedAt": finished}
+            "error": err, "createdAt": created, "finishedAt": finished, "after": after}
 
 
 def insert_done(conn, idea_id: str, node_id: str, kind: str, model: str, *,
@@ -101,16 +116,27 @@ def insert_done(conn, idea_id: str, node_id: str, kind: str, model: str, *,
     """A finished row made without a job: an upload, or an image brought over from an older plan."""
     now = int(time.time() * 1000)
     gid = secrets.token_urlsafe(9)
-    row = (gid, idea_id, node_id, kind, model, "{}", "", "done", 0, None, file, source_url, None, now, now)
-    conn.execute(f"INSERT INTO generations ({COLUMNS}) VALUES ({', '.join('?' * 15)})", row)
+    row = (gid, idea_id, node_id, kind, model, "{}", "", "done", 0, None, file, source_url, None, now, now, None)
+    conn.execute(f"INSERT INTO generations ({COLUMNS}) VALUES ({', '.join('?' * NCOLUMNS)})", row)
     return to_json(row)
 
 
-def fail_unfinished(db) -> None:
-    """After a restart no worker is running, so queued and running rows can never finish."""
+def recover(db, jobs) -> None:
+    """After a restart no worker is running. Queued rows and running rows that never reached the provider can
+    never finish: fail them and refund. Running rows with a request id go back to the worker to keep polling."""
     with db() as conn:
-        conn.execute("UPDATE generations SET status = 'failed', error = ?, finished_at = ? "
-                     "WHERE status IN ('queued', 'running')", (RESTARTED, int(time.time() * 1000)))
+        rows = conn.execute("SELECT id, kind, est_usd, status, provider_request_id FROM generations "
+                            "WHERE status IN ('queued', 'running')").fetchall()
+    for gid, kind, est, status, request_id in rows:
+        if status == "running" and request_id:
+            jobs.submit(gid)
+            continue
+        with db() as conn:
+            changed = conn.execute("UPDATE generations SET status = 'failed', error = ?, finished_at = ? "
+                                   "WHERE id = ? AND status IN ('queued', 'running')",
+                                   (RESTARTED, int(time.time() * 1000), gid)).rowcount
+        if changed:
+            jobs.refund(kind, est)
 
 
 def gen_folder(media: Path, idea_id: str) -> Optional[Path]:
@@ -129,10 +155,10 @@ def input_hash(model: str, prompt: str, start, ref, duration) -> str:
 
 
 class GenJobs:
-    """One worker thread runs jobs in order."""
+    """One worker thread runs jobs in order. `refund(kind, usd)` gives a failed job's estimate back."""
 
-    def __init__(self, db, media_dir: Callable[[], Path]):
-        self._db, self._media = db, media_dir
+    def __init__(self, db, media_dir: Callable[[], Path], refund: Callable[[str, float], None] = lambda k, u: None):
+        self._db, self._media, self.refund = db, media_dir, refund
         self._q: queue.Queue = queue.Queue()
         threading.Thread(target=self._work, name="gen-worker", daemon=True).start()
 
@@ -147,46 +173,96 @@ class GenJobs:
             except Exception as e:  # never let the worker thread die
                 print(f"[gen] {gen_id} worker error: {e}", flush=True)
 
-    def _finish(self, gen_id: str, status: str, **fields) -> None:
+    def _finish(self, gen_id: str, status: str, **fields) -> bool:
+        """Close a running row; True when this call did it (so only one caller refunds)."""
         names = "".join(f", {k} = ?" for k in fields)
         with self._db() as conn:
-            conn.execute(f"UPDATE generations SET status = ?, finished_at = ?{names} "
-                         "WHERE id = ? AND status = 'running'",
-                         (status, int(time.time() * 1000), *fields.values(), gen_id))
+            return conn.execute(f"UPDATE generations SET status = ?, finished_at = ?{names} "
+                                "WHERE id = ? AND status = 'running'",
+                                (status, int(time.time() * 1000), *fields.values(), gen_id)).rowcount > 0
+
+    def _fail(self, gen_id: str, kind: str, est: float, message: str, refund: bool) -> None:
+        if self._finish(gen_id, "failed", error=message) and refund:
+            self.refund(kind, est)
+
+    def _input_path(self, folder: Path, idea_id: str, ref_id) -> Optional[Path]:
+        if not ref_id:
+            return None
+        with self._db() as conn:
+            row = conn.execute("SELECT file FROM generations WHERE id = ? AND idea_id = ?",
+                               (ref_id, idea_id)).fetchone()
+        path = folder / row[0] if row and row[0] else None
+        if path is None or not path.is_file():
+            raise cutting.CutError("An input image is missing.")
+        return path
 
     def run(self, gen_id: str) -> None:
-        """Make one row's media. Called by the worker thread, and directly by tests."""
+        """Make one row's media. Called by the worker thread, and directly by tests. A queued row is claimed and
+        submitted; a running row with a request id (resumed after a restart) is only polled."""
         with self._db() as conn:
-            row = conn.execute("SELECT idea_id, model, inputs FROM generations WHERE id = ? AND status = 'queued'",
-                               (gen_id,)).fetchone()
-            if row is None:
+            row = conn.execute("SELECT idea_id, model, inputs, kind, est_usd, status, provider_request_id "
+                               "FROM generations WHERE id = ?", (gen_id,)).fetchone()
+            if row is None or not (row[5] == "queued" or (row[5] == "running" and row[6])):
                 return
-            conn.execute("UPDATE generations SET status = 'running' WHERE id = ?", (gen_id,))
-        idea_id, model_id, raw = row
-        inputs = json.loads(raw)
+            if row[5] == "queued":
+                conn.execute("UPDATE generations SET status = 'running' WHERE id = ?", (gen_id,))
+        idea_id, model_id, raw, kind, est, _status, request_id = row
+        sent = bool(request_id)  # the provider may have charged from here on
         try:
             model = next(m for m in load_models() if m["id"] == model_id)
             folder = gen_folder(self._media(), idea_id)
             if folder is None:
                 raise cutting.CutError("That plan doesn't exist.")
-            if model["provider"] != "mock":
-                raise cutting.CutError("This model isn't available yet.")
-            name = self._make_mock(gen_id, model, inputs, folder)
-            self._finish(gen_id, "done", file=name, actual_usd=0)
+            inputs = json.loads(raw)
+            ref = self._input_path(folder, idea_id, inputs.get("reference"))
+            start = self._input_path(folder, idea_id, inputs.get("startFrame"))
+            job = gen_providers.Job(model, inputs.get("prompt") or "", start, [ref] if ref else [],
+                                    inputs.get("duration"), scratch=folder)
+            adapter = gen_providers.adapter_for(model["provider"])
+            if not sent:
+                request_id = adapter.submit(job)
+                sent = True
+                with self._db() as conn:
+                    conn.execute("UPDATE generations SET provider_request_id = ? WHERE id = ?", (request_id, gen_id))
+            result = self._poll(adapter, job, request_id, kind, model["provider"])
+            if result is None:
+                self._finish(gen_id, "unknown", error=LOST)  # no refund: the provider may have charged
+                return
+            if result.state == "failed":
+                self._fail(gen_id, kind, est, result.error or FAILED, refund=True)
+                return
+            name = self._save(gen_id, folder, result)
+            self._finish(gen_id, "done", file=name, actual_usd=est)
         except (cutting.CutError, gen_providers.ProviderError) as e:
-            self._finish(gen_id, "failed", error=str(e))
+            self._fail(gen_id, kind, est, str(e), refund=True)
+        except gen_providers.ResultLost as e:
+            print(f"[gen] {gen_id} result lost: {e}", flush=True)
+            self._finish(gen_id, "unknown", error=LOST)
+        except (gen_providers.FileUnusable, OSError) as e:
+            print(f"[gen] {gen_id} file unusable: {e}", flush=True)
+            self._fail(gen_id, kind, est, FILE_LOST, refund=False)
         except Exception as e:
             print(f"[gen] {gen_id} failed: {e}", flush=True)
-            self._finish(gen_id, "failed", error="The generation failed. Try again.")
+            if sent:  # we lost track of a request that may have been charged
+                self._finish(gen_id, "unknown", error=LOST)
+            else:
+                self._fail(gen_id, kind, est, FAILED, refund=True)
 
-    def _make_mock(self, gen_id: str, model: dict, inputs: dict, folder: Path) -> str:
-        """Run the mock adapter and save its file; the real providers are wired in later."""
+    def _poll(self, adapter, job, request_id: str, kind: str, provider: str):
+        """Poll until done or failed; None when GEN_TIMEOUT_S passes first."""
+        interval = MOCK_POLL_S if provider == "mock" else GEN_POLL_S
+        deadline = time.monotonic() + GEN_TIMEOUT_S[kind]
+        while True:
+            result = adapter.poll(job, request_id)
+            if result.state != "running":
+                return result
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(interval)
+
+    @staticmethod
+    def _save(gen_id: str, folder: Path, result) -> str:
         folder.mkdir(parents=True, exist_ok=True)
-        job = gen_providers.Job(model, inputs.get("prompt") or "", None, [], inputs.get("duration"), scratch=folder)
-        adapter = gen_providers.adapter_for(model["provider"])
-        result = adapter.poll(job, adapter.submit(job))
-        if result.state != "done":
-            raise cutting.CutError(result.error or "The generation failed. Try again.")
         name = f"{gen_id}.{result.ext}"
         part = folder / f"{gen_id}.part.{result.ext}"
         try:
@@ -205,7 +281,7 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                 remaining=lambda: {"image": {"spent": 0, "cap": 0}, "video": {"spent": 0, "cap": 0}}) -> APIRouter:
     router = APIRouter()
     router.budget, router.refund, router.remaining = budget, refund, remaining  # used by the generate routes
-    router.jobs = GenJobs(db, media_dir)  # server.py keeps it as gen_jobs
+    router.jobs = GenJobs(db, media_dir, refund)  # server.py keeps it as gen_jobs
 
     def find_idea(idea_id: str):
         return next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
@@ -260,14 +336,28 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             source = one(idea_id, ref_id) if isinstance(ref_id, str) else None
             if source is None or source[3] != "image" or source[7] != "done":  # kind, status columns
                 return error(422, "An input image must be a finished image generated for this plan.")
+        for field, given, what in (("startFrame", start, "a start frame"), ("reference", ref, "a reference image")):
+            rule = (model.get("inputs") or {}).get(field, "none")
+            if rule == "required" and given is None:
+                return error(422, f"This model needs {what}.")
+            if rule == "none" and given is not None:
+                return error(422, f"This model doesn't take {what}.")
+        est = estimate_usd(model, duration)
+        blocked = router.budget(model["kind"], est)  # spends the estimate; a failed job gives it back
+        if blocked is not None:
+            return blocked
         now = int(time.time() * 1000)
         gid = secrets.token_urlsafe(9)
         inputs = {"prompt": prompt, "startFrame": start, "reference": ref, "duration": duration}
         row = (gid, idea_id, node_id, model["kind"], model["id"], json.dumps(inputs),
-               input_hash(model["id"], prompt, start, ref, duration), "queued", estimate_usd(model, duration),
-               None, None, None, None, now, None)
-        with db() as conn:
-            conn.execute(f"INSERT INTO generations ({COLUMNS}) VALUES ({', '.join('?' * 15)})", row)
+               input_hash(model["id"], prompt, start, ref, duration), "queued", est,
+               None, None, None, None, now, None, None)
+        try:
+            with db() as conn:
+                conn.execute(f"INSERT INTO generations ({COLUMNS}) VALUES ({', '.join('?' * NCOLUMNS)})", row)
+        except Exception:
+            router.refund(model["kind"], est)
+            raise
         out = to_json(row)
         router.jobs.submit(gid)
         return JSONResponse(out, status_code=201)
