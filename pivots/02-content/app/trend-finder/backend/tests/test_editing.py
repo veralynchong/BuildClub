@@ -753,7 +753,7 @@ def test_from_gen_applies_the_upload_checks(client, voice_env):
     voice_env["duration"], voice_env["hasAudio"] = 3.0, False
     assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 415
     folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
-    assert len([p for p in folder.iterdir()]) == 2  # only the one good import (audio + words); no part files
+    assert len([p for p in folder.iterdir()]) == 3  # only the one good import (audio, words, job note); no part files
 
 
 def test_words_error_is_scrubbed_and_capped(client, voice_env, monkeypatch):
@@ -863,3 +863,43 @@ def test_list_voice_returns_files_with_words(client, voice_env):
     got = client.get("/api/ideas/ia/edit/voice").json()["voices"]
     assert [v["id"] for v in got] == [vid] and got[0]["duration"] == 3.0 and got[0]["words"][0]["text"] == "hello"
     assert client.get("/api/ideas/iw/edit/voice").status_code == 409
+
+
+# --- Task 11 fix round 1 ---
+
+def test_pending_voice_lists_done_jobs_not_yet_imported(client, voice_env):
+    assert client.get("/api/ideas/ia/edit/voice/pending").json() == {"pending": []}
+    gid = seed_voice_gen(client)
+    assert [g["id"] for g in client.get("/api/ideas/ia/edit/voice/pending").json()["pending"]] == [gid]
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 200
+    assert client.get("/api/ideas/ia/edit/voice/pending").json() == {"pending": []}
+    assert client.get("/api/ideas/iw/edit/voice/pending").status_code == 409
+
+
+def test_signature_ignores_shot_lines_while_captions_are_off(client, setup):
+    p = project(clip())
+    p["clips"][0]["source"]["shotId"] = "s1"
+
+    def sig():
+        with server.db() as conn:
+            return editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, p)
+
+    with_lines(s1="one")
+    a = sig()
+    with_lines(s1="two")
+    assert a == sig()  # captions are off: the line is not in the video
+
+
+def test_shot_lines_skips_a_bad_shot(client, setup):
+    from models import SavedIdea
+    good = {"id": "s2", "time": "0-3s", "shot": "x", "line": "ok"}
+    store_ideas(SavedIdea(id="ia", videoId="v-ia", clientId="a", status="approved", dueDate="2026-11-02", notes="",
+                          shots=[good]))
+    with server.db() as conn:
+        row = conn.execute("SELECT value FROM store WHERE key = 'ideas'").fetchone()
+        import json
+        ideas = json.loads(row[0])
+        ideas[0]["shots"] = [{"id": "bad id!", "time": "0", "shot": "x", "line": "no"}, good]
+        conn.execute("UPDATE store SET value = ? WHERE key = 'ideas'", (json.dumps(ideas),))
+    with server.db() as conn:
+        assert editing.shot_lines(conn, "ia") == {"s2": "ok"}

@@ -91,9 +91,9 @@ const lineProject = {
 }
 const lineRun = render('lines', {
   ...input, project: lineProject, musicUrl: null,
-  lines: { s1: '三分鐘學會剪輯，從今天開始跟著做，你也可以', s2: '第二個鏡頭的台詞比較長一點，所以這一行會自動換行顯示在畫面下方' },
+  lines: { s1: '三分鐘學會剪輯從今天開始跟著做你也可以不用任何經驗', s2: '第二個鏡頭的台詞比較長一點，所以這一行會自動換行顯示在畫面下方' },
 })
-for (const t of [0.3, 1.5, 2.5, 4.5, 5.5]) ff('-ss', String(t), '-i', lineRun.out, '-frames:v', '1', path.join(frameDir, `lines-${t}s.png`))
+for (const t of [0.3, 0.9, 1.5, 4.5, 5.5]) ff('-ss', String(t), '-i', lineRun.out, '-frames:v', '1', path.join(frameDir, `lines-${t}s.png`))
 console.log(`SMOKE OK lines ${lineRun.seconds.toFixed(1)}s`)
 
 // ---- captions from a voiceover: macOS `say` English speech and its word times ----

@@ -7,10 +7,11 @@ import { t } from '../../lib/i18n'
 import type { SourcesHook } from '../../lib/editor/useSources'
 import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import type { EditHook } from '../../lib/editor/useEditProject'
-import { getVoices, type VoiceInfo } from '../../lib/editor/api'
+import { pollGen } from '../../lib/canvas/api'
+import { getPendingVoices, getVoices, importTts, startTts, type VoiceInfo } from '../../lib/editor/api'
 import { fillShotIds } from '../../lib/storyboard'
-import { reelDurationInFrames, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
-import type { ReelInput } from '../../lib/editor/types'
+import { addVoice, reelDurationInFrames, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { Reel } from '../../remotion/Reel'
 import { ToolTabs, type Tool } from './ToolTabs'
 import { TextTool } from './tools/TextTool'
@@ -42,6 +43,12 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const [frame, setFrame] = useState(0)
   const [tool, setTool] = useState<Tool>('clips')
   const [musicFile, setMusicFile] = useState<MusicFile | undefined>(undefined)
+  const [pending, setPending] = useState<string[]>([])
+  const [ttsBusy, setTtsBusy] = useState(false)
+  const [ttsError, setTtsError] = useState<string | null>(null)
+  const ttsGoing = useRef(false) // a second click can never start (and charge) a second job
+  const ttsAbort = useRef<AbortController | null>(null)
+  const frameRef = useRef(0)
   const [voices, setVoices] = useState<Record<string, VoiceInfo>>({})
   const { clients } = useApp()
   const client = clients.find((c) => c.id === clientId)
@@ -62,6 +69,17 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     }
   }, [ideaId])
 
+  // Finished AI voices that were never imported are offered again; a running job is aborted with the drawer, and
+  // its result then waits here as a pending one.
+  useEffect(() => {
+    let cancelled = false
+    getPendingVoices(ideaId).then((ids) => !cancelled && setPending(ids), () => {})
+    return () => {
+      cancelled = true
+      ttsAbort.current?.abort()
+    }
+  }, [ideaId])
+
   // Voiceover files (with their word times) are looked up once; VoiceTool keeps the list current.
   useEffect(() => {
     let cancelled = false
@@ -73,6 +91,54 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
       cancelled = true
     }
   }, [ideaId])
+  useEffect(() => {
+    frameRef.current = frame
+  })
+  const adoptVoice = (info: VoiceInfo, source: VoiceSeg['source']) => {
+    setVoices((cur) => ({ ...cur, [info.id]: info }))
+    const base = current()
+    if (base) update(addVoice(base, { id: info.id, source, start: Math.round((frameRef.current / 30) * 100) / 100, volume: 1, edits: {} }))
+  }
+  const runTts = (text: string, model: string) => {
+    if (ttsGoing.current) return
+    ttsGoing.current = true
+    setTtsBusy(true)
+    setTtsError(null)
+    const ac = new AbortController()
+    ttsAbort.current = ac
+    void (async () => {
+      try {
+        const gen = await startTts(ideaId, text, model)
+        const end = await pollGen(ideaId, gen.id, () => {}, { signal: ac.signal })
+        if (!end) return
+        if (end.status !== 'done') throw new Error(end.error || t('editor.tts.failed'))
+        adoptVoice(await importTts(ideaId, gen.id), 'tts')
+      } catch (e) {
+        setTtsError(e instanceof Error ? e.message : String(e))
+      } finally {
+        ttsGoing.current = false
+        ttsAbort.current = null
+        setTtsBusy(false)
+      }
+    })()
+  }
+  const importPending = (genId: string) => {
+    if (ttsGoing.current) return
+    ttsGoing.current = true
+    setTtsBusy(true)
+    setTtsError(null)
+    void (async () => {
+      try {
+        adoptVoice(await importTts(ideaId, genId), 'tts')
+        setPending((cur) => cur.filter((id) => id !== genId))
+      } catch (e) {
+        setTtsError(e instanceof Error ? e.message : String(e))
+      } finally {
+        ttsGoing.current = false
+        setTtsBusy(false)
+      }
+    })()
+  }
   const filled = useMemo(() => fillShotIds(shots), [shots])
   const lines = useMemo(() => Object.fromEntries(filled.flatMap((s) => (s.id && s.line?.trim() ? [[s.id, s.line]] : []))), [filled])
   const words = useMemo(() => Object.fromEntries(Object.values(voices).flatMap((v) => (v.words ? [[v.id, v.words]] : []))), [voices])
@@ -186,10 +252,12 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
             current={current}
             flush={flush}
             voices={voices}
-            onVoice={(v) => setVoices((cur) => ({ ...cur, [v.id]: v }))}
+            adopt={adoptVoice}
+            tts={{ busy: ttsBusy, error: ttsError, run: runTts }}
+            pending={pending}
+            onImport={importPending}
             onVoiceGone={(id) => setVoices((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => k !== id)))}
             lineTexts={filled.map((s) => s.line ?? '')}
-            seconds={frame / 30}
             readOnly={locked}
             onProject={update}
           />

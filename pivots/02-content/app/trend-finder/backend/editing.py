@@ -15,6 +15,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from urllib.parse import quote
 from typing import Callable, Optional
 
 from fastapi import APIRouter, Request
@@ -347,8 +348,13 @@ def shot_lines(conn, idea_id: str) -> dict:
         return {}
     row = conn.execute("SELECT value FROM store WHERE key = 'ideas'").fetchone()
     idea = next((i for i in json.loads(row[0]) if i.get("id") == idea_id), None) if row else None
-    shots = fill_shot_ids([Shot.model_validate(x) for x in idea.get("shots") or []]) if idea else []
-    return {s.id: s.line for s in shots if s.line and s.line.strip()}
+    shots = []
+    for x in (idea.get("shots") or []) if idea else []:
+        try:
+            shots.append(Shot.model_validate(x))
+        except ValueError:  # one bad shot must not break the export
+            shots.append(Shot(time="", shot=""))
+    return {s.id: s.line for s in fill_shot_ids(shots) if s.line and s.line.strip()}
 
 
 def client_brand(conn, idea_id: str) -> dict:
@@ -381,7 +387,8 @@ def signature(conn, media: Path, idea: dict, project: dict) -> str:
         except OSError:
             stamps["music"] = f"{row[0]}:0"
     relevant = {k: project.get(k) for k in RENDER_FIELDS}
-    text = json.dumps([relevant, sorted(stamps.items()), client_brand(conn, idea["id"]), shot_lines(conn, idea["id"])],
+    text = json.dumps([relevant, sorted(stamps.items()), client_brand(conn, idea["id"]),
+                       shot_lines(conn, idea["id"]) if (project.get("captions") or {}).get("enabled") else {}],
                       sort_keys=True)
     return hashlib.sha1(text.encode()).hexdigest()[:16]
 
@@ -640,7 +647,7 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
     def voice_response(idea_id: str, vid: str, path: Path, duration: float) -> dict:
         """Transcribe the saved voice file (a sync step: the callers run it in the threadpool) and describe it.
         Without whisper.cpp the file is kept and `words` is null."""
-        out = {"id": vid, "url": f"/api/ideas/{idea_id}/edit/voice/{vid}/file", "duration": duration, "words": None}
+        out = {"id": vid, "url": f"/api/ideas/{quote(idea_id, safe='')}/edit/voice/{quote(vid, safe='')}/file", "duration": duration, "words": None}
         try:
             with tempfile.TemporaryDirectory() as work:
                 words = transcribe_voice(path, Path(work))
@@ -774,9 +781,9 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             return error(409, "That voiceover isn't ready yet.")
         if not source.is_file():
             return error(404, "That voiceover's file is gone.")
-        return await run_in_threadpool(import_generated, idea_id, source)
+        return await run_in_threadpool(import_generated, idea_id, source, gen_id)
 
-    def import_generated(idea_id: str, source: Path):
+    def import_generated(idea_id: str, source: Path, gen_id: str):
         folder = voice_folder(media_dir(), idea_id)
         if folder is None:
             return error(404, "That plan doesn't exist.")
@@ -788,7 +795,25 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         except OSError:
             part.unlink(missing_ok=True)
             return error(404, "That voiceover's file is gone.")
-        return finish_upload(idea_id, part, ext)  # the same checks as an upload
+        out = finish_upload(idea_id, part, ext)  # the same checks as an upload
+        if isinstance(out, dict):  # remember which job this file came from, so the job is not offered again
+            (folder / f"{out['id']}.gen").write_text(gen_id)
+        return out
+
+    @router.get("/api/ideas/{idea_id}/edit/voice/pending")
+    def pending_voice(idea_id: str):
+        """Finished AI voice jobs of this plan that were never imported (the editor was left while one ran)."""
+        refused = gate(idea_id)
+        if refused:
+            return refused
+        folder = voice_folder(media_dir(), idea_id)
+        taken = {p.read_text().strip() for p in folder.glob("*.gen")} if folder is not None and folder.is_dir() else set()
+        gen = generations.gen_folder(media_dir(), idea_id)
+        with db() as conn:
+            rows = conn.execute("SELECT id, file, created_at FROM generations WHERE idea_id = ? AND kind = 'voice' "
+                                "AND status = 'done' ORDER BY created_at, rowid", (idea_id,)).fetchall()
+        return {"pending": [{"id": r[0], "createdAt": r[2]} for r in rows
+                            if r[0] not in taken and r[1] and gen is not None and (gen / r[1]).is_file()]}
 
     @router.get("/api/ideas/{idea_id}/edit/voice")
     def list_voice(idea_id: str):
@@ -802,7 +827,7 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             info = _probe(path) if path else None
             if path is None or info is None:
                 continue
-            out.append({"id": vid, "url": f"/api/ideas/{idea_id}/edit/voice/{vid}/file", "duration": info["duration"],
+            out.append({"id": vid, "url": f"/api/ideas/{quote(idea_id, safe='')}/edit/voice/{quote(vid, safe='')}/file", "duration": info["duration"],
                         "words": voice_words(path)})
         return {"voices": out}
 

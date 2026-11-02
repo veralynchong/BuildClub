@@ -151,6 +151,8 @@ export const en = {
   "editor.tts.working": "Making the voice…",
   "editor.tts.failed": "The voice couldn't be made.",
   "editor.tts.empty": "Write the text first.",
+  "editor.tts.pending": "An AI voice you paid for is ready but not added yet.",
+  "editor.tts.import": "Add it",
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -304,4 +306,6 @@ export const zhHant: Record<keyof typeof en, string> = {
   "editor.tts.working": "配音中…",
   "editor.tts.failed": "配音沒有成功。",
   "editor.tts.empty": "請先寫好文字。",
+  "editor.tts.pending": "有一段已付費的 AI 配音做好了，但還沒加進來。",
+  "editor.tts.import": "加入",
 }

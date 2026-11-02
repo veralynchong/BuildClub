@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { t } from '../../../lib/i18n'
-import { getModels, pollGen } from '../../../lib/canvas/api'
+import { getModels } from '../../../lib/canvas/api'
 import type { GenModel } from '../../../lib/canvas/types'
-import { deleteVoice, importTts, putVoice, quoteTts, startTts, type VoiceInfo } from '../../../lib/editor/api'
+import { deleteVoice, putVoice, quoteTts, type VoiceInfo } from '../../../lib/editor/api'
 import { ttsDefaultText, MAX_VOICE_UNITS } from '../../../lib/editor/captions'
 import { MAX_VOICE, addVoice, removeVoice, updateVoice, type FlushResult } from '../../../lib/editor/timeline'
 import type { EditProject, VoiceSeg } from '../../../lib/editor/types'
 import { ErrorText } from '../../ErrorText'
+
+// The voiceover goes back where it was when the removal could not be saved.
+function addVoiceBack(now: EditProject, before: EditProject, id: string): EditProject {
+  const seg = before.voiceover.find((v) => v.id === id)
+  return seg ? addVoice(now, seg) : now
+}
 
 const MAX_BYTES = 20 * 1024 * 1024
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -18,16 +24,18 @@ interface Props {
   current: () => EditProject | null // the newest project, even before React has rendered it
   flush: () => Promise<FlushResult>
   voices: Record<string, VoiceInfo>
-  onVoice: (v: VoiceInfo) => void
+  adopt: (info: VoiceInfo, source: Source) => void // puts a new voice on the timeline at the playhead
   onVoiceGone: (id: string) => void
+  tts: { busy: boolean; error: string | null; run: (text: string, model: string) => void } // lives in EditorPanel
+  pending: string[] // finished AI voice jobs that were never imported
+  onImport: (genId: string) => void
   lineTexts: string[] // every shot's script line, in order
-  seconds: number // the playhead
   readOnly: boolean
   onProject: (p: EditProject) => void
 }
 
 // Voiceovers: record, upload, or have an AI voice read the lines. Each one has a start, a volume and a remove button.
-export function VoiceTool({ ideaId, project, current, flush, voices, onVoice, onVoiceGone, lineTexts, seconds, readOnly, onProject }: Props) {
+export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVoiceGone, tts, pending, onImport, lineTexts, readOnly, onProject }: Props) {
   const [busy, setBusy] = useState(false)
   const [recording, setRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,11 +56,8 @@ export function VoiceTool({ ideaId, project, current, flush, voices, onVoice, on
     [],
   )
 
-  // A new voice goes on the timeline at the playhead. The newest project is read here: the upload took a while.
-  const adopt = (info: VoiceInfo, source: Source) => {
-    onVoice(info)
-    const base = current() ?? project
-    onProject(addVoice(base, { id: info.id, source, start: Math.round(seconds * 100) / 100, volume: 1, edits: {} }))
+  const take = (info: VoiceInfo, source: Source) => {
+    adopt(info, source)
     setNotice(info.words === null ? t('editor.voice.noWords') : null)
   }
 
@@ -60,7 +65,7 @@ export function VoiceTool({ ideaId, project, current, flush, voices, onVoice, on
     setBusy(true)
     setError(null)
     try {
-      adopt(await putVoice(ideaId, file, source), source)
+      take(await putVoice(ideaId, file, source), source)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -86,7 +91,13 @@ export function VoiceTool({ ideaId, project, current, flush, voices, onVoice, on
       return setError(t('editor.voice.noMic'))
     }
     const chunks: Blob[] = []
-    const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+    let mr: MediaRecorder
+    try {
+      mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+    } catch {
+      stream.getTracks().forEach((tr) => tr.stop())
+      return setError(t('editor.voice.noRecorder'))
+    }
     mr.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data)
     mr.onstop = () => {
       stream.getTracks().forEach((tr) => tr.stop())
@@ -103,9 +114,13 @@ export function VoiceTool({ ideaId, project, current, flush, voices, onVoice, on
   const remove = async (id: string) => {
     setBusy(true)
     setError(null)
+    const before = current() ?? project
     try {
-      onProject(removeVoice(current() ?? project, id))
-      if ((await flush()) !== 'saved') throw new Error(t('editor.err.save'))
+      onProject(removeVoice(before, id))
+      if ((await flush()) !== 'saved') {
+        onProject(current() && current() !== before ? addVoiceBack(current() as EditProject, before, id) : before)
+        throw new Error(t('editor.err.save'))
+      }
       await deleteVoice(ideaId, id)
       onVoiceGone(id)
     } catch (e) {
@@ -139,7 +154,14 @@ export function VoiceTool({ ideaId, project, current, flush, voices, onVoice, on
         {recording && <span className="muted small" role="status">{t('editor.voice.recording')}</span>}
         {full && <span className="muted small">{t('editor.voice.full')}</span>}
       </div>
-      <TtsSection ideaId={ideaId} lineTexts={lineTexts} disabled={off || full} onDone={(info) => adopt(info, 'tts')} onError={setError} />
+      <TtsSection ideaId={ideaId} lineTexts={lineTexts} disabled={off || full} tts={tts} onError={setError} />
+      {pending.map((id) => (
+        <div key={id} className="cv-ed-tool-row">
+          <span className="small">{t('editor.tts.pending')}</span>
+          <button type="button" className="btn btn-primary btn-sm" disabled={off || full || tts.busy} onClick={() => onImport(id)}>{t('editor.tts.import')}</button>
+        </div>
+      ))}
+      {tts.error && <p className="cv-ed-error small" role="alert"><ErrorText text={tts.error} /></p>}
       {notice && <p className="muted small" role="status">{notice}</p>}
       {error && <p className="cv-ed-error small" role="alert"><ErrorText text={error} /></p>}
       {project.voiceover.length === 0 ? (
@@ -177,21 +199,21 @@ interface TtsProps {
   ideaId: string
   lineTexts: string[]
   disabled: boolean
-  onDone: (info: VoiceInfo) => void
+  tts: Props['tts']
   onError: (message: string | null) => void
 }
 
 type Ask = { usd: number; remaining: number }
 
 // An AI voice reads the text. It asks for the price first and spends only after the person confirms.
-function TtsSection({ ideaId, lineTexts, disabled, onDone, onError }: TtsProps) {
+function TtsSection({ ideaId, lineTexts, disabled, tts, onError }: TtsProps) {
   const [models, setModels] = useState<GenModel[] | null>(null)
   const [model, setModel] = useState('')
   const [initial] = useState(() => ttsDefaultText(lineTexts))
   const [text, setText] = useState(initial.text)
   const [ask, setAsk] = useState<Ask | null>(null)
-  const [state, setState] = useState<'idle' | 'quoting' | 'working'>('idle')
-  const abort = useRef<AbortController | null>(null)
+  const [quoting, setQuoting] = useState(false)
+  const state = tts.busy ? 'working' : quoting ? 'quoting' : 'idle'
 
   useEffect(() => {
     let cancelled = false
@@ -206,43 +228,25 @@ function TtsSection({ ideaId, lineTexts, disabled, onDone, onError }: TtsProps) 
     )
     return () => {
       cancelled = true
-      abort.current?.abort()
     }
   }, [])
-
-  const fail = (e: unknown) => onError(e instanceof Error ? e.message : String(e))
 
   const quote = async () => {
     onError(null)
     if (!text.trim()) return onError(t('editor.tts.empty'))
-    setState('quoting')
+    setQuoting(true)
     try {
       setAsk(await quoteTts(ideaId, text, model))
     } catch (e) {
-      fail(e)
+      onError(e instanceof Error ? e.message : String(e))
     } finally {
-      setState('idle')
+      setQuoting(false)
     }
   }
 
-  const confirm = async () => {
-    onError(null)
+  const confirm = () => {
     setAsk(null)
-    setState('working')
-    const ac = new AbortController()
-    abort.current = ac
-    try {
-      const gen = await startTts(ideaId, text, model)
-      const end = await pollGen(ideaId, gen.id, () => {}, { signal: ac.signal })
-      if (!end) return
-      if (end.status !== 'done') throw new Error(end.error || t('editor.tts.failed'))
-      onDone(await importTts(ideaId, gen.id))
-    } catch (e) {
-      fail(e)
-    } finally {
-      abort.current = null
-      setState('idle')
-    }
+    tts.run(text, model)
   }
 
   return (
@@ -271,7 +275,7 @@ function TtsSection({ ideaId, lineTexts, disabled, onDone, onError }: TtsProps) 
           {ask ? (
             <div className="cv-ed-tool-row" role="group" aria-label={t('editor.tts.price', { usd: ask.usd.toFixed(2), left: ask.remaining.toFixed(2) })}>
               <strong className="small">{t('editor.tts.price', { usd: ask.usd.toFixed(2), left: ask.remaining.toFixed(2) })}</strong>
-              <button type="button" className="btn btn-primary btn-sm" disabled={disabled} onClick={() => void confirm()}>{t('editor.tts.confirm')}</button>
+              <button type="button" className="btn btn-primary btn-sm" disabled={disabled} onClick={confirm}>{t('editor.tts.confirm')}</button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAsk(null)}>{t('editor.tts.cancel')}</button>
             </div>
           ) : (

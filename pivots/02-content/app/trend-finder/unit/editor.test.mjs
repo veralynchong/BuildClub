@@ -443,7 +443,7 @@ test('textsAt: start is in, end is out', () => {
 
 // ---- captions (Task 11) ----
 import {
-  tokens, lineCaptions, voiceCaptions, captionPages, pagesWithEdits, voicePages, captionMode, projectPages, ttsDefaultText, widthUnits,
+  pageEnd, tokens, lineCaptions, voiceCaptions, captionPages, pagesWithEdits, voicePages, captionMode, projectPages, ttsDefaultText, widthUnits,
 } from '../src/lib/editor/captions.ts'
 
 const shotClip = (id, shotId, inn, out, extra = {}) => ({ ...clip(id, inn, out, extra), source: { kind: 'generation', id: 'g1', shotId } })
@@ -469,7 +469,7 @@ test('lineCaptions (R5): non-adjacent clips of one shot share ONE line over thei
   const caps = lineCaptions(p, lines)
   const s1 = caps.filter((c) => '一二三四五六'.includes(c.text))
   assert.equal(joined(s1), '一二三四五六') // the whole line, once
-  assert.equal(joined(caps.filter((c) => !'一二三四五六'.includes(c.text))), 'hello brave world')
+  assert.equal(joined(caps.filter((c) => !'一二三四五六'.includes(c.text))).trim(), 'hello brave world')
   const spans = [[0, 2000], [5000, 7000]] // the clips of s1
   let prev = -1
   for (const c of s1) {
@@ -508,7 +508,7 @@ test('captionPages: page text has no space between Chinese characters', () => {
   const pages = captionPages(lineCaptions(p, { s1: '三分鐘學會剪輯，3 天 學會 fast editing' }))
   assert.ok(pages.length >= 2)
   assert.ok(!/[一-鿿]\s+[一-鿿]/.test(pages.map((g) => g.text).join('')))
-  assert.ok(pages[0].text.startsWith('三分鐘學會剪輯，')) // broken after the comma
+  assert.ok(pages.every((g) => widthUnits(g.text) <= 16))
 })
 
 test('F28: the pages of a lines-mode shot join to the line', () => {
@@ -543,7 +543,7 @@ test('voice mode: pages are per voiceover and edits are keyed by page inside eac
   assert.equal(captionMode(p, words), 'voice')
   assert.equal(captionMode(p, {}), 'lines')
   assert.deepEqual(projectPages(p, { s1: '台詞' }, words).map((g) => g.text), ['甲', '乙'])
-  assert.deepEqual(projectPages(p, { s1: '台詞' }, { v1: [] }).map((g) => g.text), ['台詞'])
+  assert.equal(projectPages(p, { s1: '台詞' }, { v1: [] }).map((g) => g.text).join(''), '台詞')
   assert.deepEqual(projectPages({ ...p, captions: { enabled: false } }, { s1: '台詞' }, words), [])
 })
 
@@ -569,4 +569,38 @@ test('voice helpers add, update and remove a voiceover; setShotCaption keeps one
   assert.deepEqual(r.clips.map((c) => c.caption), ['新字幕', undefined, undefined])
   assert.deepEqual(setShotCaption(r, 's1', undefined).clips.map((c) => c.caption), [undefined, undefined, undefined])
   assert.equal(setShotCaption(q, 'zz', 'x'), q)
+})
+
+test('I1: a Chinese line without punctuation splits into several pages that join to the line', () => {
+  const p = project([shotClip('a', 's1', 0, 3)])
+  const line = '三分鐘學會剪輯短影音的方法跟著我一起做'
+  const pages = captionPages(lineCaptions(p, { s1: line }))
+  assert.ok(pages.length > 1)
+  assert.equal(pages.map((g) => g.text).join(''), line)
+  assert.ok(pages.every((g) => widthUnits(g.text) <= 16 && pageEnd(g) - g.startMs <= 1400))
+})
+
+test('I2: pages never cross a clip or a shot, and words of adjacent shots keep a space', () => {
+  const p = project([shotClip('a', 's1', 0, 2), shotClip('b', 's2', 0, 2), shotClip('c', 's1', 0, 2)])
+  const lines = { s1: 'learn editing in three days now', s2: 'cut fast add captions' }
+  const pages = captionPages(lineCaptions(p, lines))
+  const spans = [[0, 2000, 's1'], [2000, 4000, 's2'], [4000, 6000, 's1']]
+  for (const g of pages) {
+    const hit = spans.filter(([a, b]) => g.startMs >= a && pageEnd(g) <= b)
+    assert.equal(hit.length, 1, `page "${g.text}" lies inside one clip`)
+    const words = g.text.split(' ')
+    const owner = hit[0][2]
+    assert.ok(words.every((w) => lines[owner].split(' ').includes(w)), `page "${g.text}" holds only words of ${owner}`)
+  }
+  const caps = lineCaptions(p, lines)
+  const owner = (c) => (c.startMs < 2000 || c.startMs >= 4000 ? 's1' : 's2')
+  caps.forEach((c, i) => {
+    if (i > 0 && owner(caps[i - 1]) !== owner(c)) assert.ok(c.text.startsWith(' '), `"${c.text}" after another shot keeps a space`)
+  })
+})
+
+test('I2: a short clip of a shot does not leave its page on screen over another shot', () => {
+  const p = project([shotClip('a', 's1', 0, 0.2), shotClip('b', 's2', 0, 3), shotClip('c', 's1', 0, 0.2)])
+  const pages = captionPages(lineCaptions(p, { s1: 'supercalifragilistic word' }))
+  for (const g of pages) assert.ok(pageEnd(g) <= 200 || g.startMs >= 3200, `page "${g.text}" ${g.startMs}-${pageEnd(g)}`)
 })

@@ -5,6 +5,9 @@ import { clipLength, clipStarts, totalLength } from './timeline.ts'
 import type { EditProject, VoiceSeg, Word } from './types.ts'
 
 export const COMBINE_MS = 1200
+// A page also ends once it holds about this many width units (about 7 Chinese characters), where @remotion/captions
+// would not break it: it only breaks before a token that has a leading space.
+export const PAGE_UNITS = 14
 // The backend's cap for a spoken text (backend/generations.py MAX_VOICE_UNITS): a CJK character is 2 units.
 export const MAX_VOICE_UNITS = 480
 
@@ -84,7 +87,9 @@ export function lineCaptions(p: EditProject, lines: Record<string, string>): Cap
     else shots.set(id, [i])
   })
   const out: Caption[] = []
+  const starts_shot = new Set<Caption>()
   for (const [shotId, clips] of shots) {
+    const placed: { c: Caption; k: number }[] = []
     const over = clips.map((i) => p.clips[i]).find((c) => c.caption !== undefined)
     const toks = tokens(over ? (over.caption as string) : (lines[shotId] ?? ''))
     if (toks.length === 0) continue
@@ -104,10 +109,21 @@ export function lineCaptions(p: EditProject, lines: Record<string, string>): Cap
       }
       const startMs = Math.min(spans[k].to, Math.round(spans[k].from + (s - base)))
       const endMs = Math.max(startMs, Math.min(spans[k].to, Math.round(spans[k].from + (e - base))))
-      out.push(cap(text, startMs, endMs))
+      placed.push({ c: cap(text, startMs, endMs), k })
     }
+    // A page never runs past the end of a clip, and two shots never share a page.
+    placed.forEach((x, i) => {
+      if (i + 1 >= placed.length || placed[i + 1].k !== x.k) x.c.pageBreakAfter = true
+    })
+    starts_shot.add(placed[0].c)
+    out.push(...placed.map((x) => x.c))
   }
-  return out.sort((a, b) => a.startMs - b.startMs)
+  out.sort((a, b) => a.startMs - b.startMs)
+  // The first word of a shot follows another shot's words: keep a space between them.
+  out.forEach((c, i) => {
+    if (i > 0 && starts_shot.has(c) && !isCjk(c.text[0]) && !c.text.startsWith(' ')) c.text = ` ${c.text}`
+  })
+  return out
 }
 
 const NO_SPACE_BEFORE = /^[,.!?;:，。！？；：、)\]]/
@@ -133,9 +149,28 @@ export function voiceCaptions(segs: VoiceSeg[], words: Record<string, Word[]>, t
   return out.sort((a, b) => a.startMs - b.startMs)
 }
 
+// Adds the page breaks @remotion/captions would not make by itself: after COMBINE_MS or PAGE_UNITS, before a token
+// that has no leading space (every CJK character).
+function withBreaks(caps: Caption[]): Caption[] {
+  let from = -1
+  let units = 0
+  return caps.map((c, i) => {
+    if (from < 0) from = c.startMs
+    units += widthUnits(c.text.trim())
+    const next = caps[i + 1]
+    const long = c.endMs - from >= COMBINE_MS || units >= PAGE_UNITS
+    const brk = c.pageBreakAfter || (long && next !== undefined && !next.text.startsWith(' '))
+    if (brk) {
+      from = -1
+      units = 0
+    }
+    return brk && !c.pageBreakAfter ? { ...c, pageBreakAfter: true } : c
+  })
+}
+
 export function captionPages(caps: Caption[]): TikTokPage[] {
   if (caps.length === 0) return []
-  return createTikTokStyleCaptions({ captions: caps, combineTokensWithinMilliseconds: COMBINE_MS }).pages
+  return createTikTokStyleCaptions({ captions: withBreaks(caps), combineTokensWithinMilliseconds: COMBINE_MS }).pages
 }
 
 // Where a page stops showing: its last token ends (not the next page's start, which may be a gap away).
