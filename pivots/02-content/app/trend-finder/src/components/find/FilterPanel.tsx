@@ -2,9 +2,12 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { t } from '../../lib/i18n'
 import type { Key } from '../../lib/i18n'
 import type { Sort } from '../../state'
+import type { Video } from '../../types'
+import { CONTENT_TYPES } from '../../types'
+import { contentTypeLabel } from './words'
 import {
   DEFAULT_FILTERS, FOLLOWERS_OPTIONS, LENGTH_OPTIONS, VIEWS_OPTIONS, WITHIN_OPTIONS,
-  activeFilters, clearFilter, relaxHint, RELAXED_VIEWS,
+  activeFilters, clearFilter, relaxHint, toggleType, typeCounts, RELAXED_VIEWS,
   type ActiveFilter, type ResultFilters,
 } from '../../lib/resultFilters'
 
@@ -26,6 +29,7 @@ function chipLabel(which: ActiveFilter, f: ResultFilters): string {
     case 'brokeOut': return t('find.filter.chipBrokeOut')
     case 'within': return t(WITHIN_KEY[f.within])
     case 'length': return t(LENGTH_KEY[f.length])
+    case 'types': return t('find.filter.chipTypes', { types: f.types.map(contentTypeLabel).join(', ') })
   }
 }
 
@@ -57,10 +61,12 @@ interface Props {
   setFilters: (f: ResultFilters) => void
   sort: Sort
   setSort: (s: Sort) => void
+  // The results before these filters, to count how many videos each content type has.
+  videos: Video[]
 }
 
 // The YouTube-style "Filters" button and its panel. The chips and the too-few hint are separate (FilterChips).
-export function FilterButtonPanel({ filters, setFilters, sort, setSort }: Props) {
+export function FilterButtonPanel({ filters, setFilters, sort, setSort, videos }: Props) {
   const [open, setOpen] = useState(false)
   const id = useId()
   const wrap = useRef<HTMLDivElement>(null)
@@ -79,6 +85,9 @@ export function FilterButtonPanel({ filters, setFilters, sort, setSort }: Props)
     }
   }, [open])
   const n = activeFilters(filters).length
+  const counts = typeCounts(videos, filters)
+  // Only types that have videos (plus any already picked, so it can be unpicked). The group is left out when nothing was sorted.
+  const typeOptions = CONTENT_TYPES.filter((c) => counts[c] || filters.types.includes(c))
   const set = (patch: Partial<ResultFilters>) => setFilters({ ...filters, ...patch })
   return (
     <div className="fp" ref={wrap}>
@@ -104,6 +113,19 @@ export function FilterButtonPanel({ filters, setFilters, sort, setSort }: Props)
           </fieldset>
           <Radios name={`${id}-within`} legend={t('find.filter.upload')} options={WITHIN_OPTIONS} labelOf={(o) => t(WITHIN_KEY[o])} value={filters.within} onChange={(within) => set({ within })} />
           <Radios name={`${id}-length`} legend={t('find.filter.length')} options={LENGTH_OPTIONS} labelOf={(o) => t(LENGTH_KEY[o])} value={filters.length} onChange={(length) => set({ length })} />
+          {typeOptions.length > 0 && (
+            <fieldset className="fp-group">
+              <legend>{t('find.filter.types')}</legend>
+              <div className="fp-options">
+                {typeOptions.map((c) => (
+                  <label key={c} className={`fp-opt ${filters.types.includes(c) ? 'fp-opt-on' : ''}`}>
+                    <input type="checkbox" checked={filters.types.includes(c)} onChange={() => setFilters(toggleType(filters, c))} />
+                    {t('find.filter.typeOption', { label: contentTypeLabel(c), n: counts[c] ?? 0 })}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           <Radios name={`${id}-sort`} legend={t('find.filter.sort')} options={SORTS.map((s) => s.value)} labelOf={(o) => t(SORTS.find((s) => s.value === o)!.key)} value={sort} onChange={setSort} />
           <button type="button" className="link-btn" onClick={() => setFilters(DEFAULT_FILTERS)}>
             {t('find.filter.reset')}
