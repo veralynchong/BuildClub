@@ -136,7 +136,7 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
         )}
       </div>
       {pair && !readOnly && (
-        <button type="button" className="btn btn-ghost btn-sm nodrag cv-chain-btn" disabled={!!pending || chaining || retired} onClick={() => onChain(id)}>
+        <button type="button" className="btn btn-ghost btn-sm nodrag cv-chain-btn" disabled={!!pendingGen(pair.imageNodeId, gens) || !!pendingGen(pair.videoNodeId, gens) || chaining || retired} onClick={() => onChain(id)}>
           {chaining ? t('canvas.chain.quoting') : t('canvas.chain.run')}
         </button>
       )}

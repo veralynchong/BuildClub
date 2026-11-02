@@ -223,6 +223,12 @@ export function chainPair(doc: CanvasDoc, nodeId: string): { imageNodeId: string
   return null
 }
 
+// Whether either end of the node's chain still has a generation in progress (starting another would charge twice).
+export function chainBusy(doc: CanvasDoc, nodeId: string, gens: Generation[]): boolean {
+  const pair = chainPair(doc, nodeId)
+  return !!pair && (pendingGen(pair.imageNodeId, gens) !== null || pendingGen(pair.videoNodeId, gens) !== null)
+}
+
 // What one generation with the model costs in US$: flat per image, or per second times the length (default: the first).
 export function priceOf(m: Pick<GenModel, 'price' | 'durations'>, seconds: number | undefined): number {
   return m.price.per === 'second' ? m.price.usd * (seconds ?? m.durations?.[0] ?? 0) : m.price.usd

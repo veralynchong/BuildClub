@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired } from '../src/lib/canvas/graph.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy } from '../src/lib/canvas/graph.ts'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer, DRAWER_KEY } from '../src/lib/canvas/drawer.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen, getBudget, quoteChain, startChain } from '../src/lib/canvas/api.ts'
 
@@ -480,4 +480,14 @@ test('startChain shows a 429 message from the server as it is', async () => {
   globalThis.fetch = async () => ({ ok: false, status: 429, json: async () => ({ error: msg }) })
   await assert.rejects(startChain('ia', {}), { message: msg })
   await assert.rejects(quoteChain('ia', {}), { message: msg })
+})
+
+test('chainBusy: true when either end of the chain is queued, waiting or running', () => {
+  const doc = docWith()
+  assert.equal(chainBusy(doc, 'n_sb_s1', []), false)
+  assert.equal(chainBusy(doc, 'n_sb_s1', [gen('a', 'n_sb_s1', 'running', 1)]), true)
+  assert.equal(chainBusy(doc, 'n_sb_s1', [gen('b', 'n_vid', 'waiting', 1)]), true)
+  assert.equal(chainBusy(doc, 'n_vid', [gen('a', 'n_sb_s1', 'queued', 1)]), true)
+  assert.equal(chainBusy(doc, 'n_vid', [gen('a', 'n_sb_s1', 'done', 1), gen('b', 'n_vid', 'failed', 2)]), false)
+  assert.equal(chainBusy(docWith(), 'n_vid2', []), false) // no chain
 })

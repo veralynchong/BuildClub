@@ -17,7 +17,7 @@ import { t, type Key, type Vars } from '../../lib/i18n'
 import { getBudget, getCanvas, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '../../lib/canvas/drawer'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import { addNode, chainPair, isRetired, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
+import { addNode, chainBusy, chainPair, isRetired, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, listTakes, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
@@ -374,13 +374,13 @@ function CanvasBoard({
   const onChain = async (nodeId: string) => {
     const d = latest.current.doc
     const pair = chainPair(d, nodeId)
-    if (!pair || blocked || chaining) return
+    if (!pair || blocked || chaining || chainBusy(d, nodeId, gensRef.current)) return
     const image = d.nodes.find((n) => n.id === pair.imageNodeId)
     const video = d.nodes.find((n) => n.id === pair.videoNodeId)
     const imageModel = models.find((m) => m.id === image?.data.model && m.kind === 'image')
     const videoModel = models.find((m) => m.id === video?.data.model && m.kind === 'video')
-    if (!image || !video || !imageModel || !videoModel || !imageModel.available || !videoModel.available) return
-    if (missingInput(d, pair.imageNodeId, imageModel, shots, gensRef.current)) return
+    if (!image || !video || !imageModel || !videoModel || !imageModel.available || !videoModel.available) return showNote('canvas.chain.noKey')
+    if (missingInput(d, pair.imageNodeId, imageModel, shots, gensRef.current)) return showNote('canvas.chain.missing')
     const videoReq = genRequest(d, pair.videoNodeId, shots, gensRef.current)
     const body: ChainBody = {
       imageNodeId: pair.imageNodeId,
@@ -393,6 +393,10 @@ function CanvasBoard({
     }
     setChaining(true)
     try {
+      // the server prices the saved canvas, so save what is on screen first
+      while (inflight.current) await new Promise((r) => setTimeout(r, 50))
+      if (latest.current.key !== savedKey.current) await save()
+      if (blockedRef.current || latest.current.key !== savedKey.current) return showNote('canvas.save.failed')
       const quote = await quoteChain(ideaId, body)
       if (mounted.current) setAsk({ body, quote })
     } catch (e) {
@@ -401,6 +405,14 @@ function CanvasBoard({
       if (mounted.current) setChaining(false)
     }
   }
+
+  // Escape cancels the dialog, unless the start is on its way.
+  useEffect(() => {
+    if (!ask || chaining) return
+    const on = (e: KeyboardEvent) => e.key === 'Escape' && setAsk(null)
+    window.addEventListener('keydown', on)
+    return () => window.removeEventListener('keydown', on)
+  }, [ask, chaining])
 
   const confirmChain = async () => {
     if (!ask || chaining) return
@@ -710,7 +722,7 @@ function CanvasBoard({
                 <strong>{t('canvas.chain.total', { total: ask.quote.total.toFixed(2) })}</strong>
                 <span className="small muted">{t('canvas.chain.left', { image: ask.quote.remaining.image.toFixed(2), video: ask.quote.remaining.video.toFixed(2) })}</span>
                 <div className="cv-modal-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" disabled={chaining} onClick={() => setAsk(null)}>
+                  <button type="button" className="btn btn-ghost btn-sm" autoFocus disabled={chaining} onClick={() => setAsk(null)}>
                     {t('canvas.chain.cancel')}
                   </button>
                   <button type="button" className="btn btn-primary btn-sm" disabled={chaining} onClick={() => void confirmChain()}>
