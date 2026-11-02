@@ -13,6 +13,7 @@ export interface Take {
   chosen: boolean
   createdAt: number
   url: string
+  cleanedFrom: string | null // the take this one was cleaned from, null for an upload
 }
 
 // Same limits and copy as backend/takes.py.
@@ -90,4 +91,21 @@ export async function chooseTake(ideaId: string, takeId: string): Promise<Take[]
 
 export async function deleteTake(ideaId: string, takeId: string): Promise<Take[]> {
   return send(await fetch(`${base(ideaId)}/takes/${encodeURIComponent(takeId)}`, { method: 'DELETE' }), t('plan.takes.err.delete'))
+}
+
+export interface CleanResult {
+  take: Take
+  takes: Take[]
+  originalSec: number
+  cleanSec: number
+  trims: { kind: 'pause' | 'filler'; start: number; end: number }[]
+}
+
+// A take can be cleaned once: it is not itself a cleaned version and none was made from it yet.
+export function canClean(take: Take, all: Take[]): boolean {
+  return !take.cleanedFrom && !all.some((x) => x.cleanedFrom === take.id)
+}
+
+export async function cleanTake(ideaId: string, takeId: string): Promise<CleanResult> {
+  return send(await fetch(`${base(ideaId)}/takes/${encodeURIComponent(takeId)}/clean`, { method: 'POST' }), t('canvas.footage.cleanFailed'))
 }

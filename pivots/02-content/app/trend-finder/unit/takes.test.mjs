@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MAX_TAKE_BYTES,
+  canClean,
   canEdit,
   checkFile,
   checklistProgress,
@@ -78,4 +79,12 @@ test('uploadTake surfaces the server error', async () => {
   globalThis.fetch = async () => ({ ok: false, status: 409, json: async () => ({ error: 'Only an approved plan can take footage.' }) })
   const file = new File([new Uint8Array([1])], 'a.mp4', { type: 'video/mp4' })
   await assert.rejects(uploadTake('ia', 0, file), { message: 'Only an approved plan can take footage.' })
+})
+
+test('canClean: only an original take with no cleaned version yet', () => {
+  const orig = { id: 'a', cleanedFrom: null }
+  const cleaned = { id: 'b', cleanedFrom: 'a' }
+  assert.equal(canClean(orig, [orig]), true)
+  assert.equal(canClean(cleaned, [orig, cleaned]), false)
+  assert.equal(canClean(orig, [orig, cleaned]), false)
 })
