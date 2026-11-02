@@ -218,11 +218,23 @@ class Jobs:
         self._lock = threading.Lock()
         threading.Thread(target=self._work, name="analyze-worker", daemon=True).start()
 
-    def submit(self, url: str, vocab: list[str] | None = None) -> str:
+    def will_run(self, url: str, force: bool = False) -> bool:
+        """Whether submit(url, force=force) would start a paid AI run (the caller counts it against the budget)."""
+        current = self.get(job_id_for(url))
+        if current and current.status in ("queued", "running"):
+            return False
+        return force or not current or (current.status == "failed" and not current.result)
+
+    def submit(self, url: str, vocab: list[str] | None = None, force: bool = False) -> str:
+        """force re-runs the AI step for a video that already has a result, reusing its saved frames and
+        transcript. The saved breakdown is replaced only when the new run succeeds."""
         job_id = job_id_for(url)
         with self._lock:
             current = self.get(job_id)
-            if current and current.status != "failed":
+            if current and current.status in ("queued", "running"):
+                return job_id
+            if current and not force and (current.status != "failed" or current.result):
+                self._jobs.pop(job_id, None)  # after a failed re-run: back to the saved breakdown
                 return job_id
             self._jobs[job_id] = AnalyzeJob(job=job_id, status="queued", progress=0, step="Waiting to start")
         self._q.put((job_id, url, vocab))
@@ -231,6 +243,9 @@ class Jobs:
     def get(self, job_id: str):
         if job_id in self._jobs:
             return self._jobs[job_id]
+        return self._saved(job_id)
+
+    def _saved(self, job_id: str):
         saved = JOBS_DIR / job_id / "breakdown.json"
         if saved.exists():
             result = Breakdown.model_validate_json(saved.read_text(encoding="utf-8"))
@@ -256,6 +271,8 @@ class Jobs:
                 self._set(job_id, status="done", progress=1, step="Done", result=result)
             except Exception as e:
                 print(f"[analyze] {job_id} failed: {e}", flush=True)
-                self._set(job_id, status="failed", error=str(e))
+                # A failed re-run leaves the saved breakdown alone, and the failed job still carries it.
+                old = self._saved(job_id)
+                self._set(job_id, status="failed", error=str(e), result=old.result if old else None)
                 for leftover in work.glob("video.*"):
                     leftover.unlink(missing_ok=True)

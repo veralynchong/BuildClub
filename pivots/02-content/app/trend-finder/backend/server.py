@@ -970,10 +970,10 @@ def start_analyze(body: AnalyzeRequest):
     url = body.url.strip()
     if not is_video_link(url):
         return error(400, "Paste a TikTok, Instagram, YouTube Shorts, Reddit video or X link.")
-    current = jobs.get(job_id_for(url))
-    if (not current or current.status == "failed") and not spend("claude", ANALYZE_USD, DAILY_CLAUDE_USD):
+    if jobs.will_run(url, body.force) and not spend("claude", ANALYZE_USD, DAILY_CLAUDE_USD):
         return over_budget("Claude", DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD")
-    return {"job": jobs.submit(url, body.needs) if body.needs else jobs.submit(url)}
+    args = (url, body.needs) if body.needs else (url,)
+    return {"job": jobs.submit(*args, force=True) if body.force else jobs.submit(*args)}
 
 
 @app.get("/api/analyze/{job_id}", response_model=AnalyzeJob, response_model_exclude_none=True)

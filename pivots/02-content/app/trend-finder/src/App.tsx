@@ -853,6 +853,24 @@ export default function App() {
       .finally(() => analyzing.current.delete(videoId))
   }
 
+  // Re-run the AI breakdown of a video that already has an older one. The saved copy (live store, which
+  // the library syncs) is replaced only when the new answer arrives; a failure leaves it as it was.
+  const [reanalysis, setReanalysis] = useState<{ videoId: string; step: string; failed: boolean } | null>(null)
+  const reanalyse = (videoId: string) => {
+    const v = videoById.get(videoId)
+    const f = v && formatById.get(v.formatId)
+    if (!v?.live || !v.url || !f || analyzing.current.has(videoId)) return
+    analyzing.current.add(videoId)
+    setReanalysis({ videoId, step: '', failed: false })
+    analyzeVideo(v.url, (step) => setReanalysis({ videoId, step, failed: false }), true)
+      .then((b) => {
+        setLiveStore((prev) => ({ ...prev, formats: prev.formats.map((x) => (x.id === f.id ? applyBreakdown(x, b) : x)) }))
+        setReanalysis(null)
+      })
+      .catch(() => setReanalysis({ videoId, step: '', failed: true }))
+      .finally(() => analyzing.current.delete(videoId))
+  }
+
   const saveIdea = (videoId: string): SavedIdea => {
     breakDown(videoId)
     const existing = ideas.find((i) => i.videoId === videoId && i.clientId === client.id)
@@ -1358,6 +1376,8 @@ export default function App() {
           onClose={() => setOpenVideoId(null)}
           onSave={() => toggleSave(openVideo.id)}
           onPlan={() => planFromVideo(openVideo.id)}
+          onReanalyse={() => reanalyse(openVideo.id)}
+          reanalysis={reanalysis?.videoId === openVideo.id ? reanalysis : null}
         />
       )}
 
