@@ -643,6 +643,23 @@ def test_voice_upload_needs_an_approved_plan(client, voice_env):
     assert put_voice(client, idea="iw").status_code == 409
 
 
+def test_delete_voice_takes_the_edit_lock(client, voice_env):
+    import threading
+
+    got = put_voice(client).json()
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    result = {}
+    worker = threading.Thread(target=lambda: result.update(r=client.delete(f"/api/ideas/ia/edit/voice/{got['id']}")))
+    with editing.edit_lock:
+        worker.start()
+        worker.join(0.3)
+        assert worker.is_alive() and "r" not in result  # still waiting for the lock
+        assert any(folder.iterdir())
+    worker.join(5)
+    assert result["r"].status_code == 200
+    assert list(folder.iterdir()) == []
+
+
 def test_voice_delete_removes_both_files(client, voice_env):
     got = put_voice(client).json()
     assert client.delete(f"/api/ideas/ia/edit/voice/{got['id']}").status_code == 200

@@ -868,12 +868,14 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         path = voice_file(media_dir(), idea_id, vid)
         if path is None:
             return error(404, "That voiceover doesn't exist.")
-        with db() as conn:
-            saved = read(conn, idea_id)[1]
-        if any(isinstance(v, dict) and v.get("id") == vid for v in saved.get("voiceover") or []):
-            return error(409, VOICE_IN_USE)
-        path.unlink(missing_ok=True)
-        path.with_name(f"{vid}.words.json").unlink(missing_ok=True)
+        # Read, check and unlink under the lock so a save from another tab cannot add the voice in between.
+        with edit_lock:
+            with db() as conn:
+                saved = read(conn, idea_id)[1]
+            if any(isinstance(v, dict) and v.get("id") == vid for v in saved.get("voiceover") or []):
+                return error(409, VOICE_IN_USE)
+            path.unlink(missing_ok=True)
+            path.with_name(f"{vid}.words.json").unlink(missing_ok=True)
         return {"ok": True}
 
     return router

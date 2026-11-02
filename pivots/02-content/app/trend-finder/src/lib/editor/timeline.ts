@@ -306,6 +306,14 @@ export function addText(p: EditProject, at: number, text: string, id: string): E
   return { ...p, texts: [...p.texts, item] }
 }
 
+// A typed number of seconds, or null when it is blank, not a finite number, or negative.
+export function parseSeconds(raw: string): number | null {
+  const s = raw.trim()
+  if (!s) return null
+  const n = Number(s)
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+
 // Applies a change to one text and keeps it valid: it starts at 0 or later, ends after it starts, and its words
 // are never empty (an empty edit is ignored) or over the limit.
 export function updateText(p: EditProject, id: string, patch: Partial<Omit<TextItem, 'id'>>): EditProject {

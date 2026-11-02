@@ -32,6 +32,7 @@ import {
   CLIP_MIME,
   addText,
   updateText,
+  parseSeconds,
   removeText,
   newTextId,
   textsAt,
@@ -652,4 +653,15 @@ test('applyNewer whole: takes the whole new take, and refuses when the total wou
   assert.deepEqual(r.clips[0].source, src)
   const big = project([clip('a', 0, 1), clip('b', 0, 170)])
   assert.equal(applyNewer(big, 'a', src, 20, true), big)
+})
+
+test('parseSeconds: a number or null', () => {
+  assert.equal(parseSeconds('1.5'), 1.5)
+  assert.equal(parseSeconds(' 2 '), 2)
+  assert.equal(parseSeconds('0'), 0)
+  assert.equal(parseSeconds(''), null)
+  assert.equal(parseSeconds('  '), null)
+  assert.equal(parseSeconds('abc'), null)
+  assert.equal(parseSeconds('-1'), null)
+  assert.equal(parseSeconds('Infinity'), null)
 })
