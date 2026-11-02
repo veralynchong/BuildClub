@@ -1,5 +1,6 @@
 import { t } from '../i18n.ts'
 import type { CutState } from '../cut.ts'
+import type { Brand } from '../../types'
 import type { EditProject, SourceInfo } from './types.ts'
 
 // Someone saved the edit since it was loaded (or the plan is no longer approved); this copy must be reloaded.
@@ -36,4 +37,25 @@ export async function getSources(ideaId: string): Promise<SourceInfo[]> {
 
 export async function startExport(ideaId: string): Promise<CutState> {
   return send(await fetch(`${base(ideaId)}/export`, { method: 'POST' }), t('editor.err.export'))
+}
+
+// ---- the client's brand kit (logo, font, colour); showLogo is a project field and is not sent here ----
+const brandBase = (clientId: string) => `/api/clients/${encodeURIComponent(clientId)}/brand`
+
+export async function putBrand(clientId: string, body: { font: Brand['font']; color: string | null }): Promise<Brand> {
+  const r = await fetch(brandBase(clientId), {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return send(r, t('editor.err.brand'))
+}
+
+export async function putLogo(clientId: string, file: File): Promise<Brand> {
+  const r = await fetch(`${brandBase(clientId)}/logo`, { method: 'PUT', headers: { 'content-type': file.type }, body: file })
+  return send(r, t('editor.err.logo'))
+}
+
+export async function deleteLogo(clientId: string): Promise<Brand> {
+  return send(await fetch(`${brandBase(clientId)}/logo`, { method: 'DELETE' }), t('editor.err.logo'))
 }

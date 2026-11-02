@@ -30,6 +30,12 @@ import {
   withPrimary,
   repinIfOld,
   CLIP_MIME,
+  addText,
+  updateText,
+  removeText,
+  newTextId,
+  textsAt,
+  MAX_TEXTS,
 } from '../src/lib/editor/timeline.ts'
 
 const clip = (id, inn, out, extra = {}) => ({
@@ -372,4 +378,61 @@ test('flushOutcome: saved only when nothing unsaved is left', () => {
   assert.equal(flushOutcome({ ...base, dirty: true }), 'failed')
   assert.equal(flushOutcome({ ...base, dirty: true, blocked: true }), 'stale')
   assert.equal(flushOutcome({ ...base, dirty: true, readOnly: true }), 'readonly')
+})
+
+// ---- texts ----
+test('addText: 2 s at the bottom in white, cut to fit the video', () => {
+  const p = project([clip('c1', 0, 5)])
+  const a = addText(p, 1, 'hello', 't1')
+  assert.deepEqual(a.texts, [{ id: 't1', text: 'hello', start: 1, end: 3, position: 'bottom', color: 'white' }])
+  assert.equal(p.texts.length, 0)
+  const near = addText(p, 4.5, 'x', 't1').texts[0]
+  assert.equal(near.end, 5)
+  assert.ok(near.start < near.end)
+  const past = addText(p, 99, 'x', 't1').texts[0]
+  assert.ok(past.start < 5 && past.end === 5)
+  assert.equal(addText(p, -3, 'x', 't1').texts[0].start, 0)
+})
+
+test('addText: nothing to add to, empty words, or 30 texts already', () => {
+  const empty = project([])
+  assert.equal(addText(empty, 0, 'x', 't1'), empty)
+  const p = project([clip('c1', 0, 5)])
+  assert.equal(addText(p, 0, '   ', 't1'), p)
+  assert.equal(addText(p, 0, 'a'.repeat(200), 't1').texts[0].text.length, 120)
+  let full = p
+  for (let i = 0; i < MAX_TEXTS; i++) full = addText(full, 0, 'x', `t${i + 1}`)
+  assert.equal(full.texts.length, MAX_TEXTS)
+  assert.equal(addText(full, 0, 'x', 'tz'), full)
+})
+
+test('updateText: changes one text, keeps timing valid, ignores empty words', () => {
+  const p = addText(project([clip('c1', 0, 5)]), 1, 'hello', 't1')
+  const u = updateText(p, 't1', { text: '你好', position: 'top', color: 'black' })
+  assert.deepEqual([u.texts[0].text, u.texts[0].position, u.texts[0].color], ['你好', 'top', 'black'])
+  assert.equal(p.texts[0].text, 'hello')
+  assert.equal(updateText(p, 't1', { text: '  ' }), p)
+  assert.equal(updateText(p, 'nope', { text: 'x' }), p)
+  const back = updateText(p, 't1', { start: 4, end: 2 })
+  assert.ok(back.texts[0].end > back.texts[0].start)
+  assert.equal(updateText(p, 't1', { start: -2 }).texts[0].start, 0)
+})
+
+test('removeText and newTextId', () => {
+  let p = addText(project([clip('c1', 0, 5)]), 0, 'a', 't1')
+  p = addText(p, 1, 'b', newTextId(p))
+  assert.deepEqual(p.texts.map((x) => x.id), ['t1', 't2'])
+  const r = removeText(p, 't1')
+  assert.deepEqual(r.texts.map((x) => x.id), ['t2'])
+  assert.equal(removeText(r, 't1'), r)
+})
+
+test('textsAt: start is in, end is out', () => {
+  let p = addText(project([clip('c1', 0, 6)]), 1, 'a', 't1') // 1 to 3
+  p = addText(p, 2, 'b', 't2') // 2 to 4
+  assert.deepEqual(textsAt(p, 0.5).map((x) => x.id), [])
+  assert.deepEqual(textsAt(p, 1).map((x) => x.id), ['t1'])
+  assert.deepEqual(textsAt(p, 2.5).map((x) => x.id), ['t1', 't2'])
+  assert.deepEqual(textsAt(p, 3).map((x) => x.id), ['t2'])
+  assert.deepEqual(textsAt(p, 4).map((x) => x.id), [])
 })

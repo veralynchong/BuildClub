@@ -1,5 +1,5 @@
 // Pure timeline maths for the edit project. No remotion import: the Vite app and the unit tests use it too.
-import type { Clip, ClipSource, EditProject, SourceInfo } from './types.ts'
+import type { Clip, ClipSource, EditProject, SourceInfo, TextItem } from './types.ts'
 import type { Shot } from '../../types'
 import type { CanvasDoc, CanvasNode, Generation } from '../canvas/types.ts'
 import type { Take } from '../takes.ts'
@@ -276,4 +276,54 @@ export function flushOutcome(s: { dirty: boolean; blocked: boolean; readOnly: bo
   if (s.blocked) return 'stale'
   if (s.readOnly) return 'readonly'
   return s.dirty ? 'failed' : 'saved'
+}
+
+// ---- texts ----
+export const MAX_TEXTS = 30
+export const MAX_TEXT_CHARS = 120
+export const TEXT_SECONDS = 2
+
+// A new text at `at` seconds: 2 s long, at the bottom, white. It is cut to fit inside the video, and the
+// timeline is returned unchanged when there is no room (no footage, or 30 texts already).
+export function addText(p: EditProject, at: number, text: string, id: string): EditProject {
+  const total = totalFrames(p)
+  const body = text.slice(0, MAX_TEXT_CHARS)
+  if (total < 1 || p.texts.length >= MAX_TEXTS || !body.trim()) return p
+  const start = clamp(frames(at), 0, total - 1)
+  const end = Math.min(start + TEXT_SECONDS * FPS, total)
+  const item: TextItem = { id, text: body, start: secs(start), end: secs(end), position: 'bottom', color: 'white' }
+  return { ...p, texts: [...p.texts, item] }
+}
+
+// Applies a change to one text and keeps it valid: it starts at 0 or later, ends after it starts, and its words
+// are never empty (an empty edit is ignored) or over the limit.
+export function updateText(p: EditProject, id: string, patch: Partial<Omit<TextItem, 'id'>>): EditProject {
+  const old = p.texts.find((x) => x.id === id)
+  if (!old) return p
+  const next = { ...old, ...patch }
+  if (patch.text !== undefined) {
+    next.text = patch.text.slice(0, MAX_TEXT_CHARS)
+    if (!next.text.trim()) return p
+  }
+  next.start = Math.max(0, secs(frames(next.start)))
+  next.end = Math.max(secs(frames(next.end)), next.start + secs(1))
+  return { ...p, texts: p.texts.map((x) => (x.id === id ? next : x)) }
+}
+
+export function removeText(p: EditProject, id: string): EditProject {
+  return p.texts.some((x) => x.id === id) ? { ...p, texts: p.texts.filter((x) => x.id !== id) } : p
+}
+
+export function newTextId(p: EditProject): string {
+  let max = 0
+  for (const x of p.texts) {
+    const m = /^t(\d+)$/.exec(x.id)
+    if (m) max = Math.max(max, Number(m[1]))
+  }
+  return `t${max + 1}`
+}
+
+// The texts on screen at `t` seconds.
+export function textsAt(p: EditProject, t: number): TextItem[] {
+  return p.texts.filter((x) => x.start <= t && t < x.end)
 }

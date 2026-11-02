@@ -67,6 +67,26 @@ def test_check_project_accepts_drift_and_empty():
     assert editing.check_project(project(clip(b=90.0), clip("c2", 0, 90.0))) is None
 
 
+def text(**extra):
+    return {"id": "x1", "text": "hello", "start": 0, "end": 1, "position": "bottom", "color": "white", **extra}
+
+
+@pytest.mark.parametrize("bad_text", [
+    text(position="left"), text(color="red"), text(text=""), text(text="  "), text(text="a" * 121),
+    text(start=2, end=2), text(start=3, end=1), text(start=-1), text(id="bad id!"), text(end=float("nan")),
+], ids=["position", "colour", "empty", "blank", "121-chars", "end==start", "end<start", "negative", "id", "nan"])
+def test_check_project_texts(bad_text):
+    assert editing.check_project({**project(clip()), "texts": [bad_text]})
+
+
+def test_check_project_texts_and_music_accepted_and_limited():
+    assert editing.check_project({**project(clip()), "texts": [text(text="中" * 120), text(id="x2", color="black")],
+                                  "music": {"volume": 0.5}}) is None
+    assert editing.check_project({**project(clip()), "texts": [text(), text()]})  # shared id
+    for music in ({}, {"volume": 2}, {"volume": -0.1}, {"volume": "loud"}, "mp3"):
+        assert editing.check_project({**project(clip()), "music": music}), music
+
+
 def test_put_invalid_422(client, setup):
     r = client.put("/api/ideas/ia/edit", json={"version": 0, "project": project(clip(a=2, b=1))})
     assert r.status_code == 422 and "error" in r.json()
@@ -753,3 +773,47 @@ def test_delete_voice_in_use_is_409(client, voice_env):
     assert client.get(f"/api/ideas/ia/edit/voice/{vid}/file").status_code == 200
     assert client.put("/api/ideas/ia/edit", json={"version": 1, "project": project(clip())}).status_code == 200
     assert client.delete(f"/api/ideas/ia/edit/voice/{vid}").status_code == 200
+
+
+def test_signature_follows_texts_music_and_the_music_file(client, setup, monkeypatch):
+    fake_probe(monkeypatch)
+    t = up(client).json()
+    p = project(clip())
+    p["clips"][0]["source"]["id"] = t["id"]
+    folder = server.MEDIA_DIR / "ia" / "cut"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "music-m1.mp3").write_bytes(b"one")
+    (folder / "music-m2.mp3").write_bytes(b"two")
+    with server.db() as conn:
+        conn.execute("INSERT INTO cut_music (idea_id, id, ext, name, size, licensed_at) VALUES ('ia','m1','mp3','n',3,1)")
+        sig = lambda proj: editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, proj)  # noqa: E731
+        base = sig(p)
+        assert base != sig({**p, "texts": [text()]})
+        assert base == sig({**p, "texts": []})
+        withm = {**p, "music": {"volume": 0.5}}
+        one = sig(withm)
+        assert one != base and one != sig({**p, "music": {"volume": 0.8}})
+        os.utime(folder / "music-m1.mp3", ns=(9, 9))
+        rewritten = sig(withm)
+        assert rewritten != one  # the same track rewritten
+        conn.execute("UPDATE cut_music SET id = 'm2'")
+        assert sig(withm) not in (one, rewritten)  # a swapped track
+        conn.execute("UPDATE cut_music SET id = 'm1'")
+        assert sig(p) == base  # music off: the file is ignored
+
+
+def test_render_input_passes_music_url_only_when_music_is_on(client, setup, tmp_path):
+    folder = server.MEDIA_DIR / "ia" / "cut"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "music-m1.mp3").write_bytes(b"x")
+    f = tmp_path / "a.mp4"
+    f.write_bytes(b"x")
+    s = {"take:t1": src("take:t1", f)}
+    with server.db() as conn:
+        conn.execute("INSERT INTO cut_music (idea_id, id, ext, name, size, licensed_at) VALUES ('ia','m1','mp3','n',1,1)")
+        off, _ = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"}, project(clip()), s)
+        on, files = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"},
+                                         {**project(clip()), "music": {"volume": 0.3}}, s)
+    assert off["musicUrl"] is None
+    assert on["musicUrl"] == "music-m1.mp3" and files["music-m1.mp3"].is_file()
+    assert on["project"]["music"] == {"volume": 0.3}

@@ -109,6 +109,29 @@ def _check_clip(c, seen: set) -> Optional[str]:
     return None
 
 
+TEXT_POSITIONS = ("top", "middle", "bottom")
+TEXT_COLORS = ("brand", "white", "black")
+
+
+def _check_text(t: dict, seen: set) -> Optional[str]:
+    if not _id(t.get("id")):
+        return "Every text needs an id."
+    if t["id"] in seen:
+        return "Two texts share an id."
+    seen.add(t["id"])
+    if not isinstance(t.get("text"), str) or not t["text"].strip():
+        return "A text can't be empty."
+    if len(t["text"]) > MAX_TEXT_CHARS:
+        return f"A text can be at most {MAX_TEXT_CHARS} characters."
+    if not _num(t.get("start")) or not _num(t.get("end")) or t["start"] < 0 or t["end"] <= t["start"]:
+        return "A text must start at 0 or later and end after it starts."
+    if t.get("position") not in TEXT_POSITIONS:
+        return "A text's position must be top, middle or bottom."
+    if t.get("color") not in TEXT_COLORS:
+        return "A text's colour must be brand, white or black."
+    return None
+
+
 def _check_voice(v, voice_ids: Optional[set]) -> Optional[str]:
     if not isinstance(v, dict) or not _id(v.get("id")):
         return "Every voiceover needs an id."
@@ -145,15 +168,19 @@ def check_project(doc, voice_ids: Optional[set] = None) -> Optional[str]:
         return f"At most {MAX_TEXTS} texts."
     if len(voice) > MAX_VOICE:
         return f"At most {MAX_VOICE} voiceover clips."
+    text_ids: set = set()
     for t in texts:
         if not isinstance(t, dict):
             return "Every text must be an object."
-        if "text" in t and (not isinstance(t["text"], str) or len(t["text"]) > MAX_TEXT_CHARS):
-            return f"A text can be at most {MAX_TEXT_CHARS} characters."
+        problem = _check_text(t, text_ids)
+        if problem:
+            return problem
     if not isinstance(doc.get("captions"), dict) or not isinstance(doc["captions"].get("enabled"), bool):
         return "Captions need an enabled flag."
-    if doc.get("music") is not None and not isinstance(doc["music"], dict):
-        return "Music must be an object or null."
+    music = doc.get("music")
+    if music is not None and (not isinstance(music, dict) or not _num(music.get("volume"))
+                              or not 0 <= music["volume"] <= 1):
+        return "Music must be null or have a volume between 0 and 1."
     if not isinstance(doc.get("primaries"), dict) or not all(
             _id(k) and isinstance(v, dict) and v.get("kind") in ("generation", "take") and _id(v.get("id"))
             for k, v in doc["primaries"].items()):
@@ -253,9 +280,9 @@ def _source_files(conn, media: Path, idea_id: str) -> dict[str, Path]:
     return out
 
 
-# The project fields that change the rendered video. P3b adds texts, music and voice. Anything else in the
+# The project fields that change the rendered video. Anything else in the
 # project (such as the pinned primaries) does not make an export stale.
-RENDER_FIELDS = ("clips", "showLogo", "voiceover")
+RENDER_FIELDS = ("clips", "showLogo", "voiceover", "texts", "music")
 
 
 def voice_folder(media: Path, idea_id: str) -> Optional[Path]:
@@ -318,8 +345,7 @@ def client_brand(conn, idea_id: str) -> dict:
 
 def signature(conn, media: Path, idea: dict, project: dict) -> str:
     """A fingerprint of what an export was made from: the render-relevant project fields and the modified time
-    of each footage file and voiceover file, and the client's brand kit (with the logo file name). Music and
-    lines join it in P3b."""
+    of each footage file, voiceover file and the music file, and the client's brand kit (with the logo file name)."""
     files = _source_files(conn, media, idea["id"])
     stamps = {}
     for c in project["clips"]:
@@ -334,6 +360,14 @@ def signature(conn, media: Path, idea: dict, project: dict) -> str:
             stamps[f"voice:{v.get('id')}"] = path.stat().st_mtime_ns if path else 0
         except OSError:
             stamps[f"voice:{v.get('id')}"] = 0
+    if project.get("music"):  # a swapped music file (new id, or the same one rewritten) makes the export stale
+        row = conn.execute("SELECT id, ext FROM cut_music WHERE idea_id = ?", (idea["id"],)).fetchone() if conn else None
+        folder = renders.cut_folder(Path(media).resolve(), idea["id"])
+        path = folder / f"music-{row[0]}.{row[1]}" if row and folder is not None else None
+        try:
+            stamps["music"] = f"{row[0]}:{path.stat().st_mtime_ns}" if path else 0
+        except OSError:
+            stamps["music"] = f"{row[0]}:0"
     relevant = {k: project.get(k) for k in RENDER_FIELDS}
     text = json.dumps([relevant, sorted(stamps.items()), client_brand(conn, idea["id"])], sort_keys=True)
     return hashlib.sha1(text.encode()).hexdigest()[:16]

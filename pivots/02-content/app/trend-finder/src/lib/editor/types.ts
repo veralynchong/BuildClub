@@ -17,14 +17,29 @@ export type Clip = {
   caption?: string
 }
 
+export type TextPosition = 'top' | 'middle' | 'bottom'
+export type TextColor = 'brand' | 'white' | 'black'
+
+export type TextItem = {
+  id: string
+  text: string
+  start: number
+  end: number
+  position: TextPosition
+  color: TextColor
+}
+
+// The music file is the plan's cut music; the project keeps only how loud it plays (0 to 1).
+export type MusicSetting = { volume: number }
+
 export type EditProject = {
   fps: 30
   width: 1080
   height: 1920
   clips: Clip[]
-  texts: Record<string, unknown>[]
+  texts: TextItem[]
   captions: { enabled: boolean }
-  music: Record<string, unknown> | null
+  music: MusicSetting | null
   voiceover: Record<string, unknown>[]
   primaries: Record<string, ClipSource>
   showLogo: boolean

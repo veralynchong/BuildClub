@@ -128,9 +128,9 @@ export interface Line {
 
 // A client's logo, font and colour for exported videos. logo is a file name served by /api/clients/:id/brand/logo.
 export interface Brand {
-  logo?: string
+  logo?: string | null
   font: 'Noto Sans TC'
-  color?: string
+  color?: string | null
 }
 
 export interface Client {
