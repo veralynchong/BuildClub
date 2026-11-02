@@ -29,6 +29,11 @@ export function ExportBar({ ideaId, edit, timeline, readOnly }: Props) {
   const [sending, setSending] = useState(false)
   const manager = useManagerName()
 
+  const cutRef = useRef<CutState | null>(null)
+  useEffect(() => {
+    cutRef.current = cut
+  }, [cut])
+
   // The polling in flight; replaced when a new export starts and stopped on unmount.
   const poller = useRef<AbortController | null>(null)
   const track = useCallback(
@@ -72,12 +77,14 @@ export function ExportBar({ ideaId, edit, timeline, readOnly }: Props) {
     const ac = new AbortController()
     getCut(ideaId).then(
       (state) => {
-        if (!ac.signal.aborted) setCut((prev) => (isActive(prev) ? prev : state))
+        if (ac.signal.aborted) return
+        if (isActive(state) && !isActive(cutRef.current)) void track(state) // an export started elsewhere: poll it
+        else setCut((prev) => (isActive(prev) ? prev : state))
       },
       () => undefined, // the polling and the export button report real failures
     )
     return () => ac.abort()
-  }, [ideaId, edit.save])
+  }, [ideaId, edit.save, track])
 
   const blockOf = (project: EditProject | null): Key | null =>
     project ? exportBlocked(project, Object.fromEntries(project.clips.map((c) => [c.id, timeline.statusOf(c).state] as [string, ClipStatus['state']]))) : 'editor.export.empty'

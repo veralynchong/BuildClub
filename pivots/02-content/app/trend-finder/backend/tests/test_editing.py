@@ -192,6 +192,20 @@ def test_signature_is_stable_and_follows_project_and_source(client, setup, monke
         assert changed == editing.signature(conn, media, {"id": "ia"}, p)
 
 
+def test_signature_ignores_primaries_but_follows_clips(client, setup, monkeypatch):
+    fake_probe(monkeypatch)
+    t = up(client).json()
+    p = project(clip())
+    p["clips"][0]["source"]["id"] = t["id"]
+    with server.db() as conn:
+        one = editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, p)
+        pinned = {**p, "primaries": {"s1": {"kind": "take", "id": t["id"]}}}
+        assert one == editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, pinned)
+        q = project(clip(b=1.5))
+        q["clips"][0]["source"]["id"] = t["id"]
+        assert one != editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, q)
+
+
 def test_render_input_names_files_by_key_hash(setup, tmp_path):
     f = tmp_path / "whatever.MOV"
     f.write_bytes(b"x")
@@ -423,7 +437,8 @@ def test_recover_kills_orphaned_render_group(client, setup, tmp_path):
     pidfile = tmp_path / "pids"
     cut = server.MEDIA_DIR / "ia" / "cut"
     (cut / "work").mkdir(parents=True)
-    proc = subprocess.Popen([sys.executable, "-c", GRANDCHILD.format(pids=str(pidfile))], start_new_session=True)
+    proc = subprocess.Popen([sys.executable, "-c", GRANDCHILD.format(pids=str(pidfile)), "render-reel.mjs"],
+                            start_new_session=True)
     child, grandchild = read_pids(pidfile)
     (cut / "render.pid").write_text(str(proc.pid))
     with server.db() as conn:
@@ -444,6 +459,19 @@ def test_kill_orphan_ignores_junk_and_foreign_pids(tmp_path):
     editing.kill_orphan(f)
     assert not f.exists()
     editing.kill_orphan(tmp_path / "missing.pid")
+
+
+def test_kill_orphan_spares_a_group_leader_that_is_not_a_render(tmp_path):
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True)
+    try:
+        f = tmp_path / "render.pid"
+        f.write_text(str(proc.pid))  # leads its own group, but is not render-reel.mjs: a reused pid
+        editing.kill_orphan(f)
+        assert not f.exists()
+        assert proc.poll() is None
+    finally:
+        proc.kill()
+        proc.wait(10)
 
 
 def test_export_signature_is_from_the_job_start_snapshot(client, setup, monkeypatch, tmp_path):  # F13

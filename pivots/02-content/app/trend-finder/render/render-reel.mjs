@@ -36,6 +36,30 @@ function bundleKey() {
   return h.digest('hex').slice(0, 16)
 }
 
+function alive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return err.code === 'EPERM'
+  }
+}
+
+// Removes the bundles of older sources and the temp folders of dead builds. Only direct children of the cache
+// root are touched, never the current key, and a failure here never fails the render.
+function pruneCache(root, keep) {
+  try {
+    for (const name of readdirSync(root)) {
+      if (name === keep) continue
+      const tmp = /^.+\.tmp-(\d+)$/.exec(name)
+      if (tmp && (Number(tmp[1]) === process.pid || alive(Number(tmp[1])))) continue // a build in progress
+      rmSync(path.join(root, name), { recursive: true, force: true })
+    }
+  } catch {
+    /* a prune failure must not fail the render */
+  }
+}
+
 // Bundles once per source hash. The bundle is built in a temp folder and renamed into place, so a pre-warm
 // running next to a render never serves a half-written bundle.
 async function ensureBundle(cacheDir) {
@@ -56,6 +80,7 @@ async function ensureBundle(cacheDir) {
     rmSync(tmp, { recursive: true, force: true }) // another process finished first (the target is not empty)
     if (!existsSync(path.join(serveUrl, 'index.html'))) throw err
   }
+  pruneCache(path.dirname(serveUrl), path.basename(serveUrl))
   return serveUrl
 }
 

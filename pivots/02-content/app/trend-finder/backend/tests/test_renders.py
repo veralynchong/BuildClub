@@ -718,6 +718,12 @@ def test_export_refuses_missing_source(client, editor):
     assert r.status_code == 409 and r.json()["error"] == "A clip's video was deleted. Remove it from the timeline first."
 
 
+def test_export_rejects_a_clip_past_the_end_of_its_source(client, editor):
+    put_project(client, editor["id"], (0.0, 5.0))  # the source is 4.5 s long
+    r = export(client)
+    assert r.status_code == 400 and r.json()["error"] == editing.CLIP_PAST_END
+
+
 def test_export_503_without_render_tools(client, editor, monkeypatch):
     monkeypatch.setattr(editing, "missing_render_tools", lambda: "no node")
     r = export(client)

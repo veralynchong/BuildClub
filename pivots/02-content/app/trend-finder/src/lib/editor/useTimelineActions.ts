@@ -58,7 +58,7 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
       const info = await infoFor(src)
       const { edit, notify } = ref.current
       if (!info) return notify('editor.processing')
-      const p = edit.project
+      const p = edit.current()
       if (!p) return
       const next = insertClip(p, src, info.duration, index ?? p.clips.length, newClipId(p))
       if (next === p) return notify('editor.sources.full')
@@ -72,7 +72,7 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
       const info = await infoFor(src)
       const { edit, notify } = ref.current
       if (!info) return notify('editor.processing')
-      const p = edit.project
+      const p = edit.current()
       if (!p) return
       const next = applyNewer(p, clipId, src, info.duration)
       if (next === p) return
@@ -84,14 +84,15 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
 
   const fill = useCallback(async () => {
     const { edit, shots, doc, gens, takes, sources } = ref.current
-    const p = edit.project
-    if (!p || ref.current.readOnly) return []
+    if (!edit.current() || ref.current.readOnly) return []
     let list: SourceInfo[] = sources.sources ?? []
     try {
       list = await sources.refresh()
     } catch {
       /* use the list we have */
     }
+    const p = edit.current() // after the await: the newest project
+    if (!p) return []
     const r = fillByShotOrder(p, shots, doc, gens, takes, list)
     if (r.project !== p) edit.update(r.project)
     return r.skipped
@@ -105,7 +106,7 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
   const ignore = (clip: Clip, src: ClipSource) => setIgnored((prev) => new Set(prev).add(ignoreKey(clip, src)))
 
   const setPrimary = (shotId: string, src: ClipSource) => {
-    const p = inputs.edit.project
+    const p = inputs.edit.current()
     if (p) inputs.edit.update({ ...p, primaries: withPrimary(p.primaries, shotId, src) })
   }
   const isPrimary = (shotId: string, src: ClipSource): boolean => {

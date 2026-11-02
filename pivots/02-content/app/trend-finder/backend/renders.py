@@ -597,6 +597,9 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             return error(409, editing.EMPTY)
         if editing.missing_sources(project, sources):
             return error(409, editing.MISSING_SOURCE)
+        for c in project["clips"]:
+            if c["out"] > sources[editing.source_key(c["source"])]["duration"] + editing.EPS:
+                return error(400, editing.CLIP_PAST_END)
         used = {editing.source_key(c["source"]) for c in project["clips"]}
         total_bytes = sum(Path(sources[k]["path"]).stat().st_size for k in used)
         if shutil.disk_usage(media_dir()).free < DISK_FACTOR * total_bytes:

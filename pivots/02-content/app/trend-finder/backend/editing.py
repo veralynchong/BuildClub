@@ -44,6 +44,7 @@ RENDER_TIMEOUT_S = 600
 LENGTH_GUARD_S = 0.2  # a hard guard only; the export's acceptance bar is 0.1 s and is tested by the smoke script
 
 MISSING_SOURCE = "A clip's video was deleted. Remove it from the timeline first."
+CLIP_PAST_END = "A clip runs past the end of its video. Trim it on the timeline first."
 EMPTY = "Put at least one clip on the timeline first."
 EDIT_STALE = "The edit changed after this was exported. Export it again before sending it."
 BAD_OUTPUT = "The exported video doesn't look right. Export it again."
@@ -214,9 +215,14 @@ def _source_files(conn, media: Path, idea_id: str) -> dict[str, Path]:
     return out
 
 
+# The project fields that change the rendered video. P3b adds texts, music and voice. Anything else in the
+# project (such as the pinned primaries) does not make an export stale.
+RENDER_FIELDS = ("clips",)
+
+
 def signature(conn, media: Path, idea: dict, project: dict) -> str:
-    """A fingerprint of what an export was made from: the project and the modified time of each footage file.
-    Music, brand, lines and voiceover join it in P3b."""
+    """A fingerprint of what an export was made from: the render-relevant project fields and the modified time
+    of each footage file. Music, brand, lines and voiceover join it in P3b."""
     files = _source_files(conn, media, idea["id"])
     stamps = {}
     for c in project["clips"]:
@@ -225,7 +231,8 @@ def signature(conn, media: Path, idea: dict, project: dict) -> str:
             stamps[key] = files[key].stat().st_mtime_ns
         except (KeyError, OSError):
             stamps[key] = 0
-    text = json.dumps([project, sorted(stamps.items())], sort_keys=True)
+    relevant = {k: project.get(k) for k in RENDER_FIELDS}
+    text = json.dumps([relevant, sorted(stamps.items())], sort_keys=True)
     return hashlib.sha1(text.encode()).hexdigest()[:16]
 
 
@@ -318,11 +325,20 @@ def kill_orphan(pid_file: Path) -> None:
     leads its own group (as spawn_render makes it) is touched."""
     try:
         pid = int(pid_file.read_text().strip())
-        if pid > 1 and os.getpgid(pid) == pid:
+        if pid > 1 and os.getpgid(pid) == pid and _is_render(pid):
             os.killpg(pid, signal.SIGKILL)
     except (OSError, ValueError):
         pass
     pid_file.unlink(missing_ok=True)
+
+
+def _is_render(pid: int) -> bool:
+    """True when the pid's command line is the render script (a reused pid belongs to something else)."""
+    try:
+        out = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.returncode == 0 and "render-reel.mjs" in out.stdout
 
 
 def render_project(db, media_dir: Path, idea_id: str, work: Path, out: Path, step: Callable) -> dict:

@@ -23,7 +23,10 @@ export async function putProject(ideaId: string, version: number, project: EditP
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ version, project }),
   })
-  if (r.status === 409) throw new StaleProject()
+  if (r.status === 409) {
+    const body = await r.clone().json().catch(() => null)
+    if (body && typeof body === 'object' && 'version' in body) throw new StaleProject()
+  }
   return (await send<{ version: number }>(r, t('editor.err.save'))).version
 }
 
