@@ -100,3 +100,33 @@ def test_a_zero_cap_without_saved_searches_still_explains(client, monkeypatch):
     monkeypatch.setattr(server, "DAILY_APIFY_USD", 0)
     r = client.get("/api/search", params={"q": "never cached"})
     assert r.status_code == 429 and "turned off" in r.json()["error"]
+
+
+def test_refund_floors_at_zero(client):
+    server.spend("gen_image", 0.03, 1.0)
+    server.refund("gen_image", 0.10)
+    assert server.remaining("gen_image", 1.0) == 1.0
+
+
+def test_spend_then_refund_restores(client):
+    assert server.spend("gen_video", 0.40, 1.0)
+    assert server.remaining("gen_video", 1.0) == 0.6
+    server.refund("gen_video", 0.40)
+    assert server.remaining("gen_video", 1.0) == 1.0
+
+
+def test_gen_budget_429_mentions_remaining(client, monkeypatch):
+    monkeypatch.setattr(server, "DAILY_GEN_IMAGE_USD", 0.10)
+    assert server.spend("gen_image", 0.08, 0.10)
+    r = server.gen_budget("image", 0.05)
+    assert r.status_code == 429
+    assert "0.02" in json.loads(r.body)["error"]
+    assert server.gen_remaining()["image"] == {"spent": 0.08, "cap": 0.10}
+    server.gen_refund("image", 0.08)
+    assert server.gen_budget("image", 0.05) is None
+
+
+def test_zero_cost_allowed_at_zero_cap(client, monkeypatch):
+    monkeypatch.setattr(server, "DAILY_GEN_VIDEO_USD", 0)
+    assert server.gen_budget("video", 0) is None
+    assert server.gen_budget("video", 0.01).status_code == 429

@@ -187,8 +187,10 @@ def error(status: int, message: str) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
 
 
-def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
+def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd: None, refund=lambda kind, usd: None,
+                remaining=lambda: {"image": {"spent": 0, "cap": 0}, "video": {"spent": 0, "cap": 0}}) -> APIRouter:
     router = APIRouter()
+    router.budget, router.refund, router.remaining = budget, refund, remaining  # used by the generate routes
     router.jobs = GenJobs(db, media_dir)  # server.py keeps it as gen_jobs
 
     def find_idea(idea_id: str):
