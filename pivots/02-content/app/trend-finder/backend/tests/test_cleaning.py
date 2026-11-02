@@ -65,8 +65,11 @@ def test_filler_is_cut(client, setup, tmp_path, monkeypatch):
 
 def test_no_audio_422(client, setup, tmp_path):
     t = upload_clip(client, tmp_path, with_audio=False).json()
+    files = sorted(media_files())
     r = clean(client, t["id"])
     assert r.status_code == 422 and r.json()["error"] == cleaning.NO_AUDIO
+    assert len(client.get("/api/ideas/ia/takes").json()) == 1 and sorted(media_files()) == files
+    assert not any(p.name.startswith(".clean-") for p in folder().iterdir())
 
 
 def test_no_speech_422_and_nothing_saved(client, setup, tmp_path, monkeypatch):

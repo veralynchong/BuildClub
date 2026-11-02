@@ -109,12 +109,13 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             return error(409, f"This shot has the most takes it can hold ({takes.MAX_TAKES_PER_SHOT}).")
         return row, ids
 
-    def failed(e: CutError) -> JSONResponse:
+    def failed(idea_id: str, e: CutError) -> JSONResponse:
         message = str(e)
         if message in (cutting.NO_FFMPEG, cutting.NO_WHISPER):
             return error(503, message)
         if message in CONTENT_ERRORS:
             return error(422, message)
+        print(f"[clean] {idea_id} failed: {message}", flush=True)  # the full text stays in the log
         return error(422, PATH_RE.sub("<path>", message)[:MAX_ERROR_CHARS])
 
     @router.post("/api/ideas/{idea_id}/takes/{take_id}/clean")
@@ -144,7 +145,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             try:
                 result = await run_in_threadpool(clean_take, folder / f"{take_id}.{row[3]}", work, out)
             except CutError as e:
-                return failed(e)
+                return failed(idea_id, e)
             with takes.takes_lock, db() as conn:
                 again = check(conn, idea_id, take_id)  # the plan or the take may have changed meanwhile
                 if isinstance(again, JSONResponse):
