@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgencySettings, ClientEvent, IdeaStatus, Role, SavedIdea } from './types'
 import { clients as sampleClients, formats, sampleIdeas, videos } from './data/sample'
 import { formatTrend, groupFailures, hasDate, outlierScore, platformList, platformName, stageOrder, viewsPerDay, viewsPerFollower } from './lib/metrics'
-import { defaultAgency, defaultQuery, inTwoWeeks, useSavedIdeas, useStored } from './state'
+import { defaultAgency, defaultQuery, inTwoWeeks, useResearch, useResearchSlots, useSavedIdeas, useStored } from './state'
 import type { Query, Sort, Workspace } from './state'
 import { SearchScreen } from './components/SearchScreen'
 import { ResultsScreen } from './components/ResultsScreen'
@@ -77,6 +77,14 @@ interface ReturnTo {
   planIdeaId: string | null
 }
 import { ClientHome } from './components/ClientHome'
+import { ResearchScreen } from './components/research/ResearchScreen'
+import type { RowPick } from './components/research/ResearchScreen'
+import { SaveToVideo } from './components/research/SaveToVideo'
+import { entryFromVideo, newSlot, planOf, researchId, researchStatus, slotSummary, videoFromLink, withPlanRows } from './lib/research'
+import type { LinkInput, ResearchEntry } from './lib/research'
+
+// The platforms Find ideas can search, offered by Research's "Add from link".
+const SEARCH_PLATFORMS: Platform[] = ['tiktok', 'instagram', 'youtube', 'reddit', 'x']
 
 const sorters: Record<Sort, (a: (typeof videos)[number], b: (typeof videos)[number]) => number> = {
   outlier: (a, b) => outlierScore(b) - outlierScore(a),
@@ -101,7 +109,7 @@ function restoreTab(workspace: Workspace): View {
   if (workspace === 'all') return 'overview'
   if (saved === 'results') return 'search'
   if (saved === 'plan' || saved === 'review') return 'shortlist'
-  if (saved === 'home' || saved === 'search' || saved === 'shortlist' || saved === 'settings') return saved
+  if (saved === 'home' || saved === 'search' || saved === 'research' || saved === 'shortlist' || saved === 'settings') return saved
   return 'search'
 }
 
@@ -136,6 +144,10 @@ export default function App() {
   const [sort, setSort] = useState<Sort>('outlier')
   const [formatFilter, setFormatFilter] = useState<string | null>(null)
   const [openVideoId, setOpenVideoId] = useState<string | null>(null)
+  // Save to Research waiting on "Which video is this for?". `onSaved` runs only once it's saved (not on Cancel).
+  // Research opens with this row in view (from Find ideas' "Open in Research").
+  const [researchFocus, setResearchFocus] = useState<string | null>(null)
+  const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void } | null>(null)
   const [planIdeaId, setPlanIdeaId] = useState<string | null>(null)
   // The screen a plan was opened from, so Back returns there.
   const [planFrom, setPlanFrom] = useState<View>('results')
@@ -152,6 +164,13 @@ export default function App() {
   // Which client and search the results screen currently shows, so "Back to results" knows if it must search again.
   const [shownSearch, setShownSearch] = useState<string | null>(null)
   const [ideas, setIdeas] = useSavedIdeas()
+  // The Research tab's rows (reference videos), every client's. Find ideas saves here; "Plan it" makes a plan.
+  const [research, setResearch] = useResearch()
+  const [researchSlots, setResearchSlots] = useResearchSlots()
+  const researchNow = useRef(research)
+  useEffect(() => {
+    researchNow.current = research
+  }, [research])
 
   // 'open' = the API has no accounts (demo sign-in above); otherwise the API's session decides.
   const [auth, setAuth] = useState<'checking' | 'open' | 'signed-out' | 'signed-in'>('checking')
@@ -490,6 +509,12 @@ export default function App() {
     [liveStore.videos],
   )
 
+  // Every plan has a Research row, so the sheet always includes what the team is making. withPlanRows returns
+  // the same array when nothing is missing, so this settles after one pass.
+  useEffect(() => {
+    setResearch((prev) => withPlanRows(prev, ideas, videoById))
+  }, [ideas, videoById, setResearch])
+
   const [interp, setInterp] = useState<Interpretation>(() => parseQuery('tofu', formats))
   const formatById = useMemo(
     () => new Map([...formats, ...liveStore.formats].map((f) => [f.id, f])),
@@ -590,14 +615,21 @@ export default function App() {
       setSearchFailed(res.failed)
       setSearchEmpty(res.empty)
       setLiveStore((prev) => {
-        const keep = (list: { id: string }[], add: { id: string }[]) => {
+        // Videos in a Research row (and their formats) are never trimmed, so a row can still be planned later.
+        const pinnedVideos = new Set(researchNow.current.map((e) => e.videoId))
+        const pinnedFormats = new Set(prev.videos.filter((v) => pinnedVideos.has(v.id)).map((v) => v.formatId))
+        const keep = (list: { id: string }[], add: { id: string }[], pinned: Set<string>) => {
           const ids = new Set(add.map((x) => x.id))
-          return [...add, ...list.filter((x) => !ids.has(x.id))].slice(0, 600)
+          const all = [...add, ...list.filter((x) => !ids.has(x.id))]
+          return [...all.slice(0, 600), ...all.slice(600).filter((x) => pinned.has(x.id))]
         }
         // A repeat search brings placeholder formats; keep the AI breakdown of any video already broken down.
         const broken = new Map(prev.formats.filter((f) => f.shotList.length).map((f) => [f.id, f]))
         const formats = res.formats.map((f) => broken.get(f.id) ?? f)
-        return { videos: keep(prev.videos, res.videos) as Video[], formats: keep(prev.formats, formats) as Format[] }
+        return {
+          videos: keep(prev.videos, res.videos, pinnedVideos) as Video[],
+          formats: keep(prev.formats, formats, pinnedFormats) as Format[],
+        }
       })
       // The results screen takes over only if the person is on this client's search page; otherwise a toast offers them.
       const show = () => {
@@ -802,8 +834,9 @@ export default function App() {
 
   const answer = useMemo(() => (live ? liveAnswer : buildAnswer(interp, results, trends)), [interp, results, trends, live, liveAnswer])
 
-  // Live mode shows only ideas saved from real videos; sample mode only sample ones.
-  const shownIdeas = ideas.filter((i) => Boolean(videoById.get(i.videoId)?.live) === live)
+  // Live mode shows only ideas saved from real videos; sample mode only sample ones. Videos added to Research
+  // by link are the team's own, so their plans show in both.
+  const shownIdeas = ideas.filter((i) => Boolean(videoById.get(i.videoId)?.live) === live || i.videoId.startsWith('link-'))
 
   const chipGroups = buildChipGroups({
     client,
@@ -817,6 +850,9 @@ export default function App() {
   })
 
   const savedForClient = new Set(shownIdeas.filter((i) => i.clientId === client.id).map((i) => i.videoId))
+  // This client's Research rows, and the videos they hold.
+  const myResearch = research.filter((e) => e.clientId === client.id)
+  const inResearch = new Set(myResearch.map((e) => e.videoId))
 
   // Saving or planning a real video asks the API for its AI breakdown (about a minute the first time).
   // It replaces the placeholder shot list and "why it works".
@@ -839,12 +875,13 @@ export default function App() {
       .finally(() => analyzing.current.delete(videoId))
   }
 
-  const saveIdea = (videoId: string): SavedIdea => {
+  // Makes the plan for a video (Still planning), or returns the one it already has. `format` is for a video
+  // added in the same click (not in formatById yet).
+  const saveIdea = (videoId: string, format?: Format): SavedIdea => {
     breakDown(videoId)
     const existing = ideas.find((i) => i.videoId === videoId && i.clientId === client.id)
     if (existing) return existing
-    const v = videoById.get(videoId)!
-    const f = formatById.get(v.formatId)!
+    const f = format ?? formatById.get(videoById.get(videoId)!.formatId)!
     const idea: SavedIdea = {
       id: `${client.id}-${videoId}`,
       videoId,
@@ -857,17 +894,63 @@ export default function App() {
     return idea
   }
 
-  // stream B: toggles the shortlist. Only a shortlisted idea comes off; one already sent stays put.
+  const hasPlan = (videoId: string) => ideas.some((i) => i.videoId === videoId && i.clientId === client.id)
+
+  // Save to Research: adds the video as a row in this client's Research sheet (not a plan), filed under one of
+  // the client's videos (slotId) or Unsorted. Still asks for the AI breakdown, so the shots are ready when the row
+  // is planned.
+  const saveToResearch = (videoId: string, slotId?: string) => {
+    const v = videoById.get(videoId)
+    if (!v) return
+    breakDown(videoId)
+    const row = { ...entryFromVideo(client.id, v, 'search'), ...(slotId ? { slotId } : {}) }
+    setResearch((prev) => (prev.some((e) => e.id === row.id) ? prev : [...prev, row]))
+  }
+
+  const myVideos = researchSlots.filter((s) => s.clientId === client.id).sort((a, b) => a.number - b.number)
+  // Where a saved video sits in Research: short "Video 3" and full "Video 3 · Street taste test" (or Unsorted).
+  // Null when it isn't saved.
+  const savedIn = (videoId: string) => {
+    const row = research.find((e) => e.clientId === client.id && e.videoId === videoId)
+    if (!row) return null
+    const slot = myVideos.find((s) => s.id === row.slotId)
+    if (!slot) return { short: t('research.unsorted'), full: t('research.unsorted') }
+    const short = t('research.slot.videoNo', { n: slot.number })
+    return { short, full: slot.topic ? `${short} · ${slot.topic}` : short }
+  }
+  const openInResearch = (videoId: string) => {
+    setResearchFocus(researchId(client.id, videoId))
+    setView('research')
+  }
+
+  // Every Save to Research button: asks which video it's for first (when the client has any), then saves.
+  const askSave = (videoId: string, onSaved?: () => void) => {
+    if (!videoById.has(videoId)) return
+    if (!myVideos.length) {
+      saveToResearch(videoId)
+      onSaved?.()
+      return
+    }
+    setPendingSave({ videoId, onSaved })
+  }
+
+  // Takes a row off Research, but never one with a plan (the plan keeps its row).
+  const removeResearch = (rowId: string) => {
+    const row = research.find((e) => e.id === rowId)
+    if (!row || planOf(row, ideas)) return
+    setResearch((prev) => prev.filter((e) => e.id !== rowId))
+  }
+
+  // The Save button: on, it's a Research row; pressed again (and not planned yet), the row comes off.
   const toggleSave = (videoId: string) => {
-    const existing = ideas.find((i) => i.videoId === videoId && i.clientId === client.id)
-    if (!existing) saveIdea(videoId)
-    else if (existing.status === 'saved') setIdeas((prev) => prev.filter((i) => i.id !== existing.id))
+    if (inResearch.has(videoId)) removeResearch(researchId(client.id, videoId))
+    else askSave(videoId)
   }
 
   // A saved video can lack its breakdown (saved before one existed); fetch it when opened.
   const openVideoDrawer = (videoId: string) => {
     setOpenVideoId(videoId)
-    if (savedForClient.has(videoId)) breakDown(videoId)
+    if (savedForClient.has(videoId) || inResearch.has(videoId)) breakDown(videoId)
     fillNeeds(videoId)
   }
 
@@ -893,12 +976,94 @@ export default function App() {
     setView('plan')
   }
 
-  // stream B: a video not on the shortlist yet is only added to it (the tray shows it); a shortlisted one opens its plan.
+  // Find ideas' plan button and P key: a video with a plan opens it; any other is saved to Research (plans are
+  // made from Research).
   const planFromVideo = (videoId: string) => {
-    const idea = saveIdea(videoId)
-    if (!savedForClient.has(videoId)) return
+    const idea = ideas.find((i) => i.videoId === videoId && i.clientId === client.id)
+    if (!idea) return askSave(videoId)
     setOpenVideoId(null)
     openPlan(idea.id)
+  }
+
+  // Makes the plan for a video (Still planning), keeping its Research row, and opens it unless `open` is false.
+  const planNow = (videoId: string, format?: Format, open = true) => {
+    const v = videoById.get(videoId)
+    if (v && !inResearch.has(videoId)) {
+      const row = entryFromVideo(client.id, v, 'search')
+      setResearch((prev) => (prev.some((e) => e.id === row.id) ? prev : [...prev, row]))
+    }
+    const idea = saveIdea(videoId, format)
+    if (!open) return
+    setOpenVideoId(null)
+    openPlan(idea.id)
+  }
+
+  // Makes a Research row's plan. A row whose video has left this browser's store gets it back from the row's own copy.
+  const planRow = (rowId: string, open = true) => {
+    const row = research.find((e) => e.id === rowId)
+    if (!row) return
+    if (videoById.has(row.videoId) || hasPlan(row.videoId)) return planNow(row.videoId, undefined, open)
+    const { video, format } = videoFromLink(rowLink(row))
+    const restored = { ...video, id: row.videoId }
+    setLiveStore((prev) => ({
+      videos: [restored, ...prev.videos.filter((x) => x.id !== restored.id)],
+      formats: prev.formats.some((x) => x.id === format.id) ? prev.formats : [format, ...prev.formats],
+    }))
+    planNow(row.videoId, format, open)
+  }
+
+  // Research's Status dropdown. Only plans still being planned are deleted here; one sent for approval or further
+  // along is changed on Plans (the dropdown locks it too).
+  const pickRow = (rowId: string, pick: RowPick) => {
+    const row = research.find((e) => e.id === rowId)
+    if (!row) return
+    const stillPlanning = (i: SavedIdea) => i.status === 'saved' || i.status === 'rejected'
+    const plan = planOf(row, ideas)
+    if (pick === 'picked') {
+      if (plan) return
+      // The same video's earlier pick steps down to Backup, and its plan goes.
+      const before = row.slotId
+        ? research.filter((e) => e.clientId === row.clientId && e.slotId === row.slotId && e.id !== row.id && planOf(e, ideas))
+        : []
+      const theirPlans = before.map((e) => planOf(e, ideas)!)
+      if (theirPlans.some((i) => !stillPlanning(i))) return
+      const drop = new Set(theirPlans.map((i) => i.id))
+      const demoted = new Set(before.map((e) => e.id))
+      if (drop.size) setIdeas((prev) => prev.filter((i) => !drop.has(i.id)))
+      setResearch((prev) =>
+        prev.map((e) => (e.id === rowId ? { ...e, backup: undefined } : demoted.has(e.id) ? { ...e, backup: true } : e)),
+      )
+      planRow(rowId, false)
+      return
+    }
+    if (plan) {
+      if (!stillPlanning(plan)) return
+      setIdeas((prev) => prev.filter((i) => i.id !== plan.id))
+    }
+    setResearch((prev) => prev.map((e) => (e.id === rowId ? { ...e, backup: pick === 'backup' ? true : undefined } : e)))
+  }
+
+  // Research's "Add from link": a video found outside the app. Adding the same link again updates its row.
+  const addFromLink = (input: LinkInput, slotId?: string) => {
+    const { video, format } = videoFromLink(input)
+    setLiveStore((prev) => ({
+      videos: [video, ...prev.videos.filter((x) => x.id !== video.id)],
+      // Keep a breakdown the format already has.
+      formats: prev.formats.some((x) => x.id === format.id) ? prev.formats : [format, ...prev.formats],
+    }))
+    const row: ResearchEntry = {
+      ...entryFromVideo(client.id, video, 'link'),
+      keywords: input.keywords,
+      // A blank hook stays blank ("Add a hook") rather than showing the link.
+      hook: input.hook.trim(),
+      notes: input.notes,
+      ...(slotId ? { slotId } : {}),
+    }
+    setResearch((prev) =>
+      prev.some((e) => e.id === row.id)
+        ? prev.map((e) => (e.id === row.id ? { ...row, source: e.source, slotId: slotId ?? e.slotId } : e))
+        : [...prev, row],
+    )
   }
 
   const likeFormat = interp.source ? formatById.get(interp.topics[0]?.formatId ?? '') : undefined
@@ -949,11 +1114,15 @@ export default function App() {
     settings: t('shell.back.settings'),
     preferences: t('shell.back.preferences'),
     channel: t('shell.back.channel'),
+    research: t('shell.back.research'),
     shortlist: t('shell.back.shortlist'),
     'add-client': t('shell.back.addClient'),
   }
   // Sidebar badge: what needs action (waiting for approval + sent back), not the whole shortlist.
-  const counts = { plans: mine.filter((i) => i.status === 'waiting' || i.status === 'rejected').length }
+  const counts = {
+    plans: mine.filter((i) => i.status === 'waiting' || i.status === 'rejected').length,
+    research: myResearch.length,
+  }
   const openPlans = (stage?: IdeaStatus) => {
     setBoardFocus(stage ?? null)
     setView('shortlist')
@@ -1140,9 +1309,11 @@ export default function App() {
               pulseError={pulseError}
               onRefreshPulse={() => void refreshPulse(client, true)}
               onFindIdeas={() => setView('search')}
-              onSave={(videoId) => void saveIdea(videoId)}
-              onUndoSave={toggleSave}
-              onPlanShots={planFromVideo}
+              // Rows the team saved (not the made-up sample rows), so the demo's suggestions don't all disappear.
+              researched={new Set(myResearch.filter((e) => e.source !== 'sample').map((e) => e.videoId))}
+              onSave={askSave}
+              onUndoSave={(videoId) => removeResearch(researchId(client.id, videoId))}
+              onPlanShots={(videoId) => planNow(videoId)}
               onOpenPlan={openPlan}
               onOpenPlans={openPlans}
               // A signed-in manager approves right here, with the same handler as Review; team members don't.
@@ -1249,10 +1420,53 @@ export default function App() {
               formatFilter={formatFilter}
               setFormatFilter={setFormatFilter}
               ideaStatus={new Map(shownIdeas.filter((i) => i.clientId === client.id).map((i) => [i.videoId, i.status]))}
+              inResearch={inResearch}
               onOpen={openVideoDrawer}
               onToggleSave={toggleSave}
-              onGoShortlist={() => setView('shortlist')} // stream B: shortlist tray
+              onGoResearch={() => setView('research')}
+              savedIn={savedIn}
+              onOpenInResearch={openInResearch}
               blockedFormatIds={blockedFormatIds}
+            />
+          )}
+
+          {inClient && view === 'research' && (
+            <ResearchScreen
+              client={client}
+              entries={myResearch}
+              statusOf={(e) => researchStatus(e, ideas)}
+              onUpdate={(id, patch) => setResearch((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))}
+              onRemove={removeResearch}
+              onPick={pickRow}
+              focusRowId={researchFocus}
+              onFocused={() => setResearchFocus(null)}
+              onOpenPlan={(id) => {
+                const row = research.find((e) => e.id === id)
+                const plan = row && planOf(row, ideas)
+                if (plan) openPlan(plan.id)
+              }}
+              onAddFromLink={addFromLink}
+              onOpenVideo={(videoId) => {
+                if (videoById.has(videoId)) openVideoDrawer(videoId)
+              }}
+              onFindIdeas={() => navTo('search')}
+              platforms={SEARCH_PLATFORMS}
+              slots={researchSlots.filter((s) => s.clientId === client.id).sort((a, b) => a.number - b.number)}
+              summaryOf={(slot) => slotSummary(slot, research, ideas)}
+              onCreateSlot={({ number, topic, dueDate, refs }) => {
+                const slot = newSlot(client.id, researchSlots, topic, dueDate, Date.now(), number)
+                setResearchSlots((prev) => [...prev, slot])
+                for (const ref of refs) addFromLink(ref, slot.id)
+                return slot.id
+              }}
+              onUpdateSlot={(id, patch) => setResearchSlots((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)))}
+              onRemoveSlot={(id) => {
+                setResearchSlots((prev) => prev.filter((s) => s.id !== id))
+                setResearch((prev) => prev.map((e) => (e.slotId === id ? { ...e, slotId: undefined } : e)))
+              }}
+              onMoveEntry={(entryId, slotId) =>
+                setResearch((prev) => prev.map((e) => (e.id === entryId ? { ...e, slotId: slotId ?? undefined } : e)))
+              }
             />
           )}
 
@@ -1267,6 +1481,8 @@ export default function App() {
               onOpenPlan={openPlan}
               onFindMore={() => setView('search')}
               onReview={() => openReview('shortlist')}
+              inResearch={inResearch}
+              onOpenResearch={() => setView('research')}
               focus={boardFocus}
               onFocusDone={clearBoardFocus}
             />
@@ -1311,6 +1527,19 @@ export default function App() {
         </main>
       </div>
 
+      {pendingSave && videoById.has(pendingSave.videoId) && (
+        <SaveToVideo
+          account={videoById.get(pendingSave.videoId)!.handle}
+          slots={myVideos}
+          onCancel={() => setPendingSave(null)}
+          onPick={(slotId) => {
+            saveToResearch(pendingSave.videoId, slotId ?? undefined)
+            pendingSave.onSaved?.()
+            setPendingSave(null)
+          }}
+        />
+      )}
+
       {openVideo && openFormat && (
         <BreakdownPanel
           video={openVideo}
@@ -1318,10 +1547,19 @@ export default function App() {
           cohort={cohorts.get(openVideo.id)}
           formatAccounts={keywordPool.filter((v) => v.formatId === openFormat.id).length}
           client={client}
-          status={shownIdeas.find((i) => i.clientId === client.id && i.videoId === openVideo.id)?.status} // stream B
+          status={ideas.find((i) => i.clientId === client.id && i.videoId === openVideo.id)?.status} // stream B
+          inResearch={inResearch.has(openVideo.id)}
           onClose={() => setOpenVideoId(null)}
           onSave={() => toggleSave(openVideo.id)}
           onPlan={() => planFromVideo(openVideo.id)}
+          onGoResearch={
+            view === 'research'
+              ? undefined
+              : () => {
+                  setOpenVideoId(null)
+                  setView('research')
+                }
+          }
         />
       )}
 
@@ -1336,4 +1574,18 @@ export default function App() {
 function libraryKey(library: { videos: { id: string }[]; formats: { id: string }[] }) {
   const byId = (a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)
   return JSON.stringify([[...library.videos].sort(byId), [...library.formats].sort(byId)])
+}
+
+// What "Add from link" would have collected, rebuilt from a row, so a row whose video has gone can be planned.
+function rowLink(row: ResearchEntry): LinkInput {
+  return {
+    url: row.url ?? '',
+    platform: row.platform,
+    account: row.account,
+    followers: row.followers,
+    views: row.views,
+    hook: row.hook,
+    keywords: row.keywords,
+    notes: row.notes,
+  }
 }

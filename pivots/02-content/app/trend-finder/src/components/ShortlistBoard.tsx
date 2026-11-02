@@ -19,11 +19,10 @@ import type {
   DragStartEvent,
 } from "@dnd-kit/core";
 import type { Client, Format, IdeaStatus, SavedIdea, Video } from "../types";
-import type { Step } from "../lib/steps.ts";
 import type { Decision } from "../lib/memory";
 import { useApp, useManagerName } from "../lib/appContext";
-import { t, tp } from "../lib/i18n";
-import { postedThisMonth, stageOf } from "../lib/stage";
+import { t } from "../lib/i18n";
+import { postedThisMonth } from "../lib/stage";
 import { needsConfirm, patchFor, stepOf, targetsOf } from "../lib/steps.ts";
 import { useProduction } from "../lib/production.ts";
 import { ProgressRing } from "./ProgressRing";
@@ -61,6 +60,9 @@ interface Props {
   onOpenPlan: (ideaId: string) => void;
   onFindMore: () => void;
   onReview: () => void;
+  // Videos in this client's Research sheet: their cards get a "From research" link to the Research tab.
+  inResearch?: Set<string>;
+  onOpenResearch?: () => void;
   // Stage to scroll to when opened from a Home pipeline chip; cleared once done.
   focus?: IdeaStatus | null;
   onFocusDone?: () => void;
@@ -74,7 +76,8 @@ const reducedMotion = () =>
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 // One client's plans as a Kanban board (the Plans tab): Still planning → Waiting for approval → Approved, ready to
-// film, with the approved plans that are being filmed, edited or posted in a row below. Which column a plan is in is
+// film. Approved plans stay in that column while they are filmed, edited and posted (the stage menu on the card
+// shows where each one is). Which column a plan is in is
 // worked out from its data (lib/steps.ts). Any card can move to any column, both ways, with or without shots: Waiting
 // sends it, Approved approves it (manager only), and Still planning takes the send or the approval back.
 export function ShortlistBoard(p: Props) {
@@ -119,18 +122,10 @@ export function ShortlistBoard(p: Props) {
   const lists: Record<Column, SavedIdea[]> = {
     planning: inColumn("planning").sort(byDue),
     waiting: inColumn("waiting").sort((a, b) => (a.sentAt ?? 0) - (b.sentAt ?? 0) || byDue(a, b)),
-    // Approved plans not yet in production; the rest are in the row below the board.
-    approved: inColumn("approved").filter((i) => infos.get(i.id)?.step === "filming" && stageOf(i) === "approved").sort(byDue),
+    // Every approved plan, whatever its production stage.
+    approved: inColumn("approved").sort(byDue),
   };
-  const inStep = (st: Step) => mine.filter((i) => infos.get(i.id)?.step === st).sort(byDue);
-  const filming = inStep("filming").filter((i) => stageOf(i) !== "approved");
-  const editing = inStep("editing");
-  const postedNow = new Date();
-  const postedRecent = inStep("posted")
-    .filter((i) => !i.postedAt || postedThisMonth([i], postedNow) === 1)
-    .sort((a, b) => (b.postedAt ?? 0) - (a.postedAt ?? 0));
-  const postedEarlier = inStep("posted").length - postedRecent.length;
-  const postedCount = postedThisMonth(mine, postedNow);
+  const postedCount = postedThisMonth(mine, new Date());
   const approvedCount = mine.filter((i) => i.status === "approved").length;
   const progress = Math.min(approvedCount / Math.max(p.client.monthlyTarget, 1), 1) * 100;
   const dragging = mine.find((i) => i.id === dragId);
@@ -293,6 +288,7 @@ export function ShortlistBoard(p: Props) {
           targets={info.targets}
           onOpenPlan={() => p.onOpenPlan(idea.id)}
           onRemove={() => remove(idea.id)}
+          onFromResearch={p.onOpenResearch && p.inResearch?.has(idea.videoId) ? p.onOpenResearch : undefined}
           actions={
             <>
               {idea.status === "approved" && (
@@ -331,16 +327,6 @@ export function ShortlistBoard(p: Props) {
   };
   const confirmIdea = mine.find((i) => i.id === confirm?.id && i.status === "approved");
   const confirmTo = confirm?.to ?? "waiting";
-  const productionCol = (title: string, list: SavedIdea[], emptyText: string, tone: string, more?: React.ReactNode) => (
-    <section className={`board-col board-col-${tone}`} aria-label={title}>
-      <header className="board-col-head">
-        <h2>{title}</h2>
-        <span className="board-count">{list.length}</span>
-      </header>
-      {more}
-      {list.length ? <ul className="board-list">{list.map((i) => card(i))}</ul> : <p className="board-empty small muted">{emptyText}</p>}
-    </section>
-  );
   const dragVideo = dragging && p.videoById.get(dragging.videoId);
   const motion = !reducedMotion();
 
@@ -364,16 +350,8 @@ export function ShortlistBoard(p: Props) {
         </div>
       </header>
 
-      {mine.length === 0 ? (
-        <div className="empty">
-          <h2>{t("plan.board.noIdeas")}</h2>
-          <p>{t("plan.board.noIdeasBody")}</p>
-          <button className="btn btn-primary" onClick={p.onFindMore}>
-            {t("plan.board.findIdeas", { client: p.client.name })}
-          </button>
-        </div>
-      ) : (
-        <DndContext
+      {/* The three columns always show, even with no plans yet: each empty column says what goes there. */}
+      <DndContext
           sensors={sensors}
           collisionDetection={collision}
           accessibility={{
@@ -398,22 +376,6 @@ export function ShortlistBoard(p: Props) {
               </PlanColumn>
             ))}
           </div>
-          {approvedCount > 0 ? (
-            <>
-              <h2 className="board-row-title">{t("plan.board.inProduction")}</h2>
-              <div className="board-cols board-cols-production">
-                {productionCol(t("plan.board.filming"), filming, t("plan.board.empty.filming"), "filming")}
-                {productionCol(t("plan.board.editing"), editing, t("plan.board.empty.editing"), "editing")}
-                {productionCol(
-                  t("plan.board.postedMonth"),
-                  postedRecent,
-                  t("plan.board.empty.posted"),
-                  "posted",
-                  postedEarlier > 0 && <span className="small muted">{tp("plan.board.postedEarlier", postedEarlier)}</span>,
-                )}
-              </div>
-            </>
-          ) : null}
           {confirmIdea && (
             <div className="plan-bar pb-confirm" role="alertdialog" aria-label={t("plan.board.confirmAria")}>
               <span className="pb-confirm-text">
@@ -458,7 +420,6 @@ export function ShortlistBoard(p: Props) {
             document.body,
           )}
         </DndContext>
-      )}
     </section>
   );
 }

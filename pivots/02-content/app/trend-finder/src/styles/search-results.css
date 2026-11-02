@@ -165,6 +165,7 @@
 .best-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .best-actions .btn { padding: 11px 18px; }
 
+.best-cover { position: relative; min-width: 0; }
 .best-video { position: relative; display: block; width: 100%; aspect-ratio: 9 / 16; border-radius: var(--radius); overflow: hidden; background: #000; }
 .best-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .best-video-sample {
@@ -389,6 +390,7 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
 @media (max-width: 760px) {
   .best { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 14px 14px 20px; }
   .best-video, .best-video-sample { max-width: 280px; justify-self: center; }
+  .best-cover { justify-self: center; width: 100%; max-width: 280px; }
   .best-body { padding: 0 6px; }
 }
 @media (max-width: 600px) {

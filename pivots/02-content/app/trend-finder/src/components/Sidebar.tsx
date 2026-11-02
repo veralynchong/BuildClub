@@ -11,6 +11,7 @@ export type View =
   | 'home'
   | 'search'
   | 'results'
+  | 'research'
   | 'shortlist'
   | 'review'
   | 'plan'
@@ -24,6 +25,7 @@ const paths: Record<string, string> = {
   saved: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z',
   approvals: 'M20 6 9 17l-5-5',
   plans: 'M8 4h11v16H8zM5 4v16M11 8h5M11 12h5M11 16h3',
+  research: 'M4 5h16v14H4zM4 10h16M4 14.5h16M10 10v9',
   settings: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4',
   channel: 'M4 6h16M4 12h10M4 18h6M17 14l3 3-3 3',
   overview: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
@@ -56,8 +58,8 @@ interface Props {
   setWorkspace: (w: Workspace) => void
   view: View
   setView: (v: View) => void
-  // Plans that need action: waiting for approval plus sent back.
-  counts: { plans: number }
+  // Plans that need action: waiting for approval plus sent back. Research: this client's rows.
+  counts: { plans: number; research: number }
   onSignOut: () => void
   // The Remake logo opens the public landing page (still signed in).
   onLogo: () => void
@@ -223,7 +225,9 @@ export function Sidebar(p: Props) {
                 p.view === 'search' || p.view === 'results',
                 searching && searching.clientId === p.workspace ? <SearchTicker q={searching.q} startedAt={searching.startedAt} /> : null,
               )}
-              {/* Plans = the board of saved ideas + review (batch mode) + one plan */}
+              {/* Research = the sheet of saved reference videos; plans are made from it */}
+              {item('research', 'research', t('shell.side.research'), p.counts.research)}
+              {/* Plans = the board of plans + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
               <div className="side-sep" />
               {item('channel', 'channel', t('shell.side.channel'))}

@@ -30,17 +30,22 @@ interface Props {
   // Sample mode only: videos in this video's hand-written format (the old count).
   formatAccounts: number
   client: Client
-  // Where this video stands for the client, if it's been shortlisted or sent.
+  // Where this video's plan stands for the client, if it has one.
   status?: IdeaStatus
+  // In the client's Research sheet.
+  inResearch?: boolean
   onClose: () => void
-  // Add to or take off the client's shortlist.
+  // Save to the client's Research, or take it off again (only while it has no plan).
   onSave: () => void
+  // Opens the video's plan.
   onPlan: () => void
+  // Goes to the Research tab (left out when the drawer is open on Research itself).
+  onGoResearch?: () => void
 }
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAccounts, client, status, onClose, onSave, onPlan }: Props) {
+export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAccounts, client, status, inResearch, onClose, onSave, onPlan, onGoResearch }: Props) {
   const manager = useManagerName()
   // Play the slide-out before App unmounts the panel (skipped under reduced motion).
   const [closing, setClosing] = useState(false)
@@ -286,24 +291,32 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
         </div>
 
         <footer className="drawer-foot">
-          {!status && (
+          {!status && !inResearch && (
             <button className="btn btn-primary" onClick={onSave}>
               {t('find.saveFor', { client: client.name })}
             </button>
           )}
-          {status === 'saved' && (
+          {!status && inResearch && (
             <>
               <button className="btn btn-ghost" aria-pressed="true" onClick={onSave}>
                 {t('find.savedMark')}
               </button>
-              <button className="btn btn-primary" onClick={onPlan}>
-                {t('find.openPlan')}
-              </button>
+              {onGoResearch && (
+                <button className="btn btn-primary" onClick={onGoResearch}>
+                  {t('find.openResearch')}
+                </button>
+              )}
             </>
           )}
-          {status && status !== 'saved' && (
+          {status && (
             <button className="btn btn-primary" onClick={onPlan}>
-              {status === 'waiting' ? t('find.planWaiting', { manager }) : status === 'approved' ? t('find.planApproved') : t('find.planSentBack')}
+              {status === 'waiting'
+                ? t('find.planWaiting', { manager })
+                : status === 'approved'
+                  ? t('find.planApproved')
+                  : status === 'saved'
+                    ? t('find.planPlanning')
+                    : t('find.planSentBack')}
             </button>
           )}
         </footer>

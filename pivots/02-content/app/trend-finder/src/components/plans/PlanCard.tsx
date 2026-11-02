@@ -79,6 +79,8 @@ interface Props {
   onRemove: () => void;
   // Extra controls on the card, e.g. the production stage of an approved plan.
   actions?: React.ReactNode;
+  // Goes to the Research tab, for a plan whose video has a Research row.
+  onFromResearch?: () => void;
 }
 
 // Clicks and taps on the card's own controls never start a drag.
@@ -118,6 +120,15 @@ export function PlanCard(p: Props) {
           {t("plan.card.openPlan")}
         </button>
         {p.actions}
+        {p.onFromResearch && (
+          <button
+            className="link-btn"
+            onClick={p.onFromResearch}
+            aria-label={t("plan.card.fromResearchAria", { name })}
+          >
+            {t("plan.card.fromResearch")}
+          </button>
+        )}
         <button
           className="link-btn"
           onClick={p.onRemove}
