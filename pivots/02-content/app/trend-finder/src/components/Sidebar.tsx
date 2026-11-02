@@ -14,6 +14,7 @@ export type View =
   | 'shortlist'
   | 'review'
   | 'plan'
+  | 'canvas'
   | 'settings'
   | 'preferences'
   | 'channel'

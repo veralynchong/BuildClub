@@ -1,0 +1,68 @@
+/* Canvas screen: React Flow board with the editor drawer beside it. The board is styled through React Flow's own
+   --xy-* variables, set to tokens. */
+.main:has(> .cv-screen) { max-width: none; }
+.cv-screen { display: flex; flex-direction: column; gap: var(--space-md); align-items: flex-start; min-width: 0; }
+.cv-screen > .link-btn { align-self: flex-start; }
+.cv-head { display: flex; align-items: center; gap: var(--space-md); width: 100%; min-width: 0; }
+.cv-head h1 { font-size: var(--text-md); letter-spacing: var(--tracking-tight); }
+.cv-save { flex: 1 1 auto; min-width: 0; }
+.cv-editor-btn { margin-left: auto; flex: 0 0 auto; }
+
+.cv-note {
+  display: flex; align-items: center; gap: var(--space-md); justify-content: space-between; width: 100%;
+  padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--fg); font-size: var(--text-sm);
+}
+.cv-note-error { background: var(--no-soft); color: var(--no); }
+
+.cv-layout { display: flex; width: 100%; min-width: 0; gap: var(--space-md); height: calc(100dvh - 200px); min-height: 420px; }
+.cv-flow {
+  flex: 1 1 auto; min-width: 0; position: relative; overflow: hidden;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+}
+.cv-flow .react-flow {
+  --xy-background-color: var(--surface);
+  --xy-background-pattern-color: var(--line-strong);
+  --xy-node-background-color: var(--surface);
+  --xy-node-color: var(--fg);
+  --xy-node-border: 1px solid var(--line-strong);
+  --xy-node-border-radius: var(--radius-sm);
+  --xy-node-boxshadow-hover: var(--shadow-md);
+  --xy-node-boxshadow-selected: 0 0 0 2px var(--accent);
+  --xy-edge-stroke: var(--muted);
+  --xy-edge-stroke-selected: var(--accent);
+  --xy-handle-background-color: var(--accent);
+  --xy-handle-border-color: var(--surface);
+  --xy-selection-background-color: var(--accent-soft);
+  --xy-selection-border: 1px solid var(--accent);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--fg);
+  --xy-controls-button-border-color: var(--line);
+  --xy-minimap-background-color: var(--surface);
+  --xy-minimap-mask-background-color: var(--scrim);
+  --xy-minimap-node-background-color: var(--surface-3);
+  --xy-attribution-background-color: transparent;
+  font-family: var(--font-sans);
+}
+.cv-flow .react-flow__node { font-size: var(--text-sm); }
+
+.cv-drawer {
+  flex: 0 0 auto; width: var(--cv-w); position: relative; display: flex; min-width: 0;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden;
+}
+.cv-drawer-grip { flex: 0 0 8px; cursor: col-resize; touch-action: none; background: var(--surface-2); }
+.cv-drawer-grip:hover, .cv-drawer-grip:focus-visible { background: var(--surface-3); outline: none; }
+.cv-drawer-body { flex: 1 1 auto; min-width: 0; padding: 16px; display: flex; flex-direction: column; gap: var(--space-md); overflow: auto; }
+.cv-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+.cv-drawer-head h2 { font-size: var(--text-md); }
+
+/* Narrow screens: the drawer goes under the canvas at full width. */
+@media (max-width: 860px) {
+  .cv-layout { flex-direction: column; height: auto; min-height: 0; }
+  .cv-flow { flex: none; height: 60vh; }
+  .cv-drawer { width: 100%; flex-direction: column; }
+  .cv-drawer-grip { display: none; }
+}
+.sent-banner > .btn { margin-left: auto; flex: 0 0 auto; }
+/* Something global pads every element with a "connectable"-like class; give the ports their React Flow size back. */
+.cv-flow .react-flow__handle { width: 8px; height: 8px; min-width: 0; min-height: 0; padding: 0; }

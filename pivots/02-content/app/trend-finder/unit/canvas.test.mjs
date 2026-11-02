@@ -201,3 +201,37 @@ test('pollGen resolves on done and null on abort', async () => {
   ac.abort()
   assert.equal(await pollGen('ia', 'g', () => {}, { signal: ac.signal }), null)
 })
+
+import { toFlow, fromFlow } from '../src/lib/canvas/flow.ts'
+
+test('toFlow / fromFlow keep the saved node data and only take positions and viewport from the screen', () => {
+  const doc = {
+    nodes: [
+      { id: 'n2', type: 'shot', shotId: 's2', position: { x: 0, y: 300 }, data: {} },
+      { id: 'n1', type: 'shot', shotId: 's1', position: { x: 0, y: 0 }, data: { removed: true } },
+      { id: 'sb1', type: 'storyboard', position: { x: 300, y: 0 }, data: { primary: true } },
+    ],
+    edges: [{ id: 'e1', source: 'n1', sourceHandle: 'out:text', target: 'sb1', targetHandle: 'in:text' }],
+    viewport: { x: 1, y: 2, zoom: 1 },
+  }
+  const { nodes, edges } = toFlow(doc, (n, i) => `${n.type}${i}`)
+  assert.deepEqual(nodes.map((n) => n.data.label), ['shot2', 'shot1', 'storyboard0'])
+  assert.deepEqual(nodes.map((n) => n.deletable), [false, false, true])
+  assert.equal(edges[0].sourceHandle, undefined)
+  assert.deepEqual(fromFlow(nodes, edges, doc.viewport), doc)
+  nodes[2].position = { x: 310.4, y: 5.6 }
+  const moved = fromFlow(nodes, edges, { x: 0.4, y: 0, zoom: 1.23456 })
+  assert.deepEqual(moved.nodes[2].position, { x: 310, y: 6 })
+  assert.deepEqual(moved.nodes[2].data, { primary: true })
+  assert.deepEqual(moved.viewport, { x: 0, y: 0, zoom: 1.235 })
+  assert.equal(fromFlow(nodes, edges, undefined).viewport, undefined)
+})
+
+import { isDefaultViewport } from '../src/lib/canvas/flow.ts'
+
+test('the backend\'s starting view counts as not yet set', () => {
+  assert.equal(isDefaultViewport(undefined), true)
+  assert.equal(isDefaultViewport({ x: 0, y: 0, zoom: 1 }), true)
+  assert.equal(isDefaultViewport({ x: 0, y: 0, zoom: 1.2 }), false)
+  assert.equal(isDefaultViewport({ x: -40, y: 0, zoom: 1 }), false)
+})

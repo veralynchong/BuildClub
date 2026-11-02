@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgencySettings, ClientEvent, IdeaStatus, Role, SavedIdea } from './types'
 import { clients as sampleClients, formats, sampleIdeas, videos } from './data/sample'
 import { formatTrend, groupFailures, hasDate, outlierScore, platformList, platformName, stageOrder, viewsPerDay, viewsPerFollower } from './lib/metrics'
@@ -17,6 +17,7 @@ import type { Answer } from './lib/answer'
 import { BreakdownPanel } from './components/BreakdownPanel'
 import { COHORT_PLATFORMS, cohortsByPattern, cohortsByVideo, fillBaseline } from './lib/evidence'
 import { PlanScreen } from './components/PlanScreen'
+import { fillShotIds } from './lib/storyboard'
 import { Sidebar } from './components/Sidebar'
 import type { View } from './components/Sidebar'
 import { OverviewScreen } from './components/OverviewScreen'
@@ -30,7 +31,7 @@ import { CompareScreen } from './components/CompareScreen'
 import type { PickVideo } from './components/CompareScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { LandingAltitude } from './components/landing/LandingAltitude'
-import type { Client, ContentType, Format, Platform, Video } from './types'
+import type { Client, ContentType, Format, Platform, Shot, Video } from './types'
 import {
   analyzeVideo,
   applyBreakdown,
@@ -104,10 +105,12 @@ function restoreTab(workspace: Workspace): View {
   }
   if (workspace === 'all') return 'overview'
   if (saved === 'results') return 'search'
-  if (saved === 'plan' || saved === 'review') return 'shortlist'
+  if (saved === 'plan' || saved === 'canvas' || saved === 'review') return 'shortlist'
   if (saved === 'home' || saved === 'search' || saved === 'shortlist' || saved === 'settings') return saved
   return 'search'
 }
+
+const CanvasScreen = lazy(() => import('./components/canvas/CanvasScreen'))
 
 export default function App() {
   const [signedIn, setSignedIn] = useStored('trend-finder.signed-in', false)
@@ -925,6 +928,12 @@ export default function App() {
     setView('plan')
   }
 
+  // The canvas needs the plan's shots saved with ids on the server; a plan that never edited its shots has none yet.
+  const openCanvas = (idea: SavedIdea, formatShots: Shot[]) => {
+    if (!idea.shots) setIdeas((prev) => prev.map((i) => (i.id === idea.id ? { ...i, shots: fillShotIds(formatShots) } : i)))
+    setView('canvas')
+  }
+
   // stream B: a video not on the shortlist yet is only added to it (the tray shows it); a shortlisted one opens its plan.
   const planFromVideo = (videoId: string) => {
     const idea = saveIdea(videoId)
@@ -997,6 +1006,7 @@ export default function App() {
     results: t('shell.back.results'),
     review: t('shell.back.review'),
     plan: t('shell.back.plan'),
+    canvas: t('shell.back.canvas'),
     settings: t('shell.back.settings'),
     preferences: t('shell.back.preferences'),
     channel: t('shell.back.channel'),
@@ -1047,7 +1057,7 @@ export default function App() {
   }
 
   // A plan view without its plan (e.g. after switching sample/live data) would be blank: show Plans instead.
-  const planMissing = view === 'plan' && !(planIdea && planVideo && planFormat && planClient)
+  const planMissing = (view === 'plan' || view === 'canvas') && !(planIdea && planVideo && planFormat && planClient)
   useEffect(() => {
     if (planMissing) setViewRaw('shortlist')
   }, [planMissing])
@@ -1347,6 +1357,18 @@ export default function App() {
             <SettingsScreen client={client} onChange={updateClient} ideas={ideas} videoById={videoById} formatById={formatById} />
           )}
 
+          {inClient && view === 'canvas' && planIdea && planVideo && planFormat && planClient && (
+            <Suspense fallback={<p className="muted">{t('canvas.loading')}</p>}>
+              <CanvasScreen
+                idea={planIdea}
+                shots={planIdea.shots ?? planFormat.shotList}
+                onChange={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
+                onBack={() => setView('plan')}
+                backLabel={t('shell.back.plan')}
+              />
+            </Suspense>
+          )}
+
           {inClient && view === 'plan' && planIdea && planVideo && planFormat && planClient && (
             <PlanScreen
               idea={planIdea}
@@ -1356,6 +1378,7 @@ export default function App() {
               onChange={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
               onBack={() => setView(planFrom)}
               backLabel={backLabel[planFrom]}
+              onOpenCanvas={() => openCanvas(planIdea, planFormat.shotList)}
               onFindMore={planAnother}
               onPlanAnother={planAnother}
               onGoApprovals={() => setView('shortlist')} // stream B: the board replaces Approvals
