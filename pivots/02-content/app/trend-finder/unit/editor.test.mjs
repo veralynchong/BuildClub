@@ -23,6 +23,7 @@ import {
   primaryClipFor,
   fillByShotOrder,
   clipStatus,
+  exportBlocked,
   applyNewer,
   isPrimaryPin,
   withPrimary,
@@ -354,4 +355,12 @@ test('applyNewer: when clamping leaves under MIN_CLIP, restart from 0 with the o
   assert.equal(r2.clips[0].in, 0)
   assert.equal(r2.clips[0].out, 1.5)
   assert.equal(applyNewer(p, 'nope', { kind: 'take', id: 'x' }, 9), p)
+})
+
+test('exportBlocked: empty, missing, and ready', () => {
+  assert.equal(exportBlocked(project([]), {}), 'editor.export.empty')
+  const p = project([clip('a', 0, 2), clip('b', 0, 2)])
+  assert.equal(exportBlocked(p, { a: 'ok', b: 'missing' }), 'editor.export.missing')
+  assert.equal(exportBlocked(p, { a: 'ok', b: 'newer' }), null)
+  assert.equal(exportBlocked(p, { a: 'ok', b: 'ok' }), null)
 })

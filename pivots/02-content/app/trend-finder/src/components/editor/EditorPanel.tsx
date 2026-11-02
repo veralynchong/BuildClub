@@ -11,8 +11,10 @@ import { Reel } from '../../remotion/Reel'
 import { Timeline } from './Timeline'
 import { clipName } from './clipName'
 import { ErrorText } from '../ErrorText'
+import { ExportBar } from './ExportBar'
 
 interface Props {
+  ideaId: string
   shots: Shot[]
   edit: EditHook
   sources: SourcesHook // the plan's footage with lengths, kept above the drawer
@@ -23,7 +25,7 @@ interface Props {
 const FONT_URL = '/fonts/NotoSansTC-VF.ttf'
 const BRAND = { font: '', color: null, logoUrl: null }
 
-export function EditorPanel({ shots, edit, sources: footage, timeline, readOnly }: Props) {
+export function EditorPanel({ ideaId, shots, edit, sources: footage, timeline, readOnly }: Props) {
   const { project, loadError, save, stale, update, flush, reload } = edit
   const { sources, error: sourceError } = footage
   const [skipped, setSkipped] = useState<string[]>([])
@@ -112,6 +114,7 @@ export function EditorPanel({ shots, edit, sources: footage, timeline, readOnly 
         </ul>
       )}
       <Timeline project={project} sources={byKey} shots={shots} frame={frame} readOnly={locked} timeline={timeline} onProject={update} onSeek={seek} />
+      <ExportBar ideaId={ideaId} edit={edit} timeline={timeline} readOnly={locked} />
       <section className="cv-ed-sources" aria-label={t('editor.sources.title')}>
         <h3>{t('editor.sources.title')}</h3>
         {sourceError && <ErrorText text={sourceError} />}

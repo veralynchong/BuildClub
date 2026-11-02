@@ -46,6 +46,12 @@ export const en = {
   "editor.newer.ignore": "Ignore",
   "editor.missing": "Footage deleted",
   "editor.missing.remove": "Remove",
+  "editor.export.button": "Export the video",
+  "editor.export.working": "Exporting…",
+  "editor.export.empty": "Put footage on the timeline before exporting.",
+  "editor.export.missing": "Some footage was deleted. Remove those clips before exporting.",
+  "editor.export.saveFailed": "The edit isn't saved yet, so it can't be exported. Retry saving first.",
+  "editor.export.stale": "The edit changed after this video was made. Export again.",
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -94,4 +100,10 @@ export const zhHant: Record<keyof typeof en, string> = {
   "editor.newer.ignore": "忽略",
   "editor.missing": "素材已刪除",
   "editor.missing.remove": "移除",
+  "editor.export.button": "出片",
+  "editor.export.working": "出片中…",
+  "editor.export.empty": "時間軸上沒有素材，請先加入再出片。",
+  "editor.export.missing": "有素材已被刪除，請先移除那些片段再出片。",
+  "editor.export.saveFailed": "剪輯還沒存好，無法出片。請先重試儲存。",
+  "editor.export.stale": "影片做好後剪輯有變動，請重新出片。",
 }

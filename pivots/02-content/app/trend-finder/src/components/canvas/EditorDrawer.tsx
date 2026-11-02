@@ -9,6 +9,7 @@ import { EditorPanel } from '../editor/EditorPanel'
 const STEP = 24
 
 interface Props {
+  ideaId: string
   shots: Shot[]
   edit: EditHook // the edit project, kept above the drawer so it survives closing it
   sources: SourcesHook
@@ -20,7 +21,7 @@ interface Props {
 }
 
 // The right-hand drawer: a draggable left edge, then the editor (player and timeline).
-export function EditorDrawer({ open, width, onWidth, shots, edit, sources, timeline, readOnly }: Props) {
+export function EditorDrawer({ open, width, onWidth, ideaId, shots, edit, sources, timeline, readOnly }: Props) {
   const drag = useRef<{ startX: number; startWidth: number; last: number } | null>(null)
   if (!open) return null
 
@@ -59,7 +60,7 @@ export function EditorDrawer({ open, width, onWidth, shots, edit, sources, timel
       />
       <div className="cv-drawer-body">
         <h2>{t('canvas.editor.title')}</h2>
-        <EditorPanel shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} />
+        <EditorPanel ideaId={ideaId} shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} />
       </div>
     </aside>
   )

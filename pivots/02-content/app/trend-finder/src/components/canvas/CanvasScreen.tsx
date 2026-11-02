@@ -775,6 +775,7 @@ function CanvasBoard({
           </div>
         </div>
         <EditorDrawer
+          ideaId={ideaId}
           shots={shots}
           edit={edit}
           sources={sources}

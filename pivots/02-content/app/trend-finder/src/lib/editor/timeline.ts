@@ -3,6 +3,7 @@ import type { Clip, ClipSource, EditProject, SourceInfo } from './types.ts'
 import type { Shot } from '../../types'
 import type { CanvasDoc, CanvasNode, Generation } from '../canvas/types.ts'
 import type { Take } from '../takes.ts'
+import type { Key } from '../i18n.ts'
 
 export const FPS = 30
 export const MIN_CLIP = 0.2
@@ -259,4 +260,11 @@ export function applyNewer(p: EditProject, clipId: string, source: ClipSource, d
   }
   if (nout - nin < MIN_F) return p
   return withClips(p, p.clips.map((x) => (x.id === clipId ? { ...x, source, in: secs(nin), out: secs(nout) } : x)))
+}
+
+// Why the timeline can't be exported yet (the copy key), or null when it can. `statuses` maps clip id -> clipStatus state.
+export function exportBlocked(p: EditProject, statuses: Record<string, ClipStatus['state']>): Key | null {
+  if (p.clips.length === 0) return 'editor.export.empty'
+  if (p.clips.some((c) => statuses[c.id] === 'missing')) return 'editor.export.missing'
+  return null
 }
