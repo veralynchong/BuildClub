@@ -494,7 +494,7 @@ function CanvasBoard({
   }
 
   const cleanTake = (nodeId: string, takeId: string) => {
-    void working(nodeId, async () => {
+    return working(nodeId, async () => {
       const res = await cleanTakeRequest(ideaId, takeId)
       if (!mounted.current) return
       setTakes(res.takes)
@@ -662,6 +662,7 @@ function CanvasBoard({
     addTake,
     pickTake: onUseTake,
     cleanTake,
+    blocked,
     incomingHandles: (id) => edges.filter((e) => e.target === id).map((e) => e.targetHandle ?? ''),
     missing: (id) => {
       const node = doc.nodes.find((n) => n.id === id)
