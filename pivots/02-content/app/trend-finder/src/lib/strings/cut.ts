@@ -132,12 +132,6 @@ export const en = {
   "cut.err.commentsLoad": "Couldn't load the comments.",
   "cut.err.commentsFull": "This video has the most comments it can hold.",
   "cut.err.commentSave": "Couldn't save your comment.",
-  'cut.look.none': 'Original',
-  'cut.look.warm': 'Warm',
-  'cut.look.cool': 'Cool',
-  'cut.look.vivid': 'Vivid',
-  'cut.look.muted': 'Muted',
-  'cut.look.bw': 'Black and white',
 } as const
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -272,10 +266,4 @@ export const zhHant: Record<keyof typeof en, string> = {
   "cut.err.commentsLoad": "無法載入留言。",
   "cut.err.commentsFull": "這支影片的留言數已達上限。",
   "cut.err.commentSave": "無法儲存你的留言。",
-  'cut.look.none': '原始',
-  'cut.look.warm': '暖色',
-  'cut.look.cool': '冷色',
-  'cut.look.vivid': '鮮豔',
-  'cut.look.muted': '柔和',
-  'cut.look.bw': '黑白',
 }
