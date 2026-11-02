@@ -7,12 +7,14 @@ from types import SimpleNamespace
 import pytest
 
 import analyze
-from models import Breakdown
+from models import Breakdown, BreakdownOut
 
 URL = "https://www.tiktok.com/@a/video/1"
-RESULT = Breakdown.model_validate({
+NEW_WHY = {"concept": "Close-up of tofu being fried", "hookType": "visual", "scrollStopper": "Golden crust in frame one",
+           "emotion": "craving", "saveReason": "Easy recipe to try later"}
+RESULT = BreakdownOut.model_validate({
     "shotList": [{"time": "0-2s", "shot": "close-up of tofu"}],
-    "why": {"hook": "h", "first3s": "f", "length": "l", "format": "fo", "sound": "s"},
+    "why": {"hook": "h", "first3s": "f", "length": "l", "format": "fo", "sound": "s", **NEW_WHY},
     "props": ["tofu"],
     "editorNotes": "cut fast",
     "lines": [{"time": "0-1s", "text": "look", "role": "hook"}],
@@ -62,7 +64,7 @@ def test_job_finishes_and_survives_restart(monkeypatch):
     assert jobs.submit(URL) == job_id  # same link reuses the job
 
     restarted = analyze.Jobs()
-    assert restarted.get(job_id).result == RESULT
+    assert restarted.get(job_id).result.model_dump() == RESULT.model_dump()
 
 
 def test_failed_job_reports_the_error(monkeypatch):
@@ -119,10 +121,11 @@ def prepared(tmp_path, monkeypatch):
 def test_breakdown_sends_frames_and_transcript(prepared, tmp_path, monkeypatch):
     monkeypatch.setattr(FakeAnthropic, "stop_reason", "end_turn")
     assert analyze.breakdown(prepared, tmp_path) == RESULT
+    assert analyze.breakdown(prepared, tmp_path).why.hookType == "visual"
     sent = FakeAnthropic.sent
     assert sent["model"] == analyze.AI_MODEL
     assert sent["max_tokens"] == analyze.AI_MAX_TOKENS
-    assert sent["output_format"] is Breakdown
+    assert sent["output_format"] is BreakdownOut
     assert sent["output_config"] == {"effort": "high"}
     content = sent["messages"][0]["content"]
     assert [c["type"] for c in content] == ["text", "text", "image", "text"]
@@ -171,3 +174,41 @@ def test_old_breakdown_without_needs_loads(client, tmp_path):
     r = client.get("/api/analyze/old1")
     assert r.status_code == 200
     assert r.json()["result"]["needs"] == []
+
+
+def test_ai_answer_must_carry_the_new_why_fields():
+    old_why = {"hook": "h", "first3s": "f", "length": "l", "format": "fo", "sound": "s"}
+    body = {"shotList": [], "why": old_why, "props": [], "editorNotes": "", "lines": []}
+    with pytest.raises(Exception):
+        BreakdownOut.model_validate(body)
+    with pytest.raises(Exception):
+        BreakdownOut.model_validate({**body, "why": {**old_why, **NEW_WHY, "hookType": "nonsense"}})
+    with pytest.raises(Exception):
+        BreakdownOut.model_validate({**body, "why": {**old_why, **NEW_WHY, "emotion": "sad"}})
+    assert BreakdownOut.model_validate({**body, "why": {**old_why, **NEW_WHY}}).why.emotion == "craving"
+
+
+def test_prompt_lists_every_choice():
+    for word in ("visual", "question_or_text", "rage_bait", "informative", "challenge", "other",
+                 "curious", "excited", "craving", "funny", "angry_comment", "relatable"):
+        assert word in analyze.PROMPT
+
+
+def test_old_breakdown_without_new_why_fields_loads(client, tmp_path):
+    saved = tmp_path / "jobs" / "old2"
+    saved.mkdir(parents=True)
+    old = json.loads(RESULT.model_dump_json())
+    for k in NEW_WHY:
+        del old["why"][k]
+    (saved / "breakdown.json").write_text(json.dumps(old))
+    r = client.get("/api/analyze/old2")
+    assert r.status_code == 200
+    assert r.json()["result"]["why"]["hook"] == "h"
+    assert "hookType" not in r.json()["result"]["why"]
+
+
+def test_library_keeps_the_new_why_fields(client):
+    why = {"hook": "h", "first3s": "f", "length": "l", "format": "fo", "sound": "s", **NEW_WHY}
+    lib = {"videos": [], "formats": [{"id": "f1", "why": why}]}
+    assert client.put("/api/library", json=lib).status_code == 200
+    assert client.get("/api/library").json()["formats"][0]["why"] == why

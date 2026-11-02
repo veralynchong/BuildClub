@@ -183,12 +183,32 @@ class Library(BaseModel):
     formats: list[dict]
 
 
+HookType = Literal["visual", "question_or_text", "rage_bait", "informative", "challenge", "other"]
+Emotion = Literal["curious", "excited", "craving", "funny", "angry_comment", "relatable"]
+
+
 class Why(BaseModel):
     hook: str
     first3s: str
     length: str
     format: str
     sound: str
+    # The five fields below are optional so breakdowns saved before they existed still load.
+    # New AI answers must carry all five: see WhyFull.
+    concept: Optional[str] = None
+    hookType: Optional[HookType] = None
+    scrollStopper: Optional[str] = None
+    emotion: Optional[Emotion] = None
+    saveReason: Optional[str] = None
+
+
+class WhyFull(Why):
+    """Why as the AI must answer it: the five newer fields are required."""
+    concept: str
+    hookType: HookType
+    scrollStopper: str
+    emotion: Emotion
+    saveReason: str
 
 
 class Line(BaseModel):
@@ -207,6 +227,11 @@ class Breakdown(BaseModel):
     lines: list[Line]
     # What the client needs to film it, chosen from a fixed list. Empty on breakdowns saved before this existed.
     needs: list[str] = []
+
+
+class BreakdownOut(Breakdown):
+    """Breakdown as the AI must answer it (output_format for the analyze call)."""
+    why: WhyFull
 
 
 class AnalyzeRequest(BaseModel):
