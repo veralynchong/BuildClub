@@ -1,6 +1,7 @@
 import type { Key } from '../i18n.ts'
 import type { Shot } from '../../types.ts'
-import type { CanvasDoc, CanvasNode, GenModel, Generation } from './types.ts'
+import { PORTS } from './ports.ts'
+import type { CanvasDoc, CanvasNode, GenModel, Generation, NodeData, NodeKind } from './types.ts'
 
 // Every node reachable by following lines forward; not the node itself.
 export function downstream(doc: CanvasDoc, nodeId: string): string[] {
@@ -108,4 +109,48 @@ export function primaryFrames(doc: CanvasDoc, shots: Shot[], gens: Generation[])
     if (index >= 0 && url && url !== shots[index].frameImage) out.push({ index, frameImage: url })
   }
   return out.sort((a, b) => a.index - b.index)
+}
+
+const ROW_STEP = 360 // matches the backend's column spacing
+const ROW_GAP = 200
+
+function startData(kind: NodeKind): NodeData {
+  switch (kind) {
+    case 'prompt':
+      return { text: '' }
+    case 'storyboard':
+      return { primary: false, model: 'mock-image', prompt: '', selected: null, stale: false }
+    case 'video':
+      return { model: 'mock-video', prompt: '' }
+    default:
+      return {}
+  }
+}
+
+function newId(doc: CanvasDoc, kind: NodeKind): string {
+  const used = new Set(doc.nodes.map((n) => n.id))
+  for (;;) {
+    const id = `n_${kind}_${Math.random().toString(36).slice(2, 8)}`
+    if (!used.has(id)) return id
+  }
+}
+
+// A new node. With a shotId it goes on that shot's row, at the first free place at or right of `at.x`, and the shot's
+// text line is connected to it when it has a text input. A footage node needs a shot. Returns a new doc.
+export function addNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: number }, shotId?: string): CanvasDoc {
+  const shot = shotId ? doc.nodes.find((n) => n.type === 'shot' && n.shotId === shotId) : undefined
+  if (kind === 'footage' && !shot) throw new Error('A footage node needs a shot.')
+  let position = { x: Math.round(at.x), y: Math.round(at.y) }
+  if (shot) {
+    position = { x: position.x, y: shot.position.y }
+    while (doc.nodes.some((n) => Math.abs(n.position.y - position.y) < ROW_GAP && Math.abs(n.position.x - position.x) < ROW_STEP * 0.8)) {
+      position.x += ROW_STEP
+    }
+  }
+  const node: CanvasNode = { id: newId(doc, kind), type: kind, ...(shot ? { shotId } : {}), position, data: startData(kind) }
+  const edges = [...doc.edges]
+  if (shot && PORTS[kind].inputs.some((p) => p.id === 'in:text')) {
+    edges.push({ id: `e_${shot.id}_${node.id}`, source: shot.id, sourceHandle: 'out', target: node.id, targetHandle: 'in:text' })
+  }
+  return { ...doc, nodes: [...doc.nodes, node], edges }
 }

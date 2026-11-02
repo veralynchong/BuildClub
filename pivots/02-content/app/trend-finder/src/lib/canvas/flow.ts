@@ -1,12 +1,12 @@
-import type { CanvasDoc, CanvasEdge, CanvasNode } from './types.ts'
+import type { CanvasDoc, CanvasEdge, CanvasNode, NodeKind } from './types.ts'
 
 // Conversion between the saved canvas document and what React Flow shows. Pure, so it can be tested.
 // The saved node/edge rides along in `data`, so everything React Flow doesn't know about survives a save.
 export interface FlowNode {
   id: string
-  type: 'default'
+  type: NodeKind
   position: { x: number; y: number }
-  data: { label: string; node: CanvasNode }
+  data: { node: CanvasNode }
   deletable: boolean
   selected?: boolean
 }
@@ -22,17 +22,22 @@ export interface FlowEdge {
 
 type Viewport = { x: number; y: number; zoom: number }
 
-export function toFlow(doc: CanvasDoc, label: (node: CanvasNode, shotNumber: number) => string) {
-  const shotOrder = doc.nodes.filter((n) => n.type === 'shot').sort((a, b) => a.position.y - b.position.y)
+export function toFlow(doc: CanvasDoc) {
   const nodes: FlowNode[] = doc.nodes.map((n) => ({
     id: n.id,
-    type: 'default',
+    type: n.type,
     position: { ...n.position },
-    data: { label: label(n, shotOrder.indexOf(n) + 1), node: n },
+    data: { node: n },
     deletable: n.type !== 'shot',
   }))
-  // The default React Flow node has no named ports, so the saved port names stay in `data` for Task 6's nodes.
-  const edges: FlowEdge[] = doc.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, data: { edge: e } }))
+  const edges: FlowEdge[] = doc.edges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    sourceHandle: e.sourceHandle,
+    targetHandle: e.targetHandle,
+    data: { edge: e },
+  }))
   return { nodes, edges }
 }
 

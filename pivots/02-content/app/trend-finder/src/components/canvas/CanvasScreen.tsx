@@ -1,30 +1,46 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Background, Controls, MiniMap, ReactFlow, useEdgesState, useNodesState, type Viewport } from '@xyflow/react'
+import {
+  Background,
+  Controls,
+  ReactFlow,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+  type Connection,
+  type FinalConnectionState,
+  type Viewport,
+} from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { SavedIdea, Shot } from '../../types'
-import { t } from '../../lib/i18n'
+import { t, type Key, type Vars } from '../../lib/i18n'
 import { getCanvas, NoShots, putCanvas, StaleCanvas } from '../../lib/canvas/api'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '../../lib/canvas/drawer'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import type { CanvasNode, CanvasState } from '../../lib/canvas/types'
+import { addNode } from '../../lib/canvas/graph'
+import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
+import type { CanvasDoc, CanvasState, NodeData, NodeKind } from '../../lib/canvas/types'
 import { ErrorText } from '../ErrorText'
+import { AddNodeMenu } from './AddNodeMenu'
 import { EditorDrawer } from './EditorDrawer'
+import { CanvasContext, type CanvasCtx } from './nodes/ctx'
+import { nodeTypes } from './nodes'
 
 const SAVE_DELAY_MS = 800
 const RETRY_MS = 2000
 const MAX_RETRIES = 5
-const NARROW = 500 // below this the minimap would cover the canvas
+const NOTE_MS = 4000 // how long the reason for a blocked line stays up
+const ADD_KINDS: NodeKind[] = ['prompt', 'storyboard', 'video', 'upload']
+const MEDIA_COLOR = { text: 'var(--violet)', image: 'var(--blue)', video: 'var(--mustard)' } as const
+const NO_MODELS: never[] = [] // the model list arrives with generation; until then the model rule can't fire
 
 interface Props {
   idea: SavedIdea
-  shots: Shot[] // the plan's shot list; the server's copy builds the canvas, this is what Task 6's nodes will read
+  shots: Shot[] // the plan's shot list; the shot nodes show its lines
   onChange: (patch: Partial<SavedIdea>) => void
   onBack: () => void
   backLabel: string
 }
-
-const nodeLabel = (n: CanvasNode, shotNumber: number): string =>
-  n.type === 'shot' ? t('canvas.node.shot', { n: shotNumber }) : t(`canvas.node.${n.type}`)
 
 function useViewportWidth(): number {
   const [w, setW] = useState(() => window.innerWidth)
@@ -37,7 +53,7 @@ function useViewportWidth(): number {
 }
 
 // Loads the canvas (waiting a little for a just-edited shot list to reach the server), then shows the board.
-export default function CanvasScreen({ idea, onBack, backLabel }: Props) {
+export default function CanvasScreen({ idea, shots, onBack, backLabel }: Props) {
   const [state, setState] = useState<CanvasState | null>(null)
   const [loadKey, setLoadKey] = useState(0) // bumps on Reload so the board starts over from the server's copy
   const [waiting, setWaiting] = useState(false)
@@ -109,27 +125,35 @@ export default function CanvasScreen({ idea, onBack, backLabel }: Props) {
     )
   }
 
-  return <CanvasBoard key={loadKey} ideaId={idea.id} readOnly={idea.status !== 'approved'} initial={state} back={back} onReload={reload} />
+  return (
+    <ReactFlowProvider>
+      <CanvasBoard key={loadKey} ideaId={idea.id} shots={shots} readOnly={idea.status !== 'approved'} initial={state} back={back} onReload={reload} />
+    </ReactFlowProvider>
+  )
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
 
 function CanvasBoard({
   ideaId,
+  shots,
   readOnly,
   initial,
   back,
   onReload,
 }: {
   ideaId: string
+  shots: Shot[]
   readOnly: boolean
   initial: CanvasState
   back: React.ReactNode
   onReload: () => void
 }) {
-  const first = useMemo(() => toFlow(initial.doc, nodeLabel), [initial])
-  const [nodes, , onNodesChange] = useNodesState<FlowNode>(first.nodes)
-  const [edges, , onEdgesChange] = useEdgesState<FlowEdge>(first.edges)
+  const first = useMemo(() => toFlow(initial.doc), [initial])
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(first.nodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(first.edges)
+  const { screenToFlowPosition } = useReactFlow()
+  const flowBox = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState<Viewport | undefined>(initial.doc.viewport)
   const vw = useViewportWidth()
   const fit = isDefaultViewport(initial.doc.viewport)
@@ -137,9 +161,10 @@ function CanvasBoard({
   // ---- drawer ----
   const [drawer, setDrawer] = useState(() => readDrawer())
   const drawerWidth = clampDrawerWidth(drawer.width ?? defaultDrawerWidth(vw), vw)
-  const setDrawerState = (open: boolean, width: number) => {
+  // `save` false while the edge is being dragged; the width is stored once it is let go.
+  const setDrawerState = (open: boolean, width: number, save = true) => {
     setDrawer({ open, width })
-    writeDrawer({ open, width })
+    if (save) writeDrawer({ open, width })
   }
 
   // ---- autosave ----
@@ -196,6 +221,78 @@ function CanvasBoard({
     [ideaId],
   )
 
+  // ---- lines and new nodes ----
+  const [dragFrom, setDragFrom] = useState<string | null>(null) // the node a line is being dragged from
+  const [note, setNote] = useState<{ key: Key; vars?: Vars } | null>(null)
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(noteTimer.current), [])
+  const showNote = useCallback((key: Key, vars?: Vars) => {
+    setNote({ key, vars })
+    clearTimeout(noteTimer.current)
+    noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
+  }, [])
+
+  const check = (c: { source: string; target: string; targetHandle: string }) => canConnect(latest.current.doc, c, NO_MODELS)
+
+  const onConnect = (c: Connection) => {
+    if (!c.sourceHandle || !c.targetHandle) return
+    const r = check({ source: c.source, target: c.target, targetHandle: c.targetHandle })
+    if (!r.ok) return showNote(r.reason, r.vars)
+    const edge: FlowEdge = { id: `e_${c.source}_${c.target}_${c.targetHandle}`, source: c.source, target: c.target, sourceHandle: c.sourceHandle, targetHandle: c.targetHandle }
+    setEdges((es) => [...es, edge])
+  }
+
+  // A line dropped on a port that refuses it never reaches onConnect, so say why here.
+  const onConnectEnd = (_: unknown, cs: FinalConnectionState) => {
+    setDragFrom(null)
+    if (cs.isValid !== false || !cs.fromHandle || !cs.toHandle || !cs.fromNode || !cs.toNode) return
+    const fromOut = cs.fromHandle.type === 'source'
+    const [out, inp] = fromOut ? [cs.fromNode, cs.toNode] : [cs.toNode, cs.fromNode]
+    const handle = fromOut ? cs.toHandle : cs.fromHandle
+    if (handle.type !== 'target' || (fromOut ? cs.toHandle : cs.toHandle).type === cs.fromHandle.type) return
+    const r = check({ source: out.id, target: inp.id, targetHandle: handle.id ?? '' })
+    if (!r.ok) showNote(r.reason, r.vars)
+  }
+
+  const place = (doc: CanvasDoc) => {
+    const node = doc.nodes[doc.nodes.length - 1]
+    const edge = doc.edges.length > latest.current.doc.edges.length ? doc.edges[doc.edges.length - 1] : undefined
+    const f = toFlow({ nodes: [node], edges: edge ? [edge] : [] })
+    setNodes((ns) => [...ns, ...f.nodes])
+    setEdges((es) => [...es, ...f.edges])
+  }
+
+  const addAtCenter = (kind: NodeKind) => {
+    const box = flowBox.current?.getBoundingClientRect()
+    const mid = box ? screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 }) : { x: 0, y: 0 }
+    place(addNode(latest.current.doc, kind, { x: mid.x - 90, y: mid.y - 50 }))
+  }
+
+  const ctx: CanvasCtx = {
+    shots,
+    readOnly,
+    shotNumbers: useMemo(() => {
+      const order = nodes.filter((n) => n.data.node.type === 'shot').sort((a, b) => a.position.y - b.position.y)
+      return new Map(order.map((n, i) => [n.id, i + 1]))
+    }, [nodes]),
+    updateData: (nodeId: string, patch: Partial<NodeData>) =>
+      setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, ...patch } } } } : n))),
+    addAfterShot: (shotNodeId, kind) => {
+      const shot = latest.current.doc.nodes.find((n) => n.id === shotNodeId)
+      if (shot) place(addNode(latest.current.doc, kind, { x: shot.position.x + 360, y: shot.position.y }, shot.shotId))
+    },
+    acceptsDrop: (nodeId, handleId) => dragFrom === null || check({ source: dragFrom, target: nodeId, targetHandle: handleId }).ok,
+  }
+
+  const dragSource = dragFrom ? doc.nodes.find((n) => n.id === dragFrom) : undefined
+  const dragMedia = dragSource ? outMedia(dragSource) : null
+  const shownEdges = edges.map((e) => {
+    const src = doc.nodes.find((n) => n.id === e.source)
+    const media = src && outMedia(src)
+    const label = edgeLabel({ targetHandle: e.targetHandle ?? '' })
+    return { ...e, className: media ? `cv-media-${media}` : undefined, label: label ? t(label) : undefined }
+  })
+
   return (
     <section className="cv-screen">
       {back}
@@ -212,14 +309,12 @@ function CanvasBoard({
                   ? t('canvas.save.failed')
                   : ''}
         </span>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm cv-editor-btn"
-          aria-expanded={drawer.open}
-          onClick={() => setDrawerState(!drawer.open, drawerWidth)}
-        >
-          {drawer.open ? t('canvas.editor.close') : t('canvas.editor.open')}
-        </button>
+        <div className="cv-head-actions">
+          <AddNodeMenu kinds={ADD_KINDS} label={t('canvas.add')} disabled={readOnly} onPick={addAtCenter} />
+          <button type="button" className="btn btn-ghost btn-sm" aria-expanded={drawer.open} onClick={() => setDrawerState(!drawer.open, drawerWidth)}>
+            {drawer.open ? t('canvas.editor.close') : t('canvas.editor.open')}
+          </button>
+        </div>
       </header>
 
       {stale && (
@@ -237,12 +332,19 @@ function CanvasBoard({
       )}
 
       <div className="cv-layout">
-        <div className="cv-flow">
+        <div className="cv-flow" ref={flowBox}>
+          <CanvasContext.Provider value={ctx}>
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={shownEdges}
+            nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onConnectStart={(_, p) => setDragFrom(p.handleType === 'source' ? p.nodeId : null)}
+            onConnectEnd={onConnectEnd}
+            isValidConnection={(c) => !!c.targetHandle && check({ source: c.source, target: c.target, targetHandle: c.targetHandle }).ok}
+            connectionLineStyle={{ stroke: dragMedia ? MEDIA_COLOR[dragMedia] : 'var(--muted)', strokeWidth: 2 }}
             onMoveEnd={(event, vp) => {
               if (event) setViewport(vp) // only the user's own pan or zoom, not the first fit
             }}
@@ -253,19 +355,21 @@ function CanvasBoard({
             nodesDraggable={!readOnly}
             nodesConnectable={!readOnly}
             elementsSelectable={!readOnly}
-            deleteKeyCode={readOnly ? null : undefined}
+            deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
             aria-label={t('canvas.flow.label')}
           >
             <Background />
             <Controls showInteractive={false} />
-            {vw >= NARROW && <MiniMap pannable zoomable />}
           </ReactFlow>
+          </CanvasContext.Provider>
+          <div className="cv-conn-note" role="status">
+            {note && t(note.key, note.vars)}
+          </div>
         </div>
         <EditorDrawer
           open={drawer.open}
           width={drawerWidth}
-          onWidth={(px) => setDrawerState(true, clampDrawerWidth(px, vw))}
-          onClose={() => setDrawerState(false, drawerWidth)}
+          onWidth={(px, save) => setDrawerState(true, clampDrawerWidth(px, vw), save)}
         />
       </div>
     </section>

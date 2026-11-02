@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames } from '../src/lib/canvas/graph.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames } from '../src/lib/canvas/graph.ts'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer, DRAWER_KEY } from '../src/lib/canvas/drawer.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen } from '../src/lib/canvas/api.ts'
 
@@ -214,10 +214,11 @@ test('toFlow / fromFlow keep the saved node data and only take positions and vie
     edges: [{ id: 'e1', source: 'n1', sourceHandle: 'out:text', target: 'sb1', targetHandle: 'in:text' }],
     viewport: { x: 1, y: 2, zoom: 1 },
   }
-  const { nodes, edges } = toFlow(doc, (n, i) => `${n.type}${i}`)
-  assert.deepEqual(nodes.map((n) => n.data.label), ['shot2', 'shot1', 'storyboard0'])
+  const { nodes, edges } = toFlow(doc)
+  assert.deepEqual(nodes.map((n) => n.type), ['shot', 'shot', 'storyboard'])
   assert.deepEqual(nodes.map((n) => n.deletable), [false, false, true])
-  assert.equal(edges[0].sourceHandle, undefined)
+  assert.equal(edges[0].sourceHandle, 'out:text')
+  assert.equal(edges[0].targetHandle, 'in:text')
   assert.deepEqual(fromFlow(nodes, edges, doc.viewport), doc)
   nodes[2].position = { x: 310.4, y: 5.6 }
   const moved = fromFlow(nodes, edges, { x: 0.4, y: 0, zoom: 1.23456 })
@@ -234,4 +235,50 @@ test('the backend\'s starting view counts as not yet set', () => {
   assert.equal(isDefaultViewport({ x: 0, y: 0, zoom: 1 }), true)
   assert.equal(isDefaultViewport({ x: 0, y: 0, zoom: 1.2 }), false)
   assert.equal(isDefaultViewport({ x: -40, y: 0, zoom: 1 }), false)
+})
+
+test('addNode gives every node a new id and leaves the input doc alone', () => {
+  const doc = docWith()
+  const ids = new Set(doc.nodes.map((n) => n.id))
+  let cur = doc
+  for (let i = 0; i < 60; i++) cur = addNode(cur, i % 2 ? 'video' : 'prompt', { x: i, y: 5 })
+  assert.equal(cur.nodes.length, doc.nodes.length + 60)
+  assert.equal(new Set(cur.nodes.map((n) => n.id)).size, cur.nodes.length)
+  assert.equal(doc.nodes.length, 4)
+  const added = cur.nodes[doc.nodes.length]
+  assert.equal(added.type, 'prompt')
+  assert.deepEqual(added.position, { x: 0, y: 5 })
+  assert.equal(ids.has(added.id), false)
+  assert.match(added.id, /^[A-Za-z0-9_:-]{1,80}$/)
+})
+
+test('addNode starts each kind with its own data', () => {
+  const d = addNode(addNode(addNode(docWith(), 'storyboard', { x: 0, y: 0 }), 'video', { x: 0, y: 0 }), 'prompt', { x: 0, y: 0 })
+  const [sb, vid, pr] = d.nodes.slice(-3)
+  assert.equal(sb.data.primary, false)
+  assert.equal(sb.data.model, 'mock-image')
+  assert.equal(vid.data.model, 'mock-video')
+  assert.equal(pr.data.text, '')
+})
+
+test('addNode for a shot links the shot to the new node, and footage needs a shot', () => {
+  assert.throws(() => addNode(docWith(), 'footage', { x: 0, y: 0 }), /shot/i)
+  assert.throws(() => addNode(docWith(), 'footage', { x: 0, y: 0 }, 'nope'), /shot/i)
+  const d = addNode(docWith(), 'footage', { x: 700, y: 0 }, 's1')
+  const ft = d.nodes[d.nodes.length - 1]
+  assert.equal(ft.shotId, 's1')
+  const line = d.edges[d.edges.length - 1]
+  assert.deepEqual([line.source, line.sourceHandle, line.target, line.targetHandle], ['n_shot_s1', 'out', ft.id, 'in:text'])
+  const u = addNode(docWith(), 'upload', { x: 0, y: 0 }, 's1') // upload has no text port: no line
+  assert.equal(u.edges.length, docWith().edges.length)
+})
+
+test('addNode with a shot moves right to a free spot on the shot row', () => {
+  const doc = docWith()
+  doc.nodes[0].position = { x: 0, y: 100 }
+  doc.nodes[1].position = { x: 360, y: 100 }
+  const d = addNode(doc, 'video', { x: 360, y: 100 }, 's1')
+  const v = d.nodes[d.nodes.length - 1]
+  assert.equal(v.position.y, 100)
+  assert.ok(v.position.x >= 720)
 })

@@ -6,11 +6,11 @@
 .cv-head { display: flex; align-items: center; gap: var(--space-md); width: 100%; min-width: 0; }
 .cv-head h1 { font-size: var(--text-md); letter-spacing: var(--tracking-tight); }
 .cv-save { flex: 1 1 auto; min-width: 0; }
-.cv-editor-btn { margin-left: auto; flex: 0 0 auto; }
+.cv-head-actions { margin-left: auto; flex: 0 0 auto; display: flex; gap: var(--space-sm); align-items: center; }
 
 .cv-note {
   display: flex; align-items: center; gap: var(--space-md); justify-content: space-between; width: 100%;
-  padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--fg); font-size: var(--text-sm);
+  padding: var(--space-md) var(--space-lg); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--fg); font-size: var(--text-sm);
 }
 .cv-note-error { background: var(--no-soft); color: var(--no); }
 
@@ -38,13 +38,9 @@
   --xy-controls-button-background-color-hover: var(--surface-2);
   --xy-controls-button-color: var(--fg);
   --xy-controls-button-border-color: var(--line);
-  --xy-minimap-background-color: var(--surface);
-  --xy-minimap-mask-background-color: var(--scrim);
-  --xy-minimap-node-background-color: var(--surface-3);
   --xy-attribution-background-color: transparent;
   font-family: var(--font-sans);
 }
-.cv-flow .react-flow__node { font-size: var(--text-sm); }
 
 .cv-drawer {
   flex: 0 0 auto; width: var(--cv-w); position: relative; display: flex; min-width: 0;
@@ -52,7 +48,7 @@
 }
 .cv-drawer-grip { flex: 0 0 8px; cursor: col-resize; touch-action: none; background: var(--surface-2); }
 .cv-drawer-grip:hover, .cv-drawer-grip:focus-visible { background: var(--surface-3); outline: none; }
-.cv-drawer-body { flex: 1 1 auto; min-width: 0; padding: 16px; display: flex; flex-direction: column; gap: var(--space-md); overflow: auto; }
+.cv-drawer-body { flex: 1 1 auto; min-width: 0; padding: var(--space-xl); display: flex; flex-direction: column; gap: var(--space-md); overflow: auto; }
 .cv-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
 .cv-drawer-head h2 { font-size: var(--text-md); }
 
@@ -66,3 +62,69 @@
 .sent-banner > .btn { margin-left: auto; flex: 0 0 auto; }
 /* Something global pads every element with a "connectable"-like class; give the ports their React Flow size back. */
 .cv-flow .react-flow__handle { width: 8px; height: 8px; min-width: 0; min-height: 0; padding: 0; }
+
+/* ---- nodes ---- */
+.cv-flow .react-flow__node { font-size: var(--text-sm); }
+.cv-flow .react-flow__node.selectable:focus-visible { outline: 2px solid var(--accent); }
+.cv-node {
+  position: relative; width: 200px; padding: var(--space-md) var(--space-base); display: flex; flex-direction: column; gap: var(--space-xs);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--fg); box-shadow: var(--shadow-sm);
+}
+.react-flow__node.selected .cv-node { box-shadow: 0 0 0 2px var(--accent); }
+.cv-node-title { font-weight: 600; letter-spacing: var(--tracking-tight); }
+.cv-shot-line { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--fg); }
+.cv-shot.is-removed { opacity: 0.5; }
+.cv-shot-removed { margin: 0; color: var(--muted); }
+.cv-preview {
+  display: flex; align-items: center; justify-content: center; min-height: 72px; padding: var(--space-sm); text-align: center;
+  border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.cv-gen-video .cv-preview { aspect-ratio: 9 / 16; min-height: 0; max-height: 140px; }
+.cv-model { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-textarea {
+  width: 100%; resize: vertical; padding: var(--space-xs) var(--space-sm); font: inherit; color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.cv-prompt { width: 240px; }
+.cv-node:has(.cv-port-label) { width: 248px; padding-left: 88px; } /* room for the port names beside the ports */
+
+/* Ports: inputs left, the output right; colour says what flows through. */
+.cv-flow .react-flow__handle.cv-handle { width: 12px; height: 12px; border: 2px solid var(--surface); }
+.cv-media-text { --cv-media: var(--violet); }
+.cv-media-image { --cv-media: var(--blue); }
+.cv-media-video { --cv-media: var(--mustard); }
+.cv-media-none { --cv-media: var(--muted); }
+.cv-flow .react-flow__handle.cv-handle { background: var(--cv-media, var(--muted)); }
+.cv-flow .react-flow__handle.is-blocked { background: var(--surface-3); opacity: 0.6; }
+.cv-flow .react-flow__handle.connectingto.valid { box-shadow: 0 0 0 3px var(--accent-soft); }
+.cv-port-label { position: absolute; left: var(--space-md); transform: translateY(-50%); font-size: var(--text-xs); color: var(--cv-media); pointer-events: none; }
+
+/* Lines coloured by the media they carry */
+.cv-flow .react-flow__edge.cv-media-text,
+.cv-flow .react-flow__edge.cv-media-image,
+.cv-flow .react-flow__edge.cv-media-video { --xy-edge-stroke: var(--cv-media); --xy-edge-stroke-width: 2; }
+.cv-flow .react-flow__edge-textbg { fill: var(--surface); }
+.cv-flow .react-flow__edge-text { fill: var(--fg); font-size: var(--text-xs); }
+
+/* Add menus */
+.cv-add { position: relative; }
+.cv-add-corner { position: absolute; right: var(--space-xs); bottom: var(--space-xs); }
+.cv-add-plus {
+  width: 24px; height: 24px; padding: 0; line-height: 1; font-size: var(--text-md); cursor: pointer;
+  border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); color: var(--fg);
+}
+.cv-add-plus:hover { background: var(--surface-2); }
+.cv-add-list {
+  position: absolute; z-index: 10; top: 100%; right: 0; margin: var(--space-2xs) 0 0; padding: var(--space-2xs); list-style: none; min-width: 140px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-md);
+}
+.cv-add-corner .cv-add-list { top: 0; right: auto; left: 100%; margin: 0 0 0 var(--space-2xs); } /* beside the node: above or below it the board's edge clips it */
+.cv-add-list button { width: 100%; text-align: left; padding: var(--space-xs) var(--space-sm); border: 0; border-radius: var(--radius-sm); background: none; color: var(--fg); font: inherit; cursor: pointer; }
+.cv-add-list button:hover, .cv-add-list button:focus-visible { background: var(--surface-2); outline: none; }
+
+/* Why a line was refused */
+.cv-conn-note:empty { display: none; }
+.cv-conn-note {
+  position: absolute; left: 50%; bottom: var(--space-xl); transform: translateX(-50%); z-index: 5; max-width: 80%;
+  padding: var(--space-sm) var(--space-lg); border-radius: var(--radius-sm); background: var(--no-soft); color: var(--no); font-size: var(--text-sm); box-shadow: var(--shadow-md);
+}
