@@ -61,7 +61,10 @@ any quoted speech or on-screen text.
   angry_comment (makes you want to comment), relatable.
 - why.saveReason: why a viewer would save it, in one short sentence. Think of what saving says
   about interest in the product or idea shown.
-- shotList: the shots in order, time as "0-2s"; text is on-screen text, if any.
+- shotList: the shots in order, time as "0-2s"; text is on-screen text, if any. For each shot also
+  give its camera direction: framing (wide, medium, close_up, extreme_close_up, overhead or pov),
+  angle (eye_level, high, low or top_down) and movement (static, pan, tilt, push_in, handheld or
+  tracking), as the frames show it, and tip: one short line on how to film that shot well.
 - props: things the client would need to film it.
 - editorNotes: 2-3 short instructions for an editor matching this style.
 - lines: the key spoken or on-screen lines in order, each with the job it does.

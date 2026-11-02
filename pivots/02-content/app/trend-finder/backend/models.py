@@ -75,10 +75,21 @@ class Client(BaseModel):
 Hex = Annotated[str, StringConstraints(pattern=r"^#[0-9a-fA-F]{6}$")]
 
 
+Framing = Literal["wide", "medium", "close_up", "extreme_close_up", "overhead", "pov"]
+Angle = Literal["eye_level", "high", "low", "top_down"]
+Movement = Literal["static", "pan", "tilt", "push_in", "handheld", "tracking"]
+
+
 class Shot(BaseModel):
     time: str
     shot: str
     text: Optional[str] = None
+    # Camera direction and a one-line filming tip. Optional so plans and breakdowns saved before they existed
+    # still load; a new AI breakdown must carry the three camera fields (see ShotOut).
+    framing: Optional[Framing] = None
+    angle: Optional[Angle] = None
+    movement: Optional[Movement] = None
+    tip: Optional[str] = Field(default=None, max_length=300)
     # Per-shot script and storyboard (all optional, so plans saved before they existed still load).
     # line: what is said; options: up to 3 other lines; edited: the user changed the line, so a
     # regeneration must not overwrite it unless asked. frameImage: a URL from the frame endpoint.
@@ -218,6 +229,13 @@ class Line(BaseModel):
     role: Literal["hook", "setup", "proof", "payoff", "cta"]
 
 
+class ShotOut(Shot):
+    """Shot as the AI must answer it in a breakdown: the camera fields are required."""
+    framing: Framing
+    angle: Angle
+    movement: Movement
+
+
 class Breakdown(BaseModel):
     """AI analysis of one video. The first four fields fill the matching Format fields."""
     shotList: list[Shot]
@@ -231,6 +249,7 @@ class Breakdown(BaseModel):
 
 class BreakdownOut(Breakdown):
     """Breakdown as the AI must answer it (output_format for the analyze call)."""
+    shotList: list[ShotOut]
     why: WhyFull
 
 

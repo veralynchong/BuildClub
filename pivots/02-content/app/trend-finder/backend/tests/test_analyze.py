@@ -13,7 +13,8 @@ URL = "https://www.tiktok.com/@a/video/1"
 NEW_WHY = {"concept": "Close-up of tofu being fried", "hookType": "visual", "scrollStopper": "Golden crust in frame one",
            "emotion": "craving", "saveReason": "Easy recipe to try later"}
 RESULT = BreakdownOut.model_validate({
-    "shotList": [{"time": "0-2s", "shot": "close-up of tofu"}],
+    "shotList": [{"time": "0-2s", "shot": "close-up of tofu", "framing": "close_up", "angle": "eye_level",
+                  "movement": "static"}],
     "why": {"hook": "h", "first3s": "f", "length": "l", "format": "fo", "sound": "s", **NEW_WHY},
     "props": ["tofu"],
     "editorNotes": "cut fast",
@@ -212,3 +213,26 @@ def test_library_keeps_the_new_why_fields(client):
     lib = {"videos": [], "formats": [{"id": "f1", "why": why}]}
     assert client.put("/api/library", json=lib).status_code == 200
     assert client.get("/api/library").json()["formats"][0]["why"] == why
+
+
+def test_ai_answer_must_carry_camera_fields_but_old_breakdowns_load():
+    why = {"hook": "h", "first3s": "f", "length": "l", "format": "fo", "sound": "s", **NEW_WHY}
+    body = {"shotList": [{"time": "0-2s", "shot": "tofu"}], "why": why, "props": [], "editorNotes": "", "lines": []}
+    with pytest.raises(Exception):
+        BreakdownOut.model_validate(body)  # camera fields missing
+    with pytest.raises(Exception):
+        BreakdownOut.model_validate({**body, "shotList": [{"time": "0-2s", "shot": "tofu", "framing": "huge",
+                                                            "angle": "low", "movement": "static"}]})
+    cam = {"framing": "close_up", "angle": "low", "movement": "push_in", "tip": "Hold steady"}
+    ok = BreakdownOut.model_validate({**body, "shotList": [{"time": "0-2s", "shot": "tofu", **cam}]})
+    assert ok.shotList[0].framing == "close_up" and ok.shotList[0].tip == "Hold steady"
+    # A breakdown saved before the fields existed still reads, with no camera fields.
+    old = Breakdown.model_validate(body)
+    assert old.shotList[0].framing is None and old.shotList[0].movement is None
+
+
+def test_prompt_asks_for_camera_fields():
+    for word in ("framing", "angle", "movement", "close_up", "extreme_close_up", "top_down", "push_in", "tracking"):
+        assert word in analyze.PROMPT
+    # The hook/emotion change stays in the prompt.
+    assert "why.scrollStopper" in analyze.PROMPT and "why.emotion" in analyze.PROMPT

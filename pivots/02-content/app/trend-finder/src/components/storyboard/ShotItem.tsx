@@ -2,6 +2,7 @@ import type { Shot } from '../../types'
 import { purposeFor, purposeLabel } from '../../lib/storyboard'
 import { FrameImage } from '../FrameImage'
 import { SwatchRow } from '../SwatchRow'
+import { CameraTags } from '../CameraTags'
 import { t } from '../../lib/i18n'
 
 export type Busy = 'script' | 'frame' | undefined
@@ -119,6 +120,7 @@ export function ShotItem(p: Props) {
           <div className="sb-row-text">
             <div className="sb-head">{badges}</div>
             <p className="sb-shot">{shot.shot || t('plan.sb.noDescription')}</p>
+        <CameraTags shot={shot} />
           </div>
         </td>
         <td className="sb-cell-line">
@@ -138,6 +140,7 @@ export function ShotItem(p: Props) {
       <div className="sb-card-body">
         <div className="sb-head">{badges}</div>
         <p className="sb-shot">{shot.shot || t('plan.sb.noDescription')}</p>
+        <CameraTags shot={shot} />
         {line}
         {options}
         {ask}

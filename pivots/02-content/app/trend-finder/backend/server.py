@@ -49,6 +49,7 @@ import publishing
 import cut_review
 import grading
 import renders
+import shotlist
 import storyboard
 import subtitles
 import takes
@@ -848,6 +849,7 @@ def storyboard_budget(wallet: str, usd: float):
 
 
 app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget))
+app.include_router(shotlist.make_router(storyboard_budget))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(grading.make_router(db, lambda: MEDIA_DIR))
