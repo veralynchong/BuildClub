@@ -1,13 +1,22 @@
 import type { KeyboardCoordinateGetter } from '@dnd-kit/core'
 import type { Format, SavedIdea, Video } from '../../types'
-import { STEPS } from '../../lib/steps.ts'
 import type { Step } from '../../lib/steps.ts'
 import { getActiveLang, t } from '../../lib/i18n'
 
-// The Plans board columns, left to right: the six steps of a video.
-export const COLUMNS: Step[] = STEPS
+// The Plans board's three columns, left to right. The steps of a video (lib/steps.ts) are grouped into them.
+export type Column = 'planning' | 'waiting' | 'approved'
+export const COLUMNS: Column[] = ['planning', 'waiting', 'approved']
 
-export const columnTitle = (step: Step): string => t(`plan.step.${step}`)
+export const columnTitle = (col: Column): string => t(`plan.col.${col}`)
+
+// The column a step shows in. Idea and Script are still being planned; Storyboard shows under Waiting only once
+// sent (a storyboard that is ready but not sent is still being planned); Filming, Editing and Posted are approved.
+export const columnOf = (step: Step, sent: boolean): Column =>
+  step === 'idea' || step === 'script' ? 'planning' : step === 'storyboard' ? (sent ? 'waiting' : 'planning') : 'approved'
+
+// A drop on a column is a drop on the step that does the work: Waiting sends (or takes the approval back),
+// Approved approves (or moves a staged plan back to ready to film). Still planning takes no drops.
+export const stepOfColumn = (col: Column): Step | null => (col === 'waiting' ? 'storyboard' : col === 'approved' ? 'filming' : null)
 
 // The plan's name on the board: the format name, or how a live video starts.
 export const planName = (v: Video, f?: Format) => (v.live ? v.hook : (f?.name ?? v.hook))
@@ -21,8 +30,8 @@ export const dueLabel = (iso: string) =>
   new Date(`${iso}T00:00`).toLocaleDateString(getActiveLang() === 'zh-Hant' ? 'zh-TW' : 'en-US', { month: 'short', day: 'numeric' })
 
 export interface DragData {
-  step: Step
-  targets: Step[]
+  column: Column
+  targets: Column[]
 }
 
 // Keyboard dragging: left and right arrows jump between the plan's own column and the columns it can go to.
@@ -32,7 +41,7 @@ export const columnKeys: KeyboardCoordinateGetter = (event, { context, currentCo
   const box = context.collisionRect
   if (!step || !data || !box) return undefined
   event.preventDefault()
-  const stops = COLUMNS.filter((c) => c === data.step || data.targets.includes(c))
+  const stops = COLUMNS.filter((c) => c === data.column || data.targets.includes(c))
     .map((c) => document.getElementById(`board-${c}`)?.getBoundingClientRect())
     .filter((r): r is DOMRect => !!r)
   if (!stops.length) return undefined
