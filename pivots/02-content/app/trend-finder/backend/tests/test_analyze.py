@@ -236,3 +236,91 @@ def test_prompt_asks_for_camera_fields():
         assert word in analyze.PROMPT
     # The hook/emotion change stays in the prompt.
     assert "why.scrollStopper" in analyze.PROMPT and "why.emotion" in analyze.PROMPT
+
+
+def old_breakdown():
+    """A breakdown saved before hook/emotion and shot framing existed."""
+    old = json.loads(RESULT.model_dump_json())
+    for k in NEW_WHY:
+        del old["why"][k]
+    old["shotList"] = [{"time": "0-2s", "shot": "tofu"}]
+    return old
+
+
+def save_old(tmp_path, url=URL):
+    work = tmp_path / "jobs" / analyze.job_id_for(url)
+    work.mkdir(parents=True)
+    (work / "breakdown.json").write_text(json.dumps(old_breakdown()))
+    (work / "prepared.json").write_text(json.dumps({"url": url, "lengthSec": 2, "shots": [], "frames": [], "speech": []}))
+    return work
+
+
+def no_download(url, work, step):
+    raise AssertionError("a re-analysis must reuse the saved frames and transcript")
+
+
+def test_force_reruns_the_ai_step_only_and_replaces_the_result(client, tmp_path, monkeypatch):
+    import server
+    work = save_old(tmp_path)
+    runs = []
+    monkeypatch.setattr(analyze, "prepare", no_download)
+    monkeypatch.setattr(analyze, "breakdown", lambda prepared, work, vocab=None: runs.append(1) or RESULT)
+    monkeypatch.setattr(server, "jobs", analyze.Jobs())
+    job_id = analyze.job_id_for(URL)
+    assert client.get(f"/api/analyze/{job_id}").json()["result"]["why"].get("hookType") is None
+    # Without force the saved result is returned and nothing runs.
+    assert client.post("/api/analyze", json={"url": URL}).json() == {"job": job_id}
+    assert runs == []
+    assert client.post("/api/analyze", json={"url": URL, "force": True}).json() == {"job": job_id}
+    wait(server.jobs, job_id)
+    body = client.get(f"/api/analyze/{job_id}").json()
+    assert runs == [1] and body["status"] == "done"
+    assert body["result"]["why"]["hookType"] == "visual" and body["result"]["shotList"][0]["framing"] == "close_up"
+    assert json.loads((work / "breakdown.json").read_text())["why"]["emotion"] == "craving"  # saved copy replaced
+
+
+def test_failed_force_keeps_the_old_result(client, tmp_path, monkeypatch):
+    import server
+    work = save_old(tmp_path)
+
+    def broken(prepared, work, vocab=None):
+        raise RuntimeError("The AI declined to analyse this video.")
+
+    monkeypatch.setattr(analyze, "prepare", no_download)
+    monkeypatch.setattr(analyze, "breakdown", broken)
+    monkeypatch.setattr(server, "jobs", analyze.Jobs())
+    job_id = client.post("/api/analyze", json={"url": URL, "force": True}).json()["job"]
+    job = wait(server.jobs, job_id)
+    assert job.status == "failed" and "declined" in job.error
+    assert json.loads((work / "breakdown.json").read_text()) == old_breakdown()  # untouched on disk
+    assert job.result is not None and job.result.why.hook == "h"
+    # Asking again without force goes back to the saved result and costs nothing.
+    assert client.post("/api/analyze", json={"url": URL}).json() == {"job": job_id}
+    assert client.get(f"/api/analyze/{job_id}").json()["status"] == "done"
+
+
+def test_force_respects_the_daily_claude_budget(client, tmp_path, monkeypatch):
+    import server
+    save_old(tmp_path)
+    runs = []
+    monkeypatch.setattr(analyze, "prepare", no_download)
+    monkeypatch.setattr(analyze, "breakdown", lambda prepared, work, vocab=None: runs.append(1) or RESULT)
+    monkeypatch.setattr(server, "jobs", analyze.Jobs())
+    monkeypatch.setattr(server, "DAILY_CLAUDE_USD", server.ANALYZE_USD / 2)
+    r = client.post("/api/analyze", json={"url": URL, "force": True})
+    assert r.status_code == 429
+    time.sleep(0.2)
+    assert runs == []
+    assert client.get(f"/api/analyze/{analyze.job_id_for(URL)}").json()["result"]["why"]["hook"] == "h"
+
+
+def test_force_is_not_charged_twice_while_running(client, tmp_path, monkeypatch):
+    import server
+    save_old(tmp_path)
+    spent = []
+    monkeypatch.setattr(server, "spend", lambda *a: spent.append(a) or True)
+    monkeypatch.setattr(server, "jobs", analyze.Jobs())
+    monkeypatch.setattr(server.jobs, "_q", __import__("queue").Queue())  # keep the job queued, run nothing
+    client.post("/api/analyze", json={"url": URL, "force": True})
+    client.post("/api/analyze", json={"url": URL, "force": True})
+    assert len(spent) == 1

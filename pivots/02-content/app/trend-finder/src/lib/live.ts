@@ -250,11 +250,12 @@ interface AnalyzeJob {
 
 // Starts a breakdown and polls until it's done. The first run of a video takes about a minute;
 // asking again for the same link returns the saved result.
-export async function analyzeVideo(url: string, onStep: (step: string) => void): Promise<Breakdown> {
+// force re-runs the AI step for a video that already has a breakdown (older ones lack newer fields).
+export async function analyzeVideo(url: string, onStep: (step: string) => void, force = false): Promise<Breakdown> {
   const r = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify(force ? { url, force: true } : { url }),
   })
   const started = await r.json().catch(() => ({}))
   if (!r.ok) throw new Error(started.error ?? t('find.live.err.startBreakdown'))

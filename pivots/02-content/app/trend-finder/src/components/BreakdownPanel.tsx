@@ -37,6 +37,10 @@ interface Props {
   // Add to or take off the client's shortlist.
   onSave: () => void
   onPlan: () => void
+  // Run the AI breakdown again (live videos whose saved breakdown lacks newer fields).
+  onReanalyse: () => void
+  // Set while it runs (step) or after it failed.
+  reanalysis: { step: string; failed: boolean } | null
 }
 
 const hookTypes: HookType[] = ['visual', 'question_or_text', 'rage_bait', 'informative', 'challenge', 'other']
@@ -44,7 +48,7 @@ const emotions: Emotion[] = ['curious', 'excited', 'craving', 'funny', 'angry_co
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAccounts, client, status, onClose, onSave, onPlan }: Props) {
+export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAccounts, client, status, onClose, onSave, onPlan, onReanalyse, reanalysis }: Props) {
   const manager = useManagerName()
   // Play the slide-out before App unmounts the panel (skipped under reduced motion).
   const [closing, setClosing] = useState(false)
@@ -146,6 +150,9 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
   const emotionKey = why.emotion && emotions.includes(why.emotion) ? (`find.emotion.${why.emotion}.label` as const) : null
   const hasFields = Boolean(hookKey || emotionKey || why.concept || why.scrollStopper || why.saveReason)
   const missingFields = !hasFields && video.live && format.shotList.length > 0
+  // Shots written before camera directions were required have no framing.
+  const missingFraming = video.live && format.shotList.length > 0 && format.shotList.some((s) => !s.framing)
+  const running = Boolean(reanalysis && !reanalysis.failed)
 
   return (
     <div
@@ -287,7 +294,7 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
             </dl>
           </section>
 
-          {(hasFields || missingFields) && (
+          {(hasFields || missingFields || missingFraming) && (
             <section className="block">
               <h3>{t('find.bd.fields.title')}</h3>
               {hasFields ? (
@@ -310,6 +317,21 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
                 </>
               ) : (
                 <p className="small muted">{t('find.bd.fields.missing')}</p>
+              )}
+              {hasFields && missingFraming && <p className="small muted">{t('find.bd.shots.missing')}</p>}
+              {(missingFields || missingFraming) && (
+                <>
+                  <button className="btn btn-ghost" onClick={onReanalyse} disabled={running}>
+                    {t('find.bd.reanalyse')}
+                  </button>
+                  <p className="small muted" role="status" aria-live="polite">
+                    {running
+                      ? t('find.bd.reanalysing', { step: reanalysis?.step || t('shell.breakdown.waiting') })
+                      : reanalysis?.failed
+                        ? t('find.bd.reanalyse.failed')
+                        : ''}
+                  </p>
+                </>
               )}
             </section>
           )}

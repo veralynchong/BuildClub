@@ -257,6 +257,8 @@ class AnalyzeRequest(BaseModel):
     url: str
     # The things a client may be unable to do; the breakdown picks its needs from this list only.
     needs: list[str] = []
+    # Re-run the AI breakdown of a video that already has one (reusing its frames and transcript).
+    force: bool = False
 
 
 class NeedsRequest(BaseModel):
