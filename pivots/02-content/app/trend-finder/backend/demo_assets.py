@@ -88,7 +88,7 @@ def format_quote(q: dict, caps: dict) -> str:
             "video": round(sum(it["videoUsd"] for it in q["items"]), 4)}
     for kind in ("image", "video"):
         if need[kind] > caps[kind]:
-            lines.append(f"Needs US${need[kind]:g} of the daily {kind} budget, but the cap is US${caps[kind]:g}. "
+            lines.append(f"Needs US${need[kind]:.2f} of the daily {kind} budget, but the cap is US${caps[kind]:.2f}. "
                          f"Raise DAILY_GEN_{kind.upper()}_USD for the run.")
     return "\n".join(lines)
 
@@ -219,7 +219,7 @@ def wait_for(api: Api, idea_id: str, gen_id: str, kind: str, sleep, poll_s: floa
         if status == 200 and row.get("status") in ("done", "failed", "unknown"):
             return row
         if time.monotonic() > deadline:
-            return {"id": gen_id, "status": "unknown", "error": f"Gave up waiting for the {kind}."}
+            return {"id": gen_id, "status": "unknown", "timedOut": True}
         sleep(poll_s)
 
 
@@ -233,6 +233,15 @@ def run(api: Api, idea_id: str, image_model: dict, video_model: dict, seconds: i
     if local["total"] > cap:
         out(f"Refused: the quote is US${local['total']:.2f}, over the cap of US${cap:.2f}. Nothing was sent.")
         return 3
+    confirmed, spent, flying = 0, 0.0, None  # shots confirmed (money committed), their local cost, the one in flight
+
+    def committed() -> str:
+        if not confirmed and flying is None:
+            return ""
+        tail = f" Shot {flying} may still be generating on the server." if flying is not None else ""
+        return (f" {confirmed} of {len(shots)} shots were confirmed (about US${spent:.2f} committed)."
+                f" Nothing further was sent.{tail}")
+
     try:
         status, body = api("POST", "/api/auth/login", {"email": email, "password": password})
         if status != 200:
@@ -240,7 +249,7 @@ def run(api: Api, idea_id: str, image_model: dict, video_model: dict, seconds: i
             return 4
         doc = edit_canvas(api, idea_id, lambda d: ensure_rows(d, shots, video_model["id"]))
         pairs = pairs_of(doc, shots)
-        sent, server_total = {}, 0.0
+        sent, server_total, wallet = {}, 0.0, None
         for s in shots:
             image_node, video_node = pairs[s["id"]]
             sent[s["id"]] = {"imageNodeId": image_node, "videoNodeId": video_node, "imageModel": image_model["id"],
@@ -250,16 +259,28 @@ def run(api: Api, idea_id: str, image_model: dict, video_model: dict, seconds: i
                 out(f"The server wouldn't quote shot {s['id']}: {message(q)}")
                 return 4
             server_total += q["total"]
+            wallet = q.get("remaining")
         if abs(server_total - local["total"]) > QUOTE_TOLERANCE:
             out(f"The server quotes US${server_total:.2f} but the local quote is US${local['total']:.2f}. "
                 "Nothing was started.")
             return 4
+        if server_total > cap:
+            out(f"Refused: the server quotes US${server_total:.2f}, over the cap of US${cap:.2f}. Nothing was started.")
+            return 3
+        need = {"image": sum(i["imageUsd"] for i in items), "video": sum(i["videoUsd"] for i in items)}
+        if not isinstance(wallet, dict) or any(
+                need[k] > float((wallet.get(k) or 0)) + 1e-9 for k in need):
+            out(f"Refused: today's wallet doesn't cover the run (needs US${need['image']:.2f} of images and "
+                f"US${need['video']:.2f} of videos; the server has {wallet}). Raise DAILY_GEN_IMAGE_USD / "
+                "DAILY_GEN_VIDEO_USD or wait for midnight. Nothing was started.")
+            return 3
         done = []
         for n, s in enumerate(shots, 1):
             status, made = api("POST", f"/api/ideas/{idea_id}/gen/chain", {**sent[s["id"]], "confirm": True})
             if status != 201:
-                out(f"Shot {n} didn't start: {message(made)}")
+                out(f"Shot {n} didn't start: {message(made)}{committed()}")
                 return 5
+            confirmed, spent, flying = n, spent + items[n - 1]["imageUsd"] + items[n - 1]["videoUsd"], n
             image_id, video_id = made["image"]["id"], made["video"]["id"]
             image_node, video_node = pairs[s["id"]]
 
@@ -275,12 +296,21 @@ def run(api: Api, idea_id: str, image_model: dict, video_model: dict, seconds: i
             video = image if image["status"] != "done" else wait_for(api, idea_id, video_id, "video", sleep, poll_s)
             for label, row in (("image", image), ("video", video)):
                 if row["status"] != "done":
-                    out(f"Shot {n} {label} {row['status']}: {row.get('error') or 'no reason given'} Stopped.")
+                    why = "timed out" if row.get("timedOut") else f"{row['status']}: {row.get('error') or 'no reason given'}"
+                    if row["status"] == "unknown":
+                        why += " (it may have charged)"
+                    if row["status"] == "failed":
+                        flying = None  # it ended; nothing is still running
+                    out(f"Shot {n} {label} {why}.{committed()}")
                     return 5
+            flying = None
             done.append((n, image, video))
     except Refused as e:
-        out(str(e))
-        return e.code
+        out(f"{e}{committed()}")
+        return 5 if (confirmed or flying is not None) else e.code
+    except (OSError, ValueError, KeyError, TypeError) as e:  # URLError and timeouts are OSError; bad bodies the rest
+        out(f"The server didn't answer properly ({type(e).__name__}).{committed()}")
+        return 5 if (confirmed or flying is not None) else 4
     for n, image, video in done:
         out(f"Shot {n}: image {image['id']} US${image.get('actualUsd') or image.get('estUsd') or 0:.3f}, "
             f"video {video['id']} US${video.get('actualUsd') or video.get('estUsd') or 0:.3f}")

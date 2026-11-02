@@ -74,8 +74,11 @@ def test_pick_duration():
 class FakeServer:
     """Records every call and answers like the server: a canvas with versions, chain quotes and generation rows."""
 
-    def __init__(self, shot_ids=("s1", "s2"), extra=0.0, fail_video_of=None):
+    def __init__(self, shot_ids=("s1", "s2"), extra=0.0, fail_video_of=None, wallet=None, reject_confirm_of=None,
+                 stuck=False, put_fails_after_confirm=False):
         self.calls, self.extra, self.fail_video_of = [], extra, fail_video_of
+        self.wallet = wallet or {"image": 0.5, "video": 1.0}
+        self.reject_confirm_of, self.stuck, self.put_fails = reject_confirm_of, stuck, put_fails_after_confirm
         nodes, edges = [], []
         for n, sid in enumerate(shot_ids):
             y = n * 400
@@ -94,6 +97,8 @@ class FakeServer:
         if path.endswith("/canvas"):
             if method == "GET":
                 return 200, {"version": self.version, "doc": __import__("copy").deepcopy(self.doc)}
+            if self.put_fails and self.gens:
+                return 500, {"error": "Something went wrong."}
             if body["version"] != self.version:
                 return 409, {"error": "stale"}
             self.doc, self.version = body["doc"], self.version + 1
@@ -101,15 +106,18 @@ class FakeServer:
         if path.endswith("/gen/chain"):
             usd = 0.04 + 0.192 + self.extra
             if not body["confirm"]:
-                return 200, {"total": usd}
+                return 200, {"total": usd, "remaining": self.wallet}
             n = len(self.gens) // 2
+            if self.reject_confirm_of == n:
+                return 429, {"error": "Today's budget has US$0.00 left."}
             rows = {"image": {"id": f"i{n}", "status": "done", "estUsd": 0.04},
                     "video": {"id": f"v{n}", "status": "failed" if self.fail_video_of == n else "done",
                               "estUsd": 0.192, "error": "The generation failed. Try again."}}
             self.gens.update({r["id"]: r for r in rows.values()})
             return 201, rows
         if "/gen/" in path:
-            return 200, self.gens[path.rsplit("/", 1)[1]]
+            row = self.gens[path.rsplit("/", 1)[1]]
+            return 200, {**row, "status": "running"} if self.stuck else row
         raise AssertionError(path)
 
     def confirms(self):
@@ -144,6 +152,58 @@ def test_run_stops_at_first_failure():
     fake = FakeServer(fail_video_of=0)
     code, lines = go(fake)
     assert code == 5 and len(fake.confirms()) == 1 and "Shot 1 video failed" in lines[-1]
+
+
+def test_run_aborts_when_server_quote_is_lower_too():
+    fake = FakeServer(extra=-0.01)
+    code, lines = go(fake)
+    assert code == 4 and fake.confirms() == []
+
+
+def test_run_refuses_when_server_total_is_over_cap():
+    fake = FakeServer(extra=0.1)  # local 0.464 passes a 0.5 cap, the server's 0.664 does not (and also differs)
+    code, _ = go(fake, cap=0.5)
+    assert code in (3, 4) and fake.confirms() == []
+
+
+def test_run_refuses_when_wallet_is_too_low():
+    fake = FakeServer(wallet={"image": 0.5, "video": 0.3})  # videos need 0.384
+    code, lines = go(fake)
+    assert code == 3 and fake.confirms() == [] and "wallet" in lines[-1]
+
+
+def test_run_stops_when_a_confirm_is_rejected():
+    fake = FakeServer(shot_ids=("s1", "s2", "s3"), reject_confirm_of=1)
+    shots = SHOTS + [{"id": "s3", "shot": "three", "line": None}]
+    code, lines = go(fake, shots=shots, cap=2.0)
+    assert code == 5 and len(fake.confirms()) == 2 and "1 of 3 shots were confirmed" in lines[-1]
+    assert not any(c[2] and c[2].get("prompt") == "three" and c[2].get("confirm") for c in fake.calls)
+
+
+def test_run_timeout_says_the_shot_may_still_be_generating(monkeypatch):
+    monkeypatch.setattr(generations, "GEN_TIMEOUT_S", {"image": 0, "video": 0, "voice": 0})
+    fake = FakeServer(stuck=True)
+    code, lines = go(fake)
+    assert code == 5 and len(fake.confirms()) == 1 and "Shot 1 may still be generating" in lines[-1]
+    assert "1 of 2 shots were confirmed" in lines[-1]
+
+
+def test_run_canvas_save_failure_after_confirm_reports_committed_money():
+    fake = FakeServer(put_fails_after_confirm=True)
+    code, lines = go(fake)
+    assert code == 5 and len(fake.confirms()) == 1 and "may still be generating" in lines[-1]
+
+
+def test_run_network_error_after_confirm_exits_5():
+    fake = FakeServer()
+
+    def flaky(method, path, body):
+        if method == "GET" and "/gen/" in path and not path.endswith("chain"):
+            raise OSError("connection reset")
+        return fake(method, path, body)
+
+    code, lines = go(flaky)
+    assert code == 5 and len(fake.confirms()) == 1 and "may still be generating" in lines[-1]
 
 
 def test_run_wires_missing_nodes_and_awaits_the_new_rows():
