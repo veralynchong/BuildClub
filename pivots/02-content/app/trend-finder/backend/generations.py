@@ -38,6 +38,8 @@ GEN_TIMEOUT_S = {"image": 180, "video": 900}
 LOST = "The provider didn't answer in time. It may have charged."
 FILE_LOST = "The model finished but its file couldn't be saved. It may have charged."
 FAILED = "The generation failed. Try again."
+START_FRAME_LOST = "The start frame wasn't made, so the video didn't run."
+PENDING = "!pending"  # a chained video's startFrame in validation: the image isn't made yet
 MAX_PROMPT = 4000
 CSP = {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"}
 NODE_FOR_KIND = {"image": "storyboard", "video": "video"}  # the canvas node type each model kind fills
@@ -140,6 +142,15 @@ def recover(db, jobs) -> None:
                                    ("unknown" if lost else "failed", LOST if lost else RESTARTED, now, gid)).rowcount
         if changed and not lost:
             jobs.refund(kind, est)
+        if changed:
+            jobs.release(gid, "unknown" if lost else "failed")
+    with db() as conn:  # a waiting row whose upstream already ended (or never existed) can be settled now
+        waiting = conn.execute("SELECT DISTINCT g.after, u.status FROM generations g "
+                               "LEFT JOIN generations u ON u.id = g.after "
+                               "WHERE g.status = 'waiting'").fetchall()
+    for upstream, status in waiting:
+        if status in (None, "done", "failed", "unknown"):
+            jobs.release(upstream, status or "failed")
 
 
 def gen_folder(media: Path, idea_id: str) -> Optional[Path]:
@@ -187,9 +198,33 @@ class GenJobs:
         """Close a running row; True when this call did it (so only one caller refunds)."""
         names = "".join(f", {k} = ?" for k in fields)
         with self._db() as conn:
-            return conn.execute(f"UPDATE generations SET status = ?, finished_at = ?{names} "
-                                "WHERE id = ? AND status = 'running'",
-                                (status, int(time.time() * 1000), *fields.values(), gen_id)).rowcount > 0
+            closed = conn.execute(f"UPDATE generations SET status = ?, finished_at = ?{names} "
+                                  "WHERE id = ? AND status = 'running'",
+                                  (status, int(time.time() * 1000), *fields.values(), gen_id)).rowcount > 0
+        if closed:
+            self.release(gen_id, status)
+        return closed
+
+    def release(self, upstream_id: str, status: str) -> None:
+        """A row has closed: start the waiting rows that follow it (done), or fail them and give their estimate
+        back (failed, unknown; their request was never sent). Only the call that moves a row out of `waiting` acts."""
+        with self._db() as conn:
+            rows = conn.execute("SELECT id, kind, est_usd FROM generations WHERE after = ? AND status = 'waiting'",
+                                (upstream_id,)).fetchall()
+        for gid, kind, est in rows:
+            ok = status == "done"
+            with self._db() as conn:
+                moved = conn.execute("UPDATE generations SET status = ?, error = ?, finished_at = ? "
+                                     "WHERE id = ? AND status = 'waiting'",
+                                     ("queued" if ok else "failed", None if ok else START_FRAME_LOST,
+                                      None if ok else int(time.time() * 1000), gid)).rowcount > 0
+            if not moved:
+                continue
+            if ok:
+                self.submit(gid)
+            else:
+                self.refund(kind, est)
+                self.release(gid, "failed")
 
     def _fail(self, gen_id: str, kind: str, est: float, message: str, refund: bool) -> None:
         if self._finish(gen_id, "failed", error=message) and refund:
@@ -330,6 +365,44 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
     def models():
         return {"models": menu_models()}
 
+    def check(idea_id: str, nodes: list, node_id, model_id, prompt, start, ref, duration):
+        """The rules every generation follows. Returns (model, duration, None), or (None, None, the error)."""
+        if not isinstance(node_id, str) or not node_id or not isinstance(prompt, str) or len(prompt) > MAX_PROMPT:
+            return None, None, error(422, "Send the node, the model and a prompt.")
+        model = next((m for m in load_models() if m["id"] == model_id), None)
+        if model is None or model.get("retired"):
+            return None, None, error(422, "That model doesn't exist.")
+        if not is_available(model):
+            return None, None, error(422, "This model isn't set up yet.")
+        target = next((n for n in nodes if n.get("id") == node_id), None)
+        if target is None:
+            return None, None, error(422, "That node isn't on this plan's canvas.")
+        if NODE_FOR_KIND.get(model["kind"]) != target.get("type"):
+            return None, None, error(422, "That model can't make this kind of node.")
+        if duration is not None:
+            if model["kind"] != "video" or duration not in model.get("durations", []):
+                return None, None, error(422, "That duration isn't available for this model.")
+        elif model["kind"] == "video":
+            duration = model["durations"][0]
+        for ref_id in (start, ref):
+            if ref_id is None or ref_id == PENDING:
+                continue
+            source = one(idea_id, ref_id) if isinstance(ref_id, str) else None
+            if source is None or source[3] != "image" or source[7] != "done":  # kind, status columns
+                return None, None, error(422, "An input image must be a finished image generated for this plan.")
+        for field, given, what in (("startFrame", start, "a start frame"), ("reference", ref, "a reference image")):
+            rule = (model.get("inputs") or {}).get(field, "none")
+            if rule == "required" and given is None:
+                return None, None, error(422, f"This model needs {what}.")
+            if rule == "none" and given is not None:
+                return None, None, error(422, f"This model doesn't take {what}.")
+        return model, duration, None
+
+    def canvas_doc(idea_id: str) -> dict:
+        with db() as conn:
+            canvas_row = conn.execute("SELECT doc FROM canvases WHERE idea_id = ?", (idea_id,)).fetchone()
+        return json.loads(canvas_row[0]) if canvas_row else {"nodes": [], "edges": []}
+
     @router.post("/api/ideas/{idea_id}/gen")
     async def create(idea_id: str, request: Request):
         try:
@@ -345,38 +418,10 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return error(409, "Only an approved plan can generate.")
         node_id, prompt = body.get("nodeId"), body.get("prompt", "")
         start, ref, duration = body.get("startFrame"), body.get("reference"), body.get("duration")
-        if not isinstance(node_id, str) or not node_id or not isinstance(prompt, str) or len(prompt) > MAX_PROMPT:
-            return error(422, "Send the node, the model and a prompt.")
-        model = next((m for m in load_models() if m["id"] == body.get("model")), None)
-        if model is None or model.get("retired"):
-            return error(422, "That model doesn't exist.")
-        if not is_available(model):
-            return error(422, "This model isn't set up yet.")
-        with db() as conn:
-            canvas_row = conn.execute("SELECT doc FROM canvases WHERE idea_id = ?", (idea_id,)).fetchone()
-        nodes = json.loads(canvas_row[0])["nodes"] if canvas_row else []
-        target = next((n for n in nodes if n.get("id") == node_id), None)
-        if target is None:
-            return error(422, "That node isn't on this plan's canvas.")
-        if NODE_FOR_KIND.get(model["kind"]) != target.get("type"):
-            return error(422, "That model can't make this kind of node.")
-        if duration is not None:
-            if model["kind"] != "video" or duration not in model.get("durations", []):
-                return error(422, "That duration isn't available for this model.")
-        elif model["kind"] == "video":
-            duration = model["durations"][0]
-        for ref_id in (start, ref):
-            if ref_id is None:
-                continue
-            source = one(idea_id, ref_id) if isinstance(ref_id, str) else None
-            if source is None or source[3] != "image" or source[7] != "done":  # kind, status columns
-                return error(422, "An input image must be a finished image generated for this plan.")
-        for field, given, what in (("startFrame", start, "a start frame"), ("reference", ref, "a reference image")):
-            rule = (model.get("inputs") or {}).get(field, "none")
-            if rule == "required" and given is None:
-                return error(422, f"This model needs {what}.")
-            if rule == "none" and given is not None:
-                return error(422, f"This model doesn't take {what}.")
+        model, duration, bad = check(idea_id, canvas_doc(idea_id)["nodes"], node_id, body.get("model"), prompt,
+                                     start, ref, duration)
+        if bad is not None:
+            return bad
         est = estimate_usd(model, duration)
         blocked = router.budget(model["kind"], est)  # spends the estimate; a failed job gives it back
         if blocked is not None:
@@ -396,6 +441,83 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         out = to_json(row)
         router.jobs.submit(gid)
         return JSONResponse(out, status_code=201)
+
+    def left(kind: str) -> float:
+        wallet = router.remaining()[kind]
+        return round(max(0.0, wallet["cap"] - wallet["spent"]), 4)
+
+    @router.post("/api/ideas/{idea_id}/gen/chain")
+    async def chain(idea_id: str, request: Request):
+        """Quote (confirm false) or run (confirm true) a storyboard image and a video that starts from it."""
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return error(422, "Send the two nodes, the two models and a prompt.")
+        found = find_idea(idea_id)
+        if found is None:
+            return error(404, "That plan doesn't exist.")
+        if found["status"] != "approved":
+            return error(409, "Only an approved plan can generate.")
+        prompt, video_prompt = body.get("prompt", ""), body.get("videoPrompt")
+        if video_prompt is None:
+            video_prompt = prompt
+        image_node, video_node = body.get("imageNodeId"), body.get("videoNodeId")
+        doc = canvas_doc(idea_id)
+        image_model, _, bad = check(idea_id, doc["nodes"], image_node, body.get("imageModel"), prompt,
+                                    None, None, None)
+        if bad is not None:
+            return bad
+        video_model, duration, bad = check(idea_id, doc["nodes"], video_node, body.get("videoModel"), video_prompt,
+                                           PENDING, None, body.get("duration"))
+        if bad is not None:
+            return bad
+        if not any(e.get("source") == image_node and e.get("target") == video_node
+                   and e.get("targetHandle") == "in:start" for e in doc["edges"]):
+            return error(422, "Connect the storyboard to the video's start frame first.")
+        image_usd, video_usd = estimate_usd(image_model, None), estimate_usd(video_model, duration)
+        remaining = {"image": left("image"), "video": left("video")}
+        if body.get("confirm") is not True:
+            return {"total": round(image_usd + video_usd, 4), "remaining": remaining,
+                    "items": [{"nodeId": image_node, "model": image_model["id"], "usd": image_usd},
+                              {"nodeId": video_node, "model": video_model["id"], "usd": video_usd}]}
+        if image_usd > remaining["image"] or video_usd > remaining["video"]:  # check both before charging either
+            return error(429, f"Today's budget has US${remaining['image']:.2f} left for images and "
+                              f"US${remaining['video']:.2f} for videos, and this shot needs US${image_usd:.2f} and "
+                              f"US${video_usd:.2f}. Nothing was started. The budget resets at midnight.")
+        blocked = router.budget("image", image_usd)
+        if blocked is not None:
+            return blocked
+        blocked = router.budget("video", video_usd)
+        if blocked is not None:
+            router.refund("image", image_usd)
+            return blocked
+        now = int(time.time() * 1000)
+        image_id, video_id = secrets.token_urlsafe(9), secrets.token_urlsafe(9)
+        image_inputs = {"prompt": prompt, "startFrame": None, "reference": None, "duration": None}
+        video_inputs = {"prompt": video_prompt, "startFrame": image_id, "reference": None, "duration": duration}
+        rows = [(image_id, idea_id, image_node, "image", image_model["id"], json.dumps(image_inputs),
+                 input_hash(image_model["id"], prompt, None, None, None), "queued", image_usd,
+                 None, None, None, None, now, None, None),
+                (video_id, idea_id, video_node, "video", video_model["id"], json.dumps(video_inputs),
+                 input_hash(video_model["id"], video_prompt, image_id, None, duration), "waiting", video_usd,
+                 None, None, None, None, now, None, image_id)]
+        try:
+            with db() as conn:
+                for row in rows:
+                    conn.execute(f"INSERT INTO generations ({COLUMNS}) VALUES ({', '.join('?' * NCOLUMNS)})", row)
+        except Exception:
+            router.refund("image", image_usd)
+            router.refund("video", video_usd)
+            raise
+        out = {"image": to_json(rows[0]), "video": to_json(rows[1])}
+        router.jobs.submit(image_id)
+        return JSONResponse(out, status_code=201)
+
+    @router.get("/api/gen/budget")
+    def gen_budget_left():
+        return router.remaining()
 
     @router.post("/api/ideas/{idea_id}/gen/upload")
     async def upload(idea_id: str, request: Request, nodeId: str = ""):

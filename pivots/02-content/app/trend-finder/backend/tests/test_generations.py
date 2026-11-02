@@ -582,7 +582,7 @@ def test_waiting_status_and_after_column(real):
         conn.execute("UPDATE generations SET after = 'a1' WHERE id = 'w1'")
     assert row_of(real, "w1")["after"] == "a1"
     generations.recover(server.db, server.gen_jobs)
-    assert row_of(real, "w1")["status"] == "waiting"  # chaining is a later task
+    assert row_of(real, "w1")["status"] == "failed"  # its image row doesn't exist: the video can never start
 
 
 def test_migrate_adds_columns_to_an_old_table():
@@ -655,3 +655,170 @@ def test_image_finishes_while_a_video_is_still_polling(real, monkeypatch):
         assert row_of(real, "vid1")["status"] == "done"
     finally:
         release.set()
+
+
+def chain_canvas(edge=True):
+    """Add a video node (and an image -> video start edge) to plan ia's canvas."""
+    with server.db() as conn:
+        doc = json.loads(conn.execute("SELECT doc FROM canvases WHERE idea_id = 'ia'").fetchone()[0])
+        doc["nodes"].append({"id": "n_vid", "type": "video", "position": {"x": 0, "y": 0}, "data": {}})
+        if edge:
+            doc["edges"].append({"id": "e_start", "source": "n_sb_s1", "sourceHandle": "out",
+                                 "target": "n_vid", "targetHandle": "in:start"})
+        conn.execute("UPDATE canvases SET doc = ? WHERE idea_id = 'ia'", (json.dumps(doc),))
+
+
+def chain(client, idea_id="ia", **body):
+    body = {"imageNodeId": "n_sb_s1", "videoNodeId": "n_vid", "imageModel": "seedream-4.5",
+            "videoModel": "hailuo-2.3-fast", "prompt": "a tofu bar", "duration": 6, "confirm": True, **body}
+    return client.post(f"/api/ideas/{idea_id}/gen/chain", json=body)
+
+
+def test_chain_quote_spends_nothing(real):
+    chain_canvas()
+    r = chain(real, confirm=False)
+    assert r.status_code == 200
+    out = r.json()
+    assert out["items"] == [{"nodeId": "n_sb_s1", "model": "seedream-4.5", "usd": 0.04},
+                            {"nodeId": "n_vid", "model": "hailuo-2.3-fast", "usd": 0.192}]
+    assert out["total"] == 0.232 and set(out["remaining"]) == {"image", "video"}
+    assert real.spent == [] and real.get("/api/ideas/ia/gen").json() == []
+
+
+def test_chain_needs_start_edge(real):
+    chain_canvas(edge=False)
+    for confirm in (False, True):
+        r = chain(real, confirm=confirm)
+        assert r.status_code == 422 and r.json()["error"] == "Connect the storyboard to the video's start frame first."
+    assert real.spent == []
+
+
+def test_chain_validates_like_create(real):
+    chain_canvas()
+    assert chain(real, videoModel="seedream-4.5").status_code == 422  # wrong kind for the video node
+    assert chain(real, imageNodeId="n_vid").status_code == 422
+    assert chain(real, duration=7).status_code == 422
+    assert chain(real, videoNodeId="nope").status_code == 422
+    assert chain(real, idea_id="iw").status_code == 409
+    assert chain(real, idea_id="zz").status_code == 404
+    assert real.spent == []
+
+
+def test_chain_over_budget_starts_nothing(real, monkeypatch):
+    chain_canvas()
+    monkeypatch.setattr(server.gen_router, "remaining", lambda: {"image": {"spent": 0, "cap": 1},
+                                                                  "video": {"spent": 0, "cap": 0.1}})
+    r = chain(real)
+    assert r.status_code == 429 and "0.10" in r.json()["error"] and "1.00" in r.json()["error"]
+    assert real.spent == [] and real.refunds == [] and real.adapter.submits == 0
+    assert real.get("/api/ideas/ia/gen").json() == []
+
+
+def test_chain_second_spend_failure_refunds_the_first(real, monkeypatch):
+    chain_canvas()
+    monkeypatch.setattr(server.gen_router, "remaining", lambda: {"image": {"spent": 0, "cap": 1},
+                                                                  "video": {"spent": 0, "cap": 1}})
+    monkeypatch.setattr(server.gen_router, "budget", lambda kind, usd: (
+        generations.error(429, "video wallet empty") if kind == "video" else real.spent.append((kind, usd))))
+    monkeypatch.setattr(server.gen_router, "refund", lambda kind, usd: real.refunds.append((kind, usd)))
+    r = chain(real)
+    assert r.status_code == 429
+    assert real.refunds == [("image", 0.04)] and real.get("/api/ideas/ia/gen").json() == []
+
+
+def test_chain_runs_video_after_image(real, monkeypatch):
+    chain_canvas()
+    queued = []
+    monkeypatch.setattr(server.gen_jobs, "submit", queued.append)  # hold the worker to see the waiting row
+    r = chain(real)
+    assert r.status_code == 201
+    img, vid = r.json()["image"], r.json()["video"]
+    assert img["status"] == "queued" and vid["status"] == "waiting" and vid["after"] == img["id"]
+    assert vid["inputs"]["startFrame"] == img["id"] and vid["inputs"]["duration"] == 6
+    assert real.spent == [("image", 0.04), ("video", 0.192)] and queued == [img["id"]]
+    monkeypatch.setattr(server.gen_jobs, "submit", server.gen_jobs.run)
+    server.gen_jobs.run(img["id"])
+    assert row_of(real, img["id"])["status"] == "done"
+    assert row_of(real, vid["id"])["status"] == "done"
+    assert real.adapter.jobs[1].start == server.MEDIA_DIR / "ia" / "gen" / f"{img['id']}.png"
+    assert real.refunds == []
+
+
+def test_chain_image_failure_fails_and_refunds_video(real):
+    chain_canvas()
+    real.adapter.submit_error = gen_providers.ProviderError("nope")
+    r = chain(real)
+    assert r.status_code == 201
+    img, vid = r.json()["image"], r.json()["video"]
+    assert row_of(real, img["id"])["status"] == "failed"
+    got = row_of(real, vid["id"])
+    assert got["status"] == "failed" and got["error"] == "The start frame wasn't made, so the video didn't run."
+    assert sorted(real.refunds) == [("image", 0.04), ("video", 0.192)]
+    assert real.adapter.submits == 1  # the video was never sent
+
+
+def test_chain_image_unknown_fails_video_and_refunds_only_video(real):
+    chain_canvas()
+    real.adapter.submit_error = gen_providers.ResultLost("timeout")
+    r = chain(real)
+    assert row_of(real, r.json()["image"]["id"])["status"] == "unknown"
+    assert row_of(real, r.json()["video"]["id"])["status"] == "failed"
+    assert real.refunds == [("video", 0.192)]
+
+
+def test_waiting_row_is_released_once(real, monkeypatch):
+    chain_canvas()
+    submitted = []
+    monkeypatch.setattr(server.gen_jobs, "submit", submitted.append)
+    r = chain(real)
+    img, vid = r.json()["image"]["id"], r.json()["video"]["id"]
+    server.gen_jobs.run(img)
+    server.gen_jobs.release(img, "done")  # a second call must not queue or submit it again
+    assert submitted == [img, vid]
+    assert row_of(real, vid)["status"] == "queued"
+
+
+def insert_waiting(gid, after, kind="video", model="hailuo-2.3-fast", est=0.192):
+    insert_row(gid, "waiting", model=model, est=est, kind=kind)
+    with server.db() as conn:
+        conn.execute("UPDATE generations SET after = ?, inputs = ? WHERE id = ?",
+                     (after, json.dumps({"prompt": "p", "startFrame": after, "duration": 6}), gid))
+
+
+def test_recover_handles_orphan_waiting(real, monkeypatch):
+    insert_row("up_done", "done")
+    with server.db() as conn:
+        conn.execute("UPDATE generations SET file = 'up_done.png' WHERE id = 'up_done'")
+    (server.MEDIA_DIR / "ia" / "gen").mkdir(parents=True, exist_ok=True)
+    (server.MEDIA_DIR / "ia" / "gen" / "up_done.png").write_bytes(PNG_BYTES)
+    insert_row("up_failed", "failed")
+    insert_row("up_run", "running", request_id="req-x")
+    insert_waiting("w_done", "up_done")
+    insert_waiting("w_failed", "up_failed")
+    insert_waiting("w_gone", "no-such-row")
+    insert_waiting("w_run", "up_run")
+    submitted = []
+    monkeypatch.setattr(server.gen_jobs, "submit", submitted.append)
+    generations.recover(server.db, server.gen_jobs)
+    assert row_of(real, "w_done")["status"] == "queued" and "w_done" in submitted
+    for gid in ("w_failed", "w_gone"):
+        got = row_of(real, gid)
+        assert got["status"] == "failed" and got["error"] == generations.START_FRAME_LOST
+    assert real.refunds == [("video", 0.192), ("video", 0.192)]
+    assert row_of(real, "w_run")["status"] == "waiting"  # the upstream will release it
+    server.gen_jobs.release("up_failed", "failed")  # the row is already settled: no second refund
+    assert len(real.refunds) == 2 and submitted.count("w_done") == 1
+
+
+def test_recover_failing_upstream_also_fails_its_waiting_row(real):
+    insert_row("up_q", "queued")
+    insert_waiting("w1", "up_q")
+    generations.recover(server.db, server.gen_jobs)
+    assert row_of(real, "up_q")["status"] == "failed" and row_of(real, "w1")["status"] == "failed"
+    assert sorted(real.refunds) == [("image", 0.04), ("video", 0.192)]
+
+
+def test_budget_endpoint(client):
+    r = client.get("/api/gen/budget")
+    assert r.status_code == 200 and r.json() == server.gen_remaining()
+    assert set(r.json()) == {"image", "video"} and set(r.json()["image"]) == {"spent", "cap"}
