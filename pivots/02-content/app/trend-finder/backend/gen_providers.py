@@ -214,7 +214,7 @@ class MockAdapter:
                              "-movflags", "+faststart", str(part)])
             if r.returncode != 0:
                 print(f"[gen] {request_id} ffmpeg failed: {r.stderr.strip()[-500:]}", flush=True)
-                raise ProviderError("The mock video failed. Try again.")
+                return Poll("failed", error="The mock video failed. Try again.")
             return Poll("done", data=part.read_bytes(), ext="mp4")
         finally:
             part.unlink(missing_ok=True)
@@ -264,9 +264,12 @@ class FalAdapter:
         except _Transient:
             raise ProviderError(REFUSED)
         reply = json_body(data)
-        if status >= 300 or not (reply.get("status_url") and reply.get("response_url")):
+        if status >= 300:
             log_provider("fal submit", status, data)
             raise ProviderError(REFUSED)
+        if not (reply.get("status_url") and reply.get("response_url")):  # accepted, but we can't follow it
+            log_provider("fal submit without urls", status, data)
+            raise ResultLost("fal accepted the submit but sent no status url.")
         return json.dumps({"id": reply.get("request_id"), "status_url": reply["status_url"],
                            "response_url": reply["response_url"]})
 

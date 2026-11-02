@@ -405,7 +405,6 @@ def test_poll_timeout_marks_unknown_no_refund(real, monkeypatch):
     row = row_of(real, post(real, model="seedream-4.5").json()["id"])
     assert row["status"] == "unknown" and row["error"] == "The provider didn't answer in time. It may have charged."
     assert real.refunds == [] and len(real.adapter.poll_ids) >= 2
-    assert generations.GEN_TIMEOUT_S  # defaults are checked below
 
 
 def test_default_timeouts():
@@ -427,11 +426,70 @@ def test_unexpected_error_after_submit_is_unknown(real):
     assert row["status"] == "unknown" and real.refunds == []
 
 
-def test_unexpected_error_before_submit_refunds(real):
-    real.adapter = FakeAdapter(submit_error=RuntimeError("boom"))
+def test_unexpected_error_inside_submit_is_unknown(real):
+    real.adapter = FakeAdapter(submit_error=RuntimeError("boom"))  # the request may have gone out
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "unknown" and real.refunds == []
+
+
+def test_error_before_anything_is_sent_refunds(real, monkeypatch):
+    def broken(self, folder, idea_id, ref_id):
+        raise OSError("disk read failed")  # e.g. reading an input image
+    monkeypatch.setattr(generations.GenJobs, "_input_path", broken)
     row = row_of(real, post(real, model="seedream-4.5").json()["id"])
     assert row["status"] == "failed" and row["error"] == "The generation failed. Try again."
+    assert real.refunds == [("image", 0.04)] and real.adapter.submits == 0
+
+
+def test_missing_input_file_before_send_fails_and_refunds(real):
+    a = post(real, model="seedream-4.5").json()["id"]
+    (server.MEDIA_DIR / "ia" / "gen" / f"{a}.png").unlink()
+    real.refunds.clear()
+    row = row_of(real, post(real, model="seedream-4.5", reference=a).json()["id"])
+    assert row["status"] == "failed" and row["error"] == "An input image is missing."
     assert real.refunds == [("image", 0.04)]
+
+
+def test_error_from_poll_after_send_is_unknown(real):
+    real.adapter = FakeAdapter(polls=[gen_providers.ProviderError("odd")])
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "unknown" and real.refunds == []
+
+
+def test_resumed_row_does_not_resolve_inputs(real):
+    # the start frame is gone, but polling needs only the request id: it finishes, no refund
+    with server.db() as conn:
+        conn.execute("INSERT INTO generations (id, idea_id, node_id, kind, model, inputs, input_hash, status, "
+                     "est_usd, created_at, provider_request_id) VALUES ('r9','ia','n_sb_s1','image','seedream-4.5',"
+                     "?, 'h','running',0.04,1,'req-9')", (json.dumps({"prompt": "p", "startFrame": "gone"}),))
+    generations.recover(server.db, server.gen_jobs)
+    assert row_of(real, "r9")["status"] == "done" and real.refunds == []
+    assert real.adapter.poll_ids == ["req-9"]
+
+
+def test_restart_during_submit_is_unknown(real):
+    insert_row("s1", "running", request_id=generations.SUBMITTING)
+    insert_row("s2", "running")  # never reached submit
+    generations.recover(server.db, server.gen_jobs)
+    assert row_of(real, "s1")["status"] == "unknown" and row_of(real, "s1")["error"] == generations.LOST
+    assert row_of(real, "s2")["status"] == "failed"
+    assert real.refunds == [("image", 0.04)]  # only s2
+    assert real.adapter.poll_ids == []
+    server.gen_jobs.run("s1")  # a sentinel row is never polled
+    assert real.adapter.poll_ids == []
+
+
+def test_request_id_is_marked_before_submit(real):
+    seen = []
+
+    def submit(job):
+        with server.db() as conn:
+            seen.append(conn.execute("SELECT provider_request_id FROM generations").fetchone()[0])
+        return "req-x"
+
+    real.adapter.submit = submit
+    gid = post(real, model="seedream-4.5").json()["id"]
+    assert seen == [generations.SUBMITTING] and request_id(gid) == "req-x"
 
 
 def test_done_writes_file_atomically(real):
@@ -534,3 +592,66 @@ def test_migrate_adds_columns_to_an_old_table():
     generations.migrate(conn)
     generations.migrate(conn)  # twice is fine
     assert {"provider_request_id", "after"} <= {r[1] for r in conn.execute("PRAGMA table_info(generations)")}
+
+
+def test_failed_write_leaves_no_part_or_final_file(real, monkeypatch):
+    folder = server.MEDIA_DIR / "ia" / "gen"
+
+    def broken_write(self, data):
+        self.open("wb").write(data[:4])  # a half-written .part
+        raise OSError("disk full")
+
+    monkeypatch.setattr(generations.Path, "write_bytes", broken_write)
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "failed" and row["error"] == generations.FILE_LOST and row["url"] is None
+    assert real.refunds == [] and list(folder.iterdir()) == []
+
+
+def test_failed_replace_leaves_no_part_or_final_file(real, monkeypatch):
+    def broken_replace(*a):
+        raise OSError("nope")
+
+    monkeypatch.setattr(generations.os, "replace", broken_replace)
+    row = row_of(real, post(real, model="seedream-4.5").json()["id"])
+    assert row["status"] == "failed" and row["error"] == generations.FILE_LOST and real.refunds == []
+    assert list((server.MEDIA_DIR / "ia" / "gen").iterdir()) == []
+
+
+def test_image_finishes_while_a_video_is_still_polling(real, monkeypatch):
+    import threading
+    release = threading.Event()
+
+    class Slow:
+        def submit(self, job):
+            return "req-" + job.model["kind"]
+
+        def poll(self, job, request_id):
+            if job.model["kind"] == "video" and not release.is_set():
+                return gen_providers.Poll("running")
+            return gen_providers.Poll("done", data=PNG_BYTES if job.model["kind"] == "image"
+                                      else b"\0\0\0\x18ftypmp42" + b"\0" * 8,
+                                      ext="png" if job.model["kind"] == "image" else "mp4")
+
+    real.adapter = Slow()
+    monkeypatch.setattr(generations, "GEN_POLL_S", 0.01)
+    jobs = generations.GenJobs(server.db, lambda: server.MEDIA_DIR)
+    insert_row("vid1", "queued", model="hailuo-2.3-fast", est=0.19, kind="video")
+    insert_row("img1", "queued")
+    try:
+        jobs.submit("vid1")
+        jobs.submit("img1")
+        import time as _t
+        for _ in range(200):
+            if row_of(real, "img1")["status"] == "done":
+                break
+            _t.sleep(0.02)
+        assert row_of(real, "img1")["status"] == "done"
+        assert row_of(real, "vid1")["status"] == "running"
+        release.set()
+        for _ in range(200):
+            if row_of(real, "vid1")["status"] == "done":
+                break
+            _t.sleep(0.02)
+        assert row_of(real, "vid1")["status"] == "done"
+    finally:
+        release.set()

@@ -364,3 +364,13 @@ def test_mock_adapter_video_spec(tmp_path, monkeypatch):
     a = next(s for s in out["streams"] if s["codec_type"] == "audio")
     assert (v["codec_name"], v["width"], v["height"], v["r_frame_rate"]) == ("h264", 1080, 1920, "30/1")
     assert a["codec_name"] == "aac" and abs(float(out["format"]["duration"]) - 4) < 0.1
+
+
+def test_fal_submit_2xx_without_urls_is_result_lost():
+    for reply in (jr({"request_id": "r1"}), jr({}), (200, {}, b"not json")):
+        http = FakeHttp({("POST", FAL_Q + "fal/video"): reply})
+        with pytest.raises(gp.ResultLost):
+            gp.adapter_for("fal", http).submit(gp.Job(VIDEO_MODEL, "p", None, [], 5))
+    http = FakeHttp({("POST", FAL_Q + "fal/video"): jr({"detail": "no"}, 422)})
+    with pytest.raises(gp.ProviderError):
+        gp.adapter_for("fal", http).submit(gp.Job(VIDEO_MODEL, "p", None, [], 5))

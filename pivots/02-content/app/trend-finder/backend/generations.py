@@ -122,20 +122,23 @@ def insert_done(conn, idea_id: str, node_id: str, kind: str, model: str, *,
 
 
 def recover(db, jobs) -> None:
-    """After a restart no worker is running. Queued rows and running rows that never reached the provider can
-    never finish: fail them and refund. Running rows with a request id go back to the worker to keep polling."""
+    """After a restart no worker is running. A queued row, or a running one that never called submit, can never
+    finish: fail it and refund. A running row that was inside submit may have been charged: unknown, no refund.
+    A running row with a request id goes back to its worker to keep polling."""
     with db() as conn:
         rows = conn.execute("SELECT id, kind, est_usd, status, provider_request_id FROM generations "
                             "WHERE status IN ('queued', 'running')").fetchall()
+    now = int(time.time() * 1000)
     for gid, kind, est, status, request_id in rows:
-        if status == "running" and request_id:
+        if status == "running" and request_id and request_id != SUBMITTING:
             jobs.submit(gid)
             continue
+        lost = request_id == SUBMITTING
         with db() as conn:
-            changed = conn.execute("UPDATE generations SET status = 'failed', error = ?, finished_at = ? "
+            changed = conn.execute("UPDATE generations SET status = ?, error = ?, finished_at = ? "
                                    "WHERE id = ? AND status IN ('queued', 'running')",
-                                   (RESTARTED, int(time.time() * 1000), gid)).rowcount
-        if changed:
+                                   ("unknown" if lost else "failed", LOST if lost else RESTARTED, now, gid)).rowcount
+        if changed and not lost:
             jobs.refund(kind, est)
 
 
@@ -154,20 +157,27 @@ def input_hash(model: str, prompt: str, start, ref, duration) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+SUBMITTING = "!submitting"  # provider_request_id while adapter.submit runs: a restart now must not refund
+
+
 class GenJobs:
-    """One worker thread runs jobs in order. `refund(kind, usd)` gives a failed job's estimate back."""
+    """One worker thread per kind (images, videos) runs jobs in order, so a long video poll never holds up
+    images. `refund(kind, usd)` gives a failed job's estimate back."""
 
     def __init__(self, db, media_dir: Callable[[], Path], refund: Callable[[str, float], None] = lambda k, u: None):
         self._db, self._media, self.refund = db, media_dir, refund
-        self._q: queue.Queue = queue.Queue()
-        threading.Thread(target=self._work, name="gen-worker", daemon=True).start()
+        self._queues = {kind: queue.Queue() for kind in ("image", "video")}
+        for kind, q in self._queues.items():
+            threading.Thread(target=self._work, args=(q,), name=f"gen-worker-{kind}", daemon=True).start()
 
     def submit(self, gen_id: str) -> None:
-        self._q.put(gen_id)
+        with self._db() as conn:
+            row = conn.execute("SELECT kind FROM generations WHERE id = ?", (gen_id,)).fetchone()
+        self._queues[row[0] if row and row[0] in self._queues else "image"].put(gen_id)
 
-    def _work(self) -> None:
+    def _work(self, q: queue.Queue) -> None:
         while True:
-            gen_id = self._q.get()
+            gen_id = q.get()
             try:
                 self.run(gen_id)
             except Exception as e:  # never let the worker thread die
@@ -198,32 +208,42 @@ class GenJobs:
 
     def run(self, gen_id: str) -> None:
         """Make one row's media. Called by the worker thread, and directly by tests. A queued row is claimed and
-        submitted; a running row with a request id (resumed after a restart) is only polled."""
+        submitted; a running row with a request id (resumed after a restart) is only polled.
+        Money: once submit has been called the provider may have charged, so from then on only an explicit
+        `Poll(failed)` refunds; losing track of the request makes the row `unknown`."""
         with self._db() as conn:
             row = conn.execute("SELECT idea_id, model, inputs, kind, est_usd, status, provider_request_id "
                                "FROM generations WHERE id = ?", (gen_id,)).fetchone()
-            if row is None or not (row[5] == "queued" or (row[5] == "running" and row[6])):
+            if row is None:
+                return
+            resumed = row[5] == "running" and bool(row[6]) and row[6] != SUBMITTING
+            if row[5] != "queued" and not resumed:
                 return
             if row[5] == "queued":
                 conn.execute("UPDATE generations SET status = 'running' WHERE id = ?", (gen_id,))
         idea_id, model_id, raw, kind, est, _status, request_id = row
-        sent = bool(request_id)  # the provider may have charged from here on
+        phase = "poll" if resumed else "prepare"  # prepare: nothing sent; submit: may be sent; poll: sent
         try:
             model = next(m for m in load_models() if m["id"] == model_id)
             folder = gen_folder(self._media(), idea_id)
-            if folder is None:
-                raise cutting.CutError("That plan doesn't exist.")
             inputs = json.loads(raw)
-            ref = self._input_path(folder, idea_id, inputs.get("reference"))
-            start = self._input_path(folder, idea_id, inputs.get("startFrame"))
-            job = gen_providers.Job(model, inputs.get("prompt") or "", start, [ref] if ref else [],
-                                    inputs.get("duration"), scratch=folder)
+            if resumed:  # polling needs only the request id, not the input files
+                job = gen_providers.Job(model, inputs.get("prompt") or "", None, [], inputs.get("duration"),
+                                        scratch=folder)
+            else:
+                if folder is None:
+                    raise cutting.CutError("That plan doesn't exist.")
+                ref = self._input_path(folder, idea_id, inputs.get("reference"))
+                start = self._input_path(folder, idea_id, inputs.get("startFrame"))
+                job = gen_providers.Job(model, inputs.get("prompt") or "", start, [ref] if ref else [],
+                                        inputs.get("duration"), scratch=folder)
             adapter = gen_providers.adapter_for(model["provider"])
-            if not sent:
+            if not resumed:
+                self._set_request_id(gen_id, SUBMITTING)
+                phase = "submit"
                 request_id = adapter.submit(job)
-                sent = True
-                with self._db() as conn:
-                    conn.execute("UPDATE generations SET provider_request_id = ? WHERE id = ?", (request_id, gen_id))
+                phase = "poll"
+                self._set_request_id(gen_id, request_id)
             result = self._poll(adapter, job, request_id, kind, model["provider"])
             if result is None:
                 self._finish(gen_id, "unknown", error=LOST)  # no refund: the provider may have charged
@@ -231,22 +251,37 @@ class GenJobs:
             if result.state == "failed":
                 self._fail(gen_id, kind, est, result.error or FAILED, refund=True)
                 return
-            name = self._save(gen_id, folder, result)
+            try:
+                if folder is None:
+                    raise OSError("no media folder")
+                name = self._save(gen_id, folder, result)
+            except OSError as e:  # the provider finished; only our disk failed
+                print(f"[gen] {gen_id} could not save the file: {e}", flush=True)
+                self._fail(gen_id, kind, est, FILE_LOST, refund=False)
+                return
             self._finish(gen_id, "done", file=name, actual_usd=est)
-        except (cutting.CutError, gen_providers.ProviderError) as e:
-            self._fail(gen_id, kind, est, str(e), refund=True)
         except gen_providers.ResultLost as e:
             print(f"[gen] {gen_id} result lost: {e}", flush=True)
             self._finish(gen_id, "unknown", error=LOST)
-        except (gen_providers.FileUnusable, OSError) as e:
+        except gen_providers.FileUnusable as e:
             print(f"[gen] {gen_id} file unusable: {e}", flush=True)
             self._fail(gen_id, kind, est, FILE_LOST, refund=False)
+        except (cutting.CutError, gen_providers.ProviderError) as e:
+            if phase == "poll":  # a request was sent and we can't say the provider failed it
+                print(f"[gen] {gen_id} error after the request was sent: {e}", flush=True)
+                self._finish(gen_id, "unknown", error=LOST)
+            else:  # nothing usable was sent, or the provider refused it
+                self._fail(gen_id, kind, est, str(e), refund=True)
         except Exception as e:
             print(f"[gen] {gen_id} failed: {e}", flush=True)
-            if sent:  # we lost track of a request that may have been charged
-                self._finish(gen_id, "unknown", error=LOST)
-            else:
+            if phase == "prepare":
                 self._fail(gen_id, kind, est, FAILED, refund=True)
+            else:  # we lost track of a request that may have been charged
+                self._finish(gen_id, "unknown", error=LOST)
+
+    def _set_request_id(self, gen_id: str, request_id: str) -> None:
+        with self._db() as conn:
+            conn.execute("UPDATE generations SET provider_request_id = ? WHERE id = ?", (request_id, gen_id))
 
     def _poll(self, adapter, job, request_id: str, kind: str, provider: str):
         """Poll until done or failed; None when GEN_TIMEOUT_S passes first."""
