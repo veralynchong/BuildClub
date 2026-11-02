@@ -1,39 +1,77 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Logo } from './Logo'
 import { useApp } from '../lib/appContext'
 import { LandingAltitude } from './landing/LandingAltitude'
+import { login } from '../lib/auth'
+import { googleErrorMessage } from '../lib/googleError'
 
 interface Props {
+  // `real` is true when the API has accounts: staff then sign in with email and password.
+  // Without accounts it stays the demo sign-in, where no password is checked.
+  real?: boolean
+  // Skip the landing page, e.g. after the session ended in the middle of work.
+  startAtLogin?: boolean
   onSignIn: () => void
   // 'login' after a sign-out: straight to the log-in form, not the landing page.
   startOn?: 'landing' | 'login'
 }
 
-// MOCK sign-in for the demo. No account or password is checked or stored; only the picked role is kept.
-// Staff covers the whole agency and signs in as the manager (so plans can be approved in the demo); clients get their own account.
+// Staff covers the whole agency (team members and the manager who approves); clients get their own account.
 // Clients never see the agency's client list: their login is a separate second step (not built yet).
-// The demo email and password are pre-filled so testers can just press the button. Nothing checks them.
-const DEMO_EMAIL = 'demo@remake.app'
-const DEMO_PASSWORD = 'remake-demo'
-
-export function LoginScreen({ onSignIn, startOn = 'landing' }: Props) {
-  const { setRole } = useApp()
-  const [mode, setMode] = useState<'landing' | 'login' | 'client'>(startOn)
-  const [email, setEmail] = useState(DEMO_EMAIL)
-  const [password, setPassword] = useState(DEMO_PASSWORD)
+export function LoginScreen({ real = false, startAtLogin = false, onSignIn, startOn = 'landing' }: Props) {
+  const { role: savedRole, setRole } = useApp()
+  const [mode, setMode] = useState<'landing' | 'login' | 'register' | 'client'>(startAtLogin ? 'login' : startOn)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(() => googleErrorMessage(window.location.search))
+  const [busy, setBusy] = useState(false)
   const [account, setAccount] = useState<'staff' | 'client'>('staff')
+  const [staffRole, setStaffRole] = useState<'member' | 'manager'>(savedRole === 'manager' ? 'manager' : 'member')
 
-  // "Log in" and "Try the demo" both open the same log-in screen, where people pick Staff or Client.
-  if (mode === 'landing') return <LandingAltitude onLogIn={() => setMode('login')} onDemo={() => setMode('login')} />
+  // Show a failed Google sign-in once, then take the reason out of the address.
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('google_error')) {
+      url.searchParams.delete('google_error')
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash)
+    }
+  }, [])
 
+  // The server says whether Google sign-in is set up; the button only shows when it is.
+  const [google, setGoogle] = useState(false)
+  useEffect(() => {
+    fetch('/api/auth/config')
+      .then((r) => (r.ok ? r.json() : { google: false }))
+      .then((c: { google?: boolean }) => setGoogle(c.google === true))
+      .catch(() => setGoogle(false))
+  }, [])
+
+  // "Try the demo" skips sign-up: enter the sample agency as a team member.
+  const tryDemo = () => {
+    setRole('member')
+    onSignIn()
+  }
+  if (mode === 'landing') return <LandingAltitude onLogIn={() => setMode('login')} onDemo={real ? () => setMode('login') : tryDemo} />
+
+  const register = mode === 'register'
   const isClient = account === 'client'
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (isClient) {
       setMode('client')
-    } else {
-      setRole('manager')
+      return
+    }
+    setRole(staffRole)
+    if (!real) return onSignIn()
+    setError(null)
+    setBusy(true)
+    try {
+      await login(email.trim(), password)
       onSignIn()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't sign in. Try again.")
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -53,9 +91,19 @@ export function LoginScreen({ onSignIn, startOn = 'landing' }: Props) {
       <div className="rk-wrap rk-auth-wrap">
         <header className="rk-panel rk-dots rk-auth-panel">
           <h1>
-            {mode === 'client' ? <>Your plans, <em>soon</em>.</> : <>Welcome back to <em>Remake</em>.</>}
+            {mode === 'client' ? (
+              <>Your plans, <em>soon</em>.</>
+            ) : register && !real ? (
+              <>Start with the <em>sample agency</em>.</>
+            ) : (
+              <>Welcome back to <em>Remake</em>.</>
+            )}
           </h1>
-          <p className="rk-auth-lede">This is a demo. The log-in details are filled in for you. We only save the account type you pick.</p>
+          <p className="rk-auth-lede">
+            {real
+              ? 'Use the email and password your agency set up for you.'
+              : 'Demo only. There is no password, and only the account type you pick is saved.'}
+          </p>
         </header>
 
         {mode === 'client' ? (
@@ -80,18 +128,20 @@ export function LoginScreen({ onSignIn, startOn = 'landing' }: Props) {
                 onChange={(e) => setEmail(e.target.value)}
               />
             </label>
-            <label className="rk-field">
-              <span className="rk-field-label">Password</span>
-              <input
-                id="login-password"
-                className="rk-input"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <span className="rk-field-hint">Demo log-in: {DEMO_EMAIL} / {DEMO_PASSWORD}, already filled in.</span>
-            </label>
+            {real && !isClient && (
+              <label className="rk-field">
+                <span className="rk-field-label">Password</span>
+                <input
+                  id="login-password"
+                  className="rk-input"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </label>
+            )}
             <fieldset className="rk-fieldset">
               <legend className="rk-field-label">Log in as</legend>
               <div className="rk-choices">
@@ -107,10 +157,43 @@ export function LoginScreen({ onSignIn, startOn = 'landing' }: Props) {
                 </label>
               </div>
             </fieldset>
-            <button type="submit" className="rk-btn rk-btn-primary rk-btn-big rk-btn-block">
-              {isClient ? 'Continue' : 'Log in'}
+            {!isClient && (
+              <fieldset className="rk-fieldset">
+                <legend className="rk-field-label">Your role</legend>
+                <div className="rk-choices">
+                  <label className="rk-choice">
+                    <input type="radio" name="staff-role" checked={staffRole === 'member'} onChange={() => setStaffRole('member')} />
+                    <strong>Team member</strong>
+                  </label>
+                  <label className="rk-choice">
+                    <input type="radio" name="staff-role" checked={staffRole === 'manager'} onChange={() => setStaffRole('manager')} />
+                    <strong>Manager (approves)</strong>
+                  </label>
+                </div>
+              </fieldset>
+            )}
+            {error && (
+              <p className="field-error" role="alert">
+                {error}
+              </p>
+            )}
+            <button type="submit" className="rk-btn rk-btn-primary rk-btn-big rk-btn-block" disabled={busy}>
+              {isClient ? 'Continue' : register && !real ? 'Register and log in' : 'Log in'}
               <span className="rk-arrow" aria-hidden="true">→</span>
             </button>
+            {google && !isClient && (
+              <a className="rk-btn rk-btn-outline rk-btn-big rk-btn-block" href="/api/auth/google/start">
+                Continue with Google
+              </a>
+            )}
+            {!real && (
+              <p className="rk-auth-text">
+                {register ? 'Already using Remake? ' : 'New here? '}
+                <button type="button" className="link-btn" onClick={() => setMode(register ? 'login' : 'register')}>
+                  {register ? 'Log in' : 'Register free'}
+                </button>
+              </p>
+            )}
           </form>
         )}
       </div>

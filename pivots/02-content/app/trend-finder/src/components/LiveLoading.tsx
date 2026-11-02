@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { t } from '../lib/i18n'
 
-// Live searches run a real TikTok scrape, which usually takes 20–60 seconds (cached repeats are instant).
-export function LiveLoading({ query }: { query: string }) {
+// Live searches run a real scrape per platform, which usually takes 20–60 seconds (cached repeats are instant).
+// `title` names the platforms, or the step when a pasted link or screenshot is being read.
+export function LiveLoading({ query, title }: { query: string; title?: string }) {
   const [seconds, setSeconds] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setSeconds((s) => s + 1), 1000)
@@ -21,19 +23,19 @@ export function LiveLoading({ query }: { query: string }) {
             </div>
           ))}
         </div>
-        <strong>Searching TikTok for "{query}"…</strong>
+        <strong>{title ?? t('find.loading.title', { query })}</strong>
         <ol className="reading-steps">
           <li className={seconds < 3 ? 'now' : 'done'}>
             <span className="reading-dot" aria-hidden="true">{seconds < 3 ? '' : '✓'}</span>
-            Sending the search
+            {t('find.loading.sending')}
           </li>
           <li className={seconds < 3 ? '' : 'now'}>
             <span className="reading-dot" aria-hidden="true" />
-            Collecting videos, views and followers
+            {t('find.loading.collecting')}
           </li>
         </ol>
         <span className="small muted">
-          {seconds}s · New searches usually take 20–60 seconds. Repeat searches load instantly.
+          {t('find.loading.footer', { seconds })}
         </span>
       </div>
     </div>

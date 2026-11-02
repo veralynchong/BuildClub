@@ -1,6 +1,7 @@
 import type { ChipGroup } from '../lib/clientChips'
 import { PlatformLogo } from './PlatformToggles'
 import { checkedWhen } from './find/checked'
+import { t } from '../lib/i18n'
 
 export interface PulseInfo {
   live: boolean
@@ -31,18 +32,21 @@ export function ClientChips({ clientName, groups, pulse, onPick, onRefresh, extr
           <PlatformLogo platform="tiktok" size={14} />
           {pulse.loading ? (
             <span>
-              Checking what's catching on for {clientName} on TikTok. <span className="muted">This takes about 30 seconds and runs once a day.</span>
+              {t('home.clientChips.checking', { name: clientName })} <span className="muted">{t('home.clientChips.checkingTime')}</span>
             </span>
           ) : pulse.error ? (
-            <span className="pulse-error">We couldn't check TikTok just now: {pulse.error}</span>
+            <span className="pulse-error">{t('home.clientChips.error', { error: pulse.error })}</span>
+          ) : !pulse.topic ? (
+            // Nothing to look up: a refresh would only be refused.
+            <span className="muted">{t('home.clientChips.noTopic', { name: clientName })}</span>
           ) : pulse.fetchedAt ? (
-            <span className="muted">We checked TikTok for "{pulse.topic}" {checkedWhen(pulse.fetchedAt)}.</span>
+            <span className="muted">{t('home.clientChips.checked', { topic: pulse.topic, when: checkedWhen(pulse.fetchedAt) })}</span>
           ) : (
-            <span className="muted">We haven't checked TikTok for {clientName} yet.</span>
+            <span className="muted">{t('home.clientChips.notChecked', { name: clientName })}</span>
           )}
-          {!pulse.loading && (
+          {!pulse.loading && pulse.topic && (
             <button type="button" className="link-btn" onClick={onRefresh}>
-              Check again
+              {t('home.clientChips.checkAgain')}
             </button>
           )}
         </div>
@@ -50,7 +54,7 @@ export function ClientChips({ clientName, groups, pulse, onPick, onRefresh, extr
 
       {pulse.loading && !groups.some((g) => g.id === 'trending') && (
         <div className="chip-group" aria-hidden="true">
-          <span className="chip-group-title">Catching on now</span>
+          <span className="chip-group-title">{t('home.clientChips.catching')}</span>
           <div className="chip-row">
             {[90, 120, 80].map((w) => (
               <span key={w} className="cchip cchip-skeleton" style={{ width: w }} />
@@ -59,7 +63,7 @@ export function ClientChips({ clientName, groups, pulse, onPick, onRefresh, extr
         </div>
       )}
 
-      {groups.map((g) => (
+      {groups.filter((g) => g.chips.length > 0).map((g) => (
         <div key={g.id} className="chip-group">
           <span className="chip-group-title">{g.title}</span>
           <div className="chip-row">

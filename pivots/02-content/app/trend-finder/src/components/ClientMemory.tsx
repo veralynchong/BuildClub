@@ -1,5 +1,7 @@
 import type { Client, Format, SavedIdea, Video } from '../types'
-import { decisionLabel, memorySummary, planTitle } from '../lib/memory'
+import { decisionLabel, memoryEvents, memorySummary, planTitle } from '../lib/memory'
+import { t } from '../lib/i18n'
+import { dateLocale } from '../lib/dates'
 
 interface Props {
   client: Client
@@ -8,19 +10,19 @@ interface Props {
   formatById: Map<string, Format>
 }
 
-const day = (at: number) => new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+const day = (at: number) => new Date(at).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' })
 
 // What Remake has learned about this client: every manager decision, newest first, with the plan and the reason.
 export function ClientMemory({ client, ideas, videoById, formatById }: Props) {
-  const events = [...(client.memory ?? [])].reverse()
+  const events = memoryEvents(client, ideas).reverse()
   return (
     <section className="client-memory">
       <header className="client-memory-head">
-        <h3>What we've learned about {client.name}</h3>
+        <h3>{t('home.memory.title', { name: client.name })}</h3>
         {events.length > 0 && <span className="small muted">{memorySummary(events)}</span>}
       </header>
       {events.length === 0 ? (
-        <p className="small muted">Nothing yet. Every approval and send-back gets saved here.</p>
+        <p className="small muted">{t('home.memory.empty')}</p>
       ) : (
         <ul className="memory-list">
           {events.map((e) => {
@@ -33,6 +35,7 @@ export function ClientMemory({ client, ideas, videoById, formatById }: Props) {
                 </div>
                 <strong>{plan.title}</strong>
                 {plan.detail && <span className="small muted">{plan.detail}</span>}
+                {e.tags && e.tags.length > 0 && <span className="small muted">{e.tags.join(' · ')}</span>}
                 {e.reason && <p className="quote">{e.reason}</p>}
               </li>
             )

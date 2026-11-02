@@ -59,6 +59,10 @@
   --late-soft: var(--canvas-alt);
   --no: #b42318;
   --no-soft: #fdeceb;
+  /* Storyboard (src/styles/storyboard.css): frame box shape, swatch size, and the ring that keeps a near-white swatch visible */
+  --frame-ratio: 9 / 16;
+  --swatch-size: 18px;
+  --swatch-ring: rgb(10 12 40 / 0.28);
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: var(--font-serif);
   --tracking-tight: -0.02em;
@@ -72,9 +76,20 @@
   --shadow: none;
   --focus-ring: 0 0 0 3px var(--blue-soft);
   --sky-tint: none;
+  /* Subtitle tokens: the burn-in's look (backend/subtitles.py, drawn on 1080x1920) and the live preview share
+     them. Sizes are the burn-in pixel sizes as a share of the frame width (44, 56, 72 of 1080), used with
+     container units; --sub-bottom is the 460 px under the text block. They sit on top of video, so they are the same in light and dark. */
+  --sub-fg: #ffffff;
+  --sub-bg: rgb(0 0 0 / 0.67);
+  --sub-stroke: #000000;
+  --sub-size-s: 4.07cqw;
+  --sub-size-m: 5.19cqw;
+  --sub-size-l: 6.67cqw;
+  --sub-bottom: 42.59cqw;
+  --sub-margin-x: 6.48%;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-ui="altitude"] {
+  :root:not([data-theme="light"])[data-ui="altitude"] {
     --canvas: #0b0d1c;
     --canvas-alt: #14172b;
     --ink: #eceef6;
@@ -92,6 +107,9 @@
     --line: #262a48;
     --line-strong: #454a78;
     --frost: rgb(11 13 28 / 0.88);
+    --sub-fg: #ffffff;
+    --sub-bg: rgb(0 0 0 / 0.67);
+    --sub-stroke: #000000;
     --scrim: rgb(0 0 0 / 0.6);
     --accent-fg: #ffffff;
     --hot-fg: #0b0d1c;
@@ -101,10 +119,46 @@
     --rising-soft: #33260a;
     --no: #ff8a7a;
     --no-soft: #3a1512;
+    --swatch-ring: rgb(255 255 255 / 0.4);
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
     --shadow-float: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 64px rgb(0 0 0 / 0.55);
   }
 }
+/* Explicit Dark setting: same rules, regardless of the OS */
+  :root[data-theme="dark"][data-ui="altitude"] {
+    --canvas: #0b0d1c;
+    --canvas-alt: #14172b;
+    --ink: #eceef6;
+    --ink-muted: #a3a7c0;
+    --navy: #10145a;
+    --blue: #4a5cff;
+    --blue-hover: #3a4cf0;
+    --blue-soft: #1a2160;
+    --accent-soft-fg: var(--label);
+    --label: #8f9bff;
+    --violet: #b98aff;
+    --violet-soft: #2a1752;
+    --surface: #14172b;
+    --surface-3: #262a48;
+    --line: #262a48;
+    --line-strong: #454a78;
+    --frost: rgb(11 13 28 / 0.88);
+    --sub-fg: #ffffff;
+    --sub-bg: rgb(0 0 0 / 0.67);
+    --sub-stroke: #000000;
+    --scrim: rgb(0 0 0 / 0.6);
+    --accent-fg: #ffffff;
+    --hot-fg: #0b0d1c;
+    --early: #6fd39a;
+    --early-soft: #10301f;
+    --rising: #f0b44a;
+    --rising-soft: #33260a;
+    --no: #ff8a7a;
+    --no-soft: #3a1512;
+    --swatch-ring: rgb(255 255 255 / 0.4);
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+    --shadow-float: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 64px rgb(0 0 0 / 0.55);
+  }
 
 /* Canvas: plain, no sky tint */
 :root[data-ui="altitude"] body,
@@ -353,4 +407,17 @@
 @media (prefers-reduced-motion: reduce) {
   /* No movement: keep the strong blue glow, still. */
   :root[data-ui="altitude"] .platform-on { animation: none; }
+}
+
+/* Production board tokens (StepProgress, FlagBadge). They point at tokens that already have dark values, so
+   light and dark both follow without a second block here. A flag is always printed with a word. */
+:root[data-ui="altitude"] {
+  --step-done: var(--early);
+  --step-current: var(--blue);
+  --step-todo: var(--line-strong);
+  --step-gap: 3px;
+  --flag-stuck: var(--rising);
+  --flag-stuck-soft: var(--rising-soft);
+  --flag-overdue: var(--no);
+  --flag-overdue-soft: var(--no-soft);
 }

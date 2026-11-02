@@ -6,6 +6,7 @@ import { Thumb } from './Thumb'
 import { useApp, useManagerName } from '../lib/appContext'
 import type { Decision } from '../lib/memory'
 import { beatUsual } from './find/words'
+import { t, tp } from '../lib/i18n'
 
 interface Props {
   client: Client
@@ -13,6 +14,8 @@ interface Props {
   videoById: Map<string, Video>
   formatById: Map<string, Format>
   onDecide: (ideaId: string, d: Decision) => void
+  // A preview from the team's side: the buttons are off, because a decision here would really be recorded.
+  readOnly?: boolean
   // Back returns to where Review was opened from: Plans, Home or All clients.
   onBack: () => void
   backLabel: string
@@ -42,9 +45,9 @@ const tokenMs = (name: string) => parseFloat(getComputedStyle(document.documentE
 // What the manager sees: each waiting plan with its reference, shots, the team's note and due date, and three choices:
 // approve, approve with changes, or send back. A narrow column so it reads like a phone view.
 // Team members see the same plans read-only. Demo only: the role is picked at login, nothing is checked.
-export function ReviewScreen({ client, ideas, videoById, formatById, onDecide, onBack, backLabel, onOpenPlans, nextClient, onNextClient }: Props) {
+export function ReviewScreen({ client, ideas, videoById, formatById, onDecide, readOnly, onBack, backLabel, onOpenPlans, nextClient, onNextClient }: Props) {
   const manager = useManagerName()
-  const isManager = useApp().role === 'manager'
+  const isManager = useApp().role === 'manager' && !readOnly
   const [leaving, setLeaving] = useState<Leaving | null>(null)
   const timers = useRef<number[]>([])
   const pending = useRef<Leaving | null>(null)
@@ -112,36 +115,42 @@ export function ReviewScreen({ client, ideas, videoById, formatById, onDecide, o
   return (
     <section className="review">
       <button className="link-btn review-back" onClick={onBack}>
-        ← Back to {backLabel}
+        {t('cut.rv.back', { label: backLabel })}
       </button>
-      {!isManager && (
-        <p className="review-banner">You're signed in as a team member. Only {manager} can approve or send back plans.</p>
+      {readOnly ? (
+        <p className="review-banner">
+          {t('cut.rv.preview', { name: manager })}
+        </p>
+      ) : (
+        !isManager && (
+          <p className="review-banner">{t('cut.rv.teamBanner', { name: manager })}</p>
+        )
       )}
 
       <header className="page-head review-head">
-        <span className="eyebrow">{client.name} · Review</span>
+        <span className="eyebrow">{t('cut.rv.eyebrow', { client: client.name })}</span>
         <h1 ref={headRef} tabIndex={-1}>
-          {!waiting.length ? 'Nothing to review' : isManager ? `${waiting.length} to review` : `${waiting.length} waiting for ${manager}`}
+          {!waiting.length ? t('cut.rv.none') : isManager ? t('cut.rv.toReview', { n: waiting.length }) : t('cut.rv.waitingFor', { n: waiting.length, name: manager })}
         </h1>
-        {waiting.length > 0 && isManager && <p className="small muted">Swipe right to approve, left to send back.</p>}
+        {waiting.length > 0 && isManager && <p className="small muted">{t('cut.rv.swipe')}</p>}
       </header>
 
       {waiting.length === 0 && (
         <div className="empty">
-          <h2>All done</h2>
+          <h2>{t('cut.rv.allDone')}</h2>
           <p>
             {nextClient
-              ? `${nextClient.name} has ${nextClient.waiting} ${nextClient.waiting === 1 ? 'plan' : 'plans'} waiting too.`
-              : 'Nothing else is waiting for approval for any client.'}
+              ? tp('cut.rv.nextHas', nextClient.waiting, { client: nextClient.name })
+              : t('cut.rv.nothingElse')}
           </p>
           <div className="form-actions">
             {nextClient && (
               <button className="btn btn-primary" onClick={onNextClient}>
-                Next: {nextClient.name} ({nextClient.waiting} waiting)
+                {t('cut.rv.next', { client: nextClient.name, n: nextClient.waiting })}
               </button>
             )}
             <button className={`btn ${nextClient ? 'btn-ghost' : 'btn-primary'}`} onClick={onOpenPlans}>
-              Back to Plans
+              {t('cut.rv.backToPlans')}
             </button>
           </div>
         </div>
@@ -282,7 +291,7 @@ function ReviewCard(p: CardProps) {
           style={style}
           tabIndex={canSwipe ? 0 : -1}
           aria-keyshortcuts={p.isManager ? 'ArrowRight ArrowLeft' : undefined}
-          aria-label={p.isManager ? `${f.name}. Press right arrow to approve, left arrow to send back.` : f.name}
+          aria-label={p.isManager ? t('cut.rv.cardAria', { name: f.name }) : f.name}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={(e) => endDrag(e, false)}
@@ -294,14 +303,14 @@ function ReviewCard(p: CardProps) {
             aria-hidden="true"
             style={{ opacity: dx > 0 ? progress : 0 }}
           >
-            Approve
+            {t('cut.rv.approve')}
           </span>
           <span
             className="swipe-hint swipe-hint-no"
             aria-hidden="true"
             style={{ opacity: dx < 0 ? progress : 0 }}
           >
-            Send back
+            {t('cut.rv.sendBack')}
           </span>
 
           <div className="review-ref">
@@ -309,22 +318,22 @@ function ReviewCard(p: CardProps) {
             <div>
               <strong>{f.name}</strong>
               <span className="small muted">
-                Based on "{v.hook}" · {compact(v.views)} views. {beatUsual(v)}.
+                {t('cut.rv.basedOn', { hook: v.hook, views: compact(v.views), beat: beatUsual(v) })}
               </span>
             </div>
           </div>
 
           <div className="review-meta">
             <span className="small muted">
-              Due {due(idea.dueDate)}
-              {idea.approvedAt && ' · Changed after approval'}
+              {t('cut.rv.due', { date: due(idea.dueDate) })}
+              {idea.approvedAt && ` · ${t('cut.rv.changed')}`}
             </span>
-            {!p.isManager && <span className="small muted">Waiting for {p.manager}</span>}
+            {!p.isManager && <span className="small muted">{t('cut.rv.waitingForName', { name: p.manager })}</span>}
           </div>
 
           {idea.noteToApprover && (
             <div className="review-note">
-              <span className="field-label">Note from the team</span>
+              <span className="field-label">{t('cut.rv.teamNote')}</span>
               <p className="quote">{idea.noteToApprover}</p>
             </div>
           )}
@@ -336,13 +345,13 @@ function ReviewCard(p: CardProps) {
                 return (
                   <li key={i}>
                     {s.shot}
-                    {s.text && <span className="shot-text"> Text: "{s.text}"</span>}
+                    {s.text && <span className="shot-text"> {t('cut.rv.shotText', { text: s.text })}</span>}
                     {p.isManager &&
                       (open ? (
                         <input
                           className="shot-comment-input"
-                          aria-label={`Comment on shot ${i + 1}`}
-                          placeholder="Comment on this shot"
+                          aria-label={t('cut.rv.commentAria', { n: i + 1 })}
+                          placeholder={t('cut.rv.commentPlaceholder')}
                           value={shotComments[i] ?? ''}
                           autoFocus={!shotComments[i]}
                           onChange={(e) => setShotComments({ ...shotComments, [i]: e.target.value })}
@@ -355,7 +364,7 @@ function ReviewCard(p: CardProps) {
                           disabled={p.busy}
                           onClick={() => setCommenting([...commenting, i])}
                         >
-                          + Comment
+                          {t('cut.rv.addComment')}
                         </button>
                       ))}
                   </li>
@@ -367,7 +376,7 @@ function ReviewCard(p: CardProps) {
           {!p.isManager ? null : mode ? (
             <div className="review-reject">
               <label htmlFor={`comment-${idea.id}`} className="field-label">
-                {mode === 'changes' ? 'What should change before filming?' : 'Why are you sending it back?'}
+                {mode === 'changes' ? t('cut.rv.whatChange') : t('cut.rv.whyBack')}
               </label>
               <textarea
                 id={`comment-${idea.id}`}
@@ -378,23 +387,23 @@ function ReviewCard(p: CardProps) {
               />
               <div className="review-actions">
                 <button className="btn btn-ghost" onClick={() => setMode(null)}>
-                  Cancel
+                  {t('cut.common.cancel')}
                 </button>
                 <button className="btn btn-primary" onClick={confirm} disabled={p.busy || !comment.trim()}>
-                  {mode === 'changes' ? 'Approve with changes' : 'Send back'}
+                  {mode === 'changes' ? t('cut.rv.approveChanges') : t('cut.rv.sendBack')}
                 </button>
               </div>
             </div>
           ) : (
             <div className="review-actions review-actions-3">
               <button className="btn btn-ghost" onClick={() => openMode('back')} disabled={p.busy}>
-                Send back
+                {t('cut.rv.sendBack')}
               </button>
               <button className="btn btn-ghost" onClick={() => openMode('changes')} disabled={p.busy}>
-                Approve with changes
+                {t('cut.rv.approveChanges')}
               </button>
               <button className="btn btn-primary" onClick={approve} disabled={p.busy}>
-                Approve
+                {t('cut.rv.approve')}
               </button>
             </div>
           )}

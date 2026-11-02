@@ -1,4 +1,15 @@
-export type Platform = 'instagram' | 'tiktok' | 'youtube'
+export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'reddit' | 'x'
+
+export type Denominator = 'median' | 'followers'
+
+// How a video's multiple was measured. All null on data written before the details were kept.
+export interface Baseline {
+  medianN: number | null
+  baselineFrom: string | null
+  baselineTo: string | null
+  medianFetchedAt: number | null
+  denominator: Denominator | null
+}
 
 export interface Video {
   id: string
@@ -24,12 +35,29 @@ export interface Video {
   caption?: string
   music?: string
   hashtags?: string[]
+  // Reddit only: it shows no views, so `views` holds the upvotes (and medianViews the subreddit's usual upvotes).
+  comments?: number
+  baseline?: Baseline
+  // When this search fetched the video, in ms.
+  fetchedAt?: number
+  // True when the search result came from the cache.
+  fromCache?: boolean
 }
 
 export interface Shot {
   time: string
   shot: string
   text?: string
+  // Script and storyboard (set once the shot is written and drawn; old plans have neither).
+  line?: string
+  frameImage?: string
+  purpose?: 'hook' | 'body' | 'cta'
+  // Up to 3 other lines the writer offered for this shot.
+  options?: string[]
+  // The user changed (or picked) the line, so a rewrite asks first.
+  edited?: boolean
+  // Hex colours read from the frame in the browser.
+  palette?: string[]
 }
 
 export interface Format {
@@ -52,9 +80,19 @@ export interface Format {
   shotList: Shot[]
   props: string[]
   needs: string[]
+  // True once the AI has judged `needs`; before that an empty list means "not checked", not "nothing needed".
+  needsKnown?: boolean
+  // The key lines of a real video and the job each does (from its AI breakdown).
+  lines?: Line[]
   // How hard it is for a typical client to film.
   effort: 'easy' | 'medium' | 'hard'
   editorNotes: string
+}
+
+export interface Line {
+  time: string
+  text: string
+  role: 'hook' | 'setup' | 'proof' | 'payoff' | 'cta'
 }
 
 export interface Client {
@@ -91,7 +129,19 @@ export interface ClientEvent {
   kind: 'approved' | 'approved-with-changes' | 'sent-back'
   reason?: string
   at: number
+  // The preset reasons the approver ticked when sending a plan back.
+  tags?: string[]
 }
+
+// One answer from the approver on a plan, kept in SavedIdea.history (oldest first) so a resend still shows why it was sent back.
+export interface Decision {
+  decision: 'approved' | 'rejected'
+  reason?: string
+  tags?: string[]
+  decidedAt: number
+}
+
+export type Stage = 'approved' | 'filming' | 'editing' | 'posted'
 
 export interface SavedIdea {
   id: string
@@ -107,10 +157,22 @@ export interface SavedIdea {
   noteToApprover?: string
   sentAt?: number
   rejectReason?: string
+  // The preset reasons ticked when the plan was sent back.
+  rejectTags?: string[]
+  // When the approver last answered. The API keeps the newer of this and sentAt.
+  decidedAt?: number
+  // Every answer so far, oldest first. Only grows; the API keeps the longer copy.
+  history?: Decision[]
+  // Production stage of an approved plan; none means ready to film. The API drops it on any other status.
+  stage?: Stage
+  // When it moved to "posted"; kept only while posted.
+  postedAt?: number
   // Set when the manager decides.
   approvedAt?: number
   // "Approve with changes": what the manager wants changed.
   managerNote?: string
   // The manager's comment per shot, keyed by shot index.
   shotComments?: Record<number, string>
+  // When the plan last changed. The API sets it on save; the board's "Stuck" flag reads it. Old plans have none.
+  updatedAt?: number
 }
