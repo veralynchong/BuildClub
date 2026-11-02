@@ -17,7 +17,7 @@ interface Props {
   onProject: (p: EditProject) => void
 }
 
-// The plan's music track (shared with Make the video) and how loud it plays under the clips.
+// The plan's music track and how loud it plays under the clips.
 export function MusicTool({ ideaId, project, file, onFile, readOnly, onProject }: Props) {
   const [licensed, setLicensed] = useState(false)
   const [busy, setBusy] = useState(false)
