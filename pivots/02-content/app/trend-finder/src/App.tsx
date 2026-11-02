@@ -80,6 +80,7 @@ import { ClientHome } from './components/ClientHome'
 
 const sorters: Record<Sort, (a: (typeof videos)[number], b: (typeof videos)[number]) => number> = {
   outlier: (a, b) => outlierScore(b) - outlierScore(a),
+  views: (a, b) => b.views - a.views,
   ratio: (a, b) => viewsPerFollower(b) - viewsPerFollower(a),
   newest: (a, b) => a.daysAgo - b.daysAgo,
   fastest: (a, b) => viewsPerDay(b) - viewsPerDay(a),
