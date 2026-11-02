@@ -161,9 +161,26 @@ def test_run_aborts_when_server_quote_is_lower_too():
 
 
 def test_run_refuses_when_server_total_is_over_cap():
-    fake = FakeServer(extra=0.1)  # local 0.464 passes a 0.5 cap, the server's 0.664 does not (and also differs)
-    code, _ = go(fake, cap=0.5)
-    assert code in (3, 4) and fake.confirms() == []
+    fake = FakeServer(extra=0.002)  # server 0.468 is within the mismatch tolerance of local 0.464, but over the cap
+    code, lines = go(fake, cap=0.465)
+    assert code == 3 and fake.confirms() == [] and "server quotes" in lines[-1]
+
+
+def test_run_raised_confirm_may_still_be_generating():
+    for raise_on, committed_before in ((0, "0 of 2"), (1, "1 of 2")):
+        fake = FakeServer()
+        seen = []
+
+        def flaky(method, path, body):
+            if path.endswith("/gen/chain") and body["confirm"]:
+                seen.append(1)
+                if len(seen) == raise_on + 1:
+                    raise OSError("timed out")
+            return fake(method, path, body)
+
+        code, lines = go(flaky)
+        assert code == 5 and len(seen) == raise_on + 1, raise_on
+        assert f"Shot {raise_on + 1} may still be generating" in lines[-1] and committed_before in lines[-1]
 
 
 def test_run_refuses_when_wallet_is_too_low():

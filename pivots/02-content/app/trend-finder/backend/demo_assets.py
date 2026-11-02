@@ -276,8 +276,10 @@ def run(api: Api, idea_id: str, image_model: dict, video_model: dict, seconds: i
             return 3
         done = []
         for n, s in enumerate(shots, 1):
+            flying = n  # if the POST raises, the server may have accepted it
             status, made = api("POST", f"/api/ideas/{idea_id}/gen/chain", {**sent[s["id"]], "confirm": True})
             if status != 201:
+                flying = None  # a definite answer: this shot was not started
                 out(f"Shot {n} didn't start: {message(made)}{committed()}")
                 return 5
             confirmed, spent, flying = n, spent + items[n - 1]["imageUsd"] + items[n - 1]["videoUsd"], n
