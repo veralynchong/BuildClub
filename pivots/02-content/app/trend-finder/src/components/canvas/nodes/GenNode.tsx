@@ -26,7 +26,7 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
   const shown = selectedGen(node, gens)
   const need = missing(id)
   const handles = incomingHandles(id)
-  const seconds = node.data.duration ?? model?.durations?.[0]
+  const seconds = model?.durations?.includes(node.data.duration ?? -1) ? node.data.duration : model?.durations?.[0]
   const stale = node.data.stale === true
 
   // Why a model can't be picked: it has no use for an input that already has a line.
@@ -51,7 +51,10 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
         aria-label={t('canvas.gen.model')}
         value={model?.id ?? ''}
         disabled={readOnly || !!pending}
-        onChange={(e) => updateData(id, { model: e.target.value })}
+        onChange={(e) => {
+          const next = options.find((m) => m.id === e.target.value)
+          updateData(id, { model: e.target.value, ...(node.data.duration !== undefined && !next?.durations?.includes(node.data.duration) ? { duration: undefined } : {}) })
+        }}
       >
         {options.map((m) => (
           <option key={m.id} value={m.id} disabled={refuses(m) !== null} title={refuses(m) ?? undefined}>
@@ -63,7 +66,7 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
         <select
           className="cv-select nodrag"
           aria-label={t('canvas.gen.duration')}
-          value={seconds}
+          value={seconds ?? ''}
           disabled={readOnly || !!pending}
           onChange={(e) => updateData(id, { duration: Number(e.target.value) })}
         >

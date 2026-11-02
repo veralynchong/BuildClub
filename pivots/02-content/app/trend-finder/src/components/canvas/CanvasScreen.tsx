@@ -17,7 +17,7 @@ import { t, type Key, type Vars } from '../../lib/i18n'
 import { getCanvas, getModels, NoShots, pollGen, putCanvas, StaleCanvas, startGen } from '../../lib/canvas/api'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '../../lib/canvas/drawer'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import { addNode, freeSpot, genRequest, missingInput, pendingGen, primaryFrames, markStale, versionsOf } from '../../lib/canvas/graph'
+import { addNode, freeSpot, genRequest, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { mergeFrame } from '../../lib/storyboard'
 import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
 import type { CanvasDoc, CanvasState, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
@@ -246,6 +246,14 @@ function CanvasBoard({
   const [gens, setGens] = useState<Generation[]>(initial.generations)
   const gensRef = useRef(gens)
   const polls = useRef(new Map<string, AbortController>())
+  const mounted = useRef(true)
+  const before = useRef(new Map<string, string | null | undefined>()) // generation id -> the version chosen before it started
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -266,10 +274,7 @@ function CanvasBoard({
   // Marks the generated nodes after nodeId (and nodeId itself when its own input changed) as out of date.
   const markFrom = useCallback(
     (nodeId: string, self: boolean) => {
-      const d = latest.current.doc
-      const ids = new Set(markStale(d, nodeId, gensRef.current).nodes.filter((n) => n.data.stale).map((n) => n.id))
-      const me = d.nodes.find((n) => n.id === nodeId)
-      if (self && me && (me.type === 'storyboard' || me.type === 'video') && versionsOf(nodeId, gensRef.current).some((g) => g.status === 'done')) ids.add(nodeId)
+      const ids = new Set(staleIds(latest.current.doc, nodeId, gensRef.current, self))
       setNodes((ns) =>
         ns.map((n) => (ids.has(n.id) && !n.data.node.data.stale ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, stale: true } } } } : n)),
       )
@@ -292,6 +297,10 @@ function CanvasBoard({
                 ns.map((n) => (n.id === end.nodeId ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, selected: end.id, stale: false } } } } : n)),
               )
               markFrom(end.nodeId, false)
+            } else if (end?.status === 'failed' && before.current.get(end.id)) {
+              // a failed try leaves the earlier chosen version in place, so the plan's frame doesn't change
+              const prev = before.current.get(end.id)
+              setNodes((ns) => ns.map((n) => (n.id === end.nodeId && !n.data.node.data.selected ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, selected: prev } } } } : n)))
             }
             return
           } catch {
@@ -318,6 +327,15 @@ function CanvasBoard({
     }
   }, [initial, track])
 
+  // A job that finished while the canvas was closed: show it and date what comes after.
+  useEffect(() => {
+    for (const { nodeId, genId } of finishedWhileAway(initial.doc, gensRef.current)) {
+      updateData(nodeId, { selected: genId })
+      markFrom(nodeId, false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial])
+
   const onGenerate = async (nodeId: string) => {
     const d = latest.current.doc
     const node = d.nodes.find((n) => n.id === nodeId)
@@ -327,9 +345,12 @@ function CanvasBoard({
     if (missingInput(d, nodeId, model, shots, gensRef.current)) return
     const req = genRequest(d, nodeId, shots, gensRef.current)
     if (kind === 'video' && req.duration === undefined && model.durations) req.duration = model.durations[0]
+    const prev = node.data.selected
     updateData(nodeId, { selected: null, model: model.id })
     try {
       const g = await startGen(ideaId, { nodeId, model: model.id, ...req })
+      if (!mounted.current) return
+      before.current.set(g.id, prev)
       upsertGen(g)
       track(g)
     } catch (e) {

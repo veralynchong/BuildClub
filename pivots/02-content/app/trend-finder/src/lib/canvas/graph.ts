@@ -55,6 +55,31 @@ export function markStale(doc: CanvasDoc, nodeId: string, gens: Generation[]): C
   }
 }
 
+// The generated nodes to date after a change at nodeId: those downstream, plus nodeId itself when `self` (its own input
+// changed). Only nodes that have a finished version.
+export function staleIds(doc: CanvasDoc, nodeId: string, gens: Generation[], self: boolean): string[] {
+  const ids = new Set(downstream(doc, nodeId))
+  if (self) ids.add(nodeId)
+  return doc.nodes
+    .filter((n) => ids.has(n.id) && (n.type === 'storyboard' || n.type === 'video') && versionsOf(n.id, gens).some((g) => g.status === 'done'))
+    .map((n) => n.id)
+}
+
+// Nodes whose job finished while the canvas was closed: the chosen version is missing or gone and the newest finished
+// one was made here (not a legacy import or an upload). They should show that version and date what follows.
+export function finishedWhileAway(doc: CanvasDoc, gens: Generation[]): { nodeId: string; genId: string }[] {
+  const out: { nodeId: string; genId: string }[] = []
+  for (const n of doc.nodes) {
+    if (n.type !== 'storyboard' && n.type !== 'video') continue
+    const done = versionsOf(n.id, gens).filter((g) => g.status === 'done')
+    const newest = done[done.length - 1]
+    if (!newest || newest.model === 'imported' || newest.model === 'upload') continue
+    if (done.some((g) => g.id === n.data.selected)) continue
+    out.push({ nodeId: n.id, genId: newest.id })
+  }
+  return out
+}
+
 function upstream(doc: CanvasDoc, nodeId: string, handle: string): CanvasNode | null {
   const edge = doc.edges.find((e) => e.target === nodeId && e.targetHandle === handle)
   return (edge && doc.nodes.find((n) => n.id === edge.source)) || null
@@ -129,7 +154,7 @@ export function freeSpot(doc: CanvasDoc, at: { x: number; y: number }): { x: num
 }
 
 const ROW_STEP = 360 // matches the backend's column spacing
-const ROW_GAP = 200
+const ROW_GAP = 280 // a row is 400 apart in the backend; nodes in one row sit well inside this
 
 function startData(kind: NodeKind): NodeData {
   switch (kind) {

@@ -21,7 +21,7 @@ SCHEMA = (
     "doc TEXT NOT NULL, updated_at INTEGER NOT NULL)",
 )
 
-ROW_H = 280
+ROW_H = 400
 LAYOUT = {"ROW_H": ROW_H, "x": {"shot": 0, "storyboard": 360, "footage": 720}}
 NODE_TYPES = {"shot", "prompt", "storyboard", "video", "upload", "footage"}
 ID_RE = re.compile(r"^[A-Za-z0-9_:-]{1,80}$")

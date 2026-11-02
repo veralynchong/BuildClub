@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot } from '../src/lib/canvas/graph.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway } from '../src/lib/canvas/graph.ts'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer, DRAWER_KEY } from '../src/lib/canvas/drawer.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen } from '../src/lib/canvas/api.ts'
 
@@ -296,4 +296,25 @@ test('freeSpot moves a new node off the ones already there', () => {
   assert.deepEqual(freeSpot(doc, { x: 500, y: 500 }), { x: 500, y: 500 })
   const busy = { ...doc, nodes: [...doc.nodes, { ...node('n_a', 'prompt'), position: { x: 500, y: 500 } }, { ...node('n_b', 'prompt'), position: { x: 540, y: 540 } }] }
   assert.deepEqual(freeSpot(busy, { x: 500, y: 500 }), { x: 580, y: 580 })
+})
+
+test('staleIds never includes the node itself unless its own input changed', () => {
+  const g = [gen('a', 'n_sb_s1', 'done', 1), gen('v', 'n_vid', 'done', 2), gen('w', 'n_vid2', 'done', 3)]
+  const doc = docWith()
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.stale = true // an earlier stale mark on the node being regenerated
+  assert.deepEqual(staleIds(doc, 'n_sb_s1', g, false).sort(), ['n_vid', 'n_vid2'])
+  assert.deepEqual(staleIds(doc, 'n_sb_s1', g, true).sort(), ['n_sb_s1', 'n_vid', 'n_vid2'])
+  assert.deepEqual(staleIds(doc, 'n_sb_s1', [], true), [])
+})
+
+test('finishedWhileAway picks up a new version made while away, not a legacy import', () => {
+  const doc = docWith()
+  const made = [{ ...gen('a', 'n_sb_s1', 'done', 1), model: 'mock-image' }]
+  assert.deepEqual(finishedWhileAway(doc, made), [{ nodeId: 'n_sb_s1', genId: 'a' }])
+  const imported = [{ ...gen('i', 'n_sb_s1', 'done', 1), model: 'imported' }]
+  assert.deepEqual(finishedWhileAway(doc, imported), [])
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.selected = 'a'
+  assert.deepEqual(finishedWhileAway(doc, made), [])
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.selected = 'gone'
+  assert.deepEqual(finishedWhileAway(doc, made), [{ nodeId: 'n_sb_s1', genId: 'a' }])
 })
