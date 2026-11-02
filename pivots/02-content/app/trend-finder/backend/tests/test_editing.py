@@ -206,6 +206,33 @@ def test_signature_ignores_primaries_but_follows_clips(client, setup, monkeypatc
         assert one != editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, q)
 
 
+def test_brand_change_makes_editor_cut_stale(client, setup, monkeypatch):
+    fake_probe(monkeypatch)
+    t = up(client).json()
+    p = project(clip())
+    p["clips"][0]["source"]["id"] = t["id"]
+
+    def sig():
+        with server.db() as conn:
+            return editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, p)
+
+    one = sig()
+    client.put("/api/clients/a/brand", json={"font": "Noto Sans TC", "color": "#112233"})
+    colour = sig()
+    assert colour != one
+    client.put("/api/clients/a/brand/logo", content=b"\x89PNG" + b"\0" * 16, headers={"content-type": "image/png"})
+    with_logo = sig()
+    assert with_logo != colour
+    p["showLogo"] = True
+    assert sig() != with_logo
+    # render_input links the logo into the media dir and names it for the renderer
+    with server.db() as conn:
+        reel, files = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"}, p, {
+            f"take:{t['id']}": src(f"take:{t['id']}", next(server.MEDIA_DIR.glob(f"ia/{t['id']}.*")))})
+    name = reel["brand"]["logoUrl"]
+    assert name.startswith("logo-") and files[name].is_file() and reel["brand"]["color"] == "#112233"
+
+
 def test_render_input_names_files_by_key_hash(setup, tmp_path):
     f = tmp_path / "whatever.MOV"
     f.write_bytes(b"x")

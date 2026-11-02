@@ -61,6 +61,17 @@ class SearchResult(BaseModel):
     mediansPending: bool = False
 
 
+Hex = Annotated[str, StringConstraints(pattern=r"^#[0-9a-fA-F]{6}$")]
+
+
+class Brand(BaseModel):
+    # One font only: the export renders offline, so it can use only a font bundled in public/fonts/.
+    # Adding a font means adding its file there and a value to this Literal.
+    logo: Optional[str] = Field(None, pattern=r"^logo-[A-Za-z0-9_-]{6,40}\.(png|jpg|webp)$")
+    font: Literal["Noto Sans TC"] = "Noto Sans TC"
+    color: Optional[Hex] = None
+
+
 class Client(BaseModel):
     id: str
     name: str
@@ -70,9 +81,7 @@ class Client(BaseModel):
     examples: list[str]
     topics: Optional[list[str]] = None
     cannot: list[str]
-
-
-Hex = Annotated[str, StringConstraints(pattern=r"^#[0-9a-fA-F]{6}$")]
+    brand: Optional[Brand] = None
 
 
 Framing = Literal["wide", "medium", "close_up", "extreme_close_up", "overhead", "pov"]

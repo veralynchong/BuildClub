@@ -33,6 +33,7 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 import assist
+import brand
 import canvas
 import channels
 import covers
@@ -59,7 +60,7 @@ import subtitles
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
 from compare import CompareJobs, compare_id_for
-from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Client,
+from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Brand, Client,
                     CompareJob, CompareRequest, CompareStarted, Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
 
 HERE = Path(__file__).resolve().parent
@@ -792,6 +793,11 @@ def get_clients():
 
 @app.put("/api/clients", response_model=list[Client], response_model_exclude_none=True)
 def put_clients(clients: list[Client]):
+    # The client list is saved whole by the app, which does not send the brand kit back; keep the stored one.
+    stored = {c["id"]: c.get("brand") for c in load("clients") or []}
+    for c in clients:
+        if c.brand is None and stored.get(c.id):
+            c.brand = Brand(**stored[c.id])
     save("clients", clients)
     return clients
 
@@ -949,6 +955,7 @@ gen_jobs = gen_router.jobs
 app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
 app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR))
+app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(grading.make_router(db, lambda: MEDIA_DIR))
 app.include_router(recheck.make_router(db, lambda u: is_video_link(u)))

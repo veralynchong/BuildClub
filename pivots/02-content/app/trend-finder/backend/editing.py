@@ -217,12 +217,30 @@ def _source_files(conn, media: Path, idea_id: str) -> dict[str, Path]:
 
 # The project fields that change the rendered video. P3b adds texts, music and voice. Anything else in the
 # project (such as the pinned primaries) does not make an export stale.
-RENDER_FIELDS = ("clips",)
+RENDER_FIELDS = ("clips", "showLogo")
+
+
+def plan_client(conn, idea_id: str) -> dict:
+    """The client record the plan belongs to ({} when there is none)."""
+    if conn is None:
+        return {}
+
+    def stored(key):
+        row = conn.execute("SELECT value FROM store WHERE key = ?", (key,)).fetchone()
+        return json.loads(row[0]) if row else []
+
+    idea = next((i for i in stored("ideas") if i.get("id") == idea_id), None)
+    return next((c for c in stored("clients") if idea and c.get("id") == idea.get("clientId")), {})
+
+
+def client_brand(conn, idea_id: str) -> dict:
+    return plan_client(conn, idea_id).get("brand") or {}
 
 
 def signature(conn, media: Path, idea: dict, project: dict) -> str:
     """A fingerprint of what an export was made from: the render-relevant project fields and the modified time
-    of each footage file. Music, brand, lines and voiceover join it in P3b."""
+    of each footage file, and the client's brand kit (with the logo file name). Music, lines and voiceover join
+    it in P3b."""
     files = _source_files(conn, media, idea["id"])
     stamps = {}
     for c in project["clips"]:
@@ -232,7 +250,7 @@ def signature(conn, media: Path, idea: dict, project: dict) -> str:
         except (KeyError, OSError):
             stamps[key] = 0
     relevant = {k: project.get(k) for k in RENDER_FIELDS}
-    text = json.dumps([relevant, sorted(stamps.items())], sort_keys=True)
+    text = json.dumps([relevant, sorted(stamps.items()), client_brand(conn, idea["id"])], sort_keys=True)
     return hashlib.sha1(text.encode()).hexdigest()[:16]
 
 
@@ -248,8 +266,24 @@ def render_input(conn, media: Path, idea: dict, project: dict, sources: dict) ->
         name = f"{hashlib.sha1(key.encode()).hexdigest()[:16]}{path.suffix}"
         urls[key] = name
         files[name] = path
-    reel = {"project": project, "urls": urls, "lines": {}, "musicUrl": None, "voice": [],
-            "brand": {"font": "Noto Sans TC", "color": None, "logoUrl": None}, "fontUrl": ""}
+    client = plan_client(conn, idea["id"])
+    kit = client.get("brand") or {}
+    logo = kit.get("logo")
+    logo_path = Path(media) / "brand" / client.get("id", "") / logo if logo else None
+    if logo_path is not None and logo_path.is_file():
+        files[logo] = logo_path
+    else:
+        logo = None
+    music_url = None
+    if project.get("music") and conn is not None:
+        row = conn.execute("SELECT id, ext FROM cut_music WHERE idea_id = ?", (idea["id"],)).fetchone()
+        folder = renders.cut_folder(Path(media).resolve(), idea["id"])
+        if row and folder is not None and (folder / f"music-{row[0]}.{row[1]}").is_file():
+            music_url = f"music-{row[0]}.{row[1]}"
+            files[music_url] = folder / music_url
+    reel = {"project": project, "urls": urls, "lines": {}, "musicUrl": music_url, "voice": [],
+            "brand": {"font": kit.get("font", "Noto Sans TC"), "color": kit.get("color"), "logoUrl": logo},
+            "fontUrl": ""}
     return reel, files
 
 
