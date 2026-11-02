@@ -35,6 +35,7 @@ COLUMNS = ("id, idea_id, node_id, kind, model, inputs, input_hash, status, est_u
            "source_url, error, created_at, finished_at")
 MAX_PROMPT = 4000
 CSP = {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"}
+NODE_FOR_KIND = {"image": "storyboard", "video": "video"}  # the canvas node type each model kind fills
 FILE_TYPES = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "mp4": "video/mp4",
               "mp3": "audio/mpeg"}
 
@@ -208,6 +209,14 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             return error(422, "That model doesn't exist.")
         if model["provider"] != "mock":
             return error(422, "This model isn't available yet.")
+        with db() as conn:
+            canvas_row = conn.execute("SELECT doc FROM canvases WHERE idea_id = ?", (idea_id,)).fetchone()
+        nodes = json.loads(canvas_row[0])["nodes"] if canvas_row else []
+        target = next((n for n in nodes if n.get("id") == node_id), None)
+        if target is None:
+            return error(422, "That node isn't on this plan's canvas.")
+        if NODE_FOR_KIND.get(model["kind"]) != target.get("type"):
+            return error(422, "That model can't make this kind of node.")
         if duration is not None:
             if model["kind"] != "video" or duration not in model.get("durations", []):
                 return error(422, "That duration isn't available for this model.")

@@ -8,19 +8,22 @@ import pytest
 
 import generations
 import server
-from test_takes import idea, store_ideas
+from test_canvas import plan
+from test_takes import store_ideas
 
 
 @pytest.fixture
 def gen(client, monkeypatch):
     monkeypatch.setattr(generations, "MOCK_DELAY_S", 0)
     monkeypatch.setattr(server.gen_jobs, "submit", server.gen_jobs.run)  # run inline, no worker thread
-    store_ideas(idea("ia"), idea("ib"), idea("iw", "waiting"))
+    store_ideas(plan("ia"), plan("ib"), plan("iw", "waiting"))
+    for i in ("ia", "ib", "iw"):
+        client.get(f"/api/ideas/{i}/canvas")  # builds the canvas the nodes live on
     return client
 
 
 def post(client, idea_id="ia", **body):
-    body = {"nodeId": "n1", "model": "mock-image", "prompt": "a tofu bar", **body}
+    body = {"nodeId": "n_sb_s1", "model": "mock-image", "prompt": "a tofu bar", **body}
     return client.post(f"/api/ideas/{idea_id}/gen", json=body)
 
 
@@ -39,7 +42,7 @@ def test_mock_image_done(gen):
     assert r.status_code == 201 and r.json()["status"] == "queued"
     gid = r.json()["id"]
     row = gen.get(f"/api/ideas/ia/gen/{gid}").json()
-    assert row["status"] == "done" and row["estUsd"] == 0 and row["nodeId"] == "n1" and row["kind"] == "image"
+    assert row["status"] == "done" and row["estUsd"] == 0 and row["nodeId"] == "n_sb_s1" and row["kind"] == "image"
     assert row["url"] == f"/api/ideas/ia/gen/{gid}/file"
     f = gen.get(row["url"])
     assert f.status_code == 200 and f.headers["content-type"].startswith("image/svg+xml")
@@ -59,6 +62,20 @@ def test_rows_are_append_only(gen):
     post(gen, prompt="another")
     rows = gen.get("/api/ideas/ia/gen").json()
     assert len(rows) == 2 and rows[0] == before
+
+
+def test_gen_node_must_exist(gen):
+    assert post(gen, nodeId="nope").status_code == 422
+    assert post(gen, nodeId="n_shot_s1").status_code == 422
+
+
+def test_kind_mismatch_422(gen):
+    assert post(gen, model="mock-video").status_code == 422  # a storyboard node takes images
+    with server.db() as conn:
+        conn.execute("UPDATE canvases SET doc = replace(doc, '\"type\": \"storyboard\"', '\"type\": \"video\"') "
+                     "WHERE idea_id = 'ia'")
+    assert post(gen, model="mock-video").status_code == 201
+    assert post(gen).status_code == 422
 
 
 def test_unknown_model_422(gen):
@@ -120,7 +137,10 @@ def test_estimate_usd():
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
 def test_mock_video_spec(gen):
-    gid = post(gen, model="mock-video", duration=4).json()["id"]
+    c = gen.get("/api/ideas/ia/canvas").json()
+    c["doc"]["nodes"].append({"id": "n_vid", "type": "video", "position": {"x": 0, "y": 0}, "data": {}})
+    assert gen.put("/api/ideas/ia/canvas", json={"version": c["version"], "doc": c["doc"]}).status_code == 200
+    gid = post(gen, nodeId="n_vid", model="mock-video", duration=4).json()["id"]
     row = gen.get(f"/api/ideas/ia/gen/{gid}").json()
     assert row["status"] == "done", row
     path = server.MEDIA_DIR / "ia" / "gen" / f"{gid}.mp4"

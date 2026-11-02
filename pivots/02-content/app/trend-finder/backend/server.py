@@ -33,6 +33,7 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 import assist
+import canvas
 import channels
 import covers
 import instagram
@@ -755,7 +756,7 @@ def db() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
     migrate_medians(conn)
-    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + generations.SCHEMA + renders.SCHEMA + grading.SCHEMA + recheck.SCHEMA:
+    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + generations.SCHEMA + renders.SCHEMA + grading.SCHEMA + recheck.SCHEMA:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
@@ -907,6 +908,7 @@ app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
 gen_router = generations.make_router(db, load, lambda: MEDIA_DIR)
 gen_jobs = gen_router.jobs
 app.include_router(gen_router)
+app.include_router(canvas.make_router(db, load))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(grading.make_router(db, lambda: MEDIA_DIR))
 app.include_router(recheck.make_router(db, lambda u: is_video_link(u)))
