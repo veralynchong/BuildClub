@@ -127,15 +127,41 @@ def test_fal_4xx_is_provider_error():
     with pytest.raises(gp.ProviderError) as e:
         gp.adapter_for("fal", http).submit(gp.Job(VIDEO_MODEL, "p", None, [], 5))
     assert "no credit" not in str(e.value)
-    # a 5xx or a network error at submit is also a ProviderError
-    for bad in (jr({}, 502), OSError("down")):
-        with pytest.raises(gp.ProviderError):
-            gp.adapter_for("fal", FakeHttp({("POST", FAL_Q + "fal/video"): bad})).submit(
-                gp.Job(VIDEO_MODEL, "p", None, [], 5))
-    rid = json.dumps({"id": "r1", "status_url": STATUS_URL, "response_url": RESULT_URL})
+    # a 5xx at submit is also a ProviderError (the provider answered, nothing was queued)
     with pytest.raises(gp.ProviderError):
-        gp.adapter_for("fal", FakeHttp({("GET", STATUS_URL): jr({}, 404)})).poll(
-            gp.Job(VIDEO_MODEL, "p", None, [], 5), rid)
+        gp.adapter_for("fal", FakeHttp({("POST", FAL_Q + "fal/video"): jr({}, 502)})).submit(
+            gp.Job(VIDEO_MODEL, "p", None, [], 5))
+
+
+def test_fal_submit_without_answer_is_result_lost():
+    # sent, then a timeout: it may have been queued and charged, so no refund
+    with pytest.raises(gp.ResultLost):
+        gp.adapter_for("fal", FakeHttp({("POST", FAL_Q + "fal/video"): OSError("timed out")})).submit(
+            gp.Job(VIDEO_MODEL, "p", None, [], 5))
+
+
+def test_fal_poll_4xx_is_result_lost_but_429_and_408_retry():
+    rid = json.dumps({"id": "r1", "status_url": STATUS_URL, "response_url": RESULT_URL})
+    job = gp.Job(VIDEO_MODEL, "p", None, [], 5)
+    for code in (400, 401, 403, 404):
+        with pytest.raises(gp.ResultLost):
+            gp.adapter_for("fal", FakeHttp({("GET", STATUS_URL): jr({}, code)})).poll(job, rid)
+    for code in (408, 429):
+        assert gp.adapter_for("fal", FakeHttp({("GET", STATUS_URL): jr({}, code)})).poll(job, rid).state == "running"
+    http = FakeHttp({("GET", STATUS_URL): jr({"status": "COMPLETED"}), ("GET", RESULT_URL): jr({}, 404)})
+    with pytest.raises(gp.ResultLost):
+        gp.adapter_for("fal", http).poll(job, rid)
+    http = FakeHttp({("GET", STATUS_URL): jr({"status": "COMPLETED"}), ("GET", RESULT_URL): jr({}, 429)})
+    assert gp.adapter_for("fal", http).poll(job, rid).state == "running"
+
+
+def test_fal_poll_without_key_is_result_lost(monkeypatch):
+    monkeypatch.delenv("FAL_KEY")
+    rid = json.dumps({"id": "r1", "status_url": STATUS_URL, "response_url": RESULT_URL})
+    http = FakeHttp()
+    with pytest.raises(gp.ResultLost):
+        gp.adapter_for("fal", http).poll(gp.Job(VIDEO_MODEL, "p", None, [], 5), rid)
+    assert http.calls == []
 
 
 def test_fal_5xx_while_polling_is_running():
@@ -155,7 +181,7 @@ def test_fal_5xx_while_polling_is_running():
 def test_fal_rejects_foreign_status_url():
     rid = json.dumps({"id": "r1", "status_url": "https://evil.example/s", "response_url": RESULT_URL})
     http = FakeHttp()
-    with pytest.raises(gp.ProviderError):
+    with pytest.raises(gp.ResultLost):
         gp.adapter_for("fal", http).poll(gp.Job(VIDEO_MODEL, "p", None, [], 5), rid)
     assert http.calls == []
 
@@ -181,17 +207,21 @@ def test_fal_download_rejects_non_media():
     assert gp.fetch_media(FakeHttp({("GET", url): (200, {}, webp)}), url, "image")[1] == "webp"
 
 
-def test_fal_download_size_cap():
+def test_fal_download_size_cap(monkeypatch):
+    monkeypatch.setattr(gp, "MAX_BYTES", {"image": 1000, "video": 5000})
     url = "https://v3.fal.media/big"
-    big_image = PNG + b"\0" * (20 * 1024 * 1024)
-    with pytest.raises(gp.ProviderError, match="too large|over"):
-        gp.fetch_media(FakeHttp({("GET", url): (200, {}, big_image)}), url, "image")
-    ok_image = PNG + b"\0" * (20 * 1024 * 1024 - len(PNG))
+    with pytest.raises(gp.ProviderError, match="over the size limit"):
+        gp.fetch_media(FakeHttp({("GET", url): (200, {}, PNG + b"\0" * 1000)}), url, "image")
+    ok_image = PNG + b"\0" * (1000 - len(PNG))
     assert gp.fetch_media(FakeHttp({("GET", url): (200, {}, ok_image)}), url, "image")[1] == "png"
-    # the video cap is larger: a 21 MB video passes, 200 MB + 1 does not
-    assert gp.fetch_media(FakeHttp({("GET", url): (200, {}, MP4 + b"\0" * (21 << 20))}), url, "video")[1] == "mp4"
+    # the video cap is larger
+    assert gp.fetch_media(FakeHttp({("GET", url): (200, {}, MP4 + b"\0" * 2000)}), url, "video")[1] == "mp4"
     with pytest.raises(gp.ProviderError):
-        gp.fetch_media(FakeHttp({("GET", url): (200, {}, MP4 + b"\0" * (200 << 20))}), url, "video")
+        gp.fetch_media(FakeHttp({("GET", url): (200, {}, MP4 + b"\0" * 5000)}), url, "video")
+
+
+def test_size_caps_are_20mb_and_200mb():
+    assert gp.MAX_BYTES == {"image": 20 * 1024 * 1024, "video": 200 * 1024 * 1024}
 
 
 def gemini_reply(data=PNG, mime="image/png", key="inlineData"):
@@ -231,6 +261,34 @@ def test_gemini_refusal_is_provider_error():
             gp.adapter_for("gemini", FakeHttp({("POST", GEMINI_URL): reply})).submit(
                 gp.Job(GEMINI_MODEL, "p", None, [], None))
         assert "I can't draw" not in str(e.value) and "bad key" not in str(e.value)
+
+
+def test_gemini_timeout_is_result_lost_but_http_errors_are_provider_errors():
+    with pytest.raises(gp.ResultLost):
+        gp.adapter_for("gemini", FakeHttp({("POST", GEMINI_URL): TimeoutError("read timed out")})).submit(
+            gp.Job(GEMINI_MODEL, "p", None, [], None))
+
+
+def test_gemini_refuses_start_frame_before_any_call(tmp_path):
+    http = FakeHttp()
+    with pytest.raises(gp.ProviderError):
+        gp.adapter_for("gemini", http).submit(gp.Job(GEMINI_MODEL, "p", png_file(tmp_path), [], None))
+    assert http.calls == []
+
+
+def test_gemini_call_gets_the_longer_timeout(monkeypatch):
+    seen = []
+
+    class Resp:
+        status, headers = 200, {}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self, n): return b"{}"
+
+    monkeypatch.setattr(gp.urllib.request, "urlopen", lambda req, timeout: seen.append(timeout) or Resp())
+    gp.default_http("POST", GEMINI_URL, {}, b"{}")
+    gp.default_http("GET", STATUS_URL, {}, None)
+    assert seen == [120, 60]
 
 
 def test_gemini_poll_without_cached_result_is_result_lost():

@@ -1,9 +1,11 @@
 """Provider adapters for generated media: mock (free), fal (queue API) and Gemini (images), behind one
 interface, plus fetch_media, the safe download helper. All HTTP goes through an injectable `Http`.
 
-Errors: ProviderError means the provider clearly refused or failed, so the caller may refund. A network
-error or 5xx while polling is not an error, it is `running`. ResultLost means the provider may have charged
-but the result is gone (Gemini after a restart): the caller must not refund and must not call it a plain failure."""
+Errors: ProviderError means the provider explicitly refused or reported failure (or returned bad media), so
+the caller may refund. ResultLost means a request was already sent and we lost track of it (no answer to a
+submit, a 4xx or missing key while polling, Gemini's image gone after a restart): it may have been charged,
+so the caller must not refund and must not call it a plain failure. A network error, 5xx, 408 or 429 while
+polling is not an error, it is `running`."""
 
 import base64
 import json
@@ -34,9 +36,11 @@ NO_IMAGE = "The model didn't return an image."
 NO_KEY = "This model isn't set up yet."
 MAX_BYTES = {"image": 20 * 1024 * 1024, "video": 200 * 1024 * 1024}
 HTTP_TIMEOUT_S = 60
+GEMINI_TIMEOUT_S = 120  # generateContent is synchronous, so it can take a while
 FAL_QUEUE = "https://queue.fal.run/"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/"
 ASPECT = "9:16"
+RETRY_STATUS = (408, 429)  # polling again later may work
 
 
 class ProviderError(Exception):
@@ -49,6 +53,10 @@ class ResultLost(Exception):
 
 class _Transient(Exception):
     """A network error or 5xx: the thing may still work later."""
+
+
+class _NetworkError(_Transient):
+    """No answer at all (timeout, connection lost): a request already sent may or may not have been charged."""
 
 
 @dataclass
@@ -77,8 +85,9 @@ class Adapter(Protocol):
 
 def default_http(method: str, url: str, headers: dict, body: Optional[bytes]) -> tuple[int, dict, bytes]:
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    timeout = GEMINI_TIMEOUT_S if urlparse(url).hostname == "generativelanguage.googleapis.com" else HTTP_TIMEOUT_S
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, dict(r.headers), r.read(MAX_BYTES["video"] + 1)
     except urllib.error.HTTPError as e:
         return e.code, dict(e.headers), e.read(1 << 20)
@@ -89,12 +98,12 @@ def log_provider(what: str, status: int, body: bytes) -> None:
 
 
 def call(http: Http, method: str, url: str, headers: dict, body: Optional[bytes] = None) -> tuple[int, dict, bytes]:
-    """One request. A network error or 5xx raises _Transient; everything else comes back as is."""
+    """One request. A network error raises _NetworkError and a 5xx raises _Transient; everything else comes back."""
     try:
         status, resp_headers, data = http(method, url, headers, body)
     except Exception as e:
         print(f"[gen] {method} {urlparse(url).netloc}: {type(e).__name__}", flush=True)
-        raise _Transient() from e
+        raise _NetworkError() from e
     if status >= 500:
         log_provider(f"{method} {urlparse(url).netloc}", status, data)
         raise _Transient()
@@ -244,6 +253,8 @@ class FalAdapter:
         try:
             status, _h, data = call(self._http, "POST", FAL_QUEUE + endpoint, self._headers(),
                                     json.dumps(body).encode())
+        except _NetworkError:  # sent, no answer: it may have been queued and charged
+            raise ResultLost("fal didn't answer the submit.")
         except _Transient:
             raise ProviderError(REFUSED)
         reply = json_body(data)
@@ -257,34 +268,44 @@ class FalAdapter:
     def _fal_url(url) -> str:
         parsed = urlparse(url) if isinstance(url, str) else None
         if parsed is None or parsed.scheme != "https" or parsed.hostname != "queue.fal.run":
-            raise ProviderError(REFUSED)
+            raise ResultLost("The saved fal request can't be polled.")
         return url
 
     def poll(self, job: Job, request_id: str) -> Poll:
+        """A request was sent, so only an explicit failure is a ProviderError. Anything else that stops us
+        from learning the outcome (a 4xx, a missing key, an unusable id) is ResultLost: no refund."""
         try:
             ids = json.loads(request_id)
             status_url, response_url = self._fal_url(ids["status_url"]), self._fal_url(ids["response_url"])
         except (ValueError, KeyError, TypeError):
-            raise ProviderError(REFUSED)
+            raise ResultLost("The saved fal request can't be polled.")
         try:
-            status, _h, data = call(self._http, "GET", status_url, self._headers())
+            headers = self._headers()
+        except ProviderError:
+            raise ResultLost("The fal key is missing, so the request can't be polled.")
+        try:
+            status, _h, data = call(self._http, "GET", status_url, headers)
+            if status in RETRY_STATUS:
+                return Poll("running")
             if status >= 300:
                 log_provider("fal status", status, data)
-                raise ProviderError(REFUSED)
+                raise ResultLost("fal wouldn't report the request.")
             state = json_body(data)
             if state.get("error"):
                 print(f"[gen] fal reported an error: {str(state.get('error'))[:300]}", flush=True)
                 return Poll("failed", error="The model reported a failure.")
             if state.get("status") != "COMPLETED":
                 return Poll("running")
-            status, _h, data = call(self._http, "GET", response_url, self._headers())
+            status, _h, data = call(self._http, "GET", response_url, headers)
+            if status in RETRY_STATUS:
+                return Poll("running")
             if status >= 300:
                 log_provider("fal result", status, data)
-                raise ProviderError(REFUSED)
+                raise ResultLost("fal wouldn't return the result.")
             url = dig(json_body(data), (job.model.get("params") or {}).get("output") or FAL_DEFAULTS["output"])
             if not isinstance(url, str):
                 log_provider("fal result without media", status, data)
-                raise ProviderError(NOT_MEDIA)
+                raise ResultLost("fal completed without a media url.")
             media, ext = fetch_media(self._http, url, job.model["kind"])
             return Poll("done", data=media, ext=ext)
         except _Transient:
@@ -302,6 +323,8 @@ class GeminiAdapter:
         self._http = http
 
     def submit(self, job: Job) -> str:
+        if job.start is not None:
+            raise ProviderError("This model doesn't take a start frame.")
         parts = [{"text": job.prompt}]
         for ref in job.references:
             mime, b64 = data_uri(ref)[5:].split(";base64,")
@@ -312,6 +335,8 @@ class GeminiAdapter:
         url = f"{GEMINI_BASE}{job.model['endpoint']}:generateContent"
         try:
             status, _h, data = call(self._http, "POST", url, headers, json.dumps(body).encode())
+        except _NetworkError:  # sent, no answer: Gemini may have made (and charged for) the image
+            raise ResultLost("Gemini didn't answer.")
         except _Transient:
             raise ProviderError(REFUSED)
         if status >= 300:
