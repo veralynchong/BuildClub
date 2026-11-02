@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AgencySettings, Platform, SavedIdea } from './types'
 import { sampleIdeas } from './data/sample'
 
-export type Sort = 'outlier' | 'ratio' | 'newest' | 'fastest'
+export type Sort = 'outlier' | 'views' | 'ratio' | 'newest' | 'fastest'
 
 export interface Query {
   keyword: string
