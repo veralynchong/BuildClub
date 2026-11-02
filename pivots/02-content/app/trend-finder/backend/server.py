@@ -34,6 +34,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 
 import assist
 import channels
+import covers
 import instagram
 import reddit
 import comments
@@ -58,6 +59,8 @@ from models import (AnalyzeJob, AnswerRequest, AnswerResult, AnalyzeRequest, Ana
 HERE = Path(__file__).resolve().parent
 CACHE_DIR = HERE / "cache"
 PINNED_DIR = HERE / "pinned"  # searches saved for demos; never expire
+COVERS_DIR = HERE / "covers"  # cover images of cached searches (not in git)
+PINNED_COVERS_DIR = PINNED_DIR / "covers"  # cover images of pinned searches (in git, so demos work offline)
 MEDIA_DIR = HERE / "media"  # uploaded takes, one folder per plan
 DB_PATH = HERE / "data.db"  # clients and saved ideas
 DIST_DIR = HERE.parent / "dist"  # the built front end (npm run build), so one address serves everything
@@ -383,6 +386,7 @@ def in_background(fill) -> None:
 def write_cache(payload: dict) -> None:
     # Written whole and swapped in, so a poll never reads half a file and searches live (paid) instead.
     CACHE_DIR.mkdir(exist_ok=True)
+    covers.localize(payload, COVERS_DIR)  # signed CDN links expire; a failed download keeps the original URL
     target = CACHE_DIR / cache_name(payload["query"], payload["platform"])
     partial = target.with_suffix(f".{threading.get_ident()}.tmp")
     partial.write_text(json.dumps(payload))
@@ -1063,6 +1067,14 @@ def get_channel_thumb(job_id: str, name: str):
     return FileResponse(path, media_type="image/jpeg")
 
 
+@app.get("/api/cover/{name}")
+def get_cover(name: str):
+    path = covers.find([PINNED_COVERS_DIR, COVERS_DIR], name)
+    if not path:
+        return error(404, "No such cover.")
+    return FileResponse(path, media_type=covers.media_type(path))
+
+
 # Last route, so it never shadows the API: built files by path, and the app for anything else.
 @app.get("/{path:path}", include_in_schema=False)
 def front_end(path: str):
@@ -1084,6 +1096,17 @@ def pin(query: str, platform: str = "tiktok") -> None:
     PINNED_DIR.mkdir(exist_ok=True)
     shutil.copy(src, PINNED_DIR / src.name)
     print(f'Pinned "{query}": it will load without Apify or the internet.')
+
+
+def localize_pins() -> None:
+    """localize-pins: save the covers of every pinned search into pinned/covers/ (commit them) and point
+    the pins at them. Run it while the pins' cover links still work; it keeps links it cannot fetch."""
+    for f in sorted(PINNED_DIR.glob("*.json")):
+        payload = json.loads(f.read_text())
+        saved = covers.localize(payload, PINNED_COVERS_DIR)
+        left = sum(1 for v in payload["videos"] if not (v.get("cover") or "").startswith(covers.URL_PREFIX))
+        f.write_text(json.dumps(payload))
+        print(f'{payload["platform"]} "{payload["query"]}": saved {saved} new covers, {left} still remote')
 
 
 def refetch(query: str, platform: str = "tiktok") -> None:
@@ -1133,9 +1156,12 @@ if __name__ == "__main__":
         pin(sys.argv[2].strip()[:120], *sys.argv[3:])
     elif len(sys.argv) in (3, 4) and sys.argv[1] == "refetch" and (sys.argv[3:] == [] or sys.argv[3] in platforms[:2]):
         refetch(sys.argv[2], *sys.argv[3:])
+    elif len(sys.argv) == 2 and sys.argv[1] == "localize-pins":
+        localize_pins()
     elif len(sys.argv) >= 2 and sys.argv[1] == "add-user":
         add_user(sys.argv[2:])
     else:
         sys.exit(f'Usage: python backend/server.py pin "<search>" [{"|".join(platforms)}]\n'
                  '       python backend/server.py refetch "<search>" [tiktok|instagram]\n'
+                 '       python backend/server.py localize-pins\n'
                  '       python backend/server.py add-user <email> "<name>" "<agency>"')
