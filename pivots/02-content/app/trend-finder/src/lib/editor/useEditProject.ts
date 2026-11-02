@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getProject, putProject, StaleProject } from './api.ts'
 import type { EditProject } from './types.ts'
+import { flushOutcome, type FlushResult } from './timeline.ts'
 
 export type EditSave = 'idle' | 'saving' | 'saved' | 'failed'
 export const SAVE_DELAY_MS = 800
@@ -11,7 +12,8 @@ export interface EditHook {
   save: EditSave
   stale: boolean
   update: (next: EditProject) => void
-  flush: () => Promise<void> // saves now and resolves once nothing is waiting or in flight
+  flush: () => Promise<FlushResult> // saves now; resolves once nothing is waiting or in flight, with how it ended
+  current: () => EditProject | null // the newest project, even before React has rendered it
   reload: () => void
 }
 
@@ -110,6 +112,7 @@ export function useEditProject(ideaId: string, readOnly: boolean): EditHook {
       await run()
       if (!inflight.current && dirty.current && version.current === before) break // the save failed: don't spin
     }
+    return flushOutcome({ dirty: dirty.current, blocked: blocked.current, readOnly: readOnlyRef.current })
   }, [run])
 
   // Leaving the screen with an unsaved change: save it now.
@@ -127,5 +130,7 @@ export function useEditProject(ideaId: string, readOnly: boolean): EditHook {
     setLoadKey((k) => k + 1)
   }, [])
 
-  return { project, loadError, save, stale, update, flush, reload }
+  const current = useCallback(() => latest.current, [])
+
+  return { project, loadError, save, stale, update, flush, current, reload }
 }

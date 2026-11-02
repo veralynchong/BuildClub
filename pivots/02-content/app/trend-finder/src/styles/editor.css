@@ -57,5 +57,5 @@
 
 .cv-ed-export { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
 .cv-ed-export progress { width: 100%; max-width: 360px; }
-.cv-ed-export-video { width: 100%; max-width: 240px; aspect-ratio: 9 / 16; border-radius: var(--radius-sm); background: var(--fg); }
+.cv-ed-export-video { width: 100%; max-width: 240px; aspect-ratio: 9 / 16; border-radius: var(--radius-sm); background: #000; }
 .cv-ed-export-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); }

@@ -268,3 +268,12 @@ export function exportBlocked(p: EditProject, statuses: Record<string, ClipStatu
   if (p.clips.some((c) => statuses[c.id] === 'missing')) return 'editor.export.missing'
   return null
 }
+
+export type FlushResult = 'saved' | 'failed' | 'stale' | 'readonly'
+
+// What a finished flush means: `saved` only when nothing unsaved is left and the edit may be written.
+export function flushOutcome(s: { dirty: boolean; blocked: boolean; readOnly: boolean }): FlushResult {
+  if (s.blocked) return 'stale'
+  if (s.readOnly) return 'readonly'
+  return s.dirty ? 'failed' : 'saved'
+}

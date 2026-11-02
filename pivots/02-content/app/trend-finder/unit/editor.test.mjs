@@ -24,6 +24,7 @@ import {
   fillByShotOrder,
   clipStatus,
   exportBlocked,
+  flushOutcome,
   applyNewer,
   isPrimaryPin,
   withPrimary,
@@ -363,4 +364,12 @@ test('exportBlocked: empty, missing, and ready', () => {
   assert.equal(exportBlocked(p, { a: 'ok', b: 'missing' }), 'editor.export.missing')
   assert.equal(exportBlocked(p, { a: 'ok', b: 'newer' }), null)
   assert.equal(exportBlocked(p, { a: 'ok', b: 'ok' }), null)
+})
+
+test('flushOutcome: saved only when nothing unsaved is left', () => {
+  const base = { dirty: false, blocked: false, readOnly: false }
+  assert.equal(flushOutcome(base), 'saved')
+  assert.equal(flushOutcome({ ...base, dirty: true }), 'failed')
+  assert.equal(flushOutcome({ ...base, dirty: true, blocked: true }), 'stale')
+  assert.equal(flushOutcome({ ...base, dirty: true, readOnly: true }), 'readonly')
 })
