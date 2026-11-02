@@ -62,6 +62,7 @@ RESOLVE, FETCH, DETAILS, TRANSCRIBE, NAME, LABEL, AGGREGATE = range(len(STEPS))
 
 HOSTS = {"youtube": ("youtube.com",), "tiktok": ("tiktok.com",), "instagram": ("instagram.com",)}
 HANDLE = re.compile(r"[A-Za-z0-9._-]{1,60}")
+YT_CHANNEL_ID = re.compile(r"UC[A-Za-z0-9_-]{22}")
 JOB_ID = re.compile(r"[0-9a-f]{12}")
 THUMB = re.compile(r"([A-Za-z0-9_-]+)\.jpg")
 
@@ -74,30 +75,47 @@ class OverBudget(Exception):
         self.wallet = wallet
 
 
+class BadChannel(ValueError):
+    """A channel input the user must fix. `code` lets the page show the message in its own language."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
 def normalise(platform: str, raw: str) -> str:
-    """The bare handle from '@name', 'name' or a channel / profile link. Raises ValueError with a
-    message for the user."""
+    """The bare handle from '@name', 'name' or a channel / profile link. YouTube also takes
+    youtube.com/channel/UC... (returned as the bare UC id) and youtube.com/user/name (returned as
+    'user/name'); free_steps turns both into an @handle with yt-dlp. Raises BadChannel (a
+    ValueError) with a message for the user."""
     if platform not in HOSTS:
-        raise ValueError("Pick YouTube, TikTok or Instagram.")
+        raise BadChannel("pick_platform", "Pick YouTube, TikTok or Instagram.")
     text = raw.strip()
     if not text:
-        raise ValueError("Type a channel handle or paste its link.")
+        raise BadChannel("empty", "Type a channel handle or paste its link.")
     first = text.split("/")[0].lower()
     if text.lower().startswith(("http://", "https://")) or any(first == h or first.endswith("." + h)
                                                               for h in HOSTS[platform]):
         url = urlparse(text if "//" in text else "https://" + text)
         host = (url.hostname or "").lower()
         if not any(host == h or host.endswith("." + h) for h in HOSTS[platform]):
-            raise ValueError(f"That link is not a {platform.title()} link.")
+            raise BadChannel("wrong_host", f"That link is not a {platform.title()} link.")
         parts = [p for p in url.path.split("/") if p]
         text = parts[0] if parts else ""
         if platform == "instagram" and text in ("p", "reel", "reels", "stories", "explore"):
-            raise ValueError("Paste the profile link (instagram.com/name), not a post.")
+            raise BadChannel("instagram_post", "Paste the profile link (instagram.com/name), not a post.")
+        if platform == "youtube" and text in ("channel", "user") and len(parts) > 1:
+            name = parts[1]
+            if text == "channel" and YT_CHANNEL_ID.fullmatch(name):
+                return name
+            if text == "user" and HANDLE.fullmatch(name):
+                return f"user/{name}"
+            raise BadChannel("bad_handle", "That does not look like a handle. Use letters, numbers, dots, dashes and underscores.")
         if platform != "instagram" and not text.startswith("@"):
-            raise ValueError(f"Use the channel's @handle link (for example {HOSTS[platform][0]}/@name).")
+            raise BadChannel("need_handle", f"Use the channel's @handle link (for example {HOSTS[platform][0]}/@name).")
     handle = text.lstrip("@")
     if not HANDLE.fullmatch(handle):
-        raise ValueError("That does not look like a handle. Use letters, numbers, dots, dashes and underscores.")
+        raise BadChannel("bad_handle", "That does not look like a handle. Use letters, numbers, dots, dashes and underscores.")
     return handle
 
 
@@ -177,6 +195,24 @@ def yt_dlp() -> str:
     env = os.environ.get("CD_YT_DLP")
     brew = Path("/opt/homebrew/bin/yt-dlp")
     return env or (str(brew) if brew.exists() else "yt-dlp")
+
+
+def youtube_handle(handle: str) -> str:
+    """The @handle (without the @) for a YouTube channel id ('UC...') or 'user/name'; the
+    channel-decoder fetch step only takes handles. A handle passes through unchanged."""
+    if not (YT_CHANNEL_ID.fullmatch(handle) or handle.startswith("user/")):
+        return handle
+    path = f"channel/{handle}" if YT_CHANNEL_ID.fullmatch(handle) else handle
+    r = subprocess.run([yt_dlp(), "-J", "--flat-playlist", "--playlist-end", "1", "--socket-timeout", "30",
+                        f"https://www.youtube.com/{path}/shorts"],
+                       capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=180)
+    try:
+        found = str(json.loads(r.stdout).get("uploader_id") or "").lstrip("@")
+    except (ValueError, AttributeError):
+        found = ""
+    if r.returncode != 0 or not HANDLE.fullmatch(found):
+        raise RuntimeError("Could not find that YouTube channel. Check the link.")
+    return found
 
 
 def tiktok_channel_id(handle: str) -> str:
@@ -445,6 +481,8 @@ class ChannelJobs:
                     self._save(work, channel_id=tiktok_channel_id(handle))
                 accounts.write_text(f"{handle} {read_json(work / 'meta.json')['channel_id']}\n", encoding="utf-8")
             else:
+                if platform == "youtube":
+                    handle = youtube_handle(handle)
                 accounts.write_text(f"{handle}\n", encoding="utf-8")
             self._at(job_id, FETCH)
             if platform == "instagram":

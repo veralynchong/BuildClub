@@ -1,7 +1,7 @@
 // Channel summaries: the API decodes a whole channel in the background (minutes), the page polls it.
 // Shapes follow channel-decoder's analysis.json and ChannelJob in backend/models.py.
 
-import { t } from './i18n.ts'
+import { t, type Key } from './i18n.ts'
 
 export type ChannelPlatform = 'youtube' | 'tiktok' | 'instagram'
 
@@ -113,6 +113,22 @@ export async function pollChannel(job: string, onProgress: (p: ChannelProgress) 
   }
 }
 
+// The backend answers in English; its input errors also carry a code so the page can show them in
+// the chosen language. Unknown codes fall back to the backend's text.
+const INPUT_ERRORS: Record<string, Key> = {
+  pick_platform: 'home.channelLib.err.pickPlatform',
+  empty: 'home.channelLib.err.empty',
+  wrong_host: 'home.channelLib.err.wrongHost',
+  instagram_post: 'home.channelLib.err.instagramPost',
+  need_handle: 'home.channelLib.err.needHandle',
+  bad_handle: 'home.channelLib.err.badHandle',
+}
+
+export const channelInputError = (code: unknown, fallback: string): string => {
+  const key = typeof code === 'string' ? INPUT_ERRORS[code] : undefined
+  return key ? t(key) : fallback
+}
+
 export async function analyzeChannel(
   platform: ChannelPlatform,
   handle: string,
@@ -127,7 +143,10 @@ export async function analyzeChannel(
     signal,
   })
   const started = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error([started.error ?? t('home.channelLib.couldNotStart'), started.detail].filter(Boolean).join(' '))
+  if (!r.ok) {
+    const message = started.error ? channelInputError(started.code, started.error) : t('home.channelLib.couldNotStart')
+    throw new Error([message, started.detail].filter(Boolean).join(' '))
+  }
   remember(started.job, platform, handle)
   return pollChannel(started.job, onProgress, signal)
 }
