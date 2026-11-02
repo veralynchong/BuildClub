@@ -1,0 +1,17 @@
+/* Plan page tabs: Script / Storyboard / Shoot / Edit / Post. Tokens only. */
+.pt-tabs { display: flex; gap: var(--space-sm); overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; border-bottom: 1px solid var(--line); }
+.pt-tabs::-webkit-scrollbar { display: none; }
+.pt-tab {
+  flex: 0 0 auto; position: relative; display: inline-flex; align-items: center; gap: var(--space-sm);
+  min-height: 44px; padding: 0 var(--space-lg); background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap;
+}
+.pt-tab:hover { color: var(--ink); }
+.pt-tab[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--ink); }
+.pt-tab[aria-disabled='true'] { opacity: 0.6; }
+.pt-tab[data-current]::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--early); }
+.pt-tab:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; border-radius: var(--radius); }
+.pt-panel { display: grid; gap: 36px; min-width: 0; }
+.pt-panel[hidden] { display: none; }
+.pt-locked { display: grid; gap: var(--space-base); justify-items: start; padding: var(--space-4xl) 0; max-width: 520px; }
+.pt-locked h3, .pt-locked p { margin: 0; }
