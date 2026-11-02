@@ -27,6 +27,7 @@ import { SettingsScreen } from './components/SettingsScreen'
 import { PreferencesScreen } from './components/PreferencesScreen'
 import { ChannelScreen } from './components/ChannelScreen'
 import { LoginScreen } from './components/LoginScreen'
+import { LandingAltitude } from './components/landing/LandingAltitude'
 import type { Client, Format, Platform, Video } from './types'
 import {
   analyzeVideo,
@@ -107,6 +108,8 @@ export default function App() {
   const [clients, setClients] = useStored<Client[]>('trend-finder.clients.v3', sampleClients)
   const [agency, setAgencyRaw] = useStored<AgencySettings>('remake.agency.v1', defaultAgency)
   const [role, setRole] = useStored<Role>('remake.role.v2', 'manager')
+  // Signed-in users can view the public landing page via the sidebar logo; its buttons lead back into the app.
+  const [showLanding, setShowLanding] = useState(false)
   const [lang, setLangState] = useState<Lang>(() => readLang())
   const setLang = useCallback((l: Lang) => {
     writeLang(l)
@@ -998,6 +1001,17 @@ export default function App() {
       </AppContext.Provider>
     )
   }
+  if (showLanding) {
+    // Same as the signed-out landing: English whatever the setting is. Returning re-applies the user's language.
+    setActiveLang('en')
+    document.documentElement.lang = 'en'
+    const backToApp = () => setShowLanding(false)
+    return (
+      <AppContext.Provider value={appContext}>
+        <LandingAltitude onLogIn={backToApp} onDemo={backToApp} />
+      </AppContext.Provider>
+    )
+  }
   setActiveLang(lang)
   document.documentElement.lang = htmlLang(lang)
 
@@ -1030,6 +1044,7 @@ export default function App() {
         view={view}
         setView={navTo}
         counts={counts}
+        onLogo={() => setShowLanding(true)}
         onSignOut={() => {
           setSignedOut(true)
           signOut()
