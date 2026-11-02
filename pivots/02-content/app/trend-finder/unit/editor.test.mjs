@@ -19,6 +19,11 @@ import {
   setClipAudio,
   dropIndex,
   newClipId,
+  primaryClipFor,
+  fillByShotOrder,
+  clipStatus,
+  applyNewer,
+  CLIP_MIME,
 } from '../src/lib/editor/timeline.ts'
 
 const clip = (id, inn, out, extra = {}) => ({
@@ -166,4 +171,126 @@ test('newClipId is c plus a number and never repeats an id in use', () => {
   assert.equal(newClipId(project([])), 'c1')
   assert.equal(newClipId(three), 'c1')
   assert.equal(newClipId(project([clip('c1', 0, 1), clip('c7', 0, 1), clip('x', 0, 1)])), 'c8')
+})
+
+// ---- Task 5: canvas -> timeline ----
+const vnode = (id, shotId, selected = null) => ({ id, type: 'video', shotId, position: { x: 0, y: 0 }, data: { selected } })
+const gen = (id, nodeId, finishedAt, status = 'done') => ({ id, nodeId, kind: 'video', status, finishedAt, url: `/g/${id}.mp4` })
+const take = (id, shotId, chosen = false) => ({ id, shotId, chosen, url: `/t/${id}.mp4` })
+const doc = (nodes) => ({ nodes, edges: [] })
+
+test('CLIP_MIME is the drag type the timeline accepts', () => {
+  assert.equal(CLIP_MIME, 'application/x-remake-clip')
+})
+
+test('primaryClipFor: a pinned primary wins over a chosen take and a video node', () => {
+  const d = doc([vnode('n1', 's1', 'g1')])
+  const gens = [gen('g1', 'n1', 10)]
+  const takes = [take('t1', 's1', true)]
+  const pin = { kind: 'take', id: 't2', shotId: 's1' }
+  assert.deepEqual(primaryClipFor('s1', d, gens, [...takes, take('t2', 's1')], { s1: pin }), pin)
+})
+
+test('primaryClipFor: no pin -> the chosen take', () => {
+  const d = doc([vnode('n1', 's1', 'g1')])
+  const r = primaryClipFor('s1', d, [gen('g1', 'n1', 10)], [take('t1', 's1', true), take('t2', 's1')], {})
+  assert.deepEqual(r, { kind: 'take', id: 't1', shotId: 's1' })
+})
+
+test('primaryClipFor: no take -> the video node whose selected version finished last (S9)', () => {
+  const d = doc([vnode('n1', 's1', 'g1'), vnode('n2', 's1', 'g2'), vnode('n3', 's2', 'g3')])
+  const gens = [gen('g1', 'n1', 10), gen('g2', 'n2', 20), gen('g3', 'n3', 99)]
+  const r = primaryClipFor('s1', d, gens, [], {})
+  assert.deepEqual(r, { kind: 'generation', id: 'g2', nodeId: 'n2', shotId: 's1' })
+})
+
+test('primaryClipFor: a version that is not done does not count; nothing -> null', () => {
+  const d = doc([vnode('n1', 's1', 'g1')])
+  assert.equal(primaryClipFor('s1', d, [gen('g1', 'n1', null, 'running')], [], {}), null)
+  assert.equal(primaryClipFor('s9', d, [], [], {}), null)
+})
+
+test('primaryClipFor: a pin whose footage is gone falls back to the rules', () => {
+  const d = doc([vnode('n1', 's1', 'g1')])
+  const gens = [gen('g1', 'n1', 10)]
+  const r = primaryClipFor('s1', d, gens, [], { s1: { kind: 'take', id: 'gone', shotId: 's1' } })
+  assert.equal(r.id, 'g1')
+  const r2 = primaryClipFor('s1', d, [gen('g1', 'n1', 10, 'failed')], [], { s1: { kind: 'generation', id: 'g1', nodeId: 'n1' } })
+  assert.equal(r2, null)
+})
+
+const info = (kind, id, duration) => ({ key: `${kind}:${id}`, kind, id, url: '', duration, hasAudio: true, width: 1, height: 1 })
+
+test('fillByShotOrder: 3 shots, the second has nothing -> 2 clips in shot order and s2 skipped', () => {
+  const shots = [{ id: 's1' }, { id: 's2' }, { id: 's3' }]
+  const d = doc([vnode('n1', 's1', 'g1')])
+  const gens = [gen('g1', 'n1', 10)]
+  const takes = [take('t3', 's3', true)]
+  const sources = [info('generation', 'g1', 4), info('take', 't3', 2.5)]
+  const { project: out, skipped } = fillByShotOrder(project([]), shots, d, gens, takes, sources)
+  assert.deepEqual(out.clips.map((c) => [c.id, c.source.kind, c.source.id, c.in, c.out]), [
+    ['c1', 'generation', 'g1', 0, 4],
+    ['c2', 'take', 't3', 0, 2.5],
+  ])
+  assert.deepEqual(skipped, ['s2'])
+})
+
+test('fillByShotOrder: a primary without length info is skipped; a non-empty timeline is left alone', () => {
+  const shots = [{ id: 's1' }]
+  const d = doc([vnode('n1', 's1', 'g1')])
+  const gens = [gen('g1', 'n1', 10)]
+  const r = fillByShotOrder(project([]), shots, d, gens, [], [])
+  assert.deepEqual(r.project.clips, [])
+  assert.deepEqual(r.skipped, ['s1'])
+  const busy = project([clip('a', 0, 1)])
+  const r2 = fillByShotOrder(busy, shots, d, gens, [], [info('generation', 'g1', 4)])
+  assert.equal(r2.project, busy)
+  assert.deepEqual(r2.skipped, [])
+})
+
+test('clipStatus: ok, missing (generation gone / not done / take deleted)', () => {
+  const d = doc([vnode('n1', 's1', 'g1')])
+  const gens = [gen('g1', 'n1', 10)]
+  const g = clip('a', 0, 1, { source: { kind: 'generation', id: 'g1', nodeId: 'n1', shotId: 's1' } })
+  assert.deepEqual(clipStatus(g, d, gens, []), { state: 'ok' })
+  assert.deepEqual(clipStatus(g, d, [], []), { state: 'missing' })
+  assert.deepEqual(clipStatus(g, d, [gen('g1', 'n1', null, 'running')], []), { state: 'missing' })
+  const tk = clip('b', 0, 1, { source: { kind: 'take', id: 't1', shotId: 's1' } })
+  assert.deepEqual(clipStatus(tk, d, gens, [take('t1', 's1', true)]), { state: 'ok' })
+  assert.deepEqual(clipStatus(tk, d, gens, []), { state: 'missing' })
+})
+
+test('clipStatus: newer when the node picked another version, or the shot chose another take', () => {
+  const d = doc([vnode('n1', 's1', 'g2')])
+  const gens = [gen('g1', 'n1', 10), gen('g2', 'n1', 20)]
+  const g = clip('a', 0, 1, { source: { kind: 'generation', id: 'g1', nodeId: 'n1', shotId: 's1' } })
+  assert.deepEqual(clipStatus(g, d, gens, []), { state: 'newer', source: { kind: 'generation', id: 'g2', nodeId: 'n1', shotId: 's1' } })
+  const tk = clip('b', 0, 1, { source: { kind: 'take', id: 't1', shotId: 's1' } })
+  assert.deepEqual(clipStatus(tk, d, gens, [take('t1', 's1'), take('t2', 's1', true)]), { state: 'newer', source: { kind: 'take', id: 't2', shotId: 's1' } })
+  // a take with no shot never has a newer one
+  const loose = clip('c', 0, 1, { source: { kind: 'take', id: 't1' } })
+  assert.deepEqual(clipStatus(loose, d, gens, [take('t1', 's1'), take('t2', 's1', true)]), { state: 'ok' })
+})
+
+test('applyNewer: swaps the source and clamps out to the new length', () => {
+  const p = project([clip('a', 1, 4)])
+  const src = { kind: 'generation', id: 'g2', nodeId: 'n1' }
+  const same = applyNewer(p, 'a', src, 10)
+  assert.deepEqual(same.clips[0].source, src)
+  assert.equal(same.clips[0].in, 1)
+  assert.equal(same.clips[0].out, 4)
+  const cut = applyNewer(p, 'a', src, 3)
+  assert.equal(cut.clips[0].in, 1)
+  assert.equal(cut.clips[0].out, 3)
+})
+
+test('applyNewer: when clamping leaves under MIN_CLIP, restart from 0 with the old length', () => {
+  const p = project([clip('a', 4, 6)])
+  const r = applyNewer(p, 'a', { kind: 'generation', id: 'g2' }, 4.1)
+  assert.equal(r.clips[0].in, 0)
+  assert.equal(r.clips[0].out, 2)
+  const r2 = applyNewer(p, 'a', { kind: 'generation', id: 'g2' }, 1.5)
+  assert.equal(r2.clips[0].in, 0)
+  assert.equal(r2.clips[0].out, 1.5)
+  assert.equal(applyNewer(p, 'nope', { kind: 'take', id: 'x' }, 9), p)
 })

@@ -4,6 +4,7 @@ import { budgetLeft, failedGen, isRetired, pendingGen, priceOf, selectedGen, ver
 import { PORTS } from '../../../lib/canvas/ports'
 import type { GenModel } from '../../../lib/canvas/types'
 import { VersionStrip } from '../VersionStrip'
+import { ClipActions } from './ClipActions'
 import { useCanvas } from './ctx'
 import { PortLabels, Ports } from './Ports'
 import type { CvNodeProps } from './types'
@@ -124,6 +125,7 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
           {t('canvas.gen.retired')}
         </p>
       )}
+      {kind === 'video' && shown?.url && <ClipActions src={{ kind: 'generation', id: shown.id, nodeId: id, shotId: node.shotId }} />}
       <VersionStrip versions={versions} selectedId={shown?.id ?? null} disabled={readOnly} onSelect={(g) => onSelectVersion(id, g)} />
       <div className="cv-gen-foot">
         <button type="button" className="btn btn-primary btn-sm nodrag" disabled={readOnly || !!pending || !model || !model.available || retired || need !== null} onClick={() => onGenerate(id)}>

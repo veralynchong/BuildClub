@@ -38,6 +38,14 @@ export const en = {
   "editor.sources.take": "Take",
   "editor.sources.generation": "Generated",
   "editor.total": "Total {sec}s",
+  "editor.processing": "This video is still being processed. Try again in a moment.",
+  "editor.fill": "Fill in shot order",
+  "editor.fill.skipped": "Shot {n} has no video, skipped.",
+  "editor.newer": "New version, apply?",
+  "editor.newer.apply": "Apply",
+  "editor.newer.ignore": "Ignore",
+  "editor.missing": "Footage deleted",
+  "editor.missing.remove": "Remove",
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -78,4 +86,12 @@ export const zhHant: Record<keyof typeof en, string> = {
   "editor.sources.take": "實拍",
   "editor.sources.generation": "生成",
   "editor.total": "共 {sec} 秒",
+  "editor.processing": "這段影片還在處理，稍後再試。",
+  "editor.fill": "全部依 shot 順序放入",
+  "editor.fill.skipped": "第 {n} 鏡沒有影片，已跳過。",
+  "editor.newer": "有新版本，套用？",
+  "editor.newer.apply": "套用",
+  "editor.newer.ignore": "忽略",
+  "editor.missing": "素材已刪除",
+  "editor.missing.remove": "移除",
 }

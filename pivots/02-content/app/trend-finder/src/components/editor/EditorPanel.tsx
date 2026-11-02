@@ -2,42 +2,33 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import type { Shot } from '../../types'
 import { t } from '../../lib/i18n'
-import { getSources } from '../../lib/editor/api'
+import type { SourcesHook } from '../../lib/editor/useSources'
+import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import type { EditHook } from '../../lib/editor/useEditProject'
-import { insertClip, newClipId, reelDurationInFrames, totalLength, clipStarts, FPS, MAX_TOTAL } from '../../lib/editor/timeline'
-import type { ReelInput, SourceInfo } from '../../lib/editor/types'
+import { reelDurationInFrames, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import type { ReelInput } from '../../lib/editor/types'
 import { Reel } from '../../remotion/Reel'
 import { Timeline } from './Timeline'
 import { clipName } from './clipName'
 import { ErrorText } from '../ErrorText'
 
 interface Props {
-  ideaId: string
   shots: Shot[]
   edit: EditHook
+  sources: SourcesHook // the plan's footage with lengths, kept above the drawer
+  timeline: TimelineActions
   readOnly: boolean
 }
 
 const FONT_URL = '/fonts/NotoSansTC-VF.ttf'
 const BRAND = { font: '', color: null, logoUrl: null }
 
-export function EditorPanel({ ideaId, shots, edit, readOnly }: Props) {
+export function EditorPanel({ shots, edit, sources: footage, timeline, readOnly }: Props) {
   const { project, loadError, save, stale, update, flush, reload } = edit
-  const [sources, setSources] = useState<SourceInfo[] | null>(null)
-  const [sourceError, setSourceError] = useState<string | null>(null)
+  const { sources, error: sourceError } = footage
+  const [skipped, setSkipped] = useState<string[]>([])
   const [frame, setFrame] = useState(0)
   const player = useRef<PlayerRef>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    getSources(ideaId).then(
-      (s) => !cancelled && setSources(s),
-      (e: unknown) => !cancelled && setSourceError(e instanceof Error ? e.message : t('editor.err.sources')),
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [ideaId])
 
   const byKey = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s])), [sources])
   const urls = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s.url])), [sources])
@@ -69,14 +60,8 @@ export function EditorPanel({ ideaId, shots, edit, readOnly }: Props) {
   }
   const total = totalLength(project)
   const full = total > MAX_TOTAL - 0.2
-  const add = (s: SourceInfo) => {
-    // Right after the clip under the playhead, else at the end.
-    const starts = clipStarts(project)
-    const at = frame / FPS
-    let index = project.clips.length
-    for (let i = 0; i < project.clips.length; i++) if (at < starts[i] + (project.clips[i].out - project.clips[i].in)) { index = at > starts[i] ? i + 1 : i; break }
-    update(insertClip(project, { kind: s.kind, id: s.id, nodeId: s.nodeId, shotId: s.shotId }, s.duration, index, newClipId(project)))
-  }
+  const locked = readOnly || stale
+  const fill = async () => setSkipped(await timeline.fill())
 
   return (
     <div className="cv-ed nokey">
@@ -108,8 +93,22 @@ export function EditorPanel({ ideaId, shots, edit, readOnly }: Props) {
           style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '55vh' }}
         />
       </div>
-      {project.clips.length === 0 && <p className="muted">{t('editor.empty')}</p>}
-      <Timeline project={project} sources={byKey} shots={shots} frame={frame} readOnly={readOnly || stale} onProject={update} onSeek={seek} />
+      {project.clips.length === 0 && (
+        <div className="cv-ed-empty">
+          <p className="muted">{t('editor.empty')}</p>
+          <button type="button" className="btn btn-primary btn-sm" disabled={locked} onClick={() => void fill()}>
+            {t('editor.fill')}
+          </button>
+        </div>
+      )}
+      {skipped.length > 0 && (
+        <ul className="cv-ed-skipped small muted" role="status">
+          {skipped.map((id) => (
+            <li key={id}>{t('editor.fill.skipped', { n: shots.findIndex((s) => s.id === id) + 1 })}</li>
+          ))}
+        </ul>
+      )}
+      <Timeline project={project} sources={byKey} shots={shots} frame={frame} readOnly={locked} timeline={timeline} onProject={update} onSeek={seek} />
       <section className="cv-ed-sources" aria-label={t('editor.sources.title')}>
         <h3>{t('editor.sources.title')}</h3>
         {sourceError && <ErrorText text={sourceError} />}
@@ -121,7 +120,7 @@ export function EditorPanel({ ideaId, shots, edit, readOnly }: Props) {
               <span className="cv-ed-source-name">
                 {clipName(s, shots)} · {s.kind === 'take' ? t('editor.sources.take') : t('editor.sources.generation')} · {t('editor.clip.seconds', { sec: Math.round(s.duration * 10) / 10 })}
               </span>
-              <button type="button" className="btn btn-ghost btn-sm" disabled={readOnly || stale || full} onClick={() => add(s)}>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={locked || full} onClick={() => void timeline.addClip({ kind: s.kind, id: s.id, nodeId: s.nodeId, shotId: s.shotId })}>
                 {t('editor.sources.add')}
               </button>
             </li>

@@ -40,3 +40,17 @@
 .cv-ed-source-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
 .cv-ed-source-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-base); font-size: var(--text-sm); }
 .cv-ed-source-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Canvas clips landing on the timeline, and clips whose footage changed or is gone */
+.cv-ed-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
+.cv-ed-empty p { margin: 0; }
+.cv-ed-skipped { margin: 0; padding-left: var(--space-xl); }
+.cv-ed-dropline { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--accent); z-index: 3; pointer-events: none; }
+.cv-ed-clip[data-state="newer"] { border-color: var(--rising); background: var(--rising-soft); }
+.cv-ed-clip[data-state="missing"] { border: 2px solid var(--no); background: var(--no-soft); }
+.cv-ed-alerts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
+.cv-ed-alert { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); font-size: var(--text-sm); }
+.cv-ed-alert[data-state="newer"] { border: 1px solid var(--rising); background: var(--rising-soft); }
+.cv-ed-alert[data-state="missing"] { border: 2px solid var(--no); background: var(--no-soft); color: var(--no); }
+.cv-ed-alert-name { font-weight: 600; }
+.cv-ed-alert-text { margin-right: auto; }

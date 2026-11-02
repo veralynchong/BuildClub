@@ -3,8 +3,9 @@ import { DndContext, PointerSensor, useDraggable, useSensor, useSensors, type Dr
 import type { Shot } from '../../types'
 import { t } from '../../lib/i18n'
 import { clipName } from './clipName'
-import { clipLength, clipStarts, dropIndex, FPS, moveClip, newClipId, removeClip, setClipAudio, sourceKey, splitAt, totalLength, trimClip } from '../../lib/editor/timeline'
-import type { Clip, EditProject, SourceInfo } from '../../lib/editor/types'
+import type { TimelineActions } from '../../lib/editor/useTimelineActions'
+import { CLIP_MIME, clipLength, clipStarts, dropIndex, FPS, moveClip, newClipId, removeClip, setClipAudio, sourceKey, splitAt, totalLength, trimClip } from '../../lib/editor/timeline'
+import type { Clip, ClipSource, EditProject, SourceInfo } from '../../lib/editor/types'
 
 const MIN_PX = 20
 const MAX_PX = 120
@@ -16,15 +17,18 @@ interface Props {
   shots: Shot[]
   frame: number // playhead
   readOnly: boolean
+  timeline: TimelineActions
   onProject: (p: EditProject) => void
   onSeek: (frame: number) => void
 }
 
 const fmt = (sec: number) => (Math.round(sec * 10) / 10).toString()
 
-export function Timeline({ project, sources, shots, frame, readOnly, onProject, onSeek }: Props) {
+export function Timeline({ project, sources, shots, frame, readOnly, timeline, onProject, onSeek }: Props) {
   const [pxPerSec, setPx] = useState(DEFAULT_PX)
   const [selected, setSelected] = useState<string | null>(null)
+  const track = useRef<HTMLDivElement>(null)
+  const [dropAt, setDropAt] = useState<number | null>(null) // where a dragged canvas clip would land
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const total = totalLength(project)
   const starts = clipStarts(project)
@@ -65,6 +69,32 @@ export function Timeline({ project, sources, shots, frame, readOnly, onProject, 
     onSeek(Math.round(Math.min(Math.max(x / pxPerSec, 0), total) * FPS))
   }
 
+  // A video or take dragged in from a canvas node (native drag and drop; the clips themselves use dnd-kit).
+  const carries = (e: React.DragEvent) => !readOnly && e.dataTransfer.types.includes(CLIP_MIME)
+  const indexAt = (e: React.DragEvent) => dropIndex(project, e.clientX - (track.current?.getBoundingClientRect().left ?? 0), pxPerSec)
+  const onDragOver = (e: React.DragEvent) => {
+    if (!carries(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setDropAt(indexAt(e))
+  }
+  const onDrop = (e: React.DragEvent) => {
+    if (!carries(e)) return
+    e.preventDefault()
+    setDropAt(null)
+    let src: ClipSource
+    try {
+      src = JSON.parse(e.dataTransfer.getData(CLIP_MIME)) as ClipSource
+    } catch {
+      return
+    }
+    if (src && (src.kind === 'generation' || src.kind === 'take') && typeof src.id === 'string') void timeline.addClip(src, indexAt(e))
+  }
+
+  const statuses = project.clips.map((c) => ({ clip: c, status: timeline.statusOf(c) }))
+  const alerts = statuses.filter((x) => x.status.state !== 'ok')
+  const stateOf = new Map(statuses.map((x) => [x.clip.id, x.status.state]))
+
   const ticks = Array.from({ length: Math.floor(total) + 1 }, (_, i) => i)
 
   return (
@@ -88,7 +118,14 @@ export function Timeline({ project, sources, shots, frame, readOnly, onProject, 
           <input type="range" min={MIN_PX} max={MAX_PX} value={pxPerSec} onChange={(e) => setPx(Number(e.target.value))} />
         </label>
       </div>
-      <div className="cv-ed-scroll" tabIndex={0} onKeyDown={onKeyDown}>
+      <div
+        className="cv-ed-scroll"
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        onDragOver={onDragOver}
+        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setDropAt(null)}
+        onDrop={onDrop}
+      >
         <div className="cv-ed-lane" style={{ width: Math.max(total * pxPerSec, 1) + 24 }}>
           <div className="cv-ed-ruler" role="slider" aria-label={t('editor.ruler')} aria-valuemin={0} aria-valuemax={Math.round(total * 10) / 10} aria-valuenow={Math.round(playhead * 10) / 10} onClick={seekFromRuler}>
             {ticks.map((s) => (
@@ -98,7 +135,8 @@ export function Timeline({ project, sources, shots, frame, readOnly, onProject, 
             ))}
           </div>
           <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-            <div className="cv-ed-track">
+            <div className="cv-ed-track" ref={track}>
+              {dropAt !== null && <div className="cv-ed-dropline" style={{ left: (dropAt < starts.length ? starts[dropAt] : total) * pxPerSec }} aria-hidden="true" />}
               {project.clips.map((c, i) => (
                 <ClipBlock
                   key={c.id}
@@ -107,6 +145,7 @@ export function Timeline({ project, sources, shots, frame, readOnly, onProject, 
                   width={clipLength(c) * pxPerSec}
                   name={clipName(c.source, shots)}
                   selected={c.id === selected}
+                  state={stateOf.get(c.id) ?? 'ok'}
                   disabled={readOnly}
                   pxPerSec={pxPerSec}
                   sourceDuration={sources[sourceKey(c.source)]?.duration ?? c.out}
@@ -120,6 +159,33 @@ export function Timeline({ project, sources, shots, frame, readOnly, onProject, 
           <div className="cv-ed-playhead" style={{ left: playhead * pxPerSec }} aria-hidden="true" />
         </div>
       </div>
+      {alerts.length > 0 && (
+        <ul className="cv-ed-alerts">
+          {alerts.map(({ clip, status }) => (
+            <li key={clip.id} className="cv-ed-alert" data-state={status.state}>
+              <span className="cv-ed-alert-name">{clipName(clip.source, shots)}</span>
+              {status.state === 'newer' ? (
+                <>
+                  <span className="cv-ed-alert-text">{t('editor.newer')}</span>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={readOnly} onClick={() => void timeline.applyNewer(clip.id, status.source)}>
+                    {t('editor.newer.apply')}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => timeline.ignore(clip, status.source)}>
+                    {t('editor.newer.ignore')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="cv-ed-alert-text" role="alert">{t('editor.missing')}</span>
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={readOnly} onClick={() => onProject(removeClip(project, clip.id))}>
+                    {t('editor.missing.remove')}
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
       <p className="cv-ed-hint muted">{t('editor.keys')}</p>
       {project.clips.length > 0 && (
         <div className="cv-ed-audio">
@@ -165,6 +231,7 @@ interface BlockProps {
   width: number
   name: string
   selected: boolean
+  state: 'ok' | 'newer' | 'missing'
   disabled: boolean
   pxPerSec: number
   sourceDuration: number
@@ -173,7 +240,7 @@ interface BlockProps {
   onProject: (p: EditProject) => void
 }
 
-function ClipBlock({ clip, left, width, name, selected, disabled, pxPerSec, sourceDuration, project, onSelect, onProject }: BlockProps) {
+function ClipBlock({ clip, left, width, name, selected, state, disabled, pxPerSec, sourceDuration, project, onSelect, onProject }: BlockProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: clip.id, disabled })
   // Trimming works from the project as it was when the edge was grabbed, so the drag is one smooth gesture.
   const grab = useRef<{ edge: 'in' | 'out'; x: number; start: EditProject; value: number } | null>(null)
@@ -204,6 +271,7 @@ function ClipBlock({ clip, left, width, name, selected, disabled, pxPerSec, sour
       ref={setNodeRef}
       className="cv-ed-clip"
       data-selected={selected ? '' : undefined}
+      data-state={state === 'ok' ? undefined : state}
       data-dragging={isDragging ? '' : undefined}
       style={{ left, width, transform: transform ? `translate3d(${transform.x}px, 0, 0)` : undefined }}
       onPointerDownCapture={onSelect}

@@ -1,5 +1,8 @@
 // Pure timeline maths for the edit project. No remotion import: the Vite app and the unit tests use it too.
-import type { Clip, ClipSource, EditProject } from './types.ts'
+import type { Clip, ClipSource, EditProject, SourceInfo } from './types.ts'
+import type { Shot } from '../../types'
+import type { CanvasDoc, CanvasNode, Generation } from '../canvas/types.ts'
+import type { Take } from '../takes.ts'
 
 export const FPS = 30
 export const MIN_CLIP = 0.2
@@ -150,4 +153,96 @@ export function newClipId(p: EditProject): string {
     if (m) max = Math.max(max, Number(m[1]))
   }
   return `c${max + 1}`
+}
+
+// ---- canvas -> timeline ----
+// The drag type a canvas node sets and the timeline accepts; the data is JSON.stringify(ClipSource).
+export const CLIP_MIME = 'application/x-remake-clip'
+
+// Same rule as canvas/graph.ts selectedGen, copied so the Remotion bundle (which imports this file) stays free of
+// the canvas modules and their strings.
+function selectedGen(node: CanvasNode, gens: Generation[]): Generation | null {
+  const done = gens.filter((g) => g.nodeId === node.id && g.status === 'done').sort((a, b) => a.createdAt - b.createdAt)
+  return done.find((g) => g.id === node.data.selected) ?? done[done.length - 1] ?? null
+}
+
+const liveGen = (id: string, gens: Generation[]): boolean => gens.some((g) => g.id === id && g.status === 'done')
+
+// The footage a shot uses by default (spec 11.5 #6): the pinned primary if it still exists, else the shot's chosen
+// take, else the newest finished selected version among the shot's video nodes (S9), else nothing.
+export function primaryClipFor(
+  shotId: string,
+  doc: CanvasDoc,
+  gens: Generation[],
+  takes: Take[],
+  primaries: Record<string, ClipSource>,
+): ClipSource | null {
+  const pin = primaries[shotId]
+  if (pin && (pin.kind === 'take' ? takes.some((x) => x.id === pin.id) : liveGen(pin.id, gens))) return pin
+  const chosen = takes.find((x) => x.shotId === shotId && x.chosen)
+  if (chosen) return { kind: 'take', id: chosen.id, shotId }
+  let best: Generation | null = null
+  for (const n of doc.nodes) {
+    if (n.type !== 'video' || n.shotId !== shotId) continue
+    const g = selectedGen(n, gens)
+    if (g && (!best || (g.finishedAt ?? 0) > (best.finishedAt ?? 0))) best = g
+  }
+  return best ? { kind: 'generation', id: best.id, nodeId: best.nodeId, shotId } : null
+}
+
+// Fills an empty timeline with each shot's primary clip, whole, in shot order. Shots with no footage, or whose
+// footage has no length yet, are listed in `skipped`. A timeline that already has clips is left alone.
+export function fillByShotOrder(
+  p: EditProject,
+  shots: Pick<Shot, 'id'>[], // a shot without an id has no footage and is left out
+  doc: CanvasDoc,
+  gens: Generation[],
+  takes: Take[],
+  sources: SourceInfo[],
+): { project: EditProject; skipped: string[] } {
+  if (p.clips.length > 0) return { project: p, skipped: [] }
+  let out = p
+  const skipped: string[] = []
+  for (const { id } of shots) {
+    if (!id) continue
+    const src = primaryClipFor(id, doc, gens, takes, p.primaries)
+    const info = src && sources.find((s) => s.key === sourceKey(src))
+    const next = src && info ? insertClip(out, src, info.duration, out.clips.length, newClipId(out)) : out
+    if (next === out) skipped.push(id)
+    out = next
+  }
+  return { project: out, skipped }
+}
+
+export type ClipStatus = { state: 'ok' } | { state: 'newer'; source: ClipSource } | { state: 'missing' }
+
+export function clipStatus(clip: Clip, doc: CanvasDoc, gens: Generation[], takes: Take[]): ClipStatus {
+  const src = clip.source
+  if (src.kind === 'generation') {
+    if (!liveGen(src.id, gens)) return { state: 'missing' }
+    const node = src.nodeId ? doc.nodes.find((n) => n.id === src.nodeId) : undefined
+    const now = node && selectedGen(node, gens)
+    if (now && now.id !== src.id) return { state: 'newer', source: { kind: 'generation', id: now.id, nodeId: src.nodeId, shotId: src.shotId } }
+    return { state: 'ok' }
+  }
+  if (!takes.some((x) => x.id === src.id)) return { state: 'missing' }
+  const chosen = src.shotId ? takes.find((x) => x.shotId === src.shotId && x.chosen) : undefined
+  if (chosen && chosen.id !== src.id) return { state: 'newer', source: { kind: 'take', id: chosen.id, shotId: src.shotId } }
+  return { state: 'ok' }
+}
+
+// Points a clip at a newer version. The trim is kept where it still fits; otherwise the clip restarts at 0
+// with its old length, cut to the new video.
+export function applyNewer(p: EditProject, clipId: string, source: ClipSource, duration: number): EditProject {
+  const c = p.clips.find((x) => x.id === clipId)
+  if (!c) return p
+  const cap = floorFrames(duration)
+  let nin = frames(c.in)
+  let nout = Math.min(frames(c.out), cap)
+  if (nout - nin < MIN_F) {
+    nin = 0
+    nout = Math.min(frames(c.out) - frames(c.in), cap)
+  }
+  if (nout - nin < MIN_F) return p
+  return withClips(p, p.clips.map((x) => (x.id === clipId ? { ...x, source, in: secs(nin), out: secs(nout) } : x)))
 }

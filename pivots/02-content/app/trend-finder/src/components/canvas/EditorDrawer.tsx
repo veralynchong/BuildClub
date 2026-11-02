@@ -2,14 +2,17 @@ import { useRef } from 'react'
 import { t } from '../../lib/i18n'
 import type { Shot } from '../../types'
 import type { EditHook } from '../../lib/editor/useEditProject'
+import type { SourcesHook } from '../../lib/editor/useSources'
+import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import { EditorPanel } from '../editor/EditorPanel'
 
 const STEP = 24
 
 interface Props {
-  ideaId: string
   shots: Shot[]
   edit: EditHook // the edit project, kept above the drawer so it survives closing it
+  sources: SourcesHook
+  timeline: TimelineActions
   readOnly: boolean
   open: boolean
   width: number // px; ignored by the stacked (narrow screen) layout, which uses the full width
@@ -17,7 +20,7 @@ interface Props {
 }
 
 // The right-hand drawer: a draggable left edge, then the editor (player and timeline).
-export function EditorDrawer({ open, width, onWidth, ideaId, shots, edit, readOnly }: Props) {
+export function EditorDrawer({ open, width, onWidth, shots, edit, sources, timeline, readOnly }: Props) {
   const drag = useRef<{ startX: number; startWidth: number; last: number } | null>(null)
   if (!open) return null
 
@@ -56,7 +59,7 @@ export function EditorDrawer({ open, width, onWidth, ideaId, shots, edit, readOn
       />
       <div className="cv-drawer-body">
         <h2>{t('canvas.editor.title')}</h2>
-        <EditorPanel ideaId={ideaId} shots={shots} edit={edit} readOnly={readOnly} />
+        <EditorPanel shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} />
       </div>
     </aside>
   )
