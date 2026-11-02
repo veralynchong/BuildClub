@@ -50,11 +50,12 @@ export function tokens(text: string): string[] {
   return out
 }
 
-const BREAK_AFTER = /[，。！？；：、…,.!?;:]$/
+const SENTENCE_END = /[。！？!?.]$/ // a page always ends here
+const COMMA_LIKE = /[，、,；;：:]$/ // a page ends here once it is long enough
 
 function cap(text: string, startMs: number, endMs: number): Caption {
   const c: Caption = { text, startMs, endMs, timestampMs: null, confidence: null }
-  if (BREAK_AFTER.test(text.trim())) c.pageBreakAfter = true
+  if (SENTENCE_END.test(text.trim())) c.pageBreakAfter = true
   return c
 }
 
@@ -149,23 +150,66 @@ export function voiceCaptions(segs: VoiceSeg[], words: Record<string, Word[]>, t
   return out.sort((a, b) => a.startMs - b.startMs)
 }
 
-// Adds the page breaks @remotion/captions would not make by itself: after COMBINE_MS or PAGE_UNITS, before a token
-// that has no leading space (every CJK character).
-function withBreaks(caps: Caption[]): Caption[] {
-  let from = -1
+// Page rule for tokens without a leading space (every CJK character; @remotion/captions only breaks before a token
+// that has one). A page always ends at sentence punctuation and at the end of a clip or shot (the flags set above).
+// Inside such a run it ends at 14 width units, after a comma-like mark once it holds 6, or after 1200 ms once it holds
+// 8. A run of 18 units or less is one page, and a last page under 4 units joins the one before when that stays <= 18.
+const PUNCT_ONLY = /^[，。！？、；：,.!?;:…）」』]+$/
+const SHORT_RUN = 18
+const MIN_TAIL = 4
+const COMMA_UNITS = 6
+const TIME_UNITS = 8
+
+// A comma-like mark that would still end this page within SHORT_RUN units: wait for it instead of cutting on time.
+function commaSoon(run: Caption[], w: number[], i: number, units: number): boolean {
+  let n = units
+  for (let j = i + 1; j < run.length && n + w[j] <= SHORT_RUN; j++) {
+    n += w[j]
+    if (COMMA_LIKE.test(run[j].text.trim())) return true
+  }
+  return false
+}
+
+function breaksInRun(run: Caption[]): Set<number> {
+  const w = run.map((c) => widthUnits(c.text.trim()))
+  const out = new Set<number>()
+  if (w.reduce((n, x) => n + x, 0) <= SHORT_RUN) return out
+  let from = 0
   let units = 0
-  return caps.map((c, i) => {
-    if (from < 0) from = c.startMs
-    units += widthUnits(c.text.trim())
-    const next = caps[i + 1]
-    const long = c.endMs - from >= COMBINE_MS || units >= PAGE_UNITS
-    const brk = c.pageBreakAfter || (long && next !== undefined && !next.text.startsWith(' '))
-    if (brk) {
-      from = -1
+  const pages: { last: number; units: number }[] = []
+  run.forEach((c, i) => {
+    units += w[i]
+    const next = run[i + 1]
+    if (!next || next.text.startsWith(' ') || PUNCT_ONLY.test(next.text.trim())) return // the run ends, @remotion/captions decides, or a mark stays with its word
+    const timed = c.endMs - run[from].startMs >= COMBINE_MS && units >= TIME_UNITS && !commaSoon(run, w, i, units)
+    const long = units >= PAGE_UNITS || (COMMA_LIKE.test(c.text.trim()) && units >= COMMA_UNITS) || timed
+    if (long) {
+      pages.push({ last: i, units })
+      from = i + 1
       units = 0
     }
-    return brk && !c.pageBreakAfter ? { ...c, pageBreakAfter: true } : c
   })
+  const tail = units
+  const prev = pages[pages.length - 1]
+  if (prev && tail > 0 && tail < MIN_TAIL && prev.units + tail <= SHORT_RUN) pages.pop()
+  pages.forEach((x) => out.add(x.last))
+  return out
+}
+
+function withBreaks(caps: Caption[]): Caption[] {
+  const out: Caption[] = []
+  let run: Caption[] = []
+  const flush = () => {
+    const inner = breaksInRun(run)
+    run.forEach((c, i) => out.push(inner.has(i) && !c.pageBreakAfter ? { ...c, pageBreakAfter: true } : c))
+    run = []
+  }
+  for (const c of caps) {
+    run.push(c)
+    if (c.pageBreakAfter) flush()
+  }
+  flush()
+  return out
 }
 
 export function captionPages(caps: Caption[]): TikTokPage[] {

@@ -508,7 +508,8 @@ test('captionPages: page text has no space between Chinese characters', () => {
   const pages = captionPages(lineCaptions(p, { s1: '三分鐘學會剪輯，3 天 學會 fast editing' }))
   assert.ok(pages.length >= 2)
   assert.ok(!/[一-鿿]\s+[一-鿿]/.test(pages.map((g) => g.text).join('')))
-  assert.ok(pages.every((g) => widthUnits(g.text) <= 16))
+  assert.equal(pages[0].text, '三分鐘學會剪輯，')
+  assert.ok(pages.every((g) => widthUnits(g.text) <= 18))
 })
 
 test('F28: the pages of a lines-mode shot join to the line', () => {
@@ -543,7 +544,7 @@ test('voice mode: pages are per voiceover and edits are keyed by page inside eac
   assert.equal(captionMode(p, words), 'voice')
   assert.equal(captionMode(p, {}), 'lines')
   assert.deepEqual(projectPages(p, { s1: '台詞' }, words).map((g) => g.text), ['甲', '乙'])
-  assert.equal(projectPages(p, { s1: '台詞' }, { v1: [] }).map((g) => g.text).join(''), '台詞')
+  assert.deepEqual(projectPages(p, { s1: '台詞' }, { v1: [] }).map((g) => g.text), ['台詞'])
   assert.deepEqual(projectPages({ ...p, captions: { enabled: false } }, { s1: '台詞' }, words), [])
 })
 
@@ -603,4 +604,20 @@ test('I2: a short clip of a shot does not leave its page on screen over another 
   const p = project([shotClip('a', 's1', 0, 0.2), shotClip('b', 's2', 0, 3), shotClip('c', 's1', 0, 0.2)])
   const pages = captionPages(lineCaptions(p, { s1: 'supercalifragilistic word' }))
   for (const g of pages) assert.ok(pageEnd(g) <= 200 || g.startMs >= 3200, `page "${g.text}" ${g.startMs}-${pageEnd(g)}`)
+})
+
+test('N1/N2: short lines stay whole, long ones split without tiny pages, the line is kept', () => {
+  const pagesOf = (line, secs) => captionPages(lineCaptions(project([shotClip('a', 's1', 0, secs)]), { s1: line }))
+  assert.deepEqual(pagesOf('台詞', 3).map((g) => g.text), ['台詞'])
+  assert.deepEqual(pagesOf('三分鐘學會剪輯短', 6).map((g) => g.text), ['三分鐘學會剪輯短']) // 8 characters over 6 s
+  const line = '三分鐘學會剪輯短影音的'.slice(0, 13) // 13 characters, no punctuation
+  for (const secs of [2, 6, 12]) {
+    const pages = pagesOf(line.padEnd(13, '的'), secs)
+    assert.equal(pages.map((g) => g.text).join(''), line.padEnd(13, '的'))
+    assert.ok(pages.length > 1 && pages.every((g) => widthUnits(g.text) >= 4 && widthUnits(g.text) <= 18), pages.map((g) => g.text).join('|'))
+  }
+  const sentences = '先講重點，再講例子。最後給你一個行動'
+  const pages = pagesOf(sentences, 9)
+  assert.equal(pages.map((g) => g.text).join(''), sentences)
+  assert.deepEqual(pages.map((g) => g.text), ['先講重點，', '再講例子。', '最後給你一個行動'])
 })
