@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import analyze  # noqa: E402
 import channels  # noqa: E402
 import covers  # noqa: E402
+import editing  # noqa: E402
 import server  # noqa: E402
 
 
@@ -70,6 +71,7 @@ def offline(tmp_path, monkeypatch):
     monkeypatch.setattr(channels, "ask_claude", no_claude)
     # Account medians are filled after the search returns; run that inline so tests are deterministic.
     monkeypatch.setattr(server, "in_background", lambda fill: fill())
+    monkeypatch.setattr(editing, "prewarm_bundle", lambda: None)  # no test bundles Remotion at startup
     return tmp_path
 
 

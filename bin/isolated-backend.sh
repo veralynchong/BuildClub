@@ -25,6 +25,7 @@ case "$port" in 8787|5195) echo "error: port $port is reserved (demo backend / v
 if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then echo "error: port $port is already in use" >&2; exit 2; fi
 
 TF=pivots/02-content/app/trend-finder
+app_dir="$(pwd)/$TF"
 [ -d "$TF/dist" ] || { echo "error: $TF/dist is missing; run 'npm run build' in $TF first" >&2; exit 1; }
 [ -z "$jobs_src" ] || [ -d "$jobs_src" ] || { echo "error: jobs_source_dir not found: $jobs_src" >&2; exit 1; }
 venv="${TF_VENV:-/Users/tommy/Desktop/BuildClub/$TF/backend/.venv}"
@@ -67,8 +68,9 @@ rm -f "$tmp/.env" "$tmp/backend/.env"
 demo_env=(); [ "$demo" != 1 ] || demo_env=(REMAKE_DEMO=1)
 # Clean environment, dummy token, zero budgets: any paid call is rejected before it happens.
 cd "$tmp"
-clean_env=(env -i HOME="$HOME" PATH="$PATH"
-  ${demo_env[@]+"${demo_env[@]}"} APIFY_TOKEN=dummy DAILY_APIFY_USD=0 DAILY_CLAUDE_USD=0 DAILY_JEV_USD=0 DAILY_GEN_IMAGE_USD=0 DAILY_GEN_VIDEO_USD=0 DAILY_SCRAPECREATORS_CREDITS=0)
+# The backend runs from a copy, so it can't find render/ and node_modules by itself: point it at this checkout.
+clean_env=(env -i HOME="$HOME" PATH="$PATH" REMOTION_APP_DIR="$app_dir"
+  ${demo_env[@]+"${demo_env[@]}"} APIFY_TOKEN=dummy DAILY_APIFY_USD=0 DAILY_CLAUDE_USD=0 DAILY_JEV_USD=0 DAILY_GEN_IMAGE_USD=0 DAILY_GEN_VIDEO_USD=0 DAILY_GEN_VOICE_USD=0 DAILY_SCRAPECREATORS_CREDITS=0)
 "${clean_env[@]}" "$venv/bin/uvicorn" server:app --app-dir backend --port "$port" >"$tmp/server.log" 2>&1 &
 pid=$!
 echo "temp dir: $tmp"; echo "url:      http://127.0.0.1:$port"; echo "pid:      $pid  (kill $pid to stop)"

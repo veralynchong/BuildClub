@@ -229,3 +229,12 @@ test('sendCutForReview posts with no body and returns the state; failures use th
     g.restore()
   }
 })
+
+test('getCut passes the source of the video through', async () => {
+  const f = fakeFetch([{ body: state('done', { source: 'editor' }) }])
+  try {
+    assert.equal((await getCut('a')).source, 'editor')
+  } finally {
+    f.restore()
+  }
+})

@@ -278,6 +278,7 @@ export function CutPanel({ ideaId, status, shotCount, shotsDone, takesRevision =
               {formatDuration(output.durationSec)} · {formatSize(output.size)}
             </span>
           </div>
+          {cut?.source === 'editor' && <p className="small muted">{t('cut.panel.editorMade')}</p>}
           {cut?.autoCut && <AutoCutNote autoCut={cut.autoCut} finalSec={output.durationSec} />}
           {approved && cueData && cueData.cues.length > 0 && (
             <CueEditor key={output.url} ideaId={ideaId} cues={cueData.cues} edited={cueData.edited} disabled={active} onSaved={setCueData} />

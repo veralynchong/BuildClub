@@ -26,6 +26,9 @@ import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Genera
 import { ErrorText } from '../ErrorText'
 import { AddNodeMenu } from './AddNodeMenu'
 import { EditorDrawer } from './EditorDrawer'
+import { useSources } from '../../lib/editor/useSources'
+import { useTimelineActions } from '../../lib/editor/useTimelineActions'
+import { useEditProject } from '../../lib/editor/useEditProject'
 import { CanvasContext, type CanvasCtx } from './nodes/ctx'
 import { nodeTypes } from './nodes'
 
@@ -162,6 +165,9 @@ function CanvasBoard({
   const [viewport, setViewport] = useState<Viewport | undefined>(initial.doc.viewport)
   const vw = useViewportWidth()
   const fit = isDefaultViewport(initial.doc.viewport)
+
+  // ---- edit project (the drawer's timeline; lives here so it outlasts the drawer) ----
+  const edit = useEditProject(ideaId, readOnly)
 
   // ---- drawer ----
   const [drawer, setDrawer] = useState(() => readDrawer())
@@ -595,7 +601,28 @@ function CanvasBoard({
     onEdgesChange(changes)
   }
 
+  // ---- canvas -> timeline ----
+  const footageSignature = useMemo(
+    () => [...gens.filter((g) => g.kind === 'video' && g.status === 'done').map((g) => g.id), ...takes.map((x) => x.id)].join(','),
+    [gens, takes],
+  )
+  const sources = useSources(ideaId, footageSignature)
+  const timeline = useTimelineActions({
+    edit,
+    sources,
+    shots,
+    doc,
+    gens,
+    takes,
+    readOnly,
+    openDrawer: () => setDrawerState(true, drawerWidth),
+    notify: showNote,
+  })
+
   const ctx: CanvasCtx = {
+    addToTimeline: (src) => void timeline.addClip(src),
+    setPrimary: timeline.setPrimary,
+    isPrimary: timeline.isPrimary,
     shots,
     readOnly,
     shotNumbers: useMemo(() => {
@@ -748,6 +775,12 @@ function CanvasBoard({
           </div>
         </div>
         <EditorDrawer
+          ideaId={ideaId}
+          shots={shots}
+          edit={edit}
+          sources={sources}
+          timeline={timeline}
+          readOnly={readOnly}
           open={drawer.open}
           width={drawerWidth}
           onWidth={(px, save) => setDrawerState(true, clampDrawerWidth(px, vw), save)}

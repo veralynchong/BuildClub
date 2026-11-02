@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react'
 import type { Shot } from '../../../types'
 import type { Key } from '../../../lib/i18n'
 import type { Take } from '../../../lib/takes'
+import type { ClipSource } from '../../../lib/editor/types'
 import type { Budget, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
 
 // What the node components need from the board: the shot list, whether editing is allowed, and a few actions.
@@ -30,6 +31,10 @@ export interface CanvasCtx {
   uploadToNode: (nodeId: string, file: File) => void
   addTake: (nodeId: string, file: File) => void
   pickTake: (takeId: string) => void
+  // Timeline: put footage at the end, make it a shot's main clip, ask whether it is.
+  addToTimeline: (src: ClipSource) => void
+  setPrimary: (shotId: string, src: ClipSource) => void
+  isPrimary: (shotId: string, src: ClipSource) => boolean
   // While a line is being dragged: whether it could end on this input (true when nothing is being dragged).
   acceptsDrop: (nodeId: string, handleId: string) => boolean
 }
