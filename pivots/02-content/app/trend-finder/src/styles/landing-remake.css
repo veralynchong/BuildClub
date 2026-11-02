@@ -165,6 +165,10 @@ body:has(.rk) { background: #ffffff; }
 .rk-pick-thumb .rk-ph-label { display: none; }
 .rk-pick-thumb .rk-ph-tag { font-size: 0; gap: 0; padding: 9px; }
 
+/* Real video: TikTok's player fills the box; the tag and progress bar stay above it */
+.rk-ph-player { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.rk-hovercard-video > :not(.rk-ph-player) { position: relative; z-index: 1; }
+
 /* 2 · Proof */
 .rk-proof-wrap { padding-top: 56px; }
 .rk-proof { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 24px; font-size: 14px; color: var(--ink-muted); }
