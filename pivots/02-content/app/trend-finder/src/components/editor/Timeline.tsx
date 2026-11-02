@@ -48,13 +48,16 @@ export function Timeline({ project, sources, shots, frame, readOnly, onProject, 
   const shift = (dir: -1 | 1) => selIndex >= 0 && onProject(moveClip(project, selIndex, selIndex + dir))
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (readOnly || (e.target as HTMLElement).tagName === 'INPUT') return
-    if (e.key === 's' || e.key === 'S') split()
-    else if ((e.key === 'Delete' || e.key === 'Backspace') && selIndex >= 0) remove()
+    const el = e.target as HTMLElement
+    if (readOnly || e.metaKey || e.ctrlKey) return
+    if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return
+    if (!e.altKey && (e.key === 's' || e.key === 'S')) split()
+    else if (!e.altKey && (e.key === 'Delete' || e.key === 'Backspace') && selIndex >= 0) remove()
     else if (e.altKey && e.key === 'ArrowLeft') shift(-1)
     else if (e.altKey && e.key === 'ArrowRight') shift(1)
     else return
     e.preventDefault()
+    e.stopPropagation()
   }
 
   const seekFromRuler = (e: React.MouseEvent<HTMLDivElement>) => {

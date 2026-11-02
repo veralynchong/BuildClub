@@ -47,15 +47,18 @@ export function EditorPanel({ ideaId, shots, edit, readOnly }: Props) {
   )
 
   // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
-  const attached = useRef<PlayerRef | null>(null)
+  const ready = project !== null // the player only exists once the project has loaded
   useEffect(() => {
     const p = player.current
-    if (!p || attached.current === p) return
-    attached.current = p
+    if (!p) return
     const on = (e: { detail: { frame: number } }) => setFrame(e.detail.frame)
     p.addEventListener('frameupdate', on)
     p.addEventListener('seeked', on)
-  })
+    return () => {
+      p.removeEventListener('frameupdate', on)
+      p.removeEventListener('seeked', on)
+    }
+  }, [ready])
 
   if (loadError) return <ErrorText text={loadError} />
   if (!project || !inputProps) return <p className="muted">{t('editor.loading')}</p>
@@ -76,7 +79,7 @@ export function EditorPanel({ ideaId, shots, edit, readOnly }: Props) {
   }
 
   return (
-    <div className="cv-ed">
+    <div className="cv-ed nokey">
       <div className="cv-ed-status" role="status">
         {stale ? (
           <span className="cv-ed-stale">
