@@ -69,82 +69,14 @@ def test_never_cuts_inside_a_real_word(seed):
         assert any(k[0] <= start + 1e-9 and true_end <= k[1] + 1e-9 for k in keeps), (text, start, true_end, keeps)
 
 
-def test_atempo_chain():
-    assert cutting.atempo_chain(1.1) == "atempo=1.1"
-    assert cutting.atempo_chain(2.5) == "atempo=2.0,atempo=1.25"
-    assert cutting.atempo_chain(1.0) == ""
-
-
-def test_output_duration():
-    assert cutting.output_duration([(0, 1), (2, 3.5)], 1.25) == pytest.approx(2.0)
-
-
-GOLDEN = (
-    "[0:v]trim=start=0:end=1,setpts=PTS-STARTPTS[v0];"
-    "[0:a]atrim=start=0:end=1,asetpts=PTS-STARTPTS,afade=t=in:d=0.012,afade=t=out:st=0.988:d=0.012[a0];"
-    "[0:v]trim=start=2.78:end=3.5,setpts=PTS-STARTPTS[v1];"
-    "[0:a]atrim=start=2.78:end=3.5,asetpts=PTS-STARTPTS,afade=t=in:d=0.012,afade=t=out:st=0.708:d=0.012[a1];"
-    "[v0][a0][v1][a1]concat=n=2:v=1:a=1[vc][ac];"
-    "[vc]setpts=PTS/1.25[v];"
-    "[ac]atempo=1.25[as];"
-    "[as]loudnorm=I=-13:TP=-1.5:LRA=11:print_format=json,aresample=48000[a]"
-)
-
-
-def test_cut_graph_golden_string():
-    graph = cutting.build_cut_graph([(0.0, 1.0), (2.78, 3.5)], 1.25, music=False, audio_only=False, loudnorm=None)
-    assert graph == GOLDEN
-
-
-def test_cut_graph_audio_only_has_no_video():
-    graph = cutting.build_cut_graph([(0.0, 1.0)], 1.0, music=False, audio_only=True, loudnorm=None)
-    assert "trim=" not in graph.replace("atrim", "") and "[v]" not in graph and graph.endswith("[a]")
-
-
-def test_cut_graph_music_and_second_pass():
-    ln = {"input_i": -20.5, "input_tp": -3.1, "input_lra": 7.0, "input_thresh": -31.0, "target_offset": 0.4}
-    graph = cutting.build_cut_graph([(0.0, 1.0), (2.0, 4.0)], 1.1, music=True, audio_only=False, loudnorm=ln)
-    assert "amix=inputs=2:duration=first:normalize=0" in graph
-    assert "linear=true" in graph and "measured_I=-20.5" in graph and "offset=0.4" in graph
-    first = cutting.build_cut_graph([(0.0, 1.0)], 1.0, music=False, audio_only=False, loudnorm=None)
-    assert "print_format=json" in first and "linear=true" not in first and "amix" not in first
-    assert "[1:a]atrim=0:2.727" in graph
-
-
-def test_join_graph_crops_and_fills_silence():
-    graph = cutting.build_join_graph([{"hasAudio": True, "duration": 3.0}, {"hasAudio": False, "duration": 2.5}])
-    assert graph.count("anullsrc=r=48000:cl=stereo") == 1 and "atrim=0:2.5" in graph
-    assert "[1:a]" not in graph and "[0:a]aresample=48000,aformat=channel_layouts=stereo" in graph
-    chains = [c for c in graph.split(";") if c.startswith(("[0:v]", "[1:v]"))]
-    assert len(chains) == 2 and all(c.endswith("format=yuv420p[v%d]" % i) for i, c in enumerate(chains))
-    assert "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30" in graph
-    assert graph.endswith("concat=n=2:v=1:a=1[v][a]")
-
-
-LOUDNORM_ERR = """[Parsed_loudnorm_0 @ 0x1] 
-{
-\t"input_i" : "-20.53",
-\t"input_tp" : "-3.10",
-\t"input_lra" : "7.00",
-\t"input_thresh" : "-31.04",
-\t"output_i" : "-13.2",
-\t"target_offset" : "0.40"
-}
-"""
 SILENCE_ERR = """[silencedetect @ 0x1] silence_start: 1.3
 [silencedetect @ 0x1] silence_end: 2.9 | silence_duration: 1.6
 [silencedetect @ 0x1] silence_start: 4.25
 """
 
 
-def test_parse_loudnorm_and_silences_and_progress():
-    assert cutting.parse_loudnorm("noise {\"a\": 1}\n" + LOUDNORM_ERR) == {
-        "input_i": -20.53, "input_tp": -3.10, "input_lra": 7.0, "input_thresh": -31.04, "target_offset": 0.4}
+def test_parse_silences():
     assert cutting.parse_silences(SILENCE_ERR, 6.0) == [(1.3, 2.9), (4.25, 6.0)]
-    assert cutting.parse_progress("out_time_us=2500000", 10.0) == pytest.approx(0.25)
-    assert cutting.parse_progress("out_time_us=99000000", 10.0) == 1.0
-    assert cutting.parse_progress("out_time_us=N/A", 10.0) is None
-    assert cutting.parse_progress("progress=continue", 10.0) is None
 
 
 def test_missing_tools(monkeypatch, tmp_path):
@@ -207,18 +139,6 @@ def test_protected_boundary_does_not_cut_into_protected_take():
 
 def test_no_words_with_protected_keeps_everything():
     assert cutting.keep_intervals([], [], 5.0, protected=[(0.0, 5.0)]) == [(0.0, 5.0)]
-
-
-def test_wordless_spans_picks_takes_without_words():
-    words = [(0.5, 1.0, "a"), (5.5, 6.0, "b")]
-    spans = cutting.wordless_spans([2.0, 3.0, 3.0], words)
-    assert spans == [(2.0, 5.0)]
-
-
-def test_cut_graph_music_fades_stay_non_negative_for_a_short_output():
-    graph = cutting.build_cut_graph([(0.0, 0.88)], 1.1, music=True, audio_only=False, loudnorm=None)
-    assert "afade=t=out:st=0.4:d=0.4" in graph and "st=-" not in graph
-    assert "afade=t=in:d=0.4" in graph
 
 
 def test_describe_trims_splits_per_take_and_names_fillers():
