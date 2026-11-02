@@ -284,6 +284,29 @@ class AnswerResult(BaseModel):  # same fields as the front end's Answer (src/lib
     basis: str
 
 
+CONTENT_TYPES = ("street_interview", "recipe_cooking", "skit_comedy", "review_taste_test", "unboxing_product",
+                 "day_in_life_vlog", "challenge", "tutorial_tips", "other")
+ContentType = Literal["street_interview", "recipe_cooking", "skit_comedy", "review_taste_test", "unboxing_product",
+                      "day_in_life_vlog", "challenge", "tutorial_tips", "other"]  # same list as src/types.ts
+
+
+class ContentTypes(BaseModel):
+    """What kind of video each result is, by the video's id in the search (ids with no type are left out)."""
+    types: dict[str, ContentType]
+
+
+class ClassifyAnswer(BaseModel):
+    """The AI's answer: video number (as sent) -> type. A type outside the list becomes "other"."""
+    types: dict[str, ContentType]
+
+    @field_validator("types", mode="before")
+    @classmethod
+    def unknown_is_other(cls, value):
+        if not isinstance(value, dict):
+            raise ValueError("types must be an object")
+        return {str(k): (v if v in CONTENT_TYPES else "other") for k, v in value.items()}
+
+
 class LikeJob(BaseModel):
     status: Literal["queued", "running", "done", "failed"]
     step: str = ""

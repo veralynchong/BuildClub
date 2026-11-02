@@ -1,4 +1,5 @@
-import type { Video } from '../types'
+import type { ContentType, Video } from '../types'
+import { CONTENT_TYPES } from '../types.ts'
 import { UNKNOWN_DAYS } from './metrics.ts'
 
 // The filter panel on the results screen. Pure, so the rules can be tested without the screen.
@@ -14,6 +15,8 @@ export interface ResultFilters {
   brokeOut: boolean // views >= 10x followers
   within: UploadWithin
   length: LengthBand
+  // Content types to keep; none picked means all of them.
+  types: ContentType[]
 }
 
 export const VIEWS_OPTIONS: ViewsMin[] = [0, 100_000, 500_000, 1_000_000, 5_000_000]
@@ -28,6 +31,7 @@ export const DEFAULT_FILTERS: ResultFilters = {
   brokeOut: false,
   within: 0,
   length: 'any',
+  types: [],
 }
 
 const SMALL_ACCOUNT = 5_000
@@ -45,6 +49,8 @@ export const followersPending = (v: Video, f: ResultFilters): boolean => usesFol
 export const lengthBandOf = (sec: number): LengthBand => (sec < 15 ? 'short' : sec <= 60 ? 'mid' : 'long')
 
 function passes(v: Video, f: ResultFilters): boolean {
+  // A video the API hasn't sorted (yet, or the call failed) is not in any type that was picked.
+  if (f.types.length > 0 && !(v.contentType && f.types.includes(v.contentType))) return false
   // Reddit's `views` are upvotes, which say nothing about reach, so the views floor leaves them alone.
   if (v.platform !== 'reddit' && v.views < f.viewsMin) return false
   // No posting date (YouTube search) or no length: can't be judged, so these stay.
@@ -66,8 +72,24 @@ export function applyFilters(videos: Video[], f: ResultFilters): Video[] {
   return videos.filter((v) => passes(v, f))
 }
 
+// Picks or drops one type; the list keeps the fixed order of CONTENT_TYPES.
+export function toggleType(f: ResultFilters, type: ContentType): ResultFilters {
+  const on = f.types.includes(type)
+  return { ...f, types: CONTENT_TYPES.filter((c) => (c === type ? !on : f.types.includes(c))) }
+}
+
+// How many videos each type has among those that pass every other filter (so the numbers show what picking it would give).
+// Videos without a type are not counted.
+export function typeCounts(videos: Video[], f: ResultFilters): Partial<Record<ContentType, number>> {
+  const counts: Partial<Record<ContentType, number>> = {}
+  for (const v of applyFilters(videos, { ...f, types: [] })) {
+    if (v.contentType) counts[v.contentType] = (counts[v.contentType] ?? 0) + 1
+  }
+  return counts
+}
+
 // A filter that can be taken off with its own chip.
-export type ActiveFilter = 'views' | 'followers' | 'smallBig' | 'brokeOut' | 'within' | 'length'
+export type ActiveFilter = 'views' | 'followers' | 'smallBig' | 'brokeOut' | 'within' | 'length' | 'types'
 
 export function activeFilters(f: ResultFilters): ActiveFilter[] {
   const out: ActiveFilter[] = []
@@ -77,6 +99,7 @@ export function activeFilters(f: ResultFilters): ActiveFilter[] {
   if (f.brokeOut) out.push('brokeOut')
   if (f.within > 0) out.push('within')
   if (f.length !== 'any') out.push('length')
+  if (f.types.length > 0) out.push('types')
   return out
 }
 
@@ -88,6 +111,7 @@ export function clearFilter(f: ResultFilters, which: ActiveFilter): ResultFilter
     case 'brokeOut': return { ...f, brokeOut: false }
     case 'within': return { ...f, within: 0 }
     case 'length': return { ...f, length: 'any' }
+    case 'types': return { ...f, types: [] }
   }
 }
 

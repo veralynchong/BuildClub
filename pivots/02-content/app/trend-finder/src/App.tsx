@@ -30,7 +30,7 @@ import { CompareScreen } from './components/CompareScreen'
 import type { PickVideo } from './components/CompareScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { LandingAltitude } from './components/landing/LandingAltitude'
-import type { Client, Format, Platform, Video } from './types'
+import type { Client, ContentType, Format, Platform, Video } from './types'
 import {
   analyzeVideo,
   applyBreakdown,
@@ -50,6 +50,7 @@ import {
   saveLibrary,
   saveList,
   searchAll,
+  fetchContentTypes,
   searchLive,
 } from './lib/live'
 import { buildChipGroups, clientTopic, pulseFrom } from './lib/clientChips'
@@ -602,10 +603,20 @@ export default function App() {
         const formats = res.formats.map((f) => broken.get(f.id) ?? f)
         return { videos: keep(prev.videos, res.videos) as Video[], formats: keep(prev.formats, formats) as Format[] }
       })
+      // Sort the results by content type in the background; a failure leaves them without types.
+      const typed = fetchContentTypes(q, platforms)
+      const applyTypes = (types: Map<string, ContentType>) => {
+        if (types.size === 0) return
+        const tag = (v: Video) => (types.has(v.id) ? { ...v, contentType: types.get(v.id) } : v)
+        setLiveStore((prev) => ({ ...prev, videos: prev.videos.map(tag) }))
+        setLiveResults((prev) => prev.map(tag))
+      }
+      void typed.then(applyTypes)
       // The results screen takes over only if the person is on this client's search page; otherwise a toast offers them.
       const show = () => {
         setLiveResults(res.videos)
         setLiveQuery(q)
+        void typed.then(applyTypes)
         // One answer per search, from the videos it found. A failure just means no answer block.
         setLiveAnswer(null)
         if (res.videos.length) {
