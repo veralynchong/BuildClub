@@ -749,11 +749,11 @@ def test_from_gen_applies_the_upload_checks(client, voice_env):
     ok = client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}")
     assert ok.status_code == 200 and ok.json()["words"][0]["text"] == "hello"
     voice_env["duration"] = 121
-    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 422
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{seed_voice_gen(client)}").status_code == 422
     voice_env["duration"], voice_env["hasAudio"] = 3.0, False
-    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 415
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{seed_voice_gen(client)}").status_code == 415
     folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
-    assert len([p for p in folder.iterdir()]) == 3  # only the one good import (audio, words, job note); no part files
+    assert len([p for p in folder.iterdir()]) == 4  # only the one good import (audio, words, job note, claim); no part files
 
 
 def test_words_error_is_scrubbed_and_capped(client, voice_env, monkeypatch):
@@ -903,3 +903,31 @@ def test_shot_lines_skips_a_bad_shot(client, setup):
         conn.execute("UPDATE store SET value = ? WHERE key = 'ideas'", (json.dumps(ideas),))
     with server.db() as conn:
         assert editing.shot_lines(conn, "ia") == {"s2": "ok"}
+
+
+# --- Final review fixes ---
+
+def test_second_import_of_a_job_is_refused(client, voice_env):
+    gid = seed_voice_gen(client)
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 200
+    again = client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}")
+    assert again.status_code == 409 and "VOICE_ALREADY_ADDED" in again.json()["error"]
+    assert len(editing.voice_ids(server.MEDIA_DIR, "ia")) == 1
+
+
+def test_failed_import_leaves_the_job_pending(client, voice_env):
+    gid = seed_voice_gen(client)
+    voice_env["duration"] = 121
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 422
+    assert [g["id"] for g in client.get("/api/ideas/ia/edit/voice/pending").json()["pending"]] == [gid]
+    voice_env["duration"] = 3.0
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 200
+    assert client.get("/api/ideas/ia/edit/voice/pending").json() == {"pending": []}
+
+
+def test_pending_lists_running_jobs_with_status(client, voice_env):
+    with server.db() as conn:
+        gid = generations.insert_done(conn, "ia", "editor-voice", "voice", "mock-voice", file="v.mp3")["id"]
+        conn.execute("UPDATE generations SET status = 'running', file = NULL WHERE id = ?", (gid,))
+    got = client.get("/api/ideas/ia/edit/voice/pending").json()["pending"]
+    assert [(g["id"], g["status"]) for g in got] == [(gid, "running")]

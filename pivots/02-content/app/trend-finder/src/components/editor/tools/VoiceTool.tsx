@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { t } from '../../../lib/i18n'
 import { getModels } from '../../../lib/canvas/api'
 import type { GenModel } from '../../../lib/canvas/types'
-import { deleteVoice, putVoice, quoteTts, type VoiceInfo } from '../../../lib/editor/api'
+import { deleteVoice, putVoice, quoteTts, type PendingVoice, type VoiceInfo } from '../../../lib/editor/api'
 import { ttsDefaultText, MAX_VOICE_UNITS } from '../../../lib/editor/captions'
 import { MAX_VOICE, addVoice, removeVoice, updateVoice, type FlushResult } from '../../../lib/editor/timeline'
 import type { EditProject, VoiceSeg } from '../../../lib/editor/types'
@@ -27,7 +27,7 @@ interface Props {
   adopt: (info: VoiceInfo, source: Source) => void // puts a new voice on the timeline at the playhead
   onVoiceGone: (id: string) => void
   tts: { busy: boolean; error: string | null; run: (text: string, model: string) => void } // lives in EditorPanel
-  pending: string[] // finished AI voice jobs that were never imported
+  pending: PendingVoice[] // AI voice jobs never added: finished ones to add, and ones still going
   onImport: (genId: string) => void
   lineTexts: string[] // every shot's script line, in order
   readOnly: boolean
@@ -155,10 +155,16 @@ export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVo
         {full && <span className="muted small">{t('editor.voice.full')}</span>}
       </div>
       <TtsSection ideaId={ideaId} lineTexts={lineTexts} disabled={off || full} tts={tts} onError={setError} />
-      {pending.map((id) => (
-        <div key={id} className="cv-ed-tool-row">
-          <span className="small">{t('editor.tts.pending')}</span>
-          <button type="button" className="btn btn-primary btn-sm" disabled={off || full || tts.busy} onClick={() => onImport(id)}>{t('editor.tts.import')}</button>
+      {pending.map((g) => (
+        <div key={g.id} className="cv-ed-tool-row">
+          {g.status === 'done' ? (
+            <>
+              <span className="small">{t('editor.tts.pending')}</span>
+              <button type="button" className="btn btn-primary btn-sm" disabled={off || full || tts.busy} onClick={() => onImport(g.id)}>{t('editor.tts.import')}</button>
+            </>
+          ) : (
+            <span className="small" role="status">{t('editor.tts.inProgress')}</span>
+          )}
         </div>
       ))}
       {tts.error && <p className="cv-ed-error small" role="alert"><ErrorText text={tts.error} /></p>}
@@ -213,6 +219,9 @@ function TtsSection({ ideaId, lineTexts, disabled, tts, onError }: TtsProps) {
   const [text, setText] = useState(initial.text)
   const [ask, setAsk] = useState<Ask | null>(null)
   const [quoting, setQuoting] = useState(false)
+  // A price under half a cent would show as US$0.00, which reads as free.
+  const tiny = ask !== null && ask.usd > 0 && ask.usd < 0.005
+  const priceText = ask ? t(tiny ? 'editor.tts.priceTiny' : 'editor.tts.price', { usd: ask.usd.toFixed(2), left: ask.remaining.toFixed(2) }) : ''
   const state = tts.busy ? 'working' : quoting ? 'quoting' : 'idle'
 
   useEffect(() => {
@@ -273,9 +282,9 @@ function TtsSection({ ideaId, lineTexts, disabled, tts, onError }: TtsProps) {
           </label>
           {initial.truncated && <p className="muted small">{t('editor.tts.truncated', { max: MAX_VOICE_UNITS })}</p>}
           {ask ? (
-            <div className="cv-ed-tool-row" role="group" aria-label={t('editor.tts.price', { usd: ask.usd.toFixed(2), left: ask.remaining.toFixed(2) })}>
-              <strong className="small">{t('editor.tts.price', { usd: ask.usd.toFixed(2), left: ask.remaining.toFixed(2) })}</strong>
-              <button type="button" className="btn btn-primary btn-sm" disabled={disabled} onClick={confirm}>{t('editor.tts.confirm')}</button>
+            <div className="cv-ed-tool-row" role="group" aria-label={priceText}>
+              <strong className="small">{priceText}</strong>
+              <button type="button" className="btn btn-primary btn-sm" disabled={disabled || tts.busy} onClick={confirm}>{t('editor.tts.confirm')}</button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAsk(null)}>{t('editor.tts.cancel')}</button>
             </div>
           ) : (

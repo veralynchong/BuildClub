@@ -110,7 +110,11 @@ export function lineCaptions(p: EditProject, lines: Record<string, string>): Cap
       }
       const startMs = Math.min(spans[k].to, Math.round(spans[k].from + (s - base)))
       const endMs = Math.max(startMs, Math.min(spans[k].to, Math.round(spans[k].from + (e - base))))
-      placed.push({ c: cap(text, startMs, endMs), k })
+      const prev = placed[placed.length - 1]
+      if (prev && PUNCT_ONLY.test(text.trim())) {
+        // Punctuation belongs to the word before it, even where the line crosses into the next clip.
+        placed.push({ c: cap(text, prev.c.endMs, prev.c.endMs), k: prev.k })
+      } else placed.push({ c: cap(text, startMs, endMs), k })
     }
     // A page never runs past the end of a clip, and two shots never share a page.
     placed.forEach((x, i) => {

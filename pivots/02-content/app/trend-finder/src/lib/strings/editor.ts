@@ -146,6 +146,7 @@ export const en = {
   "editor.tts.truncated": "The shot lines were cut to fit the length limit (a Chinese character counts as 2 of {max}).",
   "editor.tts.quote": "See the price",
   "editor.tts.price": "About US${usd} · today left US${left}",
+  "editor.tts.priceTiny": "< US$0.01 · today left US${left}",
   "editor.tts.confirm": "Make the voice",
   "editor.tts.cancel": "Cancel",
   "editor.tts.working": "Making the voice…",
@@ -153,6 +154,7 @@ export const en = {
   "editor.tts.empty": "Write the text first.",
   "editor.tts.pending": "An AI voice you paid for is ready but not added yet.",
   "editor.tts.import": "Add it",
+  "editor.tts.inProgress": "AI voice in progress…",
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -301,6 +303,7 @@ export const zhHant: Record<keyof typeof en, string> = {
   "editor.tts.truncated": "台詞太長，已截短到長度上限內（一個中文字算 2，上限 {max}）。",
   "editor.tts.quote": "查看價格",
   "editor.tts.price": "約 US${usd} · 今日剩 US${left}",
+  "editor.tts.priceTiny": "< US$0.01 · 今日剩 US${left}",
   "editor.tts.confirm": "開始配音",
   "editor.tts.cancel": "取消",
   "editor.tts.working": "配音中…",
@@ -308,4 +311,5 @@ export const zhHant: Record<keyof typeof en, string> = {
   "editor.tts.empty": "請先寫好文字。",
   "editor.tts.pending": "有一段已付費的 AI 配音做好了，但還沒加進來。",
   "editor.tts.import": "加入",
+  "editor.tts.inProgress": "AI 配音進行中…",
 }

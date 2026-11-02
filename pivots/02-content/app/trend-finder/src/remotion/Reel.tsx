@@ -55,7 +55,8 @@ export function Reel(props: ReelInput) {
         )
       })}
       {project.texts.map((x) => {
-        const from = Math.min(toFrames(x.start), total - 1)
+        if (toFrames(x.start) >= total) return null
+        const from = toFrames(x.start)
         const duration = Math.min(toFrames(x.end), total) - from
         if (duration < 1) return null
         const look = textLook(x.color, brand.color)

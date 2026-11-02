@@ -64,6 +64,7 @@ VOICE_SOURCES = ("tts", "recording", "upload")
 NOT_AUDIO = "Upload an audio recording: WebM, Ogg, MP3, M4A or WAV."
 VOICE_TOO_BIG = "The audio is over the 20 MB limit."
 VOICE_IN_USE = "Remove this voiceover from the timeline first."
+VOICE_ALREADY_ADDED = "VOICE_ALREADY_ADDED: that voiceover was already added to the plan."
 VOICE_TOO_LONG = f"The audio is longer than {MAX_VOICE_S} seconds."
 
 
@@ -788,32 +789,50 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         if folder is None:
             return error(404, "That plan doesn't exist.")
         folder.mkdir(parents=True, exist_ok=True)
-        ext = source.suffix.lstrip(".") or "mp3"
-        part = folder / f".{secrets.token_urlsafe(9)}.part.{ext}"
+        claim = folder / f"{gen_id}.claim"
+        try:  # one import per job: whoever creates the claim first copies, the other gets a 409
+            os.close(os.open(claim, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        except FileExistsError:
+            return error(409, VOICE_ALREADY_ADDED)
+        done = False
+        part = None
         try:
-            shutil.copyfile(source, part)
-        except OSError:
-            part.unlink(missing_ok=True)
-            return error(404, "That voiceover's file is gone.")
-        out = finish_upload(idea_id, part, ext)  # the same checks as an upload
-        if isinstance(out, dict):  # remember which job this file came from, so the job is not offered again
-            (folder / f"{out['id']}.gen").write_text(gen_id)
-        return out
+            ext = source.suffix.lstrip(".") or "mp3"
+            part = folder / f".{secrets.token_urlsafe(9)}.part.{ext}"
+            try:
+                shutil.copyfile(source, part)
+            except OSError:
+                return error(404, "That voiceover's file is gone.")
+            out = finish_upload(idea_id, part, ext)  # the same checks as an upload
+            if isinstance(out, dict):  # remember which job this file came from, so the job is not offered again
+                (folder / f"{out['id']}.gen").write_text(gen_id)
+                done = True
+            return out
+        finally:
+            if part is not None:
+                part.unlink(missing_ok=True)
+            if not done:  # a failed import gives the job back, so it can be retried
+                claim.unlink(missing_ok=True)
 
     @router.get("/api/ideas/{idea_id}/edit/voice/pending")
     def pending_voice(idea_id: str):
-        """Finished AI voice jobs of this plan that were never imported (the editor was left while one ran)."""
+        """AI voice jobs of this plan that were never imported (the editor was left while one ran): finished ones
+        and the ones still queued or running, each with its status."""
         refused = gate(idea_id)
         if refused:
             return refused
         folder = voice_folder(media_dir(), idea_id)
-        taken = {p.read_text().strip() for p in folder.glob("*.gen")} if folder is not None and folder.is_dir() else set()
+        taken = set()
+        if folder is not None and folder.is_dir():
+            taken = {p.read_text().strip() for p in folder.glob("*.gen")} | {p.stem for p in folder.glob("*.claim")}
         gen = generations.gen_folder(media_dir(), idea_id)
         with db() as conn:
-            rows = conn.execute("SELECT id, file, created_at FROM generations WHERE idea_id = ? AND kind = 'voice' "
-                                "AND status = 'done' ORDER BY created_at, rowid", (idea_id,)).fetchall()
-        return {"pending": [{"id": r[0], "createdAt": r[2]} for r in rows
-                            if r[0] not in taken and r[1] and gen is not None and (gen / r[1]).is_file()]}
+            rows = conn.execute("SELECT id, file, created_at, status FROM generations WHERE idea_id = ? "
+                                "AND kind = 'voice' AND status IN ('queued', 'running', 'done') "
+                                "ORDER BY created_at, rowid", (idea_id,)).fetchall()
+        return {"pending": [{"id": r[0], "createdAt": r[2], "status": r[3]} for r in rows
+                            if r[0] not in taken
+                            and (r[3] != "done" or (r[1] and gen is not None and (gen / r[1]).is_file()))]}
 
     @router.get("/api/ideas/{idea_id}/edit/voice")
     def list_voice(idea_id: str):

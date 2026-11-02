@@ -794,12 +794,12 @@ def get_clients():
 
 @app.put("/api/clients", response_model=list[Client], response_model_exclude_none=True)
 def put_clients(clients: list[Client]):
-    # The client list is saved whole by the app, which does not send the brand kit back; keep the stored one.
-    stored = {c["id"]: c.get("brand") for c in load("clients") or []}
-    for c in clients:
-        if c.brand is None and stored.get(c.id):
-            c.brand = Brand(**stored[c.id])
-    save("clients", clients)
+    # The brand kit belongs to the brand routes: a brand carried by the request is dropped and the stored one kept.
+    with brand.lock:
+        stored = {c["id"]: c.get("brand") for c in load("clients") or []}
+        for c in clients:
+            c.brand = Brand(**stored[c.id]) if stored.get(c.id) else None
+        save("clients", clients)
     return clients
 
 

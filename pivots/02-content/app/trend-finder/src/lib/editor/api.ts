@@ -107,8 +107,13 @@ export async function deleteVoice(ideaId: string, vid: string): Promise<void> {
   await send(await fetch(`${base(ideaId)}/voice/${encodeURIComponent(vid)}`, { method: 'DELETE' }), t('editor.err.voice'))
 }
 
-// AI voice jobs that finished but were never imported (the editor was left while one ran).
-export async function getPendingVoices(ideaId: string): Promise<string[]> {
-  const r = await send<{ pending: { id: string }[] }>(await fetch(`${base(ideaId)}/voice/pending`), t('editor.err.voice'))
-  return r.pending.map((g) => g.id)
+// AI voice jobs that were never imported (the editor was left while one ran): finished ones, and ones still going.
+export interface PendingVoice {
+  id: string
+  status: 'queued' | 'running' | 'done'
+}
+
+export async function getPendingVoices(ideaId: string): Promise<PendingVoice[]> {
+  const r = await send<{ pending: PendingVoice[] }>(await fetch(`${base(ideaId)}/voice/pending`), t('editor.err.voice'))
+  return r.pending.map((g) => ({ id: g.id, status: g.status }))
 }

@@ -79,3 +79,14 @@ def test_music_file_route(client, setup):
     assert got.status_code == 200 and got.content == body and got.headers["content-type"] == "audio/mpeg"
     client.delete("/api/ideas/ia/cut/music")
     assert client.get("/api/ideas/ia/cut/music/file").status_code == 404
+
+
+def test_put_clients_ignores_a_stale_brand(client, setup):
+    client.put("/api/clients/a/brand", json={"font": "Noto Sans TC", "color": "#112233"})
+    kept = client.get("/api/clients").json()[0]["brand"]
+    stale = {**A, "brand": {"font": "Noto Sans TC", "color": "#ffffff"}}
+    r = client.put("/api/clients", json=[stale, {"id": "new", "name": "N", "niche": "n", "audience": "a", "monthlyTarget": 1, "examples": [], "cannot": [], "brand": {"font": "Noto Sans TC", "color": "#000000"}}])
+    assert r.status_code == 200
+    got = {c["id"]: c for c in client.get("/api/clients").json()}
+    assert got["a"]["brand"] == kept
+    assert got["new"].get("brand") is None

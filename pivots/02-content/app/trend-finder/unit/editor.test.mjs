@@ -621,3 +621,12 @@ test('N1/N2: short lines stay whole, long ones split without tiny pages, the lin
   assert.equal(pages.map((g) => g.text).join(''), sentences)
   assert.deepEqual(pages.map((g) => g.text), ['先講重點，', '再講例子。', '最後給你一個行動'])
 })
+
+// ---- final review fixes ----
+test('lineCaptions: a lone closing mark never becomes a page of its own across a clip boundary', () => {
+  const p = project([shotClip('a', 's1', 0, 5), shotClip('b', 's1', 0, 1)])
+  const caps = lineCaptions(p, { s1: '你好，世界。' })
+  const pages = captionPages(caps)
+  assert.equal(pages.map((pg) => pg.text).join(''), '你好，世界。')
+  assert.ok(pages.every((pg) => pg.text.trim() !== '。'))
+})

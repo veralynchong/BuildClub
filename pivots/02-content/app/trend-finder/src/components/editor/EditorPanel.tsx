@@ -8,7 +8,7 @@ import type { SourcesHook } from '../../lib/editor/useSources'
 import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import type { EditHook } from '../../lib/editor/useEditProject'
 import { pollGen } from '../../lib/canvas/api'
-import { getPendingVoices, getVoices, importTts, startTts, type VoiceInfo } from '../../lib/editor/api'
+import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { fillShotIds } from '../../lib/storyboard'
 import { addVoice, reelDurationInFrames, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
@@ -43,7 +43,8 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const [frame, setFrame] = useState(0)
   const [tool, setTool] = useState<Tool>('clips')
   const [musicFile, setMusicFile] = useState<MusicFile | undefined>(undefined)
-  const [pending, setPending] = useState<string[]>([])
+  const [pending, setPending] = useState<PendingVoice[]>([])
+  const [musicKey, setMusicKey] = useState(0) // counts music uploads and replacements, so a finished video is looked at again
   const [ttsBusy, setTtsBusy] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
   const ttsGoing = useRef(false) // a second click can never start (and charge) a second job
@@ -73,7 +74,15 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   // its result then waits here as a pending one.
   useEffect(() => {
     let cancelled = false
-    getPendingVoices(ideaId).then((ids) => !cancelled && setPending(ids), () => {})
+    getPendingVoices(ideaId).then(
+      (list) => {
+        if (cancelled) return
+        setPending(list)
+        const going = list.find((g) => g.status !== 'done')
+        if (going) followRef.current(going.id) // a job still going: wait for it, then add it
+      },
+      () => {},
+    )
     return () => {
       cancelled = true
       ttsAbort.current?.abort()
@@ -99,7 +108,8 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     const base = current()
     if (base) update(addVoice(base, { id: info.id, source, start: Math.round((frameRef.current / 30) * 100) / 100, volume: 1, edits: {} }))
   }
-  const runTts = (text: string, model: string) => {
+  // Starts or resumes one AI voice job: wait for it, then add it. Only one runs at a time, so nobody pays twice.
+  const followTts = (begin: () => Promise<string>) => {
     if (ttsGoing.current) return
     ttsGoing.current = true
     setTtsBusy(true)
@@ -107,21 +117,32 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     const ac = new AbortController()
     ttsAbort.current = ac
     void (async () => {
+      let genId = ''
+      let finished = false
       try {
-        const gen = await startTts(ideaId, text, model)
-        const end = await pollGen(ideaId, gen.id, () => {}, { signal: ac.signal })
+        genId = await begin()
+        const end = await pollGen(ideaId, genId, () => {}, { signal: ac.signal })
         if (!end) return
+        finished = true
         if (end.status !== 'done') throw new Error(end.error || t('editor.tts.failed'))
-        adoptVoice(await importTts(ideaId, gen.id), 'tts')
+        setPending((cur) => cur.map((g) => (g.id === genId ? { ...g, status: 'done' } : g)))
+        adoptVoice(await importTts(ideaId, genId), 'tts')
+        setPending((cur) => cur.filter((g) => g.id !== genId))
       } catch (e) {
         setTtsError(e instanceof Error ? e.message : String(e))
       } finally {
+        if (finished && genId) setPending((cur) => cur.filter((g) => g.id !== genId || g.status === 'done'))
         ttsGoing.current = false
         ttsAbort.current = null
         setTtsBusy(false)
       }
     })()
   }
+  const runTts = (text: string, model: string) => followTts(async () => (await startTts(ideaId, text, model)).id)
+  const followRef = useRef<(genId: string) => void>(() => {})
+  useEffect(() => {
+    followRef.current = (genId) => followTts(async () => genId)
+  })
   const importPending = (genId: string) => {
     if (ttsGoing.current) return
     ttsGoing.current = true
@@ -130,7 +151,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     void (async () => {
       try {
         adoptVoice(await importTts(ideaId, genId), 'tts')
-        setPending((cur) => cur.filter((id) => id !== genId))
+        setPending((cur) => cur.filter((g) => g.id !== genId))
       } catch (e) {
         setTtsError(e instanceof Error ? e.message : String(e))
       } finally {
@@ -262,10 +283,10 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
             onProject={update}
           />
         )}
-        {tool === 'music' && <MusicTool ideaId={ideaId} project={project} file={musicFile} onFile={setMusicFile} readOnly={locked} onProject={update} />}
+        {tool === 'music' && <MusicTool ideaId={ideaId} project={project} file={musicFile} onFile={(f) => { setMusicFile(f); setMusicKey((n) => n + 1) }} readOnly={locked} onProject={update} />}
         {tool === 'brand' && <BrandTool client={client} project={project} readOnly={locked} onProject={update} />}
       </div>
-      <ExportBar ideaId={ideaId} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} />
+      <ExportBar ideaId={ideaId} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} />
       <section className="cv-ed-sources" aria-label={t('editor.sources.title')}>
         <h3>{t('editor.sources.title')}</h3>
         {sourceError && <ErrorText text={sourceError} />}
