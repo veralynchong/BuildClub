@@ -1,4 +1,4 @@
-"""Provider adapters for generated media: mock (free), fal (queue API) and Gemini (images), behind one
+"""Provider adapters for generated media: mock (free), fal (queue API), Gemini (images) and ElevenLabs (voice), behind one
 interface, plus fetch_media, the safe download helper. All HTTP goes through an injectable `Http`.
 
 Errors: FileUnusable means the provider reported success but its file is unusable (no refund, may have
@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 
 import cutting
 import storyboard
+import subtitles
 
 Http = Callable[[str, str, dict, Optional[bytes]], tuple[int, dict, bytes]]
 
@@ -35,10 +36,11 @@ TOO_LARGE = "The model returned a file over the size limit."
 REFUSED = "The model provider didn't accept this request."
 NO_IMAGE = "The model didn't return an image."
 NO_KEY = "This model isn't set up yet."
-MAX_BYTES = {"image": 20 * 1024 * 1024, "video": 200 * 1024 * 1024}
+MAX_BYTES = {"image": 20 * 1024 * 1024, "video": 200 * 1024 * 1024, "voice": 20 * 1024 * 1024}
 HTTP_TIMEOUT_S = 60
 GEMINI_TIMEOUT_S = 120  # generateContent is synchronous, so it can take a while
 FAL_QUEUE = "https://queue.fal.run/"
+ELEVENLABS_BASE = "https://api.elevenlabs.io/v1/text-to-speech/"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/"
 ASPECT = "9:16"
 RETRY_STATUS = (408, 429)  # polling again later may work
@@ -117,7 +119,7 @@ def call(http: Http, method: str, url: str, headers: dict, body: Optional[bytes]
 
 
 def sniff(head: bytes) -> Optional[tuple[str, str]]:
-    """(kind, ext) from the file header, or None when it is not a PNG, JPEG, WebP or MP4."""
+    """(kind, ext) from the file header, or None when it is not a PNG, JPEG, WebP, MP4 or MP3."""
     if head.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image", "png"
     if head.startswith(b"\xff\xd8\xff"):
@@ -126,6 +128,8 @@ def sniff(head: bytes) -> Optional[tuple[str, str]]:
         return "image", "webp"
     if head[4:8] == b"ftyp":
         return "video", "mp4"
+    if head.startswith(b"ID3") or (len(head) >= 2 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0):
+        return "voice", "mp3"
     return None
 
 
@@ -199,6 +203,8 @@ class MockAdapter:
         rate = float(os.environ.get("MOCK_GEN_FAIL_RATE", 0) or 0)
         if "#fail" in job.prompt or (rate > 0 and random.random() < rate):
             return Poll("failed", error=MOCK_FAILED)
+        if job.model["kind"] == "voice":
+            return self._voice(job, request_id)
         if job.model["kind"] == "image":
             return Poll("done", data=storyboard.placeholder_svg("body", job.prompt, "", 0).encode(), ext="svg")
         duration = job.duration or job.model["durations"][0]
@@ -216,6 +222,27 @@ class MockAdapter:
                 print(f"[gen] {request_id} ffmpeg failed: {r.stderr.strip()[-500:]}", flush=True)
                 return Poll("failed", error="The mock video failed. Try again.")
             return Poll("done", data=part.read_bytes(), ext="mp4")
+        finally:
+            part.unlink(missing_ok=True)
+            if folder is None:
+                part.parent.rmdir()
+
+
+    @staticmethod
+    def _voice(job: Job, request_id: str) -> Poll:
+        """A 220 Hz tone as long as the text would take to say (a quarter second per width unit), as MP3."""
+        seconds = max(1.0, 0.25 * subtitles.width_units(job.prompt))
+        folder = job.scratch
+        if folder is not None:
+            folder.mkdir(parents=True, exist_ok=True)
+        part = Path(tempfile.mkdtemp()) / "m.mp3" if folder is None else folder / f"{request_id}.part.mp3"
+        try:
+            r = cutting.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=220:sample_rate=44100",
+                             "-t", str(seconds), "-c:a", "libmp3lame", "-b:a", "64k", str(part)])
+            if r.returncode != 0:
+                print(f"[gen] {request_id} ffmpeg failed: {r.stderr.strip()[-500:]}", flush=True)
+                return Poll("failed", error="The mock voice failed. Try again.")
+            return Poll("done", data=part.read_bytes(), ext="mp3")
         finally:
             part.unlink(missing_ok=True)
             if folder is None:
@@ -380,7 +407,52 @@ class GeminiAdapter:
         return Poll("done", data=found[0], ext=found[1])
 
 
-ADAPTERS = {"mock": MockAdapter, "fal": FalAdapter, "gemini": GeminiAdapter}
+class ElevenLabsAdapter:
+    """ElevenLabs text to speech. The call is synchronous: submit does the work and keeps the MP3 in memory
+    (shared by every adapter object) until poll takes it. After a restart the audio is gone: ResultLost."""
+
+    _results: dict = {}
+
+    def __init__(self, http: Http):
+        self._http = http
+
+    @staticmethod
+    def voice_id(model: dict) -> str:
+        return (model.get("params") or {}).get("voiceId") or os.environ.get("ELEVENLABS_VOICE_ID", "")
+
+    def submit(self, job: Job) -> str:
+        key = key_from("ELEVENLABS_API_KEY")
+        voice = self.voice_id(job.model)
+        if not voice or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", voice):
+            raise ProviderError(NO_KEY)
+        url = f"{ELEVENLABS_BASE}{voice}?output_format=mp3_44100_128"
+        body = {"text": job.prompt, "model_id": job.model["endpoint"]}
+        headers = {"xi-api-key": key, "Content-Type": "application/json"}
+        try:
+            status, _h, data = call(self._http, "POST", url, headers, json.dumps(body).encode())
+        except _NetworkError:  # sent, no answer: it may have been charged
+            raise ResultLost("ElevenLabs didn't answer.")
+        except _Transient:  # an explicit 5xx: the provider said it failed
+            raise ProviderError(REFUSED)
+        if status != 200:
+            log_provider("elevenlabs", status, data)
+            raise ProviderError(REFUSED)
+        try:
+            audio, ext = check_media(data, "voice")
+        except ProviderError:  # a 200 with something that is not MP3: it may have charged
+            raise FileUnusable(NOT_MEDIA)
+        rid = f"elevenlabs-{uuid.uuid4().hex}"
+        self._results[rid] = (audio, ext)
+        return rid
+
+    def poll(self, job: Job, request_id: str) -> Poll:
+        found = self._results.pop(request_id, None)
+        if found is None:
+            raise ResultLost("The audio is no longer in memory.")
+        return Poll("done", data=found[0], ext=found[1])
+
+
+ADAPTERS = {"mock": MockAdapter, "fal": FalAdapter, "gemini": GeminiAdapter, "elevenlabs": ElevenLabsAdapter}
 
 
 def adapter_for(provider: str, http: Http = default_http) -> Adapter:

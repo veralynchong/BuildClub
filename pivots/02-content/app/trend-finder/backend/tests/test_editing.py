@@ -538,3 +538,152 @@ def test_render_project_hides_probe_paths(client, setup, monkeypatch, tmp_path):
     with pytest.raises(cutting.CutError) as e:
         editing.render_project(server.db, server.MEDIA_DIR, "ia", tmp_path, tmp_path / "n.mp4", lambda *a: None)
     assert str(e.value) == editing.BAD_OUTPUT
+
+
+# --- voiceover files ---
+
+WEBM = {"content-type": "audio/webm;codecs=opus"}
+WORDS = [(0.0, 0.4, "hello"), (0.5, 0.9, "there")]
+
+
+@pytest.fixture
+def voice_env(client, setup, monkeypatch):
+    """Probing and converting are faked (they need real audio); whisper returns fixed words."""
+    info = {"duration": 3.0, "width": None, "height": None, "hasAudio": True}
+    monkeypatch.setattr(cutting, "probe", lambda path: dict(info))
+    monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
+    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: list(WORDS))
+    editing._probe_cache.clear()
+    return info
+
+
+def put_voice(client, body=b"audio-bytes", headers=WEBM, source="recording", idea="ia"):
+    return client.put(f"/api/ideas/{idea}/edit/voice?source={source}", content=body, headers=headers)
+
+
+def voiced(vid, **extra):
+    return {"id": vid, "source": "recording", "start": 0.0, "volume": 1.0, "edits": {}, **extra}
+
+
+def test_voice_upload_transcribes(client, voice_env):
+    r = put_voice(client)
+    assert r.status_code == 200
+    got = r.json()
+    assert got["duration"] == 3.0 and "wordsError" not in got
+    assert got["words"] == [{"text": "hello", "start": 0.0, "end": 0.4}, {"text": "there", "start": 0.5, "end": 0.9}]
+    assert got["url"] == f"/api/ideas/ia/edit/voice/{got['id']}/file"
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    assert sorted(p.name for p in folder.iterdir()) == [f"{got['id']}.webm", f"{got['id']}.words.json"]
+    f = client.get(got["url"])
+    assert f.status_code == 200 and f.content == b"audio-bytes" and f.headers["content-type"] == "audio/webm"
+
+
+def test_voice_upload_without_whisper_keeps_file(client, voice_env, monkeypatch):
+    def no_whisper(wav, work):
+        raise cutting.CutError(cutting.NO_WHISPER)
+    monkeypatch.setattr(cutting, "transcribe_words", no_whisper)
+    got = put_voice(client, source="upload", headers={"content-type": "audio/mpeg"}).json()
+    assert got["words"] is None and got["wordsError"] == cutting.NO_WHISPER
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    assert [p.name for p in folder.iterdir()] == [f"{got['id']}.mp3"]  # the file stays, no words file
+    assert client.get(got["url"]).status_code == 200
+
+
+def test_transcribe_voice_without_whisper_installed(tmp_path, monkeypatch):
+    import analyze
+    monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
+    monkeypatch.setattr(analyze, "WHISPER", str(tmp_path / "missing-whisper"))
+    with pytest.raises(cutting.CutError) as e:
+        editing.transcribe_voice(tmp_path / "a.mp3", tmp_path)
+    assert str(e.value) == cutting.NO_WHISPER
+
+
+def test_voice_upload_rejects_non_audio_and_long_files(client, voice_env, monkeypatch):
+    assert put_voice(client, headers={"content-type": "video/mp4"}).status_code == 415
+    assert put_voice(client, headers={"content-type": "text/plain"}).status_code == 415
+    assert put_voice(client, source="other").status_code == 422
+    voice_env["duration"] = 120.5
+    r = put_voice(client)
+    assert r.status_code == 422 and "120" in r.json()["error"]
+    voice_env["duration"], voice_env["hasAudio"] = 3.0, False
+    assert put_voice(client).status_code == 415  # no audio track
+    voice_env["hasAudio"] = True
+
+    def unreadable(path):
+        raise cutting.CutError("bad")
+    monkeypatch.setattr(cutting, "probe", unreadable)
+    assert put_voice(client).status_code == 415  # the right content type, but not audio
+    monkeypatch.setattr(editing, "MAX_VOICE_BYTES", 5)
+    assert put_voice(client).status_code == 413
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    assert list(folder.iterdir()) == []  # nothing left behind, not even a part file
+
+
+def test_voice_upload_needs_an_approved_plan(client, voice_env):
+    assert put_voice(client, idea="iw").status_code == 409
+
+
+def test_voice_delete_removes_both_files(client, voice_env):
+    got = put_voice(client).json()
+    assert client.delete(f"/api/ideas/ia/edit/voice/{got['id']}").status_code == 200
+    assert list((server.MEDIA_DIR / "ia" / "edit" / "voice").iterdir()) == []
+    assert client.get(got["url"]).status_code == 404
+    assert client.delete(f"/api/ideas/ia/edit/voice/{got['id']}").status_code == 404
+
+
+@pytest.mark.parametrize("voice", [
+    {"source": "tts"}, {"id": "x", "source": "mic"}, {"id": "x", "source": "tts", "start": -1},
+    {"id": "x", "source": "tts", "start": 0, "volume": 3}, {"id": "x", "source": "tts", "start": 0, "volume": 1, "edits": {"0": 5}},
+], ids=["no-id", "bad-source", "negative-start", "volume-3", "edit-not-text"])
+def test_check_project_rejects_bad_voiceover(voice):
+    assert editing.check_project({**project(), "voiceover": [voice]})
+
+
+def test_voiceover_id_must_exist_in_the_voice_folder(client, voice_env):
+    p = {**project(clip()), "voiceover": [voiced("ghost")]}
+    r = client.put("/api/ideas/ia/edit", json={"version": 0, "project": p})
+    assert r.status_code == 422 and "missing" in r.json()["error"]
+    vid = put_voice(client).json()["id"]
+    p["voiceover"] = [voiced(vid, start=1.5, edits={"0": "hi"})]
+    assert client.put("/api/ideas/ia/edit", json={"version": 0, "project": p}).status_code == 200
+    store_ideas(idea("ia"), idea("ib"), idea("iw", "waiting"))
+    other = client.put("/api/ideas/ib/edit", json={"version": 0, "project": p})  # another plan's folder
+    assert other.status_code == 422
+
+
+def test_signature_follows_voiceover_and_its_file(client, voice_env):
+    vid = put_voice(client).json()["id"]
+    p = {**project(), "voiceover": [voiced(vid)]}
+    path = next((server.MEDIA_DIR / "ia" / "edit" / "voice").glob(f"{vid}.webm"))
+    with server.db() as conn:
+        sig = lambda proj: editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, proj)  # noqa: E731
+        one = sig(p)
+        assert one != sig(project())  # adding a voiceover makes the cut stale
+        assert one != sig({**p, "voiceover": [voiced(vid, start=2.0)]})
+        assert one != sig({**p, "voiceover": [voiced(vid, volume=0.5)]})
+        os.utime(path, ns=(7, 7))
+        assert one != sig(p)  # a swapped file changes it
+
+
+def test_render_input_links_voice_files_with_words(client, voice_env):
+    vid = put_voice(client).json()["id"]
+    p = {**project(clip()), "voiceover": [voiced(vid)]}
+    with server.db() as conn:
+        reel, files = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"}, p, {
+            "take:t1": src("take:t1", server.MEDIA_DIR / "x.mp4")})
+    item = reel["voice"][0]
+    assert item["id"] == vid and item["url"] == f"voice-{vid}.webm" and item["words"][0]["text"] == "hello"
+    assert files[item["url"]].name == f"{vid}.webm"
+
+
+def test_render_project_refuses_a_deleted_voice_file(client, voice_env, monkeypatch, tmp_path):
+    fake_tools(monkeypatch, tmp_path)
+    t = seed_take(client)["id"]
+    vid = put_voice(client).json()["id"]
+    put(client, t, (0, 2))
+    doc = client.get("/api/ideas/ia/edit").json()
+    doc["project"]["voiceover"] = [voiced(vid)]
+    assert client.put("/api/ideas/ia/edit", json={"version": doc["version"], "project": doc["project"]}).status_code == 200
+    client.delete(f"/api/ideas/ia/edit/voice/{vid}")
+    with pytest.raises(cutting.CutError, match="voiceover file was deleted"):
+        editing.render_project(server.db, server.MEDIA_DIR, "ia", tmp_path / "w", tmp_path / "o.mp4", lambda *a: None)

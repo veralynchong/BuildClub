@@ -110,6 +110,7 @@ DAILY_APIFY_USD = float(os.environ.get("DAILY_APIFY_USD", 2.00))
 DAILY_CLAUDE_USD = float(os.environ.get("DAILY_CLAUDE_USD", 1.00))
 DAILY_GEN_IMAGE_USD = float(os.environ.get("DAILY_GEN_IMAGE_USD", 0.50))  # canvas image generations
 DAILY_GEN_VIDEO_USD = float(os.environ.get("DAILY_GEN_VIDEO_USD", 1.00))  # canvas video generations
+DAILY_GEN_VOICE_USD = float(os.environ.get("DAILY_GEN_VOICE_USD", 0.30))  # editor voiceover (text to speech)
 # Channel summaries: Jev labelling in US$; ScrapeCreators (Instagram only) in credits, 1 per 12 reels.
 DAILY_JEV_USD = float(os.environ.get("DAILY_JEV_USD", 0.50))
 DAILY_SCRAPECREATORS_CREDITS = float(os.environ.get("DAILY_SCRAPECREATORS_CREDITS", 20))
@@ -923,11 +924,12 @@ def storyboard_refund(wallet: str, usd: float) -> None:
 app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget, storyboard_refund))
 app.include_router(shotlist.make_router(storyboard_budget))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
-GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_video", "DAILY_GEN_VIDEO_USD")}
+GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_video", "DAILY_GEN_VIDEO_USD"),
+               "voice": ("gen_voice", "DAILY_GEN_VOICE_USD")}
 
 
 def gen_cap(kind: str) -> float:
-    return DAILY_GEN_IMAGE_USD if kind == "image" else DAILY_GEN_VIDEO_USD
+    return globals()[GEN_WALLETS[kind][1]]  # looked up at call time, so a test can change the cap
 
 
 def gen_budget(kind: str, usd: float):
@@ -954,7 +956,7 @@ gen_router = generations.make_router(db, load, lambda: MEDIA_DIR, gen_budget, ge
 gen_jobs = gen_router.jobs
 app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
-app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR))
+app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR, gen_router))
 app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(grading.make_router(db, lambda: MEDIA_DIR))

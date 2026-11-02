@@ -7,16 +7,19 @@ import json
 import math
 import os
 import re
+import secrets
 import shutil
 import signal
 import subprocess
+import tempfile
 import threading
 import time
 from pathlib import Path
 from typing import Callable, Optional
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 import cutting
 import generations
@@ -48,6 +51,17 @@ CLIP_PAST_END = "A clip runs past the end of its video. Trim it on the timeline 
 EMPTY = "Put at least one clip on the timeline first."
 EDIT_STALE = "The edit changed after this was exported. Export it again before sending it."
 BAD_OUTPUT = "The exported video doesn't look right. Export it again."
+MISSING_VOICE = "A voiceover file was deleted. Remove it from the timeline first."
+
+# Voiceover files: <media>/<ideaId>/edit/voice/<vid>.<ext>, and <vid>.words.json beside it.
+MAX_VOICE_BYTES = 20 * 1024 * 1024
+MAX_VOICE_S = 120
+VOICE_TYPES = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/wav": "wav"}
+VOICE_MIME = {ext: mime for mime, ext in VOICE_TYPES.items()}
+VOICE_SOURCES = ("tts", "recording", "upload")
+NOT_AUDIO = "Upload an audio recording: WebM, Ogg, MP3, M4A or WAV."
+VOICE_TOO_BIG = "The audio is over the 20 MB limit."
+VOICE_TOO_LONG = f"The audio is longer than {MAX_VOICE_S} seconds."
 
 
 def empty_project() -> dict:
@@ -94,8 +108,27 @@ def _check_clip(c, seen: set) -> Optional[str]:
     return None
 
 
-def check_project(doc) -> Optional[str]:
-    """One sentence about the first problem, or None. P3b fields are accepted when their type is right."""
+def _check_voice(v, voice_ids: Optional[set]) -> Optional[str]:
+    if not isinstance(v, dict) or not _id(v.get("id")):
+        return "Every voiceover needs an id."
+    if voice_ids is not None and v["id"] not in voice_ids:
+        return "A voiceover's audio file is missing."
+    if v.get("source") not in VOICE_SOURCES:
+        return "A voiceover's source must be tts, recording or upload."
+    if not _num(v.get("start")) or v["start"] < 0:
+        return "A voiceover must start at 0 or later."
+    if not _num(v.get("volume")) or not 0 <= v["volume"] <= 2:
+        return "Voiceover volume must be between 0 and 2."
+    edits = v.get("edits", {})
+    if not isinstance(edits, dict) or not all(isinstance(k, str) and isinstance(t, str) and len(t) <= MAX_TEXT_CHARS
+                                              for k, t in edits.items()):
+        return "A voiceover's line edits must map a page to text."
+    return None
+
+
+def check_project(doc, voice_ids: Optional[set] = None) -> Optional[str]:
+    """One sentence about the first problem, or None. P3b fields are accepted when their type is right.
+    With `voice_ids` (the ids in the plan's voice folder) every voiceover must point at one of them."""
     if not isinstance(doc, dict):
         return "Send the edit project."
     if len(json.dumps(doc, allow_nan=True)) > MAX_BYTES:
@@ -126,6 +159,10 @@ def check_project(doc) -> Optional[str]:
         return "Primaries must map a shot id to a source."
     if not isinstance(doc.get("showLogo"), bool):
         return "showLogo must be true or false."
+    for v in voice:
+        problem = _check_voice(v, voice_ids)
+        if problem:
+            return problem
     seen: set = set()
     total = 0.0
     for c in clips:
@@ -217,7 +254,48 @@ def _source_files(conn, media: Path, idea_id: str) -> dict[str, Path]:
 
 # The project fields that change the rendered video. P3b adds texts, music and voice. Anything else in the
 # project (such as the pinned primaries) does not make an export stale.
-RENDER_FIELDS = ("clips", "showLogo")
+RENDER_FIELDS = ("clips", "showLogo", "voiceover")
+
+
+def voice_folder(media: Path, idea_id: str) -> Optional[Path]:
+    """<media>/<idea_id>/edit/voice, or None when the id would lead out of the media folder."""
+    gen = generations.gen_folder(Path(media), idea_id)
+    return gen.parent / "edit" / "voice" if gen is not None else None
+
+
+def voice_file(media: Path, idea_id: str, vid) -> Optional[Path]:
+    """The audio file of a voiceover, or None."""
+    folder = voice_folder(media, idea_id)
+    if folder is None or not _id(vid):
+        return None
+    return next((p for ext in VOICE_MIME if (p := folder / f"{vid}.{ext}").is_file()), None)
+
+
+def voice_ids(media: Path, idea_id: str) -> set:
+    folder = voice_folder(media, idea_id)
+    found = set()
+    if folder is not None and folder.is_dir():
+        for p in folder.iterdir():
+            if p.suffix.lstrip(".") in VOICE_MIME and not p.name.startswith("."):
+                found.add(p.stem)
+    return found
+
+
+def voice_words(path: Path) -> Optional[list]:
+    """The word timings saved beside a voice file, or None when there are none."""
+    try:
+        words = json.loads(path.with_name(f"{path.stem}.words.json").read_text())
+    except (OSError, ValueError):
+        return None
+    return words if isinstance(words, list) else None
+
+
+def transcribe_voice(path: Path, work: Path) -> list[dict]:
+    """Word timings of a voice file: 16 kHz mono wav, then whisper.cpp. Raises cutting.CutError (with
+    cutting.NO_WHISPER when whisper.cpp is not installed)."""
+    wav = Path(work) / "voice.wav"
+    cutting._ffmpeg(["-i", str(path), "-vn", "-ac", "1", "-ar", "16000", str(wav)], "Reading the voiceover")
+    return [{"text": text, "start": start, "end": end} for start, end, text in cutting.transcribe_words(wav, Path(work))]
 
 
 def plan_client(conn, idea_id: str) -> dict:
@@ -239,8 +317,8 @@ def client_brand(conn, idea_id: str) -> dict:
 
 def signature(conn, media: Path, idea: dict, project: dict) -> str:
     """A fingerprint of what an export was made from: the render-relevant project fields and the modified time
-    of each footage file, and the client's brand kit (with the logo file name). Music, lines and voiceover join
-    it in P3b."""
+    of each footage file and voiceover file, and the client's brand kit (with the logo file name). Music and
+    lines join it in P3b."""
     files = _source_files(conn, media, idea["id"])
     stamps = {}
     for c in project["clips"]:
@@ -249,6 +327,12 @@ def signature(conn, media: Path, idea: dict, project: dict) -> str:
             stamps[key] = files[key].stat().st_mtime_ns
         except (KeyError, OSError):
             stamps[key] = 0
+    for v in project.get("voiceover") or []:
+        path = voice_file(media, idea["id"], v.get("id")) if isinstance(v, dict) else None
+        try:
+            stamps[f"voice:{v.get('id')}"] = path.stat().st_mtime_ns if path else 0
+        except OSError:
+            stamps[f"voice:{v.get('id')}"] = 0
     relevant = {k: project.get(k) for k in RENDER_FIELDS}
     text = json.dumps([relevant, sorted(stamps.items()), client_brand(conn, idea["id"])], sort_keys=True)
     return hashlib.sha1(text.encode()).hexdigest()[:16]
@@ -281,7 +365,14 @@ def render_input(conn, media: Path, idea: dict, project: dict, sources: dict) ->
         if row and folder is not None and (folder / f"music-{row[0]}.{row[1]}").is_file():
             music_url = f"music-{row[0]}.{row[1]}"
             files[music_url] = folder / music_url
-    reel = {"project": project, "urls": urls, "lines": {}, "musicUrl": music_url, "voice": [],
+    voice = []
+    for v in project.get("voiceover") or []:
+        path = voice_file(media, idea["id"], v.get("id"))
+        if path is not None:
+            name = f"voice-{v['id']}{path.suffix}"
+            files[name] = path
+            voice.append({"id": v["id"], "url": name, "words": voice_words(path)})
+    reel = {"project": project, "urls": urls, "lines": {}, "musicUrl": music_url, "voice": voice,
             "brand": {"font": kit.get("font", "Noto Sans TC"), "color": kit.get("color"), "logoUrl": logo},
             "fontUrl": ""}
     return reel, files
@@ -392,6 +483,8 @@ def render_project(db, media_dir: Path, idea_id: str, work: Path, out: Path, ste
             raise cutting.CutError(EMPTY)
         if missing_sources(project, sources):
             raise cutting.CutError(MISSING_SOURCE)
+        if any(voice_file(media, idea_id, v.get("id")) is None for v in project.get("voiceover") or []):
+            raise cutting.CutError(MISSING_VOICE)
         reel, files = render_input(conn, media, idea, project, sources)
     linked = work / "media"
     linked.mkdir(parents=True, exist_ok=True)
@@ -440,7 +533,8 @@ def error(status: int, message: str, **extra) -> JSONResponse:
     return JSONResponse({"error": message, **extra}, status_code=status)
 
 
-def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
+def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
+    """`gens` is the generations router: the voiceover jobs use its budget, refund and job queue."""
     router = APIRouter()
 
     def gate(idea_id: str):
@@ -479,7 +573,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             version, _current = read(conn, idea_id)
             if body["version"] != version:
                 return error(409, STALE, version=version)
-            problem = check_project(body.get("project"))
+            problem = check_project(body.get("project"), voice_ids(media_dir(), idea_id))
             if problem:
                 return error(422, problem)
             conn.execute("INSERT OR REPLACE INTO edit_projects (idea_id, version, doc, updated_at) VALUES (?, ?, ?, ?)",
@@ -494,5 +588,164 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         with db() as conn:
             sources = list_sources(conn, media_dir(), idea_id)
         return {"sources": [{k: v for k, v in s.items() if k != "path"} for s in sources]}
+
+    def voice_response(idea_id: str, vid: str, path: Path, duration: float) -> dict:
+        """Transcribe the saved voice file (a sync step: the callers run it in the threadpool) and describe it.
+        Without whisper.cpp the file is kept and `words` is null."""
+        out = {"id": vid, "url": f"/api/ideas/{idea_id}/edit/voice/{vid}/file", "duration": duration, "words": None}
+        try:
+            with tempfile.TemporaryDirectory() as work:
+                words = transcribe_voice(path, Path(work))
+            path.with_name(f"{vid}.words.json").write_text(json.dumps(words))
+            out["words"] = words
+        except cutting.CutError as e:
+            out["wordsError"] = str(e)
+        return out
+
+    def store_voice(idea_id: str, source: Path, ext: str, move: bool):
+        """Put `source` in the plan's voice folder under a new id: (vid, final path), or an error response."""
+        folder = voice_folder(media_dir(), idea_id)
+        if folder is None:
+            return error(404, "That plan doesn't exist.")
+        folder.mkdir(parents=True, exist_ok=True)
+        vid = secrets.token_urlsafe(9)
+        final = folder / f"{vid}.{ext}"
+        (os.replace if move else shutil.copyfile)(source, final)
+        return vid, final
+
+    def finish_upload(idea_id: str, part: Path, ext: str):
+        try:
+            info = cutting.probe(part)
+        except cutting.CutError:
+            part.unlink(missing_ok=True)
+            return error(415, NOT_AUDIO)
+        if not info.get("hasAudio") or info["duration"] <= 0:
+            part.unlink(missing_ok=True)
+            return error(415, NOT_AUDIO)
+        if info["duration"] > MAX_VOICE_S:
+            part.unlink(missing_ok=True)
+            return error(422, VOICE_TOO_LONG)
+        stored = store_voice(idea_id, part, ext, move=True)
+        if isinstance(stored, JSONResponse):
+            part.unlink(missing_ok=True)
+            return stored
+        return voice_response(idea_id, stored[0], stored[1], info["duration"])
+
+    @router.put("/api/ideas/{idea_id}/edit/voice")
+    async def put_voice(idea_id: str, request: Request, source: str = ""):
+        refused = gate(idea_id)
+        if refused:
+            return refused
+        if source not in ("recording", "upload"):
+            return error(422, "Say whether this is a recording or an upload.")
+        ext = VOICE_TYPES.get(request.headers.get("content-type", "").split(";")[0].strip().lower())
+        if ext is None:
+            return error(415, NOT_AUDIO)
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_VOICE_BYTES:
+            return error(413, VOICE_TOO_BIG)
+        folder = voice_folder(media_dir(), idea_id)
+        if folder is None:
+            return error(404, "That plan doesn't exist.")
+        folder.mkdir(parents=True, exist_ok=True)
+        part = folder / f".{secrets.token_urlsafe(9)}.part.{ext}"
+        size = 0
+        try:
+            with part.open("wb") as f:
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > MAX_VOICE_BYTES:
+                        break
+                    f.write(chunk)
+            if size > MAX_VOICE_BYTES:
+                part.unlink(missing_ok=True)
+                return error(413, VOICE_TOO_BIG)
+            return await run_in_threadpool(finish_upload, idea_id, part, ext)
+        except BaseException:
+            part.unlink(missing_ok=True)
+            raise
+
+    @router.post("/api/ideas/{idea_id}/edit/voice/tts")
+    async def voice_tts(idea_id: str, request: Request):
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        refused = gate(idea_id)
+        if refused:
+            return refused
+        if not isinstance(body, dict):
+            return error(422, "Send the text, the model and confirm.")
+        text, model_id = body.get("text"), body.get("model")
+        model, _, bad = gens.check(idea_id, [], generations.VOICE_NODE, model_id, text, None, None, None, voice=True)
+        if bad is not None:
+            return bad
+        usd = generations.estimate_usd(model, None, chars=len(text))
+        wallet = gens.remaining()["voice"]
+        left = round(max(0.0, wallet["cap"] - wallet["spent"]), 4)
+        if body.get("confirm") is not True:  # a quote: nothing is spent
+            return {"usd": usd, "remaining": left}
+        blocked = gens.budget("voice", usd)  # spends the estimate; a failed job gives it back
+        if blocked is not None:
+            return blocked
+        try:
+            with db() as conn:
+                out = generations.enqueue(conn, idea_id, generations.VOICE_NODE, "voice", model["id"],
+                                          {"prompt": text}, usd)
+        except Exception:
+            gens.refund("voice", usd)
+            raise
+        gens.jobs.submit(out["id"])
+        return JSONResponse(out, status_code=201)
+
+    @router.post("/api/ideas/{idea_id}/edit/voice/from-gen/{gen_id}")
+    async def voice_from_gen(idea_id: str, gen_id: str):
+        refused = gate(idea_id)
+        if refused:
+            return refused
+        with db() as conn:
+            row = conn.execute("SELECT kind, status, file FROM generations WHERE id = ? AND idea_id = ?",
+                               (gen_id, idea_id)).fetchone()
+        if row is None or row[0] != "voice":
+            return error(404, "That voiceover doesn't exist.")
+        gen = generations.gen_folder(media_dir(), idea_id)
+        source = gen / row[2] if gen is not None and row[1] == "done" and row[2] else None
+        if source is None:
+            return error(409, "That voiceover isn't ready yet.")
+        if not source.is_file():
+            return error(404, "That voiceover's file is gone.")
+        return await run_in_threadpool(import_generated, idea_id, source)
+
+    def import_generated(idea_id: str, source: Path):
+        try:
+            info = cutting.probe(source)
+        except cutting.CutError:
+            return error(422, "That voiceover's file can't be read.")
+        stored = store_voice(idea_id, source, source.suffix.lstrip(".") or "mp3", move=False)
+        if isinstance(stored, JSONResponse):
+            return stored
+        return voice_response(idea_id, stored[0], stored[1], info["duration"])
+
+    @router.get("/api/ideas/{idea_id}/edit/voice/{vid}/file")
+    def get_voice(idea_id: str, vid: str):
+        refused = gate(idea_id)
+        if refused:
+            return refused
+        path = voice_file(media_dir(), idea_id, vid)
+        if path is None:
+            return error(404, "That voiceover doesn't exist.")
+        return FileResponse(path, media_type=VOICE_MIME[path.suffix.lstrip(".")])
+
+    @router.delete("/api/ideas/{idea_id}/edit/voice/{vid}")
+    def delete_voice(idea_id: str, vid: str):
+        refused = gate(idea_id)
+        if refused:
+            return refused
+        path = voice_file(media_dir(), idea_id, vid)
+        if path is None:
+            return error(404, "That voiceover doesn't exist.")
+        path.unlink(missing_ok=True)
+        path.with_name(f"{vid}.words.json").unlink(missing_ok=True)
+        return {"ok": True}
 
     return router

@@ -34,7 +34,7 @@ def test_models_file_shape(client):
     for m in models:
         assert m["kind"] in ("image", "video", "voice") and m["tier"] in ("cheap", "balanced", "best")
         assert set(m["inputs"].values()) <= {"required", "optional", "none"}
-        assert "9:16" in m["aspects"]
+        assert m["kind"] == "voice" or "9:16" in m["aspects"]  # a voice has no frame shape
     assert client.get("/api/gen/models").json() == {"models": generations.menu_models()}
 
 
@@ -408,7 +408,7 @@ def test_poll_timeout_marks_unknown_no_refund(real, monkeypatch):
 
 
 def test_default_timeouts():
-    assert generations.GEN_TIMEOUT_S == {"image": 180, "video": 900}
+    assert generations.GEN_TIMEOUT_S == {"image": 180, "video": 900, "voice": 120}
     assert generations.GEN_POLL_S == 5 and generations.MOCK_POLL_S == 0.2
 
 
@@ -821,7 +821,7 @@ def test_recover_failing_upstream_also_fails_its_waiting_row(real):
 def test_budget_endpoint(client):
     r = client.get("/api/gen/budget")
     assert r.status_code == 200 and r.json() == server.gen_remaining()
-    assert set(r.json()) == {"image", "video"} and set(r.json()["image"]) == {"spent", "cap"}
+    assert set(r.json()) == {"image", "video", "voice"} and set(r.json()["image"]) == {"spent", "cap"}
 
 
 def test_chain_image_step_must_be_an_image_model_on_a_storyboard(real, monkeypatch):
@@ -953,3 +953,117 @@ def test_chain_rejects_references(real):
         assert r.status_code == 422 and "reference" in r.json()["error"]
     assert chain(real, reference=None, videoReference=None).status_code == 201
     assert len(real.spent) == 2
+
+
+# --- voiceover (TTS) jobs: the routes live in editing.py, the rules and the job in this module ---
+
+import cutting  # noqa: E402
+
+TTS = "/api/ideas/ia/edit/voice/tts"
+
+
+def tts(client, **body):
+    return client.post(TTS, json={"text": "hello", "model": "elevenlabs-multilingual-v2", "confirm": False, **body})
+
+
+@pytest.fixture
+def paid_voice(monkeypatch):
+    """The ElevenLabs entry counts as set up (no real key is set, and no request is ever made)."""
+    monkeypatch.setattr(generations, "is_available", lambda m: True)
+
+
+def test_tts_quote_spends_nothing(gen, paid_voice):
+    r = tts(gen, text="a" * 400)
+    assert r.status_code == 200 and r.json() == {"usd": 0.032, "remaining": server.DAILY_GEN_VOICE_USD}
+    assert server.gen_remaining()["voice"]["spent"] == 0
+    assert gen.get("/api/ideas/ia/gen").json() == []
+
+
+def test_tts_over_budget_429(gen, paid_voice, monkeypatch):
+    monkeypatch.setattr(server, "DAILY_GEN_VOICE_USD", 0)
+    r = tts(gen, confirm=True)
+    assert r.status_code == 429 and "left" in r.json()["error"]
+    assert gen.get("/api/ideas/ia/gen").json() == []
+
+
+def test_tts_charges_the_voice_wallet_and_queues_a_row(gen, paid_voice, monkeypatch):
+    monkeypatch.setattr(server.gen_jobs, "submit", lambda gid: None)  # no job: look at the queued row
+    r = tts(gen, confirm=True)
+    row = r.json()
+    assert r.status_code == 201 and row["status"] == "queued" and row["kind"] == "voice"
+    assert row["nodeId"] == "editor-voice" and row["inputs"]["prompt"] == "hello" and row["estUsd"] == 0.0004
+    assert server.gen_remaining()["voice"]["spent"] == 0.0004 and server.gen_remaining()["image"]["spent"] == 0
+
+
+@pytest.mark.parametrize("body", [
+    {"text": ""}, {"text": "   "}, {"text": "a" * 1001}, {"text": "字" * 241},
+    {"text": 5}, {"model": "mock-image"}, {"model": "nope"},
+], ids=["empty", "blank", "1001-chars", "over-120s", "not-text", "image-model", "unknown-model"])
+def test_tts_rejects_bad_requests(gen, paid_voice, body):
+    r = tts(gen, **body)
+    assert r.status_code == 422 and "error" in r.json()
+
+
+def test_tts_needs_an_approved_plan_and_a_set_up_model(gen):
+    assert gen.post("/api/ideas/iw/edit/voice/tts", json={"text": "hi", "model": "mock-voice"}).status_code == 409
+    assert tts(gen).status_code == 422  # ElevenLabs has no key here
+
+
+def test_voice_model_cannot_be_made_through_the_canvas_route(gen):
+    assert post(gen, model="mock-voice", nodeId="editor-voice").status_code == 422
+    assert post(gen, model="mock-voice").status_code == 422
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="needs ffmpeg")
+def test_tts_mock_runs_and_imports(gen, monkeypatch):
+    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: [(0.0, 0.5, "hi"), (0.5, 1.0, "you")])
+    r = gen.post(TTS, json={"text": "hello world", "model": "mock-voice", "confirm": True})
+    assert r.status_code == 201
+    gid = r.json()["id"]
+    done = gen.get(f"/api/ideas/ia/gen/{gid}").json()
+    assert done["status"] == "done" and done["url"] == f"/api/ideas/ia/gen/{gid}/file"
+    assert gen.get(done["url"]).headers["content-type"] == "audio/mpeg"
+    imported = gen.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}")
+    assert imported.status_code == 200
+    got = imported.json()
+    assert got["words"] == [{"text": "hi", "start": 0.0, "end": 0.5}, {"text": "you", "start": 0.5, "end": 1.0}]
+    assert abs(got["duration"] - 2.75) < 0.3  # 11 width units x 0.25 s
+    f = gen.get(got["url"])
+    assert f.status_code == 200 and f.headers["content-type"] == "audio/mpeg"
+    assert gen_providers.sniff(f.content[:16]) == ("voice", "mp3")
+    assert gen.delete(f"/api/ideas/ia/edit/voice/{got['id']}").status_code == 200
+    assert gen.get(got["url"]).status_code == 404
+
+
+def test_from_gen_needs_a_finished_voice_row(gen):
+    with server.db() as conn:
+        queued = generations.enqueue(conn, "ia", "editor-voice", "voice", "mock-voice", {"prompt": "hi"}, 0)
+        image = generations.insert_done(conn, "ia", "n_sb_s1", "image", "mock-image", file="x.png")
+    assert gen.post(f"/api/ideas/ia/edit/voice/from-gen/{queued['id']}").status_code == 409
+    assert gen.post(f"/api/ideas/ia/edit/voice/from-gen/{image['id']}").status_code == 404
+    assert gen.post("/api/ideas/ia/edit/voice/from-gen/nope").status_code == 404
+    assert gen.post(f"/api/ideas/ib/edit/voice/from-gen/{queued['id']}").status_code == 404  # another plan's row
+
+
+def test_voice_file_and_delete_of_a_missing_voice_are_404(gen):
+    assert gen.get("/api/ideas/ia/edit/voice/nope/file").status_code == 404
+    assert gen.delete("/api/ideas/ia/edit/voice/nope").status_code == 404
+    assert gen.get("/api/ideas/ia/edit/voice/..%2F..%2Fx/file").status_code == 404
+
+
+def test_estimate_usd_per_1k_chars():
+    model = {"price": {"per": "1k_chars", "usd": 0.08}}
+    assert generations.estimate_usd(model, None, chars=500) == 0.04  # 500 chars (the route caps by width)
+    assert generations.estimate_usd(model, 9) == 0
+
+
+def test_elevenlabs_is_available_only_with_key_and_voice(monkeypatch):
+    model = next(m for m in generations.load_models() if m["provider"] == "elevenlabs")
+    assert model["endpoint"] == "eleven_multilingual_v2" and model["params"]["voiceId"] == ""
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    monkeypatch.delenv("ELEVENLABS_VOICE_ID", raising=False)
+    assert not generations.is_available(model)
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "k")
+    assert not generations.is_available(model)
+    monkeypatch.setenv("ELEVENLABS_VOICE_ID", "v")
+    assert generations.is_available(model)
