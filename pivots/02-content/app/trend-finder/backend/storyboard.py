@@ -175,10 +175,10 @@ def model_frame(model: dict, prompt: str, usd: float, budget: Budget, refund: Re
     try:
         adapter = gen_providers.adapter_for(model["provider"])
         job = gen_providers.Job(model, prompt, None, [], None)
+        deadline = time.monotonic() + FRAME_TIMEOUT_S  # counts the submit too, so the whole frame stays bounded
         phase = "submit"
         request_id = adapter.submit(job)
         phase = "poll"
-        deadline = time.monotonic() + FRAME_TIMEOUT_S
         while True:
             result = adapter.poll(job, request_id)
             if result.state == "done":

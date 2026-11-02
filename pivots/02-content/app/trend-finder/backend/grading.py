@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse, Response
 
 import cutting
+import takes
 from cutting import CutError
 
 # name -> (label, ffmpeg video filter chain). "" means no change.
@@ -79,9 +80,9 @@ def make_router(db, media_dir: Callable[[], Path]) -> APIRouter:
         if (root / idea_id).resolve().parent != root:
             return JSONResponse({"error": NO_TAKE}, status_code=404)
         with db() as conn:
-            row = conn.execute("SELECT id, ext FROM takes WHERE idea_id = ? AND chosen = 1 ORDER BY shot LIMIT 1",
-                               (idea_id,)).fetchone()
-        src = root / idea_id / f"{row[0]}.{row[1]}" if row else None
+            chosen = takes.chosen_takes(conn, idea_id, takes.MAX_SHOTS)[:1]  # first chosen take in current shot order
+        row = chosen[0][0] if chosen else None
+        src = root / idea_id / f"{row[0]}.{row[3]}" if row else None
         if src is None or not src.is_file():
             return JSONResponse({"error": NO_TAKE}, status_code=404)
         if not shutil.which("ffmpeg"):
