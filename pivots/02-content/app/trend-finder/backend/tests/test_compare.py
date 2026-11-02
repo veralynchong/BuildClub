@@ -17,7 +17,7 @@ def why(n):
 
 def breakdown(n=1):
     return BreakdownOut.model_validate({
-        "shotList": [{"time": "0-2s", "shot": "interview"}], "why": why(n), "props": [], "editorNotes": "e",
+        "shotList": [{"time": "0-2s", "shot": "interview", "framing": "medium", "angle": "eye_level", "movement": "static"}], "why": why(n), "props": [], "editorNotes": "e",
         "lines": [{"time": "0-1s", "text": "No", "role": "hook"}]})
 
 
