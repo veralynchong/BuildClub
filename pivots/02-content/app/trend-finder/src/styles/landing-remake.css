@@ -225,6 +225,7 @@ body:has(.rk) { background: #ffffff; }
 :root .rk-closeup h3 { font-size: clamp(28px, 3.2vw, 40px); line-height: 1.1; letter-spacing: -0.02em; text-wrap: balance; }
 .rk-closeup p { color: var(--ink-muted); font-size: 17px; line-height: 1.6; max-width: 440px; }
 .rk-closeup-media { border-radius: 20px; }
+.rk-shot { display: block; width: 100%; height: auto; object-fit: cover; border: 1px solid var(--line-strong); }
 
 /* 7 · Stance (night band with dots) */
 .rk-stance { text-align: center; }
