@@ -109,7 +109,6 @@ export const en = {
   "canvas.editor.open": "Open editor",
   "canvas.editor.close": "Close editor",
   "canvas.editor.title": "Editor",
-  "canvas.editor.empty": "The editing timeline is coming soon. You'll drag video clips here to cut them together.",
   "canvas.editor.resize": "Resize the editor",
   "canvas.flow.label": "Canvas",
 }
@@ -223,7 +222,6 @@ export const zhHant: Record<keyof typeof en, string> = {
   "canvas.editor.open": "開啟剪輯",
   "canvas.editor.close": "收起剪輯",
   "canvas.editor.title": "剪輯",
-  "canvas.editor.empty": "剪輯時間軸即將推出，屆時可把影片片段拖到這裡剪接。",
   "canvas.editor.resize": "調整剪輯器寬度",
   "canvas.flow.label": "畫布",
 }

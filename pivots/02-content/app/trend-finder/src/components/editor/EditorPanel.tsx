@@ -1,0 +1,130 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Player, type PlayerRef } from '@remotion/player'
+import type { Shot } from '../../types'
+import { t } from '../../lib/i18n'
+import { getSources } from '../../lib/editor/api'
+import type { EditHook } from '../../lib/editor/useEditProject'
+import { insertClip, newClipId, reelDurationInFrames, totalLength, clipStarts, FPS, MAX_TOTAL } from '../../lib/editor/timeline'
+import type { ReelInput, SourceInfo } from '../../lib/editor/types'
+import { Reel } from '../../remotion/Reel'
+import { Timeline } from './Timeline'
+import { clipName } from './clipName'
+import { ErrorText } from '../ErrorText'
+
+interface Props {
+  ideaId: string
+  shots: Shot[]
+  edit: EditHook
+  readOnly: boolean
+}
+
+const FONT_URL = '/fonts/NotoSansTC-VF.ttf'
+const BRAND = { font: '', color: null, logoUrl: null }
+
+export function EditorPanel({ ideaId, shots, edit, readOnly }: Props) {
+  const { project, loadError, save, stale, update, flush, reload } = edit
+  const [sources, setSources] = useState<SourceInfo[] | null>(null)
+  const [sourceError, setSourceError] = useState<string | null>(null)
+  const [frame, setFrame] = useState(0)
+  const player = useRef<PlayerRef>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getSources(ideaId).then(
+      (s) => !cancelled && setSources(s),
+      (e: unknown) => !cancelled && setSourceError(e instanceof Error ? e.message : t('editor.err.sources')),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [ideaId])
+
+  const byKey = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s])), [sources])
+  const urls = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s.url])), [sources])
+  const inputProps = useMemo<ReelInput | null>(
+    () => (project ? { project, urls, lines: {}, musicUrl: null, voice: [], brand: BRAND, fontUrl: FONT_URL } : null),
+    [project, urls],
+  )
+
+  // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
+  const attached = useRef<PlayerRef | null>(null)
+  useEffect(() => {
+    const p = player.current
+    if (!p || attached.current === p) return
+    attached.current = p
+    const on = (e: { detail: { frame: number } }) => setFrame(e.detail.frame)
+    p.addEventListener('frameupdate', on)
+    p.addEventListener('seeked', on)
+  })
+
+  if (loadError) return <ErrorText text={loadError} />
+  if (!project || !inputProps) return <p className="muted">{t('editor.loading')}</p>
+
+  const seek = (f: number) => {
+    player.current?.seekTo(f)
+    setFrame(f)
+  }
+  const total = totalLength(project)
+  const full = total > MAX_TOTAL - 0.2
+  const add = (s: SourceInfo) => {
+    // Right after the clip under the playhead, else at the end.
+    const starts = clipStarts(project)
+    const at = frame / FPS
+    let index = project.clips.length
+    for (let i = 0; i < project.clips.length; i++) if (at < starts[i] + (project.clips[i].out - project.clips[i].in)) { index = at > starts[i] ? i + 1 : i; break }
+    update(insertClip(project, { kind: s.kind, id: s.id, nodeId: s.nodeId, shotId: s.shotId }, s.duration, index, newClipId(project)))
+  }
+
+  return (
+    <div className="cv-ed">
+      <div className="cv-ed-status" role="status">
+        {stale ? (
+          <span className="cv-ed-stale">
+            {t('editor.stale')}{' '}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={reload}>{t('editor.reload')}</button>
+          </span>
+        ) : save === 'failed' ? (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void flush()}>{t('editor.save.failed')}</button>
+        ) : save === 'saving' ? (
+          <span className="muted">{t('editor.save.saving')}</span>
+        ) : save === 'saved' ? (
+          <span className="muted">{t('editor.save.saved')}</span>
+        ) : null}
+        {readOnly && <span className="muted">{t('editor.readOnly')}</span>}
+      </div>
+      <div className="cv-ed-player">
+        <Player
+          ref={player}
+          component={Reel}
+          inputProps={inputProps}
+          durationInFrames={reelDurationInFrames(project)}
+          compositionWidth={1080}
+          compositionHeight={1920}
+          fps={30}
+          controls
+          style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '55vh' }}
+        />
+      </div>
+      {project.clips.length === 0 && <p className="muted">{t('editor.empty')}</p>}
+      <Timeline project={project} sources={byKey} shots={shots} frame={frame} readOnly={readOnly || stale} onProject={update} onSeek={seek} />
+      <section className="cv-ed-sources" aria-label={t('editor.sources.title')}>
+        <h3>{t('editor.sources.title')}</h3>
+        {sourceError && <ErrorText text={sourceError} />}
+        {sources && sources.length === 0 && <p className="muted">{t('editor.sources.empty')}</p>}
+        {full && <p className="muted">{t('editor.sources.full')}</p>}
+        <ul className="cv-ed-source-list">
+          {(sources ?? []).map((s) => (
+            <li key={s.key}>
+              <span className="cv-ed-source-name">
+                {clipName(s, shots)} · {s.kind === 'take' ? t('editor.sources.take') : t('editor.sources.generation')} · {t('editor.clip.seconds', { sec: Math.round(s.duration * 10) / 10 })}
+              </span>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={readOnly || stale || full} onClick={() => add(s)}>
+                {t('editor.sources.add')}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  )
+}

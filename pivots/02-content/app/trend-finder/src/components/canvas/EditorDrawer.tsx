@@ -1,16 +1,23 @@
 import { useRef } from 'react'
 import { t } from '../../lib/i18n'
+import type { Shot } from '../../types'
+import type { EditHook } from '../../lib/editor/useEditProject'
+import { EditorPanel } from '../editor/EditorPanel'
 
 const STEP = 24
 
 interface Props {
+  ideaId: string
+  shots: Shot[]
+  edit: EditHook // the edit project, kept above the drawer so it survives closing it
+  readOnly: boolean
   open: boolean
   width: number // px; ignored by the stacked (narrow screen) layout, which uses the full width
   onWidth: (px: number, save: boolean) => void // the raw wish (the screen clamps it); `save` once the change is final
 }
 
-// The editor lives here from the next step on. For now it is an empty shell with a draggable left edge.
-export function EditorDrawer({ open, width, onWidth }: Props) {
+// The right-hand drawer: a draggable left edge, then the editor (player and timeline).
+export function EditorDrawer({ open, width, onWidth, ideaId, shots, edit, readOnly }: Props) {
   const drag = useRef<{ startX: number; startWidth: number; last: number } | null>(null)
   if (!open) return null
 
@@ -49,7 +56,7 @@ export function EditorDrawer({ open, width, onWidth }: Props) {
       />
       <div className="cv-drawer-body">
         <h2>{t('canvas.editor.title')}</h2>
-        <p className="muted">{t('canvas.editor.empty')}</p>
+        <EditorPanel ideaId={ideaId} shots={shots} edit={edit} readOnly={readOnly} />
       </div>
     </aside>
   )

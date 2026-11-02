@@ -26,6 +26,7 @@ import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Genera
 import { ErrorText } from '../ErrorText'
 import { AddNodeMenu } from './AddNodeMenu'
 import { EditorDrawer } from './EditorDrawer'
+import { useEditProject } from '../../lib/editor/useEditProject'
 import { CanvasContext, type CanvasCtx } from './nodes/ctx'
 import { nodeTypes } from './nodes'
 
@@ -162,6 +163,9 @@ function CanvasBoard({
   const [viewport, setViewport] = useState<Viewport | undefined>(initial.doc.viewport)
   const vw = useViewportWidth()
   const fit = isDefaultViewport(initial.doc.viewport)
+
+  // ---- edit project (the drawer's timeline; lives here so it outlasts the drawer) ----
+  const edit = useEditProject(ideaId, readOnly)
 
   // ---- drawer ----
   const [drawer, setDrawer] = useState(() => readDrawer())
@@ -748,6 +752,10 @@ function CanvasBoard({
           </div>
         </div>
         <EditorDrawer
+          ideaId={ideaId}
+          shots={shots}
+          edit={edit}
+          readOnly={readOnly}
           open={drawer.open}
           width={drawerWidth}
           onWidth={(px, save) => setDrawerState(true, clampDrawerWidth(px, vw), save)}
