@@ -57,3 +57,13 @@ test('t and tp follow the active language', () => {
   setActiveLang('en')
   assert.equal(typeof tp, 'function')
 })
+
+test('channel input errors from the backend are shown in the chosen language', async () => {
+  const { channelInputError } = await import('../src/lib/channel.ts')
+  setActiveLang('zh-Hant')
+  assert.match(channelInputError('need_handle', 'English text'), /[一-鿿]/)
+  assert.equal(channelInputError('some_new_code', 'English text'), 'English text')
+  assert.equal(channelInputError(undefined, 'English text'), 'English text')
+  setActiveLang('en')
+  assert.match(channelInputError('need_handle', 'x'), /@handle/)
+})

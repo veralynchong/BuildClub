@@ -175,8 +175,9 @@ async def require_password(request: Request, call_next):
     return await call_next(request)
 
 
-def error(status: int, message: str, detail: str = "") -> JSONResponse:
-    body = {"error": message, **({"detail": detail} if detail else {})}
+def error(status: int, message: str, detail: str = "", code: str = "") -> JSONResponse:
+    """`code` is optional: a stable name the page can translate (the message stays English)."""
+    body = {"error": message, **({"detail": detail} if detail else {}), **({"code": code} if code else {})}
     return JSONResponse(body, status_code=status)
 
 
@@ -1041,6 +1042,8 @@ def start_channel(body: ChannelRequest):
     try:
         handle = channels.normalise(body.platform, body.handle)
         return {"job": channel_jobs.submit(body.platform, handle, body.maxVideos)}
+    except channels.BadChannel as e:
+        return error(400, str(e), code=e.code)
     except ValueError as e:
         return error(400, str(e))
     except channels.OverBudget as e:

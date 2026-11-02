@@ -32,7 +32,7 @@ class FakeDecoder:
             self.seen_status.append((cmd[3] if "channel_decoder" in cmd else "yt-dlp",
                                      self.jobs.get(channels.job_id_for(*self.key)).status))
         if "-J" in cmd:  # yt-dlp on a TikTok profile
-            out = json.dumps({"id": self.yt_dlp_id, "entries": [{"channel_id": self.yt_dlp_id}]})
+            out = json.dumps({"id": self.yt_dlp_id, "uploader_id": "@chan", "entries": [{"channel_id": self.yt_dlp_id}]})
             return subprocess.CompletedProcess(cmd, 0, out, "")
         step, work = cmd[3], channels.Path(cmd[cmd.index("--data") + 1])
         assert kwargs["cwd"] == channels.DECODER_DIR
@@ -128,6 +128,10 @@ def steps(fake):
     ("youtube", "@MrBeast", "MrBeast"),
     ("youtube", "mrbeast", "mrbeast"),
     ("youtube", "https://www.youtube.com/@MrBeast/shorts", "MrBeast"),
+    ("youtube", "https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA", "UCX6OQ3DkcsbYNE6H8uQQuVA"),
+    ("youtube", "youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA/videos?x=1", "UCX6OQ3DkcsbYNE6H8uQQuVA"),
+    ("youtube", "UCX6OQ3DkcsbYNE6H8uQQuVA", "UCX6OQ3DkcsbYNE6H8uQQuVA"),
+    ("youtube", "https://m.youtube.com/user/MrBeast6000", "user/MrBeast6000"),
     ("youtube", "youtube.com/@mr.beast", "mr.beast"),
     ("tiktok", "  @some_one.1 ", "some_one.1"),
     ("tiktok", "https://www.tiktok.com/@some_one.1/video/123?lang=en", "some_one.1"),
@@ -142,6 +146,8 @@ def test_handles_and_links_are_normalised(platform, raw, handle):
 @pytest.mark.parametrize("platform,raw", [
     ("youtube", ""), ("youtube", "   "), ("youtube", "two words"), ("youtube", "@a/b"),
     ("youtube", "https://www.tiktok.com/@a"), ("youtube", "https://youtube.com/channel/UCabc"),
+    ("youtube", "https://youtube.com/channel/UCshort"), ("youtube", "https://youtube.com/user/a%2Fb"),
+    ("youtube", "https://youtube.com/c/MrBeast"), ("tiktok", "https://www.tiktok.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA"),
     ("youtube", "https://evilyoutube.com/@a"), ("tiktok", "https://www.instagram.com/a"),
     ("instagram", "https://www.instagram.com/reel/abc/"), ("youtube", "a" * 61), ("vimeo", "@a"),
     ("youtube", "../../etc"), ("tiktok", "name; rm -rf"),
@@ -149,6 +155,39 @@ def test_handles_and_links_are_normalised(platform, raw, handle):
 def test_bad_handles_are_refused(platform, raw):
     with pytest.raises(ValueError):
         channels.normalise(platform, raw)
+
+
+def test_refused_input_carries_a_code_for_the_page(client):
+    r = client.post("/api/channel", json={"platform": "youtube", "handle": "https://youtube.com/c/MrBeast"})
+    assert r.status_code == 400 and r.json()["code"] == "need_handle" and "@handle" in r.json()["error"]
+
+
+def test_a_channel_id_link_is_accepted_and_resolved_to_the_handle(client, decoder, money, monkeypatch):
+    decoder.key = ("youtube", "UCX6OQ3DkcsbYNE6H8uQQuVA")
+    r = client.post("/api/channel", json={"platform": "youtube", "handle": "https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA"})
+    assert r.status_code == 200
+    job_id = r.json()["job"]
+    assert job_id == channels.job_id_for("youtube", "UCX6OQ3DkcsbYNE6H8uQQuVA")
+    job = wait(server.channel_jobs, job_id)
+    assert job.status == "done", job.error
+    ytdlp = [c for c in decoder.calls if "-J" in c]
+    assert ytdlp[0][-1] == "https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA/shorts"
+    assert (channels.CHANNELS_DIR / job_id / "accounts.txt").read_text() == "chan\n"
+
+
+def test_a_user_link_resolves_and_a_handle_is_left_alone(decoder):
+    assert channels.youtube_handle("user/MrBeast6000") == "chan"
+    assert decoder.calls[-1][-1] == "https://www.youtube.com/user/MrBeast6000/shorts"
+    decoder.calls.clear()
+    assert channels.youtube_handle("MrBeast") == "MrBeast" and decoder.calls == []
+
+
+def test_an_unknown_channel_id_fails_with_a_message(monkeypatch):
+    def gone(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 1, "", "ERROR: not found")
+    monkeypatch.setattr(channels, "subprocess", fake_subprocess(gone))
+    with pytest.raises(RuntimeError, match="Could not find that YouTube channel"):
+        channels.youtube_handle("UCX6OQ3DkcsbYNE6H8uQQuVA")
 
 
 def test_the_job_id_is_the_same_for_the_same_channel():
