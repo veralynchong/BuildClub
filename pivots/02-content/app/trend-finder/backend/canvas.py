@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 
 import generations
 import takes
-from models import Shot
+from models import Shot, fill_shot_ids
 
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS canvases (idea_id TEXT PRIMARY KEY, version INTEGER NOT NULL, "
@@ -102,7 +102,7 @@ def check_doc(doc, shot_ids: list[str]) -> Optional[str]:
     node_ids = set()
     for n in doc["nodes"]:
         if not isinstance(n, dict) or not isinstance(n.get("id"), str) or not ID_RE.match(n["id"]) \
-                or n["id"] in node_ids or n.get("type") not in NODE_TYPES:
+                or n["id"] in node_ids or not isinstance(n.get("type"), str) or n["type"] not in NODE_TYPES:
             return "Every node needs a unique id and a known type."
         pos = n.get("position")
         if not isinstance(pos, dict) or not all(isinstance(pos.get(k), (int, float)) for k in ("x", "y")):
@@ -115,13 +115,18 @@ def check_doc(doc, shot_ids: list[str]) -> Optional[str]:
         if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not ID_RE.match(e["id"]) \
                 or e["id"] in edge_ids:
             return "Every edge needs a unique id."
-        if e.get("source") not in node_ids or e.get("target") not in node_ids:
+        if not all(isinstance(e.get(k), str) and e[k] in node_ids for k in ("source", "target")):
             return "An edge must join two nodes on the canvas."
         edge_ids.add(e["id"])
     have = {n.get("shotId") for n in doc["nodes"] if n["type"] == "shot"}
     if any(s not in have for s in shot_ids):
         return "Shot nodes can't be deleted."
     return None
+
+
+def shots_of(idea: dict) -> list[Shot]:
+    """The plan's shots with ids filled in, as GET /api/ideas shows them (plans saved before ids existed have none)."""
+    return fill_shot_ids([Shot.model_validate(s) for s in idea.get("shots") or []])
 
 
 def error(status: int, message: str, **extra) -> JSONResponse:
@@ -149,7 +154,7 @@ def make_router(db, load) -> APIRouter:
             return error(404, "That plan doesn't exist.")
         if not found.get("shots"):
             return error(409, "Save the shot list first.", code="no-shots")
-        shots = [Shot.model_validate(s) for s in found["shots"]]
+        shots = shots_of(found)
         with canvas_lock, db() as conn:
             version, doc = read(conn, idea_id)
             take_rows = conn.execute(f"SELECT {takes.COLUMNS} FROM takes WHERE idea_id = ? "
@@ -182,7 +187,7 @@ def make_router(db, load) -> APIRouter:
             version, current = read(conn, idea_id)
             if body["version"] != version:
                 return error(409, STALE, version=version, doc=current)
-            problem = check_doc(body.get("doc"), [s["id"] for s in found.get("shots") or []])
+            problem = check_doc(body.get("doc"), [s.id for s in shots_of(found)])
             if problem:
                 return error(422, problem)
             write(conn, idea_id, version + 1, body["doc"])

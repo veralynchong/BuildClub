@@ -5,9 +5,10 @@ import copy
 import pytest
 
 import canvas
+import generations
 import server
 from models import Shot, SavedIdea
-from test_takes import MP4, idea, store_ideas, up
+from test_takes import store_ideas, up
 
 
 def shots(*ids, frame=None):
@@ -152,3 +153,38 @@ def test_put_needs_approved_plan(cv):
 def test_no_shots_409(cv):
     r = cv.get("/api/ideas/ne/canvas")
     assert r.status_code == 409 and r.json() == {"error": "Save the shot list first.", "code": "no-shots"}
+
+
+def test_put_rejects_unhashable_type_and_endpoints(cv):
+    doc = cv.get("/api/ideas/ia/canvas").json()["doc"]
+    bad = copy.deepcopy(doc)
+    bad["nodes"][0]["type"] = ["shot"]
+    assert put(cv, 1, bad).status_code == 422
+    bad = copy.deepcopy(doc)
+    bad["edges"][0]["source"] = {"a": 1}
+    assert put(cv, 1, bad).status_code == 422
+
+
+def test_legacy_shots_without_ids(client):
+    old = SavedIdea.model_construct(id="il", videoId="v", clientId="a", status="approved", dueDate="2026-11-02",
+                                    notes="", shots=[Shot(time="0-3", shot="a"), Shot(time="3-6", shot="b"),
+                                                     Shot(time="6-9", shot="c")])
+    server.save("ideas", [old])
+    r = client.get("/api/ideas/il/canvas").json()
+    assert [n["id"] for n in r["doc"]["nodes"] if n["type"] == "shot"] == ["n_shot_s1", "n_shot_s2", "n_shot_s3"]
+    assert [n["position"]["y"] for n in r["doc"]["nodes"] if n["type"] == "shot"] == [0, 280, 560]
+    assert put(client, r["version"], r["doc"], "il").json() == {"version": 2}
+
+
+def test_shot_list_change_after_canvas_exists(cv):
+    cv.get("/api/ideas/ia/canvas")  # imports s1's frame as a generation
+    with server.db() as conn:
+        kept = generations.insert_done(conn, "ia", "n_sb_s2", "image", "mock-image", source_url="/x.svg")
+    store_ideas(plan("ia", ids=("s1", "s3"), frame={"s1": "/api/frame/a.svg"}), plan("iw", "waiting"))
+    r = cv.get("/api/ideas/ia/canvas").json()
+    by_id = {n["id"]: n for n in r["doc"]["nodes"]}
+    assert by_id["n_shot_s3"]["position"]["y"] == 560
+    assert by_id["n_shot_s2"]["data"]["removed"] is True and "n_sb_s2" in by_id
+    assert by_id["n_shot_s1"]["data"]["removed"] is False
+    assert len([g for g in r["generations"] if g["model"] == "imported"]) == 1 and r["version"] == 2
+    assert kept["id"] in [g["id"] for g in r["generations"]]
