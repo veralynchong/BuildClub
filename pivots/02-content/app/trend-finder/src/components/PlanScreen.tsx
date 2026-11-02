@@ -17,6 +17,10 @@ import { PublishPanel } from './publish/PublishPanel'
 import { StoryboardSection } from './storyboard/StoryboardSection'
 import { getActiveLang, t } from '../lib/i18n'
 import { approverNote } from '../lib/approverNote'
+import { stepOf } from '../lib/steps'
+import { defaultTab, isPlanTab, panelId, planTabKey, tabId, tabLocked, lockedNotice } from '../lib/planTabs'
+import type { PlanTab } from '../lib/planTabs'
+import { PlanTabs } from './plan/PlanTabs'
 
 interface Props {
   idea: SavedIdea
@@ -87,6 +91,39 @@ export function PlanScreen(p: Props) {
   }
 
   const shots = idea.shots ?? format.shotList
+  // The open tab is remembered per plan for this browser session (a tab still shows its work when switched back to).
+  const idBase = `plan-${idea.id}`
+  const [tabState, setTabState] = useState<{ id: string; tab: PlanTab } | null>(null)
+  const stored = (() => {
+    try {
+      const v = sessionStorage.getItem(planTabKey(idea.id))
+      return isPlanTab(v) ? v : null
+    } catch {
+      return null
+    }
+  })()
+  const tab: PlanTab = tabState?.id === idea.id ? tabState.tab : (stored ?? defaultTab(stepOf(idea, shots)))
+  // The sticky bar's real height (it grows when its buttons wrap), so the last button on a tab is never behind it.
+  const planRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const root = planRef.current
+    const bar = root?.querySelector('.plan-bar')
+    if (!root || !bar || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => root.style.setProperty('--plan-bar-h', `${Math.ceil(bar.getBoundingClientRect().height)}px`))
+    ro.observe(bar)
+    return () => {
+      ro.disconnect()
+      root.style.removeProperty('--plan-bar-h')
+    }
+  }, [idea.status, deciding, confirmEdit])
+  const chooseTab = (next: PlanTab) => {
+    setTabState({ id: idea.id, tab: next })
+    try {
+      sessionStorage.setItem(planTabKey(idea.id), next)
+    } catch {
+      /* storage blocked: the tab just won't be remembered */
+    }
+  }
   // Approved plans are locked: the team films what the manager approved. Sent-back plans can be fixed and sent again.
   // An approved plan reopened with "Edit" waits with approvedAt still set, and stays editable while it waits.
   const reopened = idea.status === 'waiting' && !!idea.approvedAt
@@ -142,7 +179,7 @@ export function PlanScreen(p: Props) {
   const updateShot = (i: number, patch: Partial<Shot>) => setShots(shots.map((s, j) => (j === i ? { ...s, ...patch } : s)))
 
   return (
-    <section className="plan">
+    <section className="plan" ref={planRef}>
       <button className="link-btn" onClick={onBack}>
         {t('plan.screen.back', { label: p.backLabel })}
       </button>
@@ -196,7 +233,10 @@ export function PlanScreen(p: Props) {
         </div>
       )}
 
-      <div className="plan-grid">
+      <PlanTabs tab={tab} current={defaultTab(stepOf(idea, shots))} onTab={chooseTab} locked={(x) => !!tabLocked(x, idea.status)} idBase={idBase} />
+
+      <div role="tabpanel" id={panelId(idBase, 'script')} aria-labelledby={tabId(idBase, 'script')} className="pt-panel" tabIndex={0} hidden={tab !== 'script'}>
+        <div className="plan-grid">
         <aside className="plan-ref">
           <BestVideo key={video.id} video={video} control={playerControl} />
           {hasScore(video) ? (
@@ -236,7 +276,57 @@ export function PlanScreen(p: Props) {
         </aside>
 
         <div className="plan-main">
+          {format.lines && format.lines.length > 0 && (
+            <section className="block">
+              <h3>{t('plan.screen.lineRoles')}</h3>
+              <ul className="line-roles">
+                {format.lines.map((l, i) => (
+                  <li key={i}>
+                    <span className="shot-time">{l.time}</span> <span className="ai-tag">{t(`shell.role.${l.role}`)}</span> <span>{l.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
+          <section className="block">
+            <label htmlFor="note-to-approver">
+              <h3>{t('plan.screen.whyFits', { client: client.name })}</h3>
+            </label>
+            {editable ? (
+              <textarea
+                id="note-to-approver"
+                rows={3}
+                value={note}
+                placeholder={t('plan.screen.whyPlaceholder', { client: client.name })}
+                onChange={(e) => onChange({ noteToApprover: e.target.value })}
+              />
+            ) : (
+              <p className="quote">{note}</p>
+            )}
+          </section>
+
+          {idea.status === 'rejected' && (
+            <section className="block">
+              <h3>{t('plan.screen.feedbackOf', { approver: APPROVER })}</h3>
+              {idea.rejectTags && idea.rejectTags.length > 0 && <p className="small">{idea.rejectTags.join(' · ')}</p>}
+              <p className="quote">{idea.rejectReason || (idea.rejectTags?.length ? t('plan.screen.noWrittenReason') : t('plan.screen.noReason'))}</p>
+            </section>
+          )}
+          {idea.status !== 'rejected' && lastSentBack(idea) && (
+            <section className="block">
+              <h3>{t('plan.screen.lastSentBack', { approver: APPROVER })}</h3>
+              {(lastSentBack(idea)?.tags?.length ?? 0) > 0 && <p className="small">{lastSentBack(idea)?.tags?.join(' · ')}</p>}
+              <p className="quote">{lastSentBack(idea)?.reason || t('plan.screen.noWrittenReason')}</p>
+            </section>
+          )}
+
+
+        </div>
+        </div>
+      </div>
+      <div role="tabpanel" id={panelId(idBase, 'storyboard')} aria-labelledby={tabId(idBase, 'storyboard')} className="pt-panel" tabIndex={0} hidden={tab !== 'storyboard'}>
+        <div className="plan-main">
           <section className="block">
             <h3>{t('plan.screen.shots')}</h3>
             <p className="small muted">
@@ -353,40 +443,11 @@ export function PlanScreen(p: Props) {
 
           <StoryboardSection key={idea.id} ideaId={idea.id} shots={shots} editable={editable} onShots={setShots} />
 
+        </div>
+      </div>
+      <div role="tabpanel" id={panelId(idBase, 'shoot')} aria-labelledby={tabId(idBase, 'shoot')} className="pt-panel" tabIndex={0} hidden={tab !== 'shoot'}>
+        <div className="plan-main">
           <ShotChecklist key={idea.id} ideaId={idea.id} status={idea.status} shots={shots} onProgress={onTakesProgress} />
-          <CutPanel key={idea.id} ideaId={idea.id} status={idea.status} shotCount={shots.length} shotsDone={shotsDone} takesRevision={takesRevision} />
-          <PublishPanel key={`pub-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} />
-
-          {format.lines && format.lines.length > 0 && (
-            <section className="block">
-              <h3>{t('plan.screen.lineRoles')}</h3>
-              <ul className="line-roles">
-                {format.lines.map((l, i) => (
-                  <li key={i}>
-                    <span className="shot-time">{l.time}</span> <span className="ai-tag">{t(`shell.role.${l.role}`)}</span> <span>{l.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <section className="block">
-            <label htmlFor="note-to-approver">
-              <h3>{t('plan.screen.whyFits', { client: client.name })}</h3>
-            </label>
-            {editable ? (
-              <textarea
-                id="note-to-approver"
-                rows={3}
-                value={note}
-                placeholder={t('plan.screen.whyPlaceholder', { client: client.name })}
-                onChange={(e) => onChange({ noteToApprover: e.target.value })}
-              />
-            ) : (
-              <p className="quote">{note}</p>
-            )}
-          </section>
-
           {idea.status === 'approved' && idea.managerNote && (
             <section className="block manager-note">
               <h3>{t('plan.screen.changesBeforeFilming')}</h3>
@@ -422,21 +483,52 @@ export function PlanScreen(p: Props) {
             </section>
           )}
 
-          {idea.status === 'rejected' && (
-            <section className="block">
-              <h3>{t('plan.screen.feedbackOf', { approver: APPROVER })}</h3>
-              {idea.rejectTags && idea.rejectTags.length > 0 && <p className="small">{idea.rejectTags.join(' · ')}</p>}
-              <p className="quote">{idea.rejectReason || (idea.rejectTags?.length ? t('plan.screen.noWrittenReason') : t('plan.screen.noReason'))}</p>
-            </section>
-          )}
-          {idea.status !== 'rejected' && lastSentBack(idea) && (
-            <section className="block">
-              <h3>{t('plan.screen.lastSentBack', { approver: APPROVER })}</h3>
-              {(lastSentBack(idea)?.tags?.length ?? 0) > 0 && <p className="small">{lastSentBack(idea)?.tags?.join(' · ')}</p>}
-              <p className="quote">{lastSentBack(idea)?.reason || t('plan.screen.noWrittenReason')}</p>
-            </section>
-          )}
-
+        </div>
+      </div>
+      <div role="tabpanel" id={panelId(idBase, 'edit')} aria-labelledby={tabId(idBase, 'edit')} className="pt-panel" tabIndex={0} hidden={tab !== 'edit'}>
+        <div className="plan-main">
+          {(() => {
+            const n = lockedNotice('edit', idea.status)
+            return (
+              n && (
+                <div className="pt-locked" role="status">
+                  <h3>{t(n.titleKey)}</h3>
+                  <p className="muted">{t(n.bodyKey)}</p>
+                  {n.toStoryboard && (
+                    <button type="button" className="btn btn-primary" onClick={() => chooseTab('storyboard')}>
+                      {t('plan.tab.locked.go')}
+                    </button>
+                  )}
+                </div>
+              )
+            )
+          })()}
+          <div hidden={!!tabLocked('edit', idea.status)}>
+          <CutPanel key={idea.id} ideaId={idea.id} status={idea.status} shotCount={shots.length} shotsDone={shotsDone} takesRevision={takesRevision} />
+          </div>
+        </div>
+      </div>
+      <div role="tabpanel" id={panelId(idBase, 'post')} aria-labelledby={tabId(idBase, 'post')} className="pt-panel" tabIndex={0} hidden={tab !== 'post'}>
+        <div className="plan-main">
+          {(() => {
+            const n = lockedNotice('post', idea.status)
+            return (
+              n && (
+                <div className="pt-locked" role="status">
+                  <h3>{t(n.titleKey)}</h3>
+                  <p className="muted">{t(n.bodyKey)}</p>
+                  {n.toStoryboard && (
+                    <button type="button" className="btn btn-primary" onClick={() => chooseTab('storyboard')}>
+                      {t('plan.tab.locked.go')}
+                    </button>
+                  )}
+                </div>
+              )
+            )
+          })()}
+          <div hidden={!!tabLocked('post', idea.status)}>
+          <PublishPanel key={`pub-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} />
+          </div>
         </div>
       </div>
 
