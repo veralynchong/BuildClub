@@ -34,7 +34,50 @@ def test_models_file_shape(client):
         assert m["kind"] in ("image", "video", "voice") and m["tier"] in ("cheap", "balanced", "best")
         assert set(m["inputs"].values()) <= {"required", "optional", "none"}
         assert "9:16" in m["aspects"]
-    assert client.get("/api/gen/models").json() == {"models": models}
+    assert client.get("/api/gen/models").json() == {"models": generations.menu_models()}
+
+
+def test_models_file_valid():
+    assert generations.validate_models(generations.load_models()) == []
+
+
+def test_validate_models_catches_errors():
+    ok = {"id": "a", "kind": "image", "provider": "mock", "aspects": ["9:16"]}
+    assert generations.validate_models([ok]) == []
+    errs = generations.validate_models([
+        ok, {**ok},
+        {"id": "v", "kind": "video", "provider": "mock", "aspects": ["16:9"]},
+        {"id": "p", "kind": "image", "provider": "other", "aspects": ["9:16"]}])
+    assert len(errs) == 3
+
+
+def fake_models(monkeypatch, *extra):
+    base = {"kind": "image", "tier": "best", "price": {"per": "image", "usd": 1}, "endpoint": "e",
+            "priceCheckedAt": "2026-11-03", "inputs": {"text": "required"}, "aspects": ["9:16"]}
+    monkeypatch.setattr(generations, "load_models", lambda: [{**base, **m} for m in extra])
+
+
+def test_retired_model_hidden_but_rows_still_load(gen, monkeypatch):
+    fake_models(monkeypatch, {"id": "old", "provider": "mock", "retired": True},
+                {"id": "new", "provider": "mock"})
+    ids = [m["id"] for m in gen.get("/api/gen/models").json()["models"]]
+    assert ids == ["new"]
+    with server.db() as conn:
+        gid = generations.insert_done(conn, "ia", "n_sb_s1", "image", "old")["id"]
+    assert gen.get(f"/api/ideas/ia/gen/{gid}").status_code == 200
+    assert post(gen, model="old").status_code == 422
+
+
+def test_available_follows_keys(gen, monkeypatch):
+    fake_models(monkeypatch, {"id": "f", "provider": "fal"}, {"id": "g", "provider": "gemini"},
+                {"id": "m", "provider": "mock"})
+    monkeypatch.delenv("FAL_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    got = {m["id"]: m["available"] for m in gen.get("/api/gen/models").json()["models"]}
+    assert got == {"f": False, "g": False, "m": True}
+    monkeypatch.setenv("FAL_KEY", "x")
+    got = {m["id"]: m["available"] for m in gen.get("/api/gen/models").json()["models"]}
+    assert got == {"f": True, "g": False, "m": True}
 
 
 def test_mock_image_done(gen):
@@ -82,12 +125,11 @@ def test_unknown_model_422(gen):
     assert post(gen, model="nope").status_code == 422
 
 
-def test_unavailable_provider_422(gen, monkeypatch):
-    monkeypatch.setattr(generations, "load_models", lambda: [
-        {"id": "x", "kind": "image", "provider": "other", "tier": "best", "price": {"per": "image", "usd": 1},
-         "inputs": {"text": "required"}, "aspects": ["9:16"]}])
+def test_create_rejects_unavailable_model(gen, monkeypatch):
+    fake_models(monkeypatch, {"id": "x", "provider": "fal"})
+    monkeypatch.delenv("FAL_KEY", raising=False)
     r = post(gen, model="x")
-    assert r.status_code == 422 and r.json()["error"] == "This model isn't available yet."
+    assert r.status_code == 422 and r.json()["error"] == "This model isn't set up yet."
 
 
 def test_plan_not_approved_409(gen):

@@ -65,8 +65,11 @@ export interface GenModel {
   label: string
   kind: 'image' | 'video'
   provider: string
+  endpoint: string
   tier: string
   price: { per: string; usd: number }
+  priceCheckedAt: string
+  available: boolean
   inputs: { text?: InputNeed; startFrame?: InputNeed; reference?: InputNeed }
   durations?: number[]
   aspects: string[]

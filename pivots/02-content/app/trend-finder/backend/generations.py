@@ -52,8 +52,36 @@ def image_header_ok(ext: str, head: bytes) -> bool:
     return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
 
 
+KEY_ENV = {"fal": "FAL_KEY", "gemini": "GEMINI_API_KEY"}
+
+
 def load_models() -> list[dict]:
+    """Every model, retired ones too, so older rows can still be looked up."""
     return json.loads(MODELS_FILE.read_text())["models"]
+
+
+def is_available(model: dict) -> bool:
+    provider = model.get("provider")
+    return provider == "mock" or bool(os.environ.get(KEY_ENV.get(provider, ""), ""))
+
+
+def menu_models() -> list[dict]:
+    """The models a new generation can pick: retired ones removed, `available` set from the provider's key."""
+    return [{**m, "available": is_available(m)} for m in load_models() if not m.get("retired")]
+
+
+def validate_models(models: list[dict]) -> list[str]:
+    errors, seen = [], set()
+    for m in models:
+        mid = m.get("id")
+        if mid in seen:
+            errors.append(f"{mid}: duplicate id")
+        seen.add(mid)
+        if m.get("provider") not in ("mock", "fal", "gemini"):
+            errors.append(f"{mid}: unknown provider {m.get('provider')!r}")
+        if m.get("kind") == "video" and "9:16" not in m.get("aspects", []):
+            errors.append(f"{mid}: video model without 9:16")
+    return errors
 
 
 def estimate_usd(model: dict, duration: Optional[float]) -> float:
@@ -203,7 +231,7 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
 
     @router.get("/api/gen/models")
     def models():
-        return {"models": load_models()}
+        return {"models": menu_models()}
 
     @router.post("/api/ideas/{idea_id}/gen")
     async def create(idea_id: str, request: Request):
@@ -223,10 +251,10 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         if not isinstance(node_id, str) or not node_id or not isinstance(prompt, str) or len(prompt) > MAX_PROMPT:
             return error(422, "Send the node, the model and a prompt.")
         model = next((m for m in load_models() if m["id"] == body.get("model")), None)
-        if model is None:
+        if model is None or model.get("retired"):
             return error(422, "That model doesn't exist.")
-        if model["provider"] != "mock":
-            return error(422, "This model isn't available yet.")
+        if not is_available(model):
+            return error(422, "This model isn't set up yet.")
         with db() as conn:
             canvas_row = conn.execute("SELECT doc FROM canvases WHERE idea_id = ?", (idea_id,)).fetchone()
         nodes = json.loads(canvas_row[0])["nodes"] if canvas_row else []
