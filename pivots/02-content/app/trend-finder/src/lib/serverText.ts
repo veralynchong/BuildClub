@@ -26,6 +26,17 @@ const templates = entries
   })
   .sort((a, b) => b.fixed - a.fixed)
 
+// Fixed words the backend drops into a templated sentence ("This model needs {what}.", "Today's {kind} ..."). They are
+// not sentences themselves, so they live here and not in areas.server (the pytest would call them stale).
+const fragments: Record<string, string> = {
+  'a start frame': '起始畫面',
+  'a reference image': '參考圖',
+  image: '圖片',
+  video: '影片',
+  voice: '語音',
+}
+const part = (value: string): string => (Object.prototype.hasOwnProperty.call(fragments, value) ? fragments[value] : value)
+
 export function serverText(text: string | null | undefined): string {
   if (!text) return ''
   if (getActiveLang() === 'en') return text
@@ -33,7 +44,7 @@ export function serverText(text: string | null | undefined): string {
   if (key) return t(key)
   for (const tpl of templates) {
     const m = tpl.re.exec(text)
-    if (m) return t(tpl.key, Object.fromEntries(tpl.names.map((n, i) => [n, m[i + 1]])))
+    if (m) return t(tpl.key, Object.fromEntries(tpl.names.map((n, i) => [n, part(m[i + 1])])))
   }
   return text
 }

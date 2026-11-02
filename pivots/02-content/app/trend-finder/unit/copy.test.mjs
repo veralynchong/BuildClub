@@ -28,15 +28,28 @@ function copyIn(file, text) {
     found.push(`${relative(root, file)}:${line + 1} ${what}`)
   }
   const isWords = (n) => (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && HAS_LETTER.test(n.text)
+  // Words hiding in an expression: a template's fixed parts, or a string branch of ?: / && / || / ??.
+  // Two or more letters in a row counts as a word, so a one-letter unit like `v${n}` is fine.
+  const WORD = /[A-Za-z]{2}|[一-鿿]/
+  const wordsIn = (n) => {
+    if (ts.isParenthesizedExpression(n)) return wordsIn(n.expression)
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return WORD.test(n.text)
+    if (ts.isTemplateExpression(n)) return WORD.test(n.head.text) || n.templateSpans.some((s) => WORD.test(s.literal.text))
+    if (ts.isConditionalExpression(n)) return wordsIn(n.whenTrue) || wordsIn(n.whenFalse)
+    if (ts.isBinaryExpression(n) && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(n.operatorToken.kind)) {
+      return wordsIn(n.right) || (n.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken && wordsIn(n.left))
+    }
+    return false
+  }
   const visit = (node) => {
     if (ts.isJsxText(node) && HAS_LETTER.test(node.text)) at(node, `JSX text "${node.text.trim()}"`)
     if (ts.isJsxAttribute(node) && COPY_ATTRS.has(node.name.getText(source)) && node.initializer) {
       const init = node.initializer
       if (isWords(init)) at(node, `${node.name.getText(source)}="${init.text}"`)
-      if (ts.isJsxExpression(init) && init.expression && isWords(init.expression)) at(node, `${node.name.getText(source)}={'${init.expression.text}'}`)
+      if (ts.isJsxExpression(init) && init.expression && wordsIn(init.expression)) at(node, `${node.name.getText(source)}={${init.expression.getText(source)}}`)
     }
-    if (ts.isJsxExpression(node) && node.expression && isWords(node.expression) && (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent))) {
-      at(node, `JSX string {'${node.expression.text}'}`)
+    if (ts.isJsxExpression(node) && node.expression && wordsIn(node.expression) && (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent))) {
+      at(node, `JSX expression {${node.expression.getText(source)}}`)
     }
     ts.forEachChild(node, visit)
   }
@@ -64,6 +77,11 @@ test('the scan flags each kind of literal copy and passes t() calls', () => {
   assert.equal(count('<button aria-label="Close" />'), 1)
   assert.equal(count("<input placeholder={'Name'} />"), 1)
   assert.equal(count("<p>{'Hello'}</p>"), 1)
+  assert.equal(count('<p>{`Final ${x}`}</p>'), 1)
+  assert.equal(count("<p>{c ? 'Yes' : t('no')}</p>"), 1)
+  assert.equal(count("<p>{c && 'Done'}</p>"), 1)
+  assert.equal(count('<b title={`Close ${n}`} />'), 1)
+  assert.equal(count('<b>{`v${n}`}</b>'), 0)
   assert.equal(count("<p title={t('x')}>{t('y')} · {n}</p>"), 0)
   assert.equal(count('<img alt="" className="cv-x" />'), 0)
 })
@@ -95,6 +113,21 @@ test('serverText picks the most specific template', () => {
     assert.match(serverText('The export failed: out of memory'), /^出片失敗：out of memory$/)
     assert.match(serverText('Finding the words failed: bad model'), /^找逐字稿失敗：bad model$/)
     assert.match(serverText('ffmpeg failed: boom'), /^ffmpeg 失敗：boom$/)
+  } finally {
+    setActiveLang('en')
+  }
+})
+
+test('serverText translates the fixed words inside templated sentences', () => {
+  try {
+    setActiveLang('zh-Hant')
+    assert.equal(serverText('This model needs a start frame.'), '這個模型需要 起始畫面。')
+    assert.equal(serverText("This model doesn't take a reference image."), '這個模型不接受 參考圖。')
+    const wallet = serverText("Today's video generation budget has US$1.50 left, and this needs US$2.00. The budget resets at midnight; to allow more, raise DAILY_GEN_VIDEO_USD in .env and restart the API.")
+    assert.match(wallet, /影片/)
+    assert.match(wallet, /1\.50/)
+    assert.match(wallet, /DAILY_GEN_VIDEO_USD/)
+    assert.equal(serverText('The export failed: constructor'), '出片失敗：constructor')
   } finally {
     setActiveLang('en')
   }

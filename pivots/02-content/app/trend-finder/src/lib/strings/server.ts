@@ -110,6 +110,13 @@ export const en = {
   "server.step.starting": "Starting",
   "server.step.waiting": "Waiting to start",
   "server.step.exporting": "Exporting",
+  "server.provider.inputNotImage": "An input image isn't a PNG, JPEG or WebP file.",
+  "server.provider.fileUnusable": "The file fal produced can't be used.",
+  "server.provider.mockVideo": "The mock video failed. Try again.",
+  "server.provider.mockVoice": "The mock voice failed. Try again.",
+  "server.provider.reportedFailure": "The model reported a failure.",
+  "server.provider.noStartFrame": "This model doesn't take a start frame.",
+  "server.provider.noRefImages": "This model doesn't take reference images.",
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -220,4 +227,11 @@ export const zhHant: Record<keyof typeof en, string> = {
   "server.step.starting": "準備中",
   "server.step.waiting": "等待開始",
   "server.step.exporting": "出片中",
+  "server.provider.inputNotImage": "輸入的圖片不是 PNG、JPEG 或 WebP 檔。",
+  "server.provider.fileUnusable": "fal 產生的檔案無法使用。",
+  "server.provider.mockVideo": "模擬影片失敗了，請再試一次。",
+  "server.provider.mockVoice": "模擬語音失敗了，請再試一次。",
+  "server.provider.reportedFailure": "模型回報失敗。",
+  "server.provider.noStartFrame": "這個模型不接受起始畫面。",
+  "server.provider.noRefImages": "這個模型不接受參考圖。",
 }

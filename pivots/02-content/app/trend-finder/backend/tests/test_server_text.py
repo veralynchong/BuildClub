@@ -17,11 +17,13 @@ MODULES = ("canvas", "generations", "gen_providers", "editing", "brand", "takes"
 
 # server.py sentences the canvas can receive that the ast rules cannot see.
 MANUAL = {
-    "Today's {} generation budget has US${} left, and this needs US${}. "
-    "The budget resets at midnight; to allow more, raise {} in .env and restart the API.",
+    "server.py": [
+        "Today's {} generation budget has US${} left, and this needs US${}. "
+        "The budget resets at midnight; to allow more, raise {} in .env and restart the API.",
+    ],
 }
 
-CALLS = {"error", "CutError", "step"}
+CALLS = {"error", "CutError", "step", "ProviderError", "FileUnusable"}
 
 
 def _texts(node):
@@ -61,7 +63,7 @@ def sentences(path):
                 for a in args:
                     found.update(_texts(a))
             for kw in node.keywords:
-                if kw.arg == "step":
+                if kw.arg in ("step", "error"):  # step="..." and Poll("failed", error="...")
                     found.update(_texts(kw.value))
     for node in tree.body:
         if isinstance(node, ast.Assign):
@@ -94,5 +96,15 @@ def test_every_canvas_and_editor_server_sentence_is_translated():
 
 def test_every_translation_still_matches_backend():
     every = {p.stem for p in BACKEND.glob("*.py")}
-    stale = table_sentences() - backend_sentences(every) - MANUAL
+    stale = table_sentences() - backend_sentences(every) - {s for lines in MANUAL.values() for s in lines}
     assert not stale, "strings/server.ts sentences no backend module says any more:\n" + "\n".join(sorted(stale))
+
+
+def test_manual_sentences_still_in_their_backend_file():
+    """MANUAL is normalised ({} for every f-string expression); each entry must still be in the file it names."""
+    for name, lines in MANUAL.items():
+        source = (BACKEND / name).read_text()
+        # Put the file's own text through the same normalisation: adjacent literals joined, {expr} -> {}.
+        flat = re.sub(r"\{[^{}]*\}", "{}", re.sub(r"\"\s*\n\s*f?\"", "", source))
+        for line in lines:
+            assert line in flat, f"{name} no longer says: {line}"
