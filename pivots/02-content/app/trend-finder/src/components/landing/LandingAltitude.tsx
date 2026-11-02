@@ -538,18 +538,21 @@ const CLOSEUPS = [
     title: 'Every client’s ideas on one board.',
     text: 'See what’s shortlisted, what’s waiting for your manager, and what’s ready to film. No more ideas spread across ten chats.',
     media: 'Shortlist board: Shortlisted → Waiting → Approved',
+    img: '/landing/shortlist-board-three-columns.jpg',
   },
   {
     eyebrow: 'Manager review',
     title: 'Approvals from a phone, in about a minute.',
     text: 'Your manager sees the original video and your shot list. They approve it, ask for changes, or send it back with a reason.',
     media: 'Manager review on a phone',
+    img: '/landing/manager-review-phone.jpg',
   },
   {
     eyebrow: 'Client memory',
     title: 'It remembers what each client said.',
     text: 'Every approval and every “not this one” is saved to the client. Next month, you can see what they liked and why.',
     media: 'Client memory: “Sent back: not on brand”',
+    img: '/landing/client-memory-sent-back.jpg',
   },
 ]
 
@@ -710,7 +713,7 @@ export function LandingAltitude({ onLogIn, onDemo }: { onLogIn: () => void; onDe
                   <h3>{c.title}</h3>
                   <p>{c.text}</p>
                 </div>
-                <Media kind="photo" label={c.media} ratio="4 / 3" className="rk-closeup-media" />
+                <img className="rk-closeup-media rk-shot" src={c.img} alt={c.media} width={1400} height={1050} loading="lazy" decoding="async" style={{ aspectRatio: '4 / 3' }} />
               </article>
             ))}
           </div>
