@@ -5,7 +5,7 @@ import type { CanvasDoc, Generation } from '../canvas/types.ts'
 import type { Take } from '../takes.ts'
 import type { EditHook } from './useEditProject.ts'
 import type { SourcesHook } from './useSources.ts'
-import { applyNewer, clipStatus, fillByShotOrder, insertClip, newClipId, sourceKey, type ClipStatus } from './timeline.ts'
+import { applyNewer, clipStatus, fillByShotOrder, insertClip, isPrimaryPin, newClipId, repinIfOld, sourceKey, withPrimary, type ClipStatus } from './timeline.ts'
 import type { Clip, ClipSource, SourceInfo } from './types.ts'
 
 export interface TimelineActions {
@@ -72,7 +72,12 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
       const info = await infoFor(src)
       const { edit, notify } = ref.current
       if (!info) return notify('editor.processing')
-      if (edit.project) edit.update(applyNewer(edit.project, clipId, src, info.duration))
+      const p = edit.project
+      if (!p) return
+      const next = applyNewer(p, clipId, src, info.duration)
+      if (next === p) return
+      const old = p.clips.find((c) => c.id === clipId)?.source
+      edit.update(old ? { ...next, primaries: repinIfOld(next.primaries, src.shotId, old, src) } : next)
     },
     [infoFor],
   )
@@ -101,11 +106,11 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
 
   const setPrimary = (shotId: string, src: ClipSource) => {
     const p = inputs.edit.project
-    if (p) inputs.edit.update({ ...p, primaries: { ...p.primaries, [shotId]: src } })
+    if (p) inputs.edit.update({ ...p, primaries: withPrimary(p.primaries, shotId, src) })
   }
   const isPrimary = (shotId: string, src: ClipSource): boolean => {
-    const cur = inputs.edit.project?.primaries[shotId]
-    return !!cur && cur.kind === src.kind && cur.id === src.id
+    const pins = inputs.edit.project?.primaries
+    return !!pins && isPrimaryPin(pins, shotId, src)
   }
 
   return { addClip, applyNewer: apply, fill, statusOf, ignore, setPrimary, isPrimary }

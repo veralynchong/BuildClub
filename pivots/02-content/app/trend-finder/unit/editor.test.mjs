@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { selectedGen as graphSelectedGen } from '../src/lib/canvas/graph.ts'
 import {
   FPS,
   MAX_TOTAL,
@@ -23,6 +24,9 @@ import {
   fillByShotOrder,
   clipStatus,
   applyNewer,
+  isPrimaryPin,
+  withPrimary,
+  repinIfOld,
   CLIP_MIME,
 } from '../src/lib/editor/timeline.ts'
 
@@ -260,16 +264,73 @@ test('clipStatus: ok, missing (generation gone / not done / take deleted)', () =
   assert.deepEqual(clipStatus(tk, d, gens, []), { state: 'missing' })
 })
 
-test('clipStatus: newer when the node picked another version, or the shot chose another take', () => {
+test('clipStatus: newer when the node picked another version', () => {
   const d = doc([vnode('n1', 's1', 'g2')])
   const gens = [gen('g1', 'n1', 10), gen('g2', 'n1', 20)]
   const g = clip('a', 0, 1, { source: { kind: 'generation', id: 'g1', nodeId: 'n1', shotId: 's1' } })
   assert.deepEqual(clipStatus(g, d, gens, []), { state: 'newer', source: { kind: 'generation', id: 'g2', nodeId: 'n1', shotId: 's1' } })
+})
+
+test('clipStatus: a take stays ok even when another take of the shot is chosen', () => {
+  const d = doc([vnode('n1', 's1', 'g2')])
+  const gens = [gen('g1', 'n1', 10), gen('g2', 'n1', 20)]
+  const takes = [take('t1', 's1'), take('t2', 's1', true)]
   const tk = clip('b', 0, 1, { source: { kind: 'take', id: 't1', shotId: 's1' } })
-  assert.deepEqual(clipStatus(tk, d, gens, [take('t1', 's1'), take('t2', 's1', true)]), { state: 'newer', source: { kind: 'take', id: 't2', shotId: 's1' } })
-  // a take with no shot never has a newer one
+  assert.deepEqual(clipStatus(tk, d, gens, takes), { state: 'ok' })
   const loose = clip('c', 0, 1, { source: { kind: 'take', id: 't1' } })
-  assert.deepEqual(clipStatus(loose, d, gens, [take('t1', 's1'), take('t2', 's1', true)]), { state: 'ok' })
+  assert.deepEqual(clipStatus(loose, d, gens, takes), { state: 'ok' })
+  assert.deepEqual(clipStatus(tk, d, gens, [take('t2', 's1', true)]), { state: 'missing' })
+})
+
+test('repinIfOld: the pin follows a replaced version, other pins stay', () => {
+  const g1 = { kind: 'generation', id: 'g1', nodeId: 'n1', shotId: 's1' }
+  const g2 = { kind: 'generation', id: 'g2', nodeId: 'n1', shotId: 's1' }
+  const other = { kind: 'take', id: 't9', shotId: 's1' }
+  const pins = { s1: g1 }
+  assert.deepEqual(repinIfOld(pins, 's1', g1, g2), { s1: g2 })
+  assert.deepEqual(pins, { s1: g1 })
+  const p2 = { s1: other }
+  assert.equal(repinIfOld(p2, 's1', g1, g2), p2)
+  assert.equal(repinIfOld(pins, undefined, g1, g2), pins)
+  assert.equal(repinIfOld({}, 's1', g1, g2).s1, undefined)
+})
+
+test('isPrimaryPin / withPrimary', () => {
+  const g1 = { kind: 'generation', id: 'g1', nodeId: 'n1', shotId: 's1' }
+  const t1 = { kind: 'take', id: 'g1', shotId: 's1' }
+  const pins = {}
+  assert.equal(isPrimaryPin(pins, 's1', g1), false)
+  const next = withPrimary(pins, 's1', g1)
+  assert.deepEqual(pins, {})
+  assert.equal(isPrimaryPin(next, 's1', g1), true)
+  assert.equal(isPrimaryPin(next, 's1', t1), false) // same id, other kind
+  assert.equal(isPrimaryPin(next, 's2', g1), false)
+  assert.deepEqual(withPrimary(next, 's1', t1), { s1: t1 })
+})
+
+test('timeline selectedGen agrees with canvas graph selectedGen', () => {
+  const gens = [
+    { id: 'a', nodeId: 'n1', status: 'done', createdAt: 1 },
+    { id: 'b', nodeId: 'n1', status: 'done', createdAt: 3 },
+    { id: 'c', nodeId: 'n1', status: 'running', createdAt: 5 },
+    { id: 'x', nodeId: 'n2', status: 'done', createdAt: 2 },
+  ]
+  const nodes = [
+    { id: 'n1', type: 'video', shotId: 's1', data: {} },
+    { id: 'n1', type: 'video', shotId: 's1', data: { selected: 'a' } },
+    { id: 'n1', type: 'video', shotId: 's1', data: { selected: 'c' } },
+    { id: 'n3', type: 'video', shotId: 's3', data: {} },
+  ]
+  for (const n of nodes) {
+    const viaGraph = graphSelectedGen(n, gens)
+    const d = doc([n])
+    const clipSrc = { kind: 'generation', id: viaGraph ? viaGraph.id : 'none', nodeId: n.id, shotId: n.shotId }
+    const st = clipStatus(clip('k', 0, 1, { source: clipSrc }), d, gens, [])
+    // primaryClipFor goes through the timeline copy of selectedGen
+    const prim = primaryClipFor(n.shotId, d, gens, [], {})
+    assert.equal(prim ? prim.id : null, viaGraph ? viaGraph.id : null)
+    if (viaGraph) assert.deepEqual(st, { state: 'ok' })
+  }
 })
 
 test('applyNewer: swaps the source and clamps out to the new length', () => {

@@ -226,9 +226,23 @@ export function clipStatus(clip: Clip, doc: CanvasDoc, gens: Generation[], takes
     return { state: 'ok' }
   }
   if (!takes.some((x) => x.id === src.id)) return { state: 'missing' }
-  const chosen = src.shotId ? takes.find((x) => x.shotId === src.shotId && x.chosen) : undefined
-  if (chosen && chosen.id !== src.id) return { state: 'newer', source: { kind: 'take', id: chosen.id, shotId: src.shotId } }
-  return { state: 'ok' }
+  return { state: 'ok' } // a take is a separate piece of footage, never a newer version of another take
+}
+
+const sameSource = (a: ClipSource | undefined, b: ClipSource): boolean => !!a && a.kind === b.kind && a.id === b.id
+
+export function isPrimaryPin(primaries: Record<string, ClipSource>, shotId: string, src: ClipSource): boolean {
+  return sameSource(primaries[shotId], src)
+}
+
+export function withPrimary(primaries: Record<string, ClipSource>, shotId: string, src: ClipSource): Record<string, ClipSource> {
+  return { ...primaries, [shotId]: src }
+}
+
+// When a newer version replaces the pinned one, the pin follows it; any other pin is left alone.
+export function repinIfOld(primaries: Record<string, ClipSource>, shotId: string | undefined, oldSrc: ClipSource, newSrc: ClipSource): Record<string, ClipSource> {
+  if (!shotId || !sameSource(primaries[shotId], oldSrc)) return primaries
+  return { ...primaries, [shotId]: newSrc }
 }
 
 // Points a clip at a newer version. The trim is kept where it still fits; otherwise the clip restarts at 0

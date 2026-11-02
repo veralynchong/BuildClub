@@ -103,9 +103,12 @@ export function EditorPanel({ shots, edit, sources: footage, timeline, readOnly 
       )}
       {skipped.length > 0 && (
         <ul className="cv-ed-skipped small muted" role="status">
-          {skipped.map((id) => (
-            <li key={id}>{t('editor.fill.skipped', { n: shots.findIndex((s) => s.id === id) + 1 })}</li>
-          ))}
+          {skipped
+            .map((id) => ({ id, n: shots.findIndex((s) => s.id === id) + 1 }))
+            .filter((x) => x.n > 0)
+            .map(({ id, n }) => (
+              <li key={id}>{t('editor.fill.skipped', { n })}</li>
+            ))}
         </ul>
       )}
       <Timeline project={project} sources={byKey} shots={shots} frame={frame} readOnly={locked} timeline={timeline} onProject={update} onSeek={seek} />
