@@ -118,6 +118,8 @@ function toVideo(item: LiveItem, query: string, platform: Platform, search: { fe
     music: item.music,
     hashtags: item.hashtags ?? [],
     comments: platform === 'reddit' ? item.comments : undefined,
+    likes: item.likes,
+    commentCount: item.comments,
     baseline: baselineOf(item),
     fetchedAt: search.fetchedAt,
     fromCache: search.cached,

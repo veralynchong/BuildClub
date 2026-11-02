@@ -48,6 +48,7 @@ import production
 import publishing
 import cut_review
 import grading
+import recheck
 import renders
 import shotlist
 import storyboard
@@ -752,7 +753,7 @@ def db() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
     migrate_medians(conn)
-    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + renders.SCHEMA + grading.SCHEMA:
+    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + renders.SCHEMA + grading.SCHEMA + recheck.SCHEMA:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
@@ -903,6 +904,7 @@ app.include_router(shotlist.make_router(storyboard_budget))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(grading.make_router(db, lambda: MEDIA_DIR))
+app.include_router(recheck.make_router(db, lambda u: is_video_link(u)))
 app.include_router(subtitles.make_router(lambda: MEDIA_DIR, lambda i: any(x["id"] == i for x in load("ideas") or [])))
 publishing.seed_demo(db)
 

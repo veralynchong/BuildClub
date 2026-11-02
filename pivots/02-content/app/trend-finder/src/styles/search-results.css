@@ -484,3 +484,25 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
 .fp-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .fp-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: var(--text-sm); background: var(--accent-soft); border-radius: var(--radius); padding: 10px 14px; }
 @media (max-width: 600px) { .fp { flex-basis: 100%; } .fp-panel { position: static; width: auto; max-height: none; margin-top: 8px; } }
+
+/* "Where these numbers come from": a quiet disclosure under a tile and in the breakdown panel */
+.numsrc { font-size: var(--text-sm); min-width: 0; margin-top: 6px; }
+.numsrc > summary { white-space: normal; overflow-wrap: anywhere; cursor: pointer; color: var(--muted); font-size: var(--text-xs); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: transparent; list-style-position: inside; }
+.numsrc > summary:hover, .numsrc > summary:focus-visible { color: var(--fg); text-decoration-color: currentColor; }
+.numsrc-list { margin: 8px 0 0; display: grid; gap: 8px; }
+.numsrc-list > div { display: grid; gap: 2px; min-width: 0; }
+.numsrc-list dt { font-size: var(--text-xs); color: var(--muted); }
+.numsrc-list dd { margin: 0; overflow-wrap: anywhere; }
+.numsrc-formula { font-variant-numeric: tabular-nums; }
+.numsrc-list a { color: var(--fg); text-underline-offset: 3px; }
+.numsrc-check { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 10px; justify-items: start; min-width: 0; }
+.numsrc-check > * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.numsrc-error { margin: 0; color: var(--bad, #b3261e); overflow-wrap: anywhere; }
+.numsrc-result { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; width: 100%; }
+.numsrc-result p { margin: 0; overflow-wrap: anywhere; }
+.numsrc-rows { margin: 0; display: grid; gap: 4px; font-variant-numeric: tabular-nums; }
+.numsrc-rows > div { display: grid; gap: 1px; }
+.numsrc-rows dt { font-size: var(--text-xs); color: var(--muted); }
+.numsrc-rows dd { margin: 0; }
+.numsrc-rows .is-changed strong { font-weight: 700; }
+.numsrc-rows > div:not(.is-changed) strong { font-weight: 400; }
