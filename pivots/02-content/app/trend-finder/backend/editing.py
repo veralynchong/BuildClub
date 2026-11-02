@@ -64,7 +64,7 @@ VOICE_SOURCES = ("tts", "recording", "upload")
 NOT_AUDIO = "Upload an audio recording: WebM, Ogg, MP3, M4A or WAV."
 VOICE_TOO_BIG = "The audio is over the 20 MB limit."
 VOICE_IN_USE = "Remove this voiceover from the timeline first."
-VOICE_ALREADY_ADDED = "VOICE_ALREADY_ADDED: that voiceover was already added to the plan."
+VOICE_ALREADY_ADDED = "That voiceover was already added to the plan."
 VOICE_TOO_LONG = f"The audio is longer than {MAX_VOICE_S} seconds."
 
 

@@ -911,7 +911,7 @@ def test_second_import_of_a_job_is_refused(client, voice_env):
     gid = seed_voice_gen(client)
     assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 200
     again = client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}")
-    assert again.status_code == 409 and "VOICE_ALREADY_ADDED" in again.json()["error"]
+    assert again.status_code == 409 and again.json()["error"] == editing.VOICE_ALREADY_ADDED
     assert len(editing.voice_ids(server.MEDIA_DIR, "ia")) == 1
 
 
