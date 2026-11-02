@@ -53,8 +53,9 @@ import storyboard
 import subtitles
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
+from compare import CompareJobs, compare_id_for
 from models import (AnalyzeJob, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Client,
-                    Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
+                    CompareJob, CompareRequest, CompareStarted, Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
 
 HERE = Path(__file__).resolve().parent
 CACHE_DIR = HERE / "cache"
@@ -113,6 +114,7 @@ X_USD_PER_TWEET = 0.0004  # the dearer of the two candidate actors; account medi
 REDDIT_USD_PER_SUB = 0.02
 APIFY_USD_PER_VIDEO = 0.0037  # TikTok actor; account medians cost this per video fetched (134 videos: 0.497)
 ANALYZE_USD = 0.08  # one Claude breakdown
+COMPARE_USD = 0.05  # one Claude call that compares finished breakdowns (text only, no images)
 NEEDS_USD = 0.01  # one small Claude call that fills in a finished breakdown's needs
 IMAGE_USD = 0.02  # one small Claude call that reads a screenshot
 ASK_USD = 0.01  # one small Claude call that answers a search from its results
@@ -908,11 +910,15 @@ jobs = Jobs()
 X_STATUS = re.compile(r"https://(www\.|mobile\.)?(x|twitter)\.com/\w+/status/\d+")
 
 
+def is_video_link(url: str) -> bool:
+    return url.startswith(("https://www.tiktok.com/", "https://www.instagram.com/", "https://www.youtube.com/shorts/",
+                           "https://youtube.com/shorts/", "https://www.reddit.com/r/", "https://v.redd.it/")) or bool(X_STATUS.match(url))
+
+
 @app.post("/api/analyze", response_model=AnalyzeStarted)
 def start_analyze(body: AnalyzeRequest):
     url = body.url.strip()
-    if not (url.startswith(("https://www.tiktok.com/", "https://www.instagram.com/", "https://www.youtube.com/shorts/",
-                            "https://youtube.com/shorts/", "https://www.reddit.com/r/", "https://v.redd.it/")) or X_STATUS.match(url)):
+    if not is_video_link(url):
         return error(400, "Paste a TikTok, Instagram, YouTube Shorts, Reddit video or X link.")
     current = jobs.get(job_id_for(url))
     if (not current or current.status == "failed") and not spend("claude", ANALYZE_USD, DAILY_CLAUDE_USD):
@@ -925,6 +931,36 @@ def get_analyze(job_id: str):
     job = jobs.get(job_id)
     if not job:
         return error(404, "No breakdown with that id. Start one with POST /api/analyze.")
+    return job
+
+
+# Compare viral videos: a breakdown per video (free when it was done before), then one synthesis call.
+compares = CompareJobs(jobs)
+
+
+@app.post("/api/compare", response_model=CompareStarted)
+def start_compare(body: CompareRequest):
+    urls = list(dict.fromkeys(u.strip() for u in body.urls))
+    if len(urls) < 2:
+        return error(400, "Add at least 2 different videos to compare.", code="few")
+    if len(urls) > 5:
+        return error(400, "Compare up to 5 videos at a time.", code="many")
+    bad = [u for u in urls if not is_video_link(u)]
+    if bad:
+        return error(400, f"That is not a TikTok, Instagram, YouTube Shorts, Reddit video or X link: {bad[0]}", code="link")
+    current = compares.get(compare_id_for(urls))
+    if not current or current.status == "failed":
+        new = [u for u in urls if not (jobs.get(job_id_for(u)) and jobs.get(job_id_for(u)).status != "failed")]
+        if not spend("claude", ANALYZE_USD * len(new) + COMPARE_USD, DAILY_CLAUDE_USD):
+            return over_budget("Claude", DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD")
+    return {"job": compares.submit(urls)}
+
+
+@app.get("/api/compare/{job_id}", response_model=CompareJob, response_model_exclude_none=True)
+def get_compare(job_id: str):
+    job = compares.get(job_id)
+    if not job:
+        return error(404, "No comparison with that id. Start one with POST /api/compare.")
     return job
 
 

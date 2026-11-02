@@ -26,6 +26,8 @@ import { applyDecision, type Decision } from './lib/memory'
 import { SettingsScreen } from './components/SettingsScreen'
 import { PreferencesScreen } from './components/PreferencesScreen'
 import { ChannelScreen } from './components/ChannelScreen'
+import { CompareScreen } from './components/CompareScreen'
+import type { PickVideo } from './components/CompareScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { LandingAltitude } from './components/landing/LandingAltitude'
 import type { Client, Format, Platform, Video } from './types'
@@ -940,6 +942,25 @@ export default function App() {
   const blockedFormatIds = new Set(
     [...formatById.values()].filter((f) => f.needs.some((n) => client.cannot.includes(n))).map((f) => f.id),
   )
+  // Videos the Compare screen offers: the saved plans' videos (this client's, or everyone's from All
+  // clients), then the latest live search results. Only real videos with a link can be compared.
+  const comparePicks = (() => {
+    const label = (v: Video) => `@${v.handle} · ${v.hook || v.caption || ''}`.slice(0, 120)
+    const pick = (v: Video): PickVideo => ({ url: v.url!, label: label(v), thumbnail: v.thumbnail })
+    const seen = new Set<string>()
+    const fresh = (v: Video | undefined): v is Video => {
+      if (!v?.url || seen.has(v.url)) return false
+      seen.add(v.url)
+      return true
+    }
+    const shortlist = shownIdeas
+      .filter((i) => workspace === 'all' || i.clientId === client.id)
+      .map((i) => videoById.get(i.videoId))
+      .filter(fresh)
+      .map(pick)
+    const results = liveStore.videos.filter(fresh).slice(0, 30).map(pick)
+    return { shortlist, results }
+  })()
   const backLabel: Record<View, string> = {
     overview: t('shell.back.overview'),
     home: t('shell.back.home'),
@@ -950,6 +971,7 @@ export default function App() {
     settings: t('shell.back.settings'),
     preferences: t('shell.back.preferences'),
     channel: t('shell.back.channel'),
+    compare: t('shell.back.compare'),
     shortlist: t('shell.back.shortlist'),
     'add-client': t('shell.back.addClient'),
   }
@@ -1111,7 +1133,7 @@ export default function App() {
             />
           )}
 
-          {((!inClient && view !== 'add-client' && view !== 'channel' && view !== 'preferences') || view === 'overview') && (
+          {((!inClient && view !== 'add-client' && view !== 'channel' && view !== 'compare' && view !== 'preferences') || view === 'overview') && (
             <OverviewScreen
               clients={clients}
               ideas={shownIdeas}
@@ -1154,6 +1176,8 @@ export default function App() {
           )}
 
           {view === 'channel' && <ChannelScreen />}
+
+          {view === 'compare' && <CompareScreen shortlist={comparePicks.shortlist} results={comparePicks.results} />}
 
           {view === 'preferences' && <PreferencesScreen />}
 

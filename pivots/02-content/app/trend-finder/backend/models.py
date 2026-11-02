@@ -414,3 +414,59 @@ class CutDecideRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(max_length=320)
     password: str = Field(max_length=1024)
+
+
+# ---- compare viral videos -----------------------------------------------------------------------
+
+class CompareRequest(BaseModel):
+    urls: list[str] = Field(min_length=2, max_length=5)
+
+
+class CompareBeat(BaseModel):
+    beat: str  # short name, e.g. "No, no, no"
+    what: str  # what happens in this beat
+    timing: str  # typical timing, e.g. "0-8s"
+
+
+class CompareHook(BaseModel):
+    pattern: str
+    # The hookType values the videos share, from their breakdowns (empty when none was recorded).
+    hookTypes: list[HookType]
+
+
+class CompareOut(BaseModel):
+    """The synthesis as the AI must answer it (output_format for the compare call)."""
+    commonFormat: str
+    structure: list[CompareBeat] = Field(min_length=1, max_length=8)
+    typicalLength: str
+    hookPattern: CompareHook
+    emotionPattern: str
+    whatToCopy: list[str] = Field(min_length=3, max_length=5)
+    whatDiffers: list[str] = Field(max_length=6)
+    confidence: str
+
+
+class CompareVideo(BaseModel):
+    """One video in a comparison and the state of its breakdown."""
+    url: str
+    job: str
+    status: Literal["queued", "running", "done", "failed"]
+    progress: float = 0
+    step: str = ""
+    error: Optional[str] = None
+    concept: Optional[str] = None
+    lengthSec: Optional[float] = None
+
+
+class CompareStarted(BaseModel):
+    job: str
+
+
+class CompareJob(BaseModel):
+    job: str
+    status: Literal["queued", "running", "done", "failed"]
+    progress: float
+    step: str = ""
+    videos: list[CompareVideo] = []
+    result: Optional[CompareOut] = None
+    error: Optional[str] = None
