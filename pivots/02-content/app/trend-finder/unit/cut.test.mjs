@@ -2,8 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MAX_MUSIC_BYTES,
-  SPEEDS,
-  canStartCut,
   checkMusic,
   deleteMusic,
   formatDuration,
@@ -13,7 +11,6 @@ import {
   putMusic,
   reviewLine,
   sendCutForReview,
-  startCut,
 } from '../src/lib/cut.ts'
 
 const state = (status, extra = {}) => ({ status, progress: 0, step: '', speed: 1.1, stale: false, music: null, ...extra })
@@ -31,7 +28,6 @@ function fakeFetch(responses) {
 
 test('constants', () => {
   assert.equal(MAX_MUSIC_BYTES, 30 * 1024 * 1024)
-  assert.deepEqual(SPEEDS, [1, 1.1, 1.25])
 })
 
 test('musicType falls back to the extension, case-insensitively', () => {
@@ -56,16 +52,6 @@ test('checkMusic uses the server copy', () => {
   assert.equal(checkMusic({ name: 'a.mp3', type: 'audio/mpeg', size: MAX_MUSIC_BYTES }), null)
 })
 
-test('canStartCut needs an approved plan, all shots chosen, and no active cut', () => {
-  const ok = { status: 'approved', shotsDone: 3, shotsTotal: 3, active: false }
-  assert.equal(canStartCut(ok), true)
-  assert.equal(canStartCut({ ...ok, shotsDone: 2 }), false)
-  assert.equal(canStartCut({ ...ok, shotsDone: 0, shotsTotal: 0 }), false)
-  assert.equal(canStartCut({ ...ok, active: true }), false)
-  assert.equal(canStartCut({ ...ok, status: 'saved' }), false)
-  assert.equal(canStartCut({ ...ok, status: 'rejected' }), false)
-})
-
 test('formatDuration', () => {
   assert.equal(formatDuration(75), '1:15')
   assert.equal(formatDuration(5), '0:05')
@@ -73,30 +59,25 @@ test('formatDuration', () => {
   assert.equal(formatDuration(0), '0:00')
 })
 
-test('getCut, startCut and deleteMusic hit the right routes', async () => {
+test('getCut and deleteMusic hit the right routes', async () => {
   const f = fakeFetch([{ body: state('none') }])
   try {
     await getCut('a b')
-    await startCut('a b', 3, 1.25)
     await deleteMusic('a b')
     await getCut('a b', 2)
   } finally {
     f.restore()
   }
   assert.equal(f.calls[0].url, '/api/ideas/a%20b/cut')
-  assert.equal(f.calls[1].url, '/api/ideas/a%20b/cut')
-  assert.equal(f.calls[1].init.method, 'POST')
-  assert.deepEqual(JSON.parse(f.calls[1].init.body), { shotCount: 3, speed: 1.25 })
-  assert.equal(f.calls[1].init.headers['content-type'], 'application/json')
-  assert.equal(f.calls[2].url, '/api/ideas/a%20b/cut/music')
-  assert.equal(f.calls[2].init.method, 'DELETE')
-  assert.equal(f.calls[3].url, '/api/ideas/a%20b/cut?shots=2')
+  assert.equal(f.calls[1].url, '/api/ideas/a%20b/cut/music')
+  assert.equal(f.calls[1].init.method, 'DELETE')
+  assert.equal(f.calls[2].url, '/api/ideas/a%20b/cut?shots=2')
 })
 
 test('API errors surface the server sentence, else the fallback', async () => {
   let f = fakeFetch([{ status: 409, body: { error: 'Choose a take for shot 3 first.' } }])
   try {
-    await assert.rejects(startCut('i', 3, 1.1), { message: 'Choose a take for shot 3 first.' })
+    await assert.rejects(sendCutForReview('i'), { message: 'Choose a take for shot 3 first.' })
   } finally {
     f.restore()
   }
