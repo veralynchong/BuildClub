@@ -35,6 +35,8 @@ def parse_words(data: dict) -> list[Word]:
         text = seg.get("text", "").strip()
         if not text or (text[0], text[-1]) in {("[", "]"), ("(", ")")}:
             continue
+        if text[0] == "*" or text[-1] == "*":  # a sound note such as "*phone rings*", split per word
+            continue
         words.append((seg["offsets"]["from"] / 1000, seg["offsets"]["to"] / 1000, text))
     return sorted(words, key=lambda w: w[0])
 

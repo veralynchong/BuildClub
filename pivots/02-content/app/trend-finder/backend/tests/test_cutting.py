@@ -22,6 +22,12 @@ def test_parse_words_drops_markers():
         (1.0, 1.6, "um"), (2.9, 3.5, "world")]
 
 
+def test_parse_words_drops_starred_sound_notes():
+    seg = lambda a, b, text: {"offsets": {"from": a, "to": b}, "text": text}
+    data = {"transcription": [seg(0, 1990, " *phone"), seg(1990, 4000, " rings*"), seg(4000, 4500, " hi")]}
+    assert cutting.parse_words(data) == [(4.0, 4.5, "hi")]
+
+
 def test_filler_removed_and_gap_trimmed():
     keeps = cutting.keep_intervals(W, SIL, 3.5)
     # um 1.0-1.3 and the gap up to 2.9 are one cut; keep 0.12 only on the world side
