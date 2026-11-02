@@ -15,6 +15,10 @@ STATUS_URL = "https://queue.fal.run/fal-ai/x/requests/r1/status"
 RESULT_URL = "https://queue.fal.run/fal-ai/x/requests/r1"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent"
 
+ELEVEN_URL = "https://api.elevenlabs.io/v1/text-to-speech/voice1?output_format=mp3_44100_128"
+MP3 = b"ID3\x04\0\0\0\0\0\0" + b"\0" * 32
+VOICE_MODEL = {"id": "el", "kind": "voice", "provider": "elevenlabs", "endpoint": "eleven_multilingual_v2",
+               "params": {"voiceId": "voice1"}}
 IMAGE_MODEL = {"id": "seedream-4.5", "kind": "image", "provider": "fal", "endpoint": "fal/t2i",
                "endpointWithRefs": "fal/edit",
                "params": {"prompt": "prompt", "start": None, "references": "image_urls", "aspect": "image_size",
@@ -51,6 +55,7 @@ def jr(obj, status=200):
 
 @pytest.fixture(autouse=True)
 def keys(monkeypatch):
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "el-test-key")
     monkeypatch.setenv("FAL_KEY", "fal-test-key")
     monkeypatch.setenv("GEMINI_API_KEY", "gem-test-key")
 
@@ -221,7 +226,7 @@ def test_fal_download_size_cap(monkeypatch):
 
 
 def test_size_caps_are_20mb_and_200mb():
-    assert gp.MAX_BYTES == {"image": 20 * 1024 * 1024, "video": 200 * 1024 * 1024}
+    assert gp.MAX_BYTES == {"image": 20 * 1024 * 1024, "video": 200 * 1024 * 1024, "voice": 20 * 1024 * 1024}
 
 
 def gemini_reply(data=PNG, mime="image/png", key="inlineData"):
@@ -374,3 +379,71 @@ def test_fal_submit_2xx_without_urls_is_result_lost():
     http = FakeHttp({("POST", FAL_Q + "fal/video"): jr({"detail": "no"}, 422)})
     with pytest.raises(gp.ProviderError):
         gp.adapter_for("fal", http).submit(gp.Job(VIDEO_MODEL, "p", None, [], 5))
+
+
+def test_sniff_mp3_headers():
+    assert gp.sniff(b"ID3\x04" + b"\0" * 12) == ("voice", "mp3")
+    assert gp.sniff(b"\xff\xfb\x90\x00" + b"\0" * 12) == ("voice", "mp3")  # MPEG-1 layer 3, the common header
+    assert gp.sniff(b"\xff\xf3\x90\x00" + b"\0" * 12) == ("voice", "mp3")
+    assert gp.sniff(b"\xff\xd8\xff\xe0" + b"\0" * 12) == ("image", "jpg")  # a JPEG is not an MP3
+    assert gp.sniff(b"\xff\x00" + b"\0" * 12) is None
+
+
+def test_elevenlabs_submit_sends_key_and_model():
+    http = FakeHttp({("POST", ELEVEN_URL): (200, {}, MP3)})
+    ad = gp.adapter_for("elevenlabs", http)
+    job = gp.Job(VOICE_MODEL, "hello there", None, [], None)
+    rid = ad.submit(job)
+    call = http.calls[0]
+    assert call["headers"] == {"xi-api-key": "el-test-key", "Content-Type": "application/json"}
+    assert call["body"] == {"text": "hello there", "model_id": "eleven_multilingual_v2"}
+    p = ad.poll(job, rid)
+    assert p.state == "done" and p.ext == "mp3" and p.data == MP3
+    with pytest.raises(gp.ResultLost):  # the audio is taken once; after a restart it is gone
+        ad.poll(job, rid)
+
+
+def test_elevenlabs_voice_id_falls_back_to_the_environment(monkeypatch):
+    model = {**VOICE_MODEL, "params": {"voiceId": ""}}
+    job = gp.Job(model, "hi", None, [], None)
+    with pytest.raises(gp.ProviderError):  # no voice anywhere: nothing is sent
+        gp.adapter_for("elevenlabs", FakeHttp()).submit(job)
+    monkeypatch.setenv("ELEVENLABS_VOICE_ID", "voice1")
+    http = FakeHttp({("POST", ELEVEN_URL): (200, {}, MP3)})
+    gp.adapter_for("elevenlabs", http).submit(job)
+    assert http.calls[0]["url"] == ELEVEN_URL
+
+
+def test_elevenlabs_4xx_is_provider_error():
+    for status in (401, 422, 500):
+        http = FakeHttp({("POST", ELEVEN_URL): jr({"detail": "no"}, status)})
+        with pytest.raises(gp.ProviderError):  # refundable: the provider said it failed
+            gp.adapter_for("elevenlabs", http).submit(gp.Job(VOICE_MODEL, "hi", None, [], None))
+
+
+def test_elevenlabs_no_answer_is_result_lost():
+    http = FakeHttp({("POST", ELEVEN_URL): TimeoutError("slow")})
+    with pytest.raises(gp.ResultLost):  # sent, no answer: it may have been charged (spec 11.5 #8)
+        gp.adapter_for("elevenlabs", http).submit(gp.Job(VOICE_MODEL, "hi", None, [], None))
+
+
+def test_elevenlabs_non_mp3_rejected():
+    http = FakeHttp({("POST", ELEVEN_URL): (200, {}, b"<html>not audio</html>" + b"\0" * 20)})
+    with pytest.raises(gp.FileUnusable):  # a 200 that isn't MP3: no refund, it may have charged
+        gp.adapter_for("elevenlabs", http).submit(gp.Job(VOICE_MODEL, "hi", None, [], None))
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="needs ffmpeg")
+def test_mock_voice_is_mp3(tmp_path, monkeypatch):
+    import subprocess
+    monkeypatch.setattr(gp, "MOCK_DELAY_S", 0)
+    ad = gp.adapter_for("mock")
+    job = gp.Job({"id": "mock-voice", "kind": "voice", "provider": "mock"}, "abcd", None, [], None, scratch=tmp_path)
+    p = ad.poll(job, ad.submit(job))
+    assert p.state == "done" and p.ext == "mp3" and gp.sniff(p.data[:16]) == ("voice", "mp3")
+    assert list(tmp_path.iterdir()) == []
+    f = tmp_path.parent / "v.mp3"
+    f.write_bytes(p.data)
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(f)],
+                         capture_output=True, text=True).stdout
+    assert abs(float(out) - 1.0) < 0.2  # 4 width units x 0.25 s

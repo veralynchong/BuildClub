@@ -30,6 +30,16 @@ import {
   withPrimary,
   repinIfOld,
   CLIP_MIME,
+  addText,
+  updateText,
+  removeText,
+  newTextId,
+  textsAt,
+  MAX_TEXTS,
+  addVoice,
+  updateVoice,
+  removeVoice,
+  setShotCaption,
 } from '../src/lib/editor/timeline.ts'
 
 const clip = (id, inn, out, extra = {}) => ({
@@ -372,4 +382,251 @@ test('flushOutcome: saved only when nothing unsaved is left', () => {
   assert.equal(flushOutcome({ ...base, dirty: true }), 'failed')
   assert.equal(flushOutcome({ ...base, dirty: true, blocked: true }), 'stale')
   assert.equal(flushOutcome({ ...base, dirty: true, readOnly: true }), 'readonly')
+})
+
+// ---- texts ----
+test('addText: 2 s at the bottom in white, cut to fit the video', () => {
+  const p = project([clip('c1', 0, 5)])
+  const a = addText(p, 1, 'hello', 't1')
+  assert.deepEqual(a.texts, [{ id: 't1', text: 'hello', start: 1, end: 3, position: 'bottom', color: 'white' }])
+  assert.equal(p.texts.length, 0)
+  const near = addText(p, 4.5, 'x', 't1').texts[0]
+  assert.equal(near.end, 5)
+  assert.ok(near.start < near.end)
+  const past = addText(p, 99, 'x', 't1').texts[0]
+  assert.ok(past.start < 5 && past.end === 5)
+  assert.equal(addText(p, -3, 'x', 't1').texts[0].start, 0)
+})
+
+test('addText: nothing to add to, empty words, or 30 texts already', () => {
+  const empty = project([])
+  assert.equal(addText(empty, 0, 'x', 't1'), empty)
+  const p = project([clip('c1', 0, 5)])
+  assert.equal(addText(p, 0, '   ', 't1'), p)
+  assert.equal(addText(p, 0, 'a'.repeat(200), 't1').texts[0].text.length, 120)
+  let full = p
+  for (let i = 0; i < MAX_TEXTS; i++) full = addText(full, 0, 'x', `t${i + 1}`)
+  assert.equal(full.texts.length, MAX_TEXTS)
+  assert.equal(addText(full, 0, 'x', 'tz'), full)
+})
+
+test('updateText: changes one text, keeps timing valid, ignores empty words', () => {
+  const p = addText(project([clip('c1', 0, 5)]), 1, 'hello', 't1')
+  const u = updateText(p, 't1', { text: '你好', position: 'top', color: 'black' })
+  assert.deepEqual([u.texts[0].text, u.texts[0].position, u.texts[0].color], ['你好', 'top', 'black'])
+  assert.equal(p.texts[0].text, 'hello')
+  assert.equal(updateText(p, 't1', { text: '  ' }), p)
+  assert.equal(updateText(p, 'nope', { text: 'x' }), p)
+  const back = updateText(p, 't1', { start: 4, end: 2 })
+  assert.ok(back.texts[0].end > back.texts[0].start)
+  assert.equal(updateText(p, 't1', { start: -2 }).texts[0].start, 0)
+})
+
+test('removeText and newTextId', () => {
+  let p = addText(project([clip('c1', 0, 5)]), 0, 'a', 't1')
+  p = addText(p, 1, 'b', newTextId(p))
+  assert.deepEqual(p.texts.map((x) => x.id), ['t1', 't2'])
+  const r = removeText(p, 't1')
+  assert.deepEqual(r.texts.map((x) => x.id), ['t2'])
+  assert.equal(removeText(r, 't1'), r)
+})
+
+test('textsAt: start is in, end is out', () => {
+  let p = addText(project([clip('c1', 0, 6)]), 1, 'a', 't1') // 1 to 3
+  p = addText(p, 2, 'b', 't2') // 2 to 4
+  assert.deepEqual(textsAt(p, 0.5).map((x) => x.id), [])
+  assert.deepEqual(textsAt(p, 1).map((x) => x.id), ['t1'])
+  assert.deepEqual(textsAt(p, 2.5).map((x) => x.id), ['t1', 't2'])
+  assert.deepEqual(textsAt(p, 3).map((x) => x.id), ['t2'])
+  assert.deepEqual(textsAt(p, 4).map((x) => x.id), [])
+})
+
+// ---- captions (Task 11) ----
+import {
+  pageEnd, tokens, lineCaptions, voiceCaptions, captionPages, pagesWithEdits, voicePages, captionMode, projectPages, ttsDefaultText, widthUnits,
+} from '../src/lib/editor/captions.ts'
+
+const shotClip = (id, shotId, inn, out, extra = {}) => ({ ...clip(id, inn, out, extra), source: { kind: 'generation', id: 'g1', shotId } })
+const joined = (caps) => caps.map((c) => c.text).join('')
+
+test('tokens: one per CJK character, latin words carry one leading space', () => {
+  assert.deepEqual(tokens('3 天學會 editing fast'), ['3', '天', '學', '會', ' editing', ' fast'])
+  assert.deepEqual(tokens('學會editing'), ['學', '會', 'editing'])
+  assert.deepEqual(tokens('  '), [])
+})
+
+test('lineCaptions: two adjacent clips of one shot share the line', () => {
+  const p = project([shotClip('a', 's1', 0, 2), shotClip('b', 's1', 0, 2)])
+  const caps = lineCaptions(p, { s1: '一二三四' })
+  assert.equal(joined(caps), '一二三四')
+  assert.deepEqual(caps.map((c) => c.startMs), [0, 1000, 2000, 3000])
+  assert.equal(caps[3].endMs, 4000)
+})
+
+test('lineCaptions (R5): non-adjacent clips of one shot share ONE line over their combined time', () => {
+  const p = project([shotClip('a', 's1', 0, 2), shotClip('b', 's2', 0, 3), shotClip('c', 's1', 0, 2)])
+  const lines = { s1: '一二三四五六', s2: 'hello brave world' }
+  const caps = lineCaptions(p, lines)
+  const s1 = caps.filter((c) => '一二三四五六'.includes(c.text))
+  assert.equal(joined(s1), '一二三四五六') // the whole line, once
+  assert.equal(joined(caps.filter((c) => !'一二三四五六'.includes(c.text))).trim(), 'hello brave world')
+  const spans = [[0, 2000], [5000, 7000]] // the clips of s1
+  let prev = -1
+  for (const c of s1) {
+    assert.ok(c.startMs >= prev, 'monotonic')
+    prev = c.startMs
+    assert.ok(spans.some(([a, b]) => c.startMs >= a && c.endMs <= b), `token ${c.text} ${c.startMs}-${c.endMs} lies inside a clip of the shot`)
+  }
+  assert.deepEqual(s1.map((c) => c.startMs), [0, 667, 1333, 5000, 5667, 6333])
+  const all = caps.map((c) => c.startMs)
+  assert.deepEqual(all, [...all].sort((a, b) => a - b))
+})
+
+test('lineCaptions: a clip caption overrides the line; the first overriding clip wins', () => {
+  const p = project([shotClip('a', 's1', 0, 1), shotClip('b', 's1', 0, 1, { caption: '改過' }), shotClip('c', 's1', 0, 1, { caption: '別的' })])
+  assert.equal(joined(lineCaptions(p, { s1: '原本' })), '改過')
+  const cleared = project([shotClip('a', 's1', 0, 1, { caption: '' })])
+  assert.deepEqual(lineCaptions(cleared, { s1: '原本' }), []) // an empty override hides the caption
+})
+
+test('lineCaptions: clips without a shot, or a shot without a line, get nothing', () => {
+  assert.deepEqual(lineCaptions(project([clip('a', 0, 2)]), { s1: 'x' }), [])
+  assert.deepEqual(lineCaptions(project([shotClip('a', 's1', 0, 2)]), {}), [])
+})
+
+test('voiceCaptions: words move to the voiceover start, and words past the end are dropped', () => {
+  const seg = { id: 'v1', source: 'upload', start: 1, volume: 1, edits: {} }
+  const words = { v1: [{ text: 'hello', start: 0, end: 0.5 }, { text: 'there', start: 0.6, end: 1 }, { text: 'late', start: 5, end: 6 }] }
+  const caps = voiceCaptions([seg], words, 3)
+  assert.deepEqual(caps.map((c) => [c.text, c.startMs, c.endMs]), [['hello', 1000, 1500], [' there', 1600, 2000]])
+  const cut = voiceCaptions([seg], { v1: [{ text: 'hello', start: 1.5, end: 3 }] }, 3)
+  assert.equal(cut[0].endMs, 3000) // clamped to the total
+})
+
+test('captionPages: page text has no space between Chinese characters', () => {
+  const p = project([shotClip('a', 's1', 0, 6)])
+  const pages = captionPages(lineCaptions(p, { s1: '三分鐘學會剪輯，3 天 學會 fast editing' }))
+  assert.ok(pages.length >= 2)
+  assert.ok(!/[一-鿿]\s+[一-鿿]/.test(pages.map((g) => g.text).join('')))
+  assert.equal(pages[0].text, '三分鐘學會剪輯，')
+  assert.ok(pages.every((g) => widthUnits(g.text) <= 18))
+})
+
+test('F28: the pages of a lines-mode shot join to the line', () => {
+  const p = project([shotClip('a', 's1', 0, 3), shotClip('b', 's2', 0, 1), shotClip('c', 's1', 0, 3)])
+  const line = '先講重點，再講例子。最後給你一個行動'
+  const caps = lineCaptions(p, { s1: line })
+  assert.equal(captionPages(caps).map((g) => g.text).join(''), line)
+})
+
+test('pagesWithEdits: replaces the text of the page at that index only', () => {
+  const caps = [
+    { text: '你', startMs: 0, endMs: 500, timestampMs: null, confidence: null },
+    { text: '好', startMs: 500, endMs: 1000, timestampMs: null, confidence: null, pageBreakAfter: true },
+    { text: '再', startMs: 1000, endMs: 1500, timestampMs: null, confidence: null },
+    { text: '見', startMs: 1500, endMs: 2000, timestampMs: null, confidence: null },
+  ]
+  const pages = captionPages(caps)
+  assert.deepEqual(pages.map((g) => g.text), ['你好', '再見'])
+  const edited = pagesWithEdits(pages, { 1: '拜拜囉' })
+  assert.deepEqual(edited.map((g) => g.text), ['你好', '拜拜囉'])
+  assert.deepEqual(edited[1].tokens.map((t) => t.text), ['拜', '拜', '囉'])
+  assert.equal(edited[1].startMs, 1000)
+  assert.equal(edited[0], pages[0])
+})
+
+test('voice mode: pages are per voiceover and edits are keyed by page inside each', () => {
+  const a = { id: 'v1', source: 'upload', start: 0, volume: 1, edits: { 0: '甲' } }
+  const b = { id: 'v2', source: 'upload', start: 3, volume: 1, edits: { 0: '乙' } }
+  const words = { v1: [{ text: '你好', start: 0, end: 1 }], v2: [{ text: '再見', start: 0, end: 1 }] }
+  assert.deepEqual(voicePages([a, b], words, 10).map((g) => g.text), ['甲', '乙'])
+  const p = { ...project([shotClip('a', 's1', 0, 10)]), voiceover: [a, b], captions: { enabled: true } }
+  assert.equal(captionMode(p, words), 'voice')
+  assert.equal(captionMode(p, {}), 'lines')
+  assert.deepEqual(projectPages(p, { s1: '台詞' }, words).map((g) => g.text), ['甲', '乙'])
+  assert.deepEqual(projectPages(p, { s1: '台詞' }, { v1: [] }).map((g) => g.text), ['台詞'])
+  assert.deepEqual(projectPages({ ...p, captions: { enabled: false } }, { s1: '台詞' }, words), [])
+})
+
+test('ttsDefaultText: joins the lines and cuts at 480 width units', () => {
+  assert.deepEqual(ttsDefaultText(['一', '', 'b']), { text: '一\nb', truncated: false })
+  const long = ttsDefaultText(['字'.repeat(300)])
+  assert.equal(long.truncated, true)
+  assert.ok(widthUnits(long.text) <= 480 && long.text.length === 240)
+})
+
+test('voice helpers add, update and remove a voiceover; setShotCaption keeps one override on the first clip', () => {
+  const seg = { id: 'v1', source: 'upload', start: 0, volume: 1, edits: {} }
+  let p = addVoice(project([clip('a', 0, 2)]), seg)
+  assert.equal(addVoice(p, seg), p)
+  p = updateVoice(p, 'v1', { start: 2, volume: 0.5 })
+  assert.deepEqual([p.voiceover[0].start, p.voiceover[0].volume], [2, 0.5])
+  assert.equal(updateVoice(p, 'nope', { start: 1 }), p)
+  p = removeVoice(p, 'v1')
+  assert.deepEqual(p.voiceover, [])
+  assert.equal(removeVoice(p, 'v1'), p)
+  const q = project([shotClip('a', 's1', 0, 1), shotClip('b', 's2', 0, 1), shotClip('c', 's1', 0, 1, { caption: 'old' })])
+  const r = setShotCaption(q, 's1', '新字幕')
+  assert.deepEqual(r.clips.map((c) => c.caption), ['新字幕', undefined, undefined])
+  assert.deepEqual(setShotCaption(r, 's1', undefined).clips.map((c) => c.caption), [undefined, undefined, undefined])
+  assert.equal(setShotCaption(q, 'zz', 'x'), q)
+})
+
+test('I1: a Chinese line without punctuation splits into several pages that join to the line', () => {
+  const p = project([shotClip('a', 's1', 0, 3)])
+  const line = '三分鐘學會剪輯短影音的方法跟著我一起做'
+  const pages = captionPages(lineCaptions(p, { s1: line }))
+  assert.ok(pages.length > 1)
+  assert.equal(pages.map((g) => g.text).join(''), line)
+  assert.ok(pages.every((g) => widthUnits(g.text) <= 16 && pageEnd(g) - g.startMs <= 1400))
+})
+
+test('I2: pages never cross a clip or a shot, and words of adjacent shots keep a space', () => {
+  const p = project([shotClip('a', 's1', 0, 2), shotClip('b', 's2', 0, 2), shotClip('c', 's1', 0, 2)])
+  const lines = { s1: 'learn editing in three days now', s2: 'cut fast add captions' }
+  const pages = captionPages(lineCaptions(p, lines))
+  const spans = [[0, 2000, 's1'], [2000, 4000, 's2'], [4000, 6000, 's1']]
+  for (const g of pages) {
+    const hit = spans.filter(([a, b]) => g.startMs >= a && pageEnd(g) <= b)
+    assert.equal(hit.length, 1, `page "${g.text}" lies inside one clip`)
+    const words = g.text.split(' ')
+    const owner = hit[0][2]
+    assert.ok(words.every((w) => lines[owner].split(' ').includes(w)), `page "${g.text}" holds only words of ${owner}`)
+  }
+  const caps = lineCaptions(p, lines)
+  const owner = (c) => (c.startMs < 2000 || c.startMs >= 4000 ? 's1' : 's2')
+  caps.forEach((c, i) => {
+    if (i > 0 && owner(caps[i - 1]) !== owner(c)) assert.ok(c.text.startsWith(' '), `"${c.text}" after another shot keeps a space`)
+  })
+})
+
+test('I2: a short clip of a shot does not leave its page on screen over another shot', () => {
+  const p = project([shotClip('a', 's1', 0, 0.2), shotClip('b', 's2', 0, 3), shotClip('c', 's1', 0, 0.2)])
+  const pages = captionPages(lineCaptions(p, { s1: 'supercalifragilistic word' }))
+  for (const g of pages) assert.ok(pageEnd(g) <= 200 || g.startMs >= 3200, `page "${g.text}" ${g.startMs}-${pageEnd(g)}`)
+})
+
+test('N1/N2: short lines stay whole, long ones split without tiny pages, the line is kept', () => {
+  const pagesOf = (line, secs) => captionPages(lineCaptions(project([shotClip('a', 's1', 0, secs)]), { s1: line }))
+  assert.deepEqual(pagesOf('台詞', 3).map((g) => g.text), ['台詞'])
+  assert.deepEqual(pagesOf('三分鐘學會剪輯短', 6).map((g) => g.text), ['三分鐘學會剪輯短']) // 8 characters over 6 s
+  const line = '三分鐘學會剪輯短影音的'.slice(0, 13) // 13 characters, no punctuation
+  for (const secs of [2, 6, 12]) {
+    const pages = pagesOf(line.padEnd(13, '的'), secs)
+    assert.equal(pages.map((g) => g.text).join(''), line.padEnd(13, '的'))
+    assert.ok(pages.length > 1 && pages.every((g) => widthUnits(g.text) >= 4 && widthUnits(g.text) <= 18), pages.map((g) => g.text).join('|'))
+  }
+  const sentences = '先講重點，再講例子。最後給你一個行動'
+  const pages = pagesOf(sentences, 9)
+  assert.equal(pages.map((g) => g.text).join(''), sentences)
+  assert.deepEqual(pages.map((g) => g.text), ['先講重點，', '再講例子。', '最後給你一個行動'])
+})
+
+// ---- final review fixes ----
+test('lineCaptions: a lone closing mark never becomes a page of its own across a clip boundary', () => {
+  const p = project([shotClip('a', 's1', 0, 5), shotClip('b', 's1', 0, 1)])
+  const caps = lineCaptions(p, { s1: '你好，世界。' })
+  const pages = captionPages(caps)
+  assert.equal(pages.map((pg) => pg.text).join(''), '你好，世界。')
+  assert.ok(pages.every((pg) => pg.text.trim() !== '。'))
 })

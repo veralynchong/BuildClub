@@ -67,6 +67,26 @@ def test_check_project_accepts_drift_and_empty():
     assert editing.check_project(project(clip(b=90.0), clip("c2", 0, 90.0))) is None
 
 
+def text(**extra):
+    return {"id": "x1", "text": "hello", "start": 0, "end": 1, "position": "bottom", "color": "white", **extra}
+
+
+@pytest.mark.parametrize("bad_text", [
+    text(position="left"), text(color="red"), text(text=""), text(text="  "), text(text="a" * 121),
+    text(start=2, end=2), text(start=3, end=1), text(start=-1), text(id="bad id!"), text(end=float("nan")),
+], ids=["position", "colour", "empty", "blank", "121-chars", "end==start", "end<start", "negative", "id", "nan"])
+def test_check_project_texts(bad_text):
+    assert editing.check_project({**project(clip()), "texts": [bad_text]})
+
+
+def test_check_project_texts_and_music_accepted_and_limited():
+    assert editing.check_project({**project(clip()), "texts": [text(text="中" * 120), text(id="x2", color="black")],
+                                  "music": {"volume": 0.5}}) is None
+    assert editing.check_project({**project(clip()), "texts": [text(), text()]})  # shared id
+    for music in ({}, {"volume": 2}, {"volume": -0.1}, {"volume": "loud"}, "mp3"):
+        assert editing.check_project({**project(clip()), "music": music}), music
+
+
 def test_put_invalid_422(client, setup):
     r = client.put("/api/ideas/ia/edit", json={"version": 0, "project": project(clip(a=2, b=1))})
     assert r.status_code == 422 and "error" in r.json()
@@ -204,6 +224,33 @@ def test_signature_ignores_primaries_but_follows_clips(client, setup, monkeypatc
         q = project(clip(b=1.5))
         q["clips"][0]["source"]["id"] = t["id"]
         assert one != editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, q)
+
+
+def test_brand_change_makes_editor_cut_stale(client, setup, monkeypatch):
+    fake_probe(monkeypatch)
+    t = up(client).json()
+    p = project(clip())
+    p["clips"][0]["source"]["id"] = t["id"]
+
+    def sig():
+        with server.db() as conn:
+            return editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, p)
+
+    one = sig()
+    client.put("/api/clients/a/brand", json={"font": "Noto Sans TC", "color": "#112233"})
+    colour = sig()
+    assert colour != one
+    client.put("/api/clients/a/brand/logo", content=b"\x89PNG" + b"\0" * 16, headers={"content-type": "image/png"})
+    with_logo = sig()
+    assert with_logo != colour
+    p["showLogo"] = True
+    assert sig() != with_logo
+    # render_input links the logo into the media dir and names it for the renderer
+    with server.db() as conn:
+        reel, files = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"}, p, {
+            f"take:{t['id']}": src(f"take:{t['id']}", next(server.MEDIA_DIR.glob(f"ia/{t['id']}.*")))})
+    name = reel["brand"]["logoUrl"]
+    assert name.startswith("logo-") and files[name].is_file() and reel["brand"]["color"] == "#112233"
 
 
 def test_render_input_names_files_by_key_hash(setup, tmp_path):
@@ -511,3 +558,376 @@ def test_render_project_hides_probe_paths(client, setup, monkeypatch, tmp_path):
     with pytest.raises(cutting.CutError) as e:
         editing.render_project(server.db, server.MEDIA_DIR, "ia", tmp_path, tmp_path / "n.mp4", lambda *a: None)
     assert str(e.value) == editing.BAD_OUTPUT
+
+
+# --- voiceover files ---
+
+WEBM = {"content-type": "audio/webm;codecs=opus"}
+WORDS = [(0.0, 0.4, "hello"), (0.5, 0.9, "there")]
+
+
+@pytest.fixture
+def voice_env(client, setup, monkeypatch):
+    """Probing and converting are faked (they need real audio); whisper returns fixed words."""
+    info = {"duration": 3.0, "width": None, "height": None, "hasAudio": True}
+    monkeypatch.setattr(cutting, "probe", lambda path: dict(info))
+    monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
+    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: list(WORDS))
+    editing._probe_cache.clear()
+    return info
+
+
+def put_voice(client, body=b"audio-bytes", headers=WEBM, source="recording", idea="ia"):
+    return client.put(f"/api/ideas/{idea}/edit/voice?source={source}", content=body, headers=headers)
+
+
+def voiced(vid, **extra):
+    return {"id": vid, "source": "recording", "start": 0.0, "volume": 1.0, "edits": {}, **extra}
+
+
+def test_voice_upload_transcribes(client, voice_env):
+    r = put_voice(client)
+    assert r.status_code == 200
+    got = r.json()
+    assert got["duration"] == 3.0 and "wordsError" not in got
+    assert got["words"] == [{"text": "hello", "start": 0.0, "end": 0.4}, {"text": "there", "start": 0.5, "end": 0.9}]
+    assert got["url"] == f"/api/ideas/ia/edit/voice/{got['id']}/file"
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    assert sorted(p.name for p in folder.iterdir()) == [f"{got['id']}.webm", f"{got['id']}.words.json"]
+    f = client.get(got["url"])
+    assert f.status_code == 200 and f.content == b"audio-bytes" and f.headers["content-type"] == "audio/webm"
+
+
+def test_voice_upload_without_whisper_keeps_file(client, voice_env, monkeypatch):
+    def no_whisper(wav, work):
+        raise cutting.CutError(cutting.NO_WHISPER)
+    monkeypatch.setattr(cutting, "transcribe_words", no_whisper)
+    got = put_voice(client, source="upload", headers={"content-type": "audio/mpeg"}).json()
+    assert got["words"] is None and got["wordsError"] == cutting.NO_WHISPER
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    assert [p.name for p in folder.iterdir()] == [f"{got['id']}.mp3"]  # the file stays, no words file
+    assert client.get(got["url"]).status_code == 200
+
+
+def test_transcribe_voice_without_whisper_installed(tmp_path, monkeypatch):
+    import analyze
+    monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
+    monkeypatch.setattr(analyze, "WHISPER", str(tmp_path / "missing-whisper"))
+    with pytest.raises(cutting.CutError) as e:
+        editing.transcribe_voice(tmp_path / "a.mp3", tmp_path)
+    assert str(e.value) == cutting.NO_WHISPER
+
+
+def test_voice_upload_rejects_non_audio_and_long_files(client, voice_env, monkeypatch):
+    assert put_voice(client, headers={"content-type": "video/mp4"}).status_code == 415
+    assert put_voice(client, headers={"content-type": "text/plain"}).status_code == 415
+    assert put_voice(client, source="other").status_code == 422
+    voice_env["duration"] = 120.5
+    r = put_voice(client)
+    assert r.status_code == 422 and "120" in r.json()["error"]
+    voice_env["duration"], voice_env["hasAudio"] = 3.0, False
+    assert put_voice(client).status_code == 415  # no audio track
+    voice_env["hasAudio"] = True
+
+    def unreadable(path):
+        raise cutting.CutError("bad")
+    monkeypatch.setattr(cutting, "probe", unreadable)
+    assert put_voice(client).status_code == 415  # the right content type, but not audio
+    monkeypatch.setattr(editing, "MAX_VOICE_BYTES", 5)
+    assert put_voice(client).status_code == 413
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    assert list(folder.iterdir()) == []  # nothing left behind, not even a part file
+
+
+def test_voice_upload_needs_an_approved_plan(client, voice_env):
+    assert put_voice(client, idea="iw").status_code == 409
+
+
+def test_voice_delete_removes_both_files(client, voice_env):
+    got = put_voice(client).json()
+    assert client.delete(f"/api/ideas/ia/edit/voice/{got['id']}").status_code == 200
+    assert list((server.MEDIA_DIR / "ia" / "edit" / "voice").iterdir()) == []
+    assert client.get(got["url"]).status_code == 404
+    assert client.delete(f"/api/ideas/ia/edit/voice/{got['id']}").status_code == 404
+
+
+@pytest.mark.parametrize("voice", [
+    {"source": "tts"}, {"id": "x", "source": "mic"}, {"id": "x", "source": "tts", "start": -1},
+    {"id": "x", "source": "tts", "start": 0, "volume": 3}, {"id": "x", "source": "tts", "start": 0, "volume": 1, "edits": {"0": 5}},
+], ids=["no-id", "bad-source", "negative-start", "volume-3", "edit-not-text"])
+def test_check_project_rejects_bad_voiceover(voice):
+    assert editing.check_project({**project(), "voiceover": [voice]})
+
+
+def test_voiceover_id_must_exist_in_the_voice_folder(client, voice_env):
+    p = {**project(clip()), "voiceover": [voiced("ghost")]}
+    r = client.put("/api/ideas/ia/edit", json={"version": 0, "project": p})
+    assert r.status_code == 422 and "missing" in r.json()["error"]
+    vid = put_voice(client).json()["id"]
+    p["voiceover"] = [voiced(vid, start=1.5, edits={"0": "hi"})]
+    assert client.put("/api/ideas/ia/edit", json={"version": 0, "project": p}).status_code == 200
+    store_ideas(idea("ia"), idea("ib"), idea("iw", "waiting"))
+    other = client.put("/api/ideas/ib/edit", json={"version": 0, "project": p})  # another plan's folder
+    assert other.status_code == 422
+
+
+def test_signature_follows_voiceover_and_its_file(client, voice_env):
+    vid = put_voice(client).json()["id"]
+    p = {**project(), "voiceover": [voiced(vid)]}
+    path = next((server.MEDIA_DIR / "ia" / "edit" / "voice").glob(f"{vid}.webm"))
+    with server.db() as conn:
+        sig = lambda proj: editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, proj)  # noqa: E731
+        one = sig(p)
+        assert one != sig(project())  # adding a voiceover makes the cut stale
+        assert one != sig({**p, "voiceover": [voiced(vid, start=2.0)]})
+        assert one != sig({**p, "voiceover": [voiced(vid, volume=0.5)]})
+        os.utime(path, ns=(7, 7))
+        assert one != sig(p)  # a swapped file changes it
+
+
+def test_render_input_links_voice_files_with_words(client, voice_env):
+    vid = put_voice(client).json()["id"]
+    p = {**project(clip()), "voiceover": [voiced(vid)]}
+    with server.db() as conn:
+        reel, files = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"}, p, {
+            "take:t1": src("take:t1", server.MEDIA_DIR / "x.mp4")})
+    item = reel["voice"][0]
+    assert item["id"] == vid and item["url"] == f"voice-{vid}.webm" and item["words"][0]["text"] == "hello"
+    assert files[item["url"]].name == f"{vid}.webm"
+
+
+def test_render_project_refuses_a_deleted_voice_file(client, voice_env, monkeypatch, tmp_path):
+    fake_tools(monkeypatch, tmp_path)
+    t = seed_take(client)["id"]
+    vid = put_voice(client).json()["id"]
+    put(client, t, (0, 2))
+    doc = client.get("/api/ideas/ia/edit").json()
+    doc["project"]["voiceover"] = [voiced(vid)]
+    assert client.put("/api/ideas/ia/edit", json={"version": doc["version"], "project": doc["project"]}).status_code == 200
+    voice_file = editing.voice_file(server.MEDIA_DIR, "ia", vid)
+    voice_file.unlink()  # the DELETE route refuses while the project uses it
+    with pytest.raises(cutting.CutError, match="voiceover file was deleted"):
+        editing.render_project(server.db, server.MEDIA_DIR, "ia", tmp_path / "w", tmp_path / "o.mp4", lambda *a: None)
+
+
+# --- fix round 1 ---
+
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="needs ffmpeg")
+def test_live_webm_recording_without_duration_is_accepted(client, setup, monkeypatch, tmp_path):
+    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: [])
+    live = tmp_path / "live.webm"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=d=3", "-c:a", "libopus", "-live", "1",
+                    "-f", "webm", str(live)], check=True)
+    r = put_voice(client, body=live.read_bytes())
+    assert r.status_code == 200, r.text
+    got = r.json()
+    assert abs(got["duration"] - 3) < 0.3
+    stored = next((server.MEDIA_DIR / "ia" / "edit" / "voice").glob(f"{got['id']}.webm"))
+    assert cutting.probe(stored)["duration"] > 2.5  # the stored file has a duration for the renderer
+    assert [p.name for p in stored.parent.iterdir() if p.name.startswith(".")] == []
+
+
+def test_no_duration_after_remux_stays_415(client, voice_env):
+    voice_env["duration"] = 0
+    assert put_voice(client).status_code == 415
+
+
+def seed_voice_gen(client, duration=3.0):
+    folder = server.MEDIA_DIR / "ia" / "gen"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "v.mp3").write_bytes(b"ID3" + b"\0" * 20)
+    with server.db() as conn:
+        return generations.insert_done(conn, "ia", "editor-voice", "voice", "mock-voice", file="v.mp3")["id"]
+
+
+def test_from_gen_applies_the_upload_checks(client, voice_env):
+    gid = seed_voice_gen(client)
+    ok = client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}")
+    assert ok.status_code == 200 and ok.json()["words"][0]["text"] == "hello"
+    voice_env["duration"] = 121
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{seed_voice_gen(client)}").status_code == 422
+    voice_env["duration"], voice_env["hasAudio"] = 3.0, False
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{seed_voice_gen(client)}").status_code == 415
+    folder = server.MEDIA_DIR / "ia" / "edit" / "voice"
+    assert len([p for p in folder.iterdir()]) == 4  # only the one good import (audio, words, job note, claim); no part files
+
+
+def test_words_error_is_scrubbed_and_capped(client, voice_env, monkeypatch):
+    def boom(wav, work):
+        raise cutting.CutError("Finding the words failed: cannot open /Users/x/secret/a.wav " + "z" * 400)
+    monkeypatch.setattr(cutting, "transcribe_words", boom)
+    err = put_voice(client).json()["wordsError"]
+    assert "/Users" not in err and "<path>" in err and len(err) <= editing.MAX_ERROR_CHARS
+
+
+def test_delete_voice_in_use_is_409(client, voice_env):
+    vid = put_voice(client).json()["id"]
+    p = {**project(clip()), "voiceover": [voiced(vid)]}
+    assert client.put("/api/ideas/ia/edit", json={"version": 0, "project": p}).status_code == 200
+    r = client.delete(f"/api/ideas/ia/edit/voice/{vid}")
+    assert r.status_code == 409 and r.json()["error"] == editing.VOICE_IN_USE
+    assert client.get(f"/api/ideas/ia/edit/voice/{vid}/file").status_code == 200
+    assert client.put("/api/ideas/ia/edit", json={"version": 1, "project": project(clip())}).status_code == 200
+    assert client.delete(f"/api/ideas/ia/edit/voice/{vid}").status_code == 200
+
+
+def test_signature_follows_texts_music_and_the_music_file(client, setup, monkeypatch):
+    fake_probe(monkeypatch)
+    t = up(client).json()
+    p = project(clip())
+    p["clips"][0]["source"]["id"] = t["id"]
+    folder = server.MEDIA_DIR / "ia" / "cut"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "music-m1.mp3").write_bytes(b"one")
+    (folder / "music-m2.mp3").write_bytes(b"two")
+    with server.db() as conn:
+        conn.execute("INSERT INTO cut_music (idea_id, id, ext, name, size, licensed_at) VALUES ('ia','m1','mp3','n',3,1)")
+        sig = lambda proj: editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, proj)  # noqa: E731
+        base = sig(p)
+        assert base != sig({**p, "texts": [text()]})
+        assert base == sig({**p, "texts": []})
+        withm = {**p, "music": {"volume": 0.5}}
+        one = sig(withm)
+        assert one != base and one != sig({**p, "music": {"volume": 0.8}})
+        os.utime(folder / "music-m1.mp3", ns=(9, 9))
+        rewritten = sig(withm)
+        assert rewritten != one  # the same track rewritten
+        conn.execute("UPDATE cut_music SET id = 'm2'")
+        assert sig(withm) not in (one, rewritten)  # a swapped track
+        conn.execute("UPDATE cut_music SET id = 'm1'")
+        assert sig(p) == base  # music off: the file is ignored
+
+
+def test_render_input_passes_music_url_only_when_music_is_on(client, setup, tmp_path):
+    folder = server.MEDIA_DIR / "ia" / "cut"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "music-m1.mp3").write_bytes(b"x")
+    f = tmp_path / "a.mp4"
+    f.write_bytes(b"x")
+    s = {"take:t1": src("take:t1", f)}
+    with server.db() as conn:
+        conn.execute("INSERT INTO cut_music (idea_id, id, ext, name, size, licensed_at) VALUES ('ia','m1','mp3','n',1,1)")
+        off, _ = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"}, project(clip()), s)
+        on, files = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"},
+                                         {**project(clip()), "music": {"volume": 0.3}}, s)
+    assert off["musicUrl"] is None
+    assert on["musicUrl"] == "music-m1.mp3" and files["music-m1.mp3"].is_file()
+    assert on["project"]["music"] == {"volume": 0.3}
+
+
+# --- Task 11: captions read the shots' lines ---
+
+def with_lines(**lines):
+    from models import SavedIdea
+    shots = [{"id": sid, "time": "0-3s", "shot": f"shot {sid}", "line": line} for sid, line in lines.items()]
+    store_ideas(SavedIdea(id="ia", videoId="v-ia", clientId="a", status="approved", dueDate="2026-11-02", notes="",
+                          shots=shots), idea("iw", "waiting"))
+
+
+def test_signature_changes_when_shot_line_changes(client, setup):
+    p = {**project(clip()), "captions": {"enabled": True}}
+    p["clips"][0]["source"]["shotId"] = "s1"
+
+    def sig(proj=p):
+        with server.db() as conn:
+            return editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, proj)
+
+    with_lines(s1="three days")
+    one = sig()
+    assert one == sig()
+    with_lines(s1="four days")
+    two = sig()
+    assert one != two  # a changed line makes the export stale
+    with_lines(s1="four days", s2="more")
+    assert two != sig()
+    assert sig({**p, "captions": {"enabled": False}}) != sig()
+
+
+def test_render_input_fills_lines_from_the_shots(client, setup, tmp_path):
+    with_lines(s1="第一句", s2="  ", s3="third")
+    f = tmp_path / "a.mp4"
+    f.write_bytes(b"x")
+    with server.db() as conn:
+        reel, _ = editing.render_input(conn, server.MEDIA_DIR, {"id": "ia"}, project(clip()), {"take:t1": src("take:t1", f)})
+        assert reel["lines"] == {"s1": "第一句", "s3": "third"}
+        assert editing.render_input(None, tmp_path, {"id": "ia"}, project(clip()), {"take:t1": src("take:t1", f)})[0]["lines"] == {}
+
+
+def test_list_voice_returns_files_with_words(client, voice_env):
+    assert client.get("/api/ideas/ia/edit/voice").json() == {"voices": []}
+    vid = put_voice(client).json()["id"]
+    got = client.get("/api/ideas/ia/edit/voice").json()["voices"]
+    assert [v["id"] for v in got] == [vid] and got[0]["duration"] == 3.0 and got[0]["words"][0]["text"] == "hello"
+    assert client.get("/api/ideas/iw/edit/voice").status_code == 409
+
+
+# --- Task 11 fix round 1 ---
+
+def test_pending_voice_lists_done_jobs_not_yet_imported(client, voice_env):
+    assert client.get("/api/ideas/ia/edit/voice/pending").json() == {"pending": []}
+    gid = seed_voice_gen(client)
+    assert [g["id"] for g in client.get("/api/ideas/ia/edit/voice/pending").json()["pending"]] == [gid]
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 200
+    assert client.get("/api/ideas/ia/edit/voice/pending").json() == {"pending": []}
+    assert client.get("/api/ideas/iw/edit/voice/pending").status_code == 409
+
+
+def test_signature_ignores_shot_lines_while_captions_are_off(client, setup):
+    p = project(clip())
+    p["clips"][0]["source"]["shotId"] = "s1"
+
+    def sig():
+        with server.db() as conn:
+            return editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, p)
+
+    with_lines(s1="one")
+    a = sig()
+    with_lines(s1="two")
+    assert a == sig()  # captions are off: the line is not in the video
+
+
+def test_shot_lines_skips_a_bad_shot(client, setup):
+    from models import SavedIdea
+    good = {"id": "s2", "time": "0-3s", "shot": "x", "line": "ok"}
+    store_ideas(SavedIdea(id="ia", videoId="v-ia", clientId="a", status="approved", dueDate="2026-11-02", notes="",
+                          shots=[good]))
+    with server.db() as conn:
+        row = conn.execute("SELECT value FROM store WHERE key = 'ideas'").fetchone()
+        import json
+        ideas = json.loads(row[0])
+        ideas[0]["shots"] = [{"id": "bad id!", "time": "0", "shot": "x", "line": "no"}, good]
+        conn.execute("UPDATE store SET value = ? WHERE key = 'ideas'", (json.dumps(ideas),))
+    with server.db() as conn:
+        assert editing.shot_lines(conn, "ia") == {"s2": "ok"}
+
+
+# --- Final review fixes ---
+
+def test_second_import_of_a_job_is_refused(client, voice_env):
+    gid = seed_voice_gen(client)
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 200
+    again = client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}")
+    assert again.status_code == 409 and again.json()["error"] == editing.VOICE_ALREADY_ADDED
+    assert len(editing.voice_ids(server.MEDIA_DIR, "ia")) == 1
+
+
+def test_failed_import_leaves_the_job_pending(client, voice_env):
+    gid = seed_voice_gen(client)
+    voice_env["duration"] = 121
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 422
+    assert [g["id"] for g in client.get("/api/ideas/ia/edit/voice/pending").json()["pending"]] == [gid]
+    voice_env["duration"] = 3.0
+    assert client.post(f"/api/ideas/ia/edit/voice/from-gen/{gid}").status_code == 200
+    assert client.get("/api/ideas/ia/edit/voice/pending").json() == {"pending": []}
+
+
+def test_pending_lists_running_jobs_with_status(client, voice_env):
+    with server.db() as conn:
+        gid = generations.insert_done(conn, "ia", "editor-voice", "voice", "mock-voice", file="v.mp3")["id"]
+        conn.execute("UPDATE generations SET status = 'running', file = NULL WHERE id = ?", (gid,))
+    got = client.get("/api/ideas/ia/edit/voice/pending").json()["pending"]
+    assert [(g["id"], g["status"]) for g in got] == [(gid, "running")]

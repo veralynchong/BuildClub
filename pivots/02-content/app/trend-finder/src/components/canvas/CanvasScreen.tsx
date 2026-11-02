@@ -133,7 +133,7 @@ export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel 
 
   return (
     <ReactFlowProvider>
-      <CanvasBoard key={loadKey} ideaId={idea.id} shots={shots} onChange={onChange} readOnly={idea.status !== 'approved'} initial={state} back={back} onReload={reload} />
+      <CanvasBoard key={loadKey} ideaId={idea.id} clientId={idea.clientId} shots={shots} onChange={onChange} readOnly={idea.status !== 'approved'} initial={state} back={back} onReload={reload} />
     </ReactFlowProvider>
   )
 }
@@ -142,6 +142,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
 
 function CanvasBoard({
   ideaId,
+  clientId,
   shots,
   onChange,
   readOnly,
@@ -150,6 +151,7 @@ function CanvasBoard({
   onReload,
 }: {
   ideaId: string
+  clientId: string
   shots: Shot[]
   onChange: (patch: Partial<SavedIdea>) => void
   readOnly: boolean
@@ -776,6 +778,7 @@ function CanvasBoard({
         </div>
         <EditorDrawer
           ideaId={ideaId}
+          clientId={clientId}
           shots={shots}
           edit={edit}
           sources={sources}
