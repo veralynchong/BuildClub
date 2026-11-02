@@ -35,8 +35,10 @@ interface Props {
   search?: ReactNode;
   onSearch?: (text: string) => void;
   onFindIdeas: () => void;
-  // Film next: save a video to Plans, undo that, or open its plan to write the shots.
-  onSave: (videoId: string) => void;
+  // Videos this client saved to Research (Film next doesn't suggest their kind again).
+  researched?: Set<string>;
+  // Film next: save a video to Research, undo that, or make its plan and open it to write the shots.
+  onSave: (videoId: string, onSaved?: () => void) => void;
   onUndoSave: (videoId: string) => void;
   onPlanShots: (videoId: string) => void;
   onOpenPlan: (ideaId: string) => void;
@@ -76,6 +78,7 @@ export function ClientHome(p: Props) {
     pulse: p.pulse,
     ideas: p.ideas,
     videoById: p.videoById,
+    researched: p.researched,
   });
   const plannedKinds = p.live
     ? 0

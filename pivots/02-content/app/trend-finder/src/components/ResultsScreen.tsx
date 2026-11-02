@@ -60,12 +60,18 @@ interface Props {
   setSort: (s: Sort) => void
   formatFilter: string | null
   setFormatFilter: (id: string | null) => void
-  // Status of each video's plan for this client (shortlisted, sent, approved…).
+  // Status of each video's plan for this client (still planning, sent, approved…).
   ideaStatus: Map<string, IdeaStatus>
+  // Videos in this client's Research sheet.
+  inResearch: Set<string>
   onOpen: (id: string) => void
-  // Add to or take off the client's shortlist.
+  // Save to the client's Research, or take it off again (only while it has no plan).
   onToggleSave: (id: string) => void
-  onGoShortlist: () => void
+  onGoResearch: () => void
+  // Which of the client's videos a saved video was filed under ("Video 3 · Street taste test", or Unsorted).
+  savedIn: (id: string) => { short: string; full: string } | null
+  // Opens Research on that video, with the saved row in view.
+  onOpenInResearch: (id: string) => void
   // Formats this client can't film (e.g. needs a kitchen), so they never lead the page.
   blockedFormatIds: Set<string>
   clientName: string
@@ -85,8 +91,10 @@ export function ResultsScreen(p: Props) {
   const activeTrend = p.trends.find((tr) => tr.format.id === p.formatFilter)
   const [draft, setDraft] = useState(p.interp.text)
   const [helpOpen, setHelpOpen] = useState(false)
-  // Only show "Saved. You'll find it in Plans." right after the Save button is pressed here, not for ideas saved earlier.
+  // Only show "Saved. You'll find it in Research." right after the Save button is pressed here, not for ideas saved earlier.
   const [justSaved, setJustSaved] = useState<string | null>(null)
+  // The best card's Save pill pops when clicked, like the tiles'.
+  const [bestPop, setBestPop] = useState(false)
   useResultsShortcuts({
     onToggleSave: p.onToggleSave,
     onPlan: p.onPlan,
@@ -116,7 +124,9 @@ export function ResultsScreen(p: Props) {
     })
     .filter((x) => x.n > 0)
   const platformNames = platformsText(platformCounts.map((x) => x.pl))
-  const shortlisted = [...p.ideaStatus.values()].filter((s) => s === 'saved').length
+  // Saved to Research and not planned yet.
+  const shortlisted = [...p.inResearch].filter((id) => !p.ideaStatus.has(id)).length
+  const bestSaved = best ? p.inResearch.has(best.id) && !bestStatus : false
   const i = p.interp
   const queryLabel = i.source ? '' : i.text.trim()
 
@@ -292,7 +302,26 @@ export function ResultsScreen(p: Props) {
           )}
           {best && (
             <div className="best">
-              <BestVideo key={best.id} video={best} onOpen={() => p.onOpen(best.id)} />
+              {/* The same Save pill as the video tiles below: "+ Save", then "✓ Video 2". Gone once it has a plan. */}
+              <div className="best-cover">
+                <BestVideo key={best.id} video={best} onOpen={() => p.onOpen(best.id)} />
+                {!bestStatus && (
+                  <button
+                    className={`tile-save ${bestSaved ? 'tile-save-on' : ''} ${bestPop ? 'tile-save-pop' : ''}`}
+                    aria-pressed={bestSaved}
+                    aria-label={bestSaved ? t('find.tile.unsaveAria') : t('find.tile.saveIdea')}
+                    title={bestSaved ? t('find.tile.savedTitle') : t('find.tile.saveIdea')}
+                    onClick={() => {
+                      setBestPop(true)
+                      setJustSaved(bestSaved ? null : best.id)
+                      p.onToggleSave(best.id)
+                    }}
+                    onAnimationEnd={() => setBestPop(false)}
+                  >
+                    {bestSaved ? `✓ ${p.savedIn(best.id)?.short ?? ''}`.trim() || t('find.tile.savedShort') : t('find.tile.plusSave')}
+                  </button>
+                )}
+              </div>
               <div className="best-body">
                 {bestTrend && <p className="best-trend">{spreadSentence(bestTrend)}.</p>}
                 <strong className="best-hook">"{best.hook}"</strong>
@@ -307,32 +336,30 @@ export function ResultsScreen(p: Props) {
                 {/* Usual → this video, so the jump reads without decoding the × score. Keyed so it animates once per pick. */}
                 {hasScore(best) && <BestCompare key={best.id} video={best} />}
                 <div className="best-actions">
-                  {bestStatus === 'saved' ? (
-                    <button className="btn btn-primary" aria-pressed="true" onClick={() => { setJustSaved(null); p.onToggleSave(best.id) }}>
-                      {t('find.res.savedFor', { client: p.clientName })}
-                    </button>
-                  ) : bestStatus ? (
+                  {bestStatus ? (
                     <button className="btn btn-primary" onClick={() => p.onPlan(best.id)}>
-                      {bestStatus === 'waiting' ? t('find.planWaiting', { manager }) : bestStatus === 'approved' ? t('find.planApproved') : t('find.planSentBack')}
+                      {bestStatus === 'waiting'
+                        ? t('find.planWaiting', { manager })
+                        : bestStatus === 'approved'
+                          ? t('find.planApproved')
+                          : bestStatus === 'saved'
+                            ? t('find.planPlanning')
+                            : t('find.planSentBack')}
                     </button>
-                  ) : (
-                    <button className="btn btn-primary" onClick={() => { setJustSaved(best.id); p.onToggleSave(best.id) }}>
-                      {t('find.saveFor', { client: p.clientName })}
-                    </button>
-                  )}
+                  ) : null}
                   <button className="btn btn-ghost" onClick={() => p.onOpen(best.id)}>
                     {t('find.seeWhy')}
                   </button>
                 </div>
-                {bestStatus === 'saved' && justSaved === best.id && (
-                  <p className="saved-where small" role="status">
+                {/* Saved (or planned, which keeps its Research row): say which video it's filed under. */}
+                {(bestSaved || (!!bestStatus && p.savedIn(best.id) !== null)) && (
+                  <p className="saved-where small" role={justSaved === best.id ? 'status' : undefined}>
                     <span>
-                      {t('find.res.savedWhere1')}
-                      <strong>{t('find.res.savedWhere2')}</strong>
-                      {t('find.res.savedWhere3')}
+                      {t('find.res.savedTo')}
+                      <strong>{p.savedIn(best.id)?.full ?? t('find.res.savedWhere2')}</strong>
                     </span>
-                    <button className="link-btn" onClick={p.onGoShortlist}>
-                      {t('find.res.goPlans')}
+                    <button className="link-btn" onClick={() => p.onOpenInResearch(best.id)}>
+                      {t('find.res.openInResearch')}
                     </button>
                   </p>
                 )}
@@ -368,6 +395,9 @@ export function ResultsScreen(p: Props) {
                 onOpen={() => p.onOpen(v.id)}
                 onToggleSave={() => p.onToggleSave(v.id)}
                 status={p.ideaStatus.get(v.id)}
+                inResearch={p.inResearch.has(v.id)}
+                where={p.savedIn(v.id)}
+                onOpenInResearch={() => p.onOpenInResearch(v.id)}
                 cohort={p.cohorts.get(v.id)}
                 followersLoading={followersPending(v, filters)}
               />
@@ -381,8 +411,8 @@ export function ResultsScreen(p: Props) {
           <span>
             <strong>{shortlisted}</strong> {tp('find.res.trayLead', shortlisted, { client: p.clientName })}
           </span>
-          <button className="btn btn-primary btn-sm" onClick={p.onGoShortlist}>
-            {t('find.res.planShots')}
+          <button className="btn btn-primary btn-sm" onClick={p.onGoResearch}>
+            {t('find.res.openResearch')}
           </button>
         </div>
       )}

@@ -62,10 +62,11 @@ export function FilmNextCard(p: {
   picks: FilmPick[];
   // How many kinds of video were left out because they already have a plan.
   plannedKinds: number;
-  // Saves the video to the client's Plans (Still planning). Undo takes it off again.
-  onSave: (videoId: string) => void;
+  // Saves the video to the client's Research. Undo takes it off again.
+  // `onSaved` runs once it's saved (the app first asks which video it's for; Cancel never calls it).
+  onSave: (videoId: string, onSaved?: () => void) => void;
   onUndo: (videoId: string) => void;
-  // Opens the saved idea's plan so the shots can be written.
+  // Makes the saved video's plan (Still planning) and opens it so the shots can be written.
   onPlanShots: (videoId: string) => void;
   onOpenPlans: () => void;
   empty: { text: string; fix: string; onFix: () => void; busy?: boolean };
@@ -76,8 +77,7 @@ export function FilmNextCard(p: {
   );
   const [top, ...rest] = p.picks.filter((pk) => pk.video.id !== saved?.videoId);
   const save = (pick: FilmPick) => {
-    p.onSave(pick.video.id);
-    setSaved({ videoId: pick.video.id, name: pick.name });
+    p.onSave(pick.video.id, () => setSaved({ videoId: pick.video.id, name: pick.name }));
   };
   const confirm = saved && (
     <div className="ch-saved" role="status">

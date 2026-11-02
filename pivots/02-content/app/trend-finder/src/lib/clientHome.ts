@@ -79,16 +79,19 @@ export function filmNext(x: {
   pulse: Pulse | undefined
   ideas: SavedIdea[]
   videoById: Map<string, Video>
+  // Videos this client already saved to Research: their kind isn't suggested again (it's one click away there).
+  researched?: Set<string>
 }): FilmPick[] {
   const { client } = x
-  const plannedVideos = new Set(mineOf(x.ideas, client.id).map((i) => i.videoId))
+  const researched = x.researched ?? new Set<string>()
+  const plannedVideos = new Set([...mineOf(x.ideas, client.id).map((i) => i.videoId), ...researched])
   const byScore = (a: Video, b: Video) => outlierScore(b) - outlierScore(a)
 
   if (x.live) {
     if (!x.pulse) return []
     return [...x.pulse.patterns]
       .sort((a, b) => b.accounts - a.accounts)
-      // A sound or hashtag with any of its videos already planned for this client counts as planned.
+      // A sound or hashtag with any of its videos already planned (or saved to Research) for this client counts as planned.
       .filter((p) => !p.videoIds.some((id) => plannedVideos.has(id)))
       .map((p): FilmPick | null => {
         const vids = p.videoIds.map((id) => x.videoById.get(id)).filter((v): v is Video => !!v).sort(byScore)
@@ -108,6 +111,10 @@ export function filmNext(x: {
 
   if (!sampleFitsClient(client)) return []
   const planned = plannedFormatIds(x.ideas, client.id, x.videoById)
+  for (const id of researched) {
+    const v = x.videoById.get(id)
+    if (v && !v.live) planned.add(v.formatId)
+  }
   const audience = parseQuery(client.audience, sampleFormats).audience
   return sampleFormats
     .filter((f) => !blocked(f, client) && !planned.has(f.id))

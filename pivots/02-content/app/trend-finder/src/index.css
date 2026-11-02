@@ -24,6 +24,7 @@
 @import './styles/production-board.css'; /* Plans board as the production hub: six steps, StepProgress, FlagBadge */
 @import './styles/grading.css'; /* Make the video: colour look, subtitles, cue editor */
 @import './styles/publish.css'; /* Publishing: Post the video panel, results entry, topic and board result lines */
+@import './styles/research.css'; /* Research tab: the reference-video sheet, on the theme-remake tokens */
 @import './styles/storyboard.css'; /* script and storyboard on the plan page: shot cards, script table, frames, swatches */
 @import './styles/canvas.css'; /* canvas screen: React Flow board and the editor drawer */
 @import './styles/shots.css'; /* camera tags and selects on shots, and the From script panel */

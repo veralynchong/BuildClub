@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { AgencySettings, Platform, SavedIdea } from './types'
 import { sampleIdeas } from './data/sample'
+import type { ResearchEntry, ResearchSlot } from './lib/research'
+import { sampleResearch, sampleResearchSlots } from './data/sampleResearch'
 
 export type Sort = 'outlier' | 'views' | 'ratio' | 'newest' | 'fastest'
 
@@ -42,6 +44,12 @@ export function useStored<T>(key: string, initial: T) {
 }
 
 export const useSavedIdeas = () => useStored<SavedIdea[]>('trend-finder.ideas.v6', sampleIdeas)
+
+// The Research tab's rows, every client's (front end only for now: this browser, not the API).
+export const useResearch = () => useStored<ResearchEntry[]>('trend-finder.research.v4', sampleResearch)
+
+// The Research tab's content slots (the videos each client is paying for), every client's.
+export const useResearchSlots = () => useStored<ResearchSlot[]>('trend-finder.research-slots.v2', sampleResearchSlots)
 
 // 'all' is the agency view across every client.
 export type Workspace = 'all' | string
