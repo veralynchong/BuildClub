@@ -106,7 +106,6 @@ MEDIAN_DAYS = 30  # an account's usual views are reused this long before they ar
 # counted before it runs; cached searches and finished breakdowns are free and never counted.
 DAILY_APIFY_USD = float(os.environ.get("DAILY_APIFY_USD", 2.00))
 DAILY_CLAUDE_USD = float(os.environ.get("DAILY_CLAUDE_USD", 1.00))
-DAILY_IMAGE_USD = float(os.environ.get("DAILY_IMAGE_USD", 0.50))  # storyboard frames from gpt-image
 DAILY_GEN_IMAGE_USD = float(os.environ.get("DAILY_GEN_IMAGE_USD", 0.50))  # canvas image generations
 DAILY_GEN_VIDEO_USD = float(os.environ.get("DAILY_GEN_VIDEO_USD", 1.00))  # canvas video generations
 # Channel summaries: Jev labelling in US$; ScrapeCreators (Instagram only) in credits, 1 per 12 reels.
@@ -763,6 +762,7 @@ def db() -> sqlite3.Connection:
     auth.migrate(conn)
     publishing.migrate(conn)
     generations.migrate(conn)
+    takes.migrate(conn)
     return conn
 
 
@@ -900,12 +900,17 @@ app.include_router(publishing.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(takes.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(production.make_router(db))
 def storyboard_budget(wallet: str, usd: float):
-    """None when the paid call may go ahead, else the 429 to return."""
-    cap, env = (DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD") if wallet == "claude" else (DAILY_IMAGE_USD, "DAILY_IMAGE_USD")
-    return None if spend(wallet, usd, cap) else over_budget("Claude" if wallet == "claude" else "Image", cap, env)
+    """None when the paid call may go ahead, else the 429 to return. Frame images use the generation wallet."""
+    if wallet == "image":
+        return gen_budget("image", usd)
+    return None if spend(wallet, usd, DAILY_CLAUDE_USD) else over_budget("Claude", DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD")
 
 
-app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget))
+def storyboard_refund(wallet: str, usd: float) -> None:
+    gen_refund("image", usd)
+
+
+app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget, storyboard_refund))
 app.include_router(shotlist.make_router(storyboard_budget))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
 GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_video", "DAILY_GEN_VIDEO_USD")}

@@ -4,21 +4,23 @@ through PUT /api/ideas (which keeps the ETag and approval rules in one place).
 
 Script: Claude when ANTHROPIC_API_KEY is set (and REMAKE_DEMO is not 1), otherwise deterministic sample
 lines. A shot with edited=true is never overwritten unless the request says force.
-Frames: a free SVG placeholder by default; gpt-image only with FRAME_IMAGE_PROVIDER=openai and
-OPENAI_API_KEY, both in the environment. Files live in <media>/<ideaId>/frames/ (git-ignored)."""
+Frames: a free SVG placeholder by default; with FRAME_IMAGE_MODEL set to an available image model of the
+model list (gen_models.json) the frame is made by that model's adapter, paid from the gen_image wallet,
+and waited for inside the request. Files live in <media>/<ideaId>/frames/ (git-ignored)."""
 
-import base64
 import json
 import os
 import re
 import secrets
 import textwrap
-import urllib.request
+import time
 from pathlib import Path
 from typing import Callable, Optional
 from xml.sax.saxutils import escape
 
 import assist
+import gen_providers
+import generations
 from fastapi import APIRouter
 from fastapi.responses import FileResponse, JSONResponse
 from models import Shot
@@ -26,13 +28,15 @@ from pydantic import BaseModel
 
 SCRIPT_USD = 0.03  # one Claude call that writes every line of a plan
 ONE_SHOT_USD = 0.01  # one Claude call for a single shot
-IMAGE_USD = 0.02  # one gpt-image-1 call, low quality, 1024x1536 (about 0.016)
-OPENAI_URL = "https://api.openai.com/v1/images/generations"
-IMAGE_MODEL = "gpt-image-1"
-FRAME_NAME = re.compile(r"^[0-9]{1,3}-[A-Za-z0-9_-]{6,40}\.(svg|png)$")
-PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+FRAME_TIMEOUT_S = 120  # how long a frame request waits for the model
+FRAME_POLL_S = 1.0
+FRAME_NAME = re.compile(r"^[0-9]{1,3}-[A-Za-z0-9_-]{6,40}\.(svg|png|jpg|webp)$")
+FRAME_TYPES = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}
+FRAME_FAILED = "Could not make the image. Try again."
+FRAME_LOST = "The image didn't come back. The model may have charged. Check before trying again."
 
 Budget = Callable[[str, float], Optional[JSONResponse]]  # None when the spend is allowed
+Refund = Callable[[str, float], None]
 
 
 class ScriptRequest(BaseModel):
@@ -151,19 +155,49 @@ def placeholder_svg(purpose: str, line: str, shot: str, index: int) -> str:
     )
 
 
-def image_provider() -> str:
-    on = os.environ.get("FRAME_IMAGE_PROVIDER", "").strip().lower() == "openai"
-    return "openai" if on and os.environ.get("OPENAI_API_KEY") else "fake"
+def frame_model() -> Optional[dict]:
+    """The model FRAME_IMAGE_MODEL names, when it is an image model whose provider is set up; else None (free SVG)."""
+    wanted = os.environ.get("FRAME_IMAGE_MODEL", "").strip()
+    found = next((m for m in generations.load_models() if m["id"] == wanted), None) if wanted else None
+    if found is None or found.get("kind") != "image" or found.get("retired") or not generations.is_available(found):
+        return None
+    return found
 
 
-def openai_image(prompt: str, key: str) -> str:
-    """One gpt-image call; returns the base64 PNG. Plain HTTP, no SDK."""
-    body = json.dumps({"model": IMAGE_MODEL, "prompt": prompt, "n": 1, "quality": "low",
-                       "size": os.environ.get("FRAME_IMAGE_SIZE", "1024x1536")}).encode()
-    req = urllib.request.Request(OPENAI_URL, data=body, method="POST",
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        return json.loads(resp.read())["data"][0]["b64_json"]
+def model_frame(model: dict, prompt: str, usd: float, budget: Budget, refund: Refund):
+    """Make one frame with `model` and wait for it. (bytes, ext) on success, else the error response.
+    Money: nothing sent yet or the provider says it failed -> refund; once a request may have been sent and we
+    lose track of it (or the file is unusable) the provider may have charged, so no refund."""
+    over = budget("image", usd)
+    if over is not None:
+        return over
+    phase = "prepare"  # prepare: nothing sent; submit: the request is going out; poll: it was accepted
+    try:
+        adapter = gen_providers.adapter_for(model["provider"])
+        job = gen_providers.Job(model, prompt, None, [], None)
+        phase = "submit"
+        request_id = adapter.submit(job)
+        phase = "poll"
+        deadline = time.monotonic() + FRAME_TIMEOUT_S
+        while True:
+            result = adapter.poll(job, request_id)
+            if result.state == "done":
+                return result.data, result.ext
+            if result.state == "failed":
+                refund("image", usd)
+                return error(502, FRAME_FAILED)
+            if time.monotonic() >= deadline:
+                return error(502, FRAME_LOST)
+            time.sleep(FRAME_POLL_S)
+    except (gen_providers.ResultLost, gen_providers.FileUnusable) as e:
+        print(f"[frame] {model['id']} result not usable: {e}", flush=True)
+        return error(502, FRAME_LOST)
+    except Exception as e:  # ProviderError included: only an error before the request was accepted refunds
+        print(f"[frame] {model['id']} failed in {phase}: {type(e).__name__}: {e}", flush=True)
+        if phase == "poll":
+            return error(502, FRAME_LOST)
+        refund("image", usd)
+        return error(502, FRAME_FAILED)
 
 
 def camera_words(shot: Shot) -> str:
@@ -180,7 +214,8 @@ def frame_prompt(shot: Shot, purpose: str, line: str) -> str:
 
 # ---- routes ------------------------------------------------------------------------------------
 
-def make_router(load, media_dir: Callable[[], Path], budget: Budget) -> APIRouter:
+def make_router(load, media_dir: Callable[[], Path], budget: Budget,
+                refund: Refund = lambda wallet, usd: None) -> APIRouter:
     router = APIRouter()
 
     def find(idea_id: str) -> Optional[dict]:
@@ -259,25 +294,27 @@ def make_router(load, media_dir: Callable[[], Path], budget: Budget) -> APIRoute
         s = shots[shot]
         purpose = (body.purpose if body and body.purpose in COLORS else None) or s.purpose or purpose_for(shot, len(shots))
         line = (body.line if body and body.line is not None else s.line) or ""
-        provider = image_provider()
         token = secrets.token_urlsafe(9)
-        if provider == "openai":
-            over = budget("image", IMAGE_USD)
-            if over is not None:
-                return over
-            try:
-                data = base64.b64decode(openai_image(frame_prompt(s, purpose, line), os.environ["OPENAI_API_KEY"]))
-                if not data.startswith(PNG_MAGIC):
-                    raise ValueError("the answer is not a PNG")
-            except Exception as e:
-                return error(502, "Could not make the image. Try again.", type(e).__name__)
-            ext = "png"
+        model = frame_model()
+        if model is not None:
+            made = model_frame(model, frame_prompt(s, purpose, line), generations.estimate_usd(model, None), budget, refund)
+            if isinstance(made, JSONResponse):
+                return made
+            data, ext = made
         else:
             data, ext = placeholder_svg(purpose, line, s.shot, shot).encode(), "svg"
         name = f"{shot}-{token}.{ext}"
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / name).write_bytes(data)
-        return {"index": shot, "provider": provider, "frameImage": f"/api/ideas/{idea_id}/frames/{name}"}
+        part = folder / f".{name}.part"
+        try:
+            part.write_bytes(data)
+            os.replace(part, folder / name)
+        except OSError as e:  # the model answered; only our disk failed, so the money stays spent
+            print(f"[frame] could not save {name}: {e}", flush=True)
+            return error(502, FRAME_LOST if model is not None else FRAME_FAILED)
+        finally:
+            part.unlink(missing_ok=True)
+        return {"index": shot, "provider": model["id"] if model else "fake", "frameImage": f"/api/ideas/{idea_id}/frames/{name}"}
 
     @router.get("/api/ideas/{idea_id}/frames/{name}")
     def get_frame(idea_id: str, name: str):
@@ -287,8 +324,7 @@ def make_router(load, media_dir: Callable[[], Path], budget: Budget) -> APIRoute
         path = folder / name
         if not path.is_file():
             return error(404, "That image doesn't exist.")
-        kind = "image/svg+xml" if name.endswith(".svg") else "image/png"
-        return FileResponse(path, media_type=kind,
+        return FileResponse(path, media_type=FRAME_TYPES[name.rsplit(".", 1)[1]],
                             headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
 
     return router

@@ -40,6 +40,14 @@ test('takesByShot groups by shot and drops out-of-range ones', () => {
   )
 })
 
+test('takesByShot leaves out takes whose shot was removed (shot null)', () => {
+  const t = (id, shot) => ({ id, shot, shotId: shot === null ? 'gone' : `s${shot}` })
+  assert.deepEqual(
+    takesByShot([t('a', 0), t('b', null)], 2).map((g) => g.map((x) => x.id)),
+    [['a'], []],
+  )
+})
+
 test('formatSize', () => {
   assert.equal(formatSize(0), '0 B')
   assert.equal(formatSize(1536), '1.5 KB')

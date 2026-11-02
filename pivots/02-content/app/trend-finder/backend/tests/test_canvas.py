@@ -25,7 +25,7 @@ def plan(id="ia", status="approved", ids=("s1", "s2"), frame=None):
 
 
 def test_first_build_rows():
-    doc, imports = canvas.reconcile(None, shots("s1", "s2", "s3"), {1}, [])
+    doc, imports = canvas.reconcile(None, shots("s1", "s2", "s3"), {"s2"}, [])
     shot_nodes = [n for n in doc["nodes"] if n["type"] == "shot"]
     assert [n["position"]["y"] for n in shot_nodes] == [0, 400, 800]
     assert [n["id"] for n in doc["nodes"] if n["type"] == "storyboard"] == ["n_sb_s1", "n_sb_s2", "n_sb_s3"]
@@ -72,9 +72,9 @@ def test_frame_image_imported_once():
 
 def test_reconcile_is_idempotent():
     s = shots("s1", "s2", frame={"s1": "/api/frame/a.svg"})
-    doc1, imports = canvas.reconcile(None, s, {0}, [])
+    doc1, imports = canvas.reconcile(None, s, {"s1"}, [])
     gens = [{"nodeId": n, "url": u} for n, u in imports]
-    doc2, imports2 = canvas.reconcile(doc1, s, {0}, gens)
+    doc2, imports2 = canvas.reconcile(doc1, s, {"s1"}, gens)
     assert doc2 == doc1 and imports2 == []
 
 
@@ -196,3 +196,13 @@ def test_long_shot_id_reconciles_and_saves(client):
     r = client.get("/api/ideas/ia/canvas").json()
     assert any(len(e["id"]) > 80 for e in r["doc"]["edges"])
     assert put(client, r["version"], r["doc"]).json() == {"version": r["version"] + 1}
+
+
+def test_canvas_footage_follows_shot_id(client):
+    from test_takes import with_shots
+    store_ideas(with_shots("ia", "s1", "s2"))
+    up(client, shot=1)  # a take for s2
+    store_ideas(with_shots("ia", "s0", "s1", "s2"))  # a shot is added in front; s2 is now at index 2
+    r = client.get("/api/ideas/ia/canvas").json()
+    assert [n["shotId"] for n in r["doc"]["nodes"] if n["type"] == "footage"] == ["s2"]
+    assert r["takes"][0]["shotId"] == "s2" and r["takes"][0]["shot"] == 2
