@@ -203,9 +203,9 @@ test('sendCutForReview posts with no body and returns the state; failures use th
   } finally {
     f.restore()
   }
-  const g = fakeFetch([{ status: 409, body: { error: 'Make the video first.' } }])
+  const g = fakeFetch([{ status: 409, body: { error: 'Make the video in the editor first.' } }])
   try {
-    await assert.rejects(sendCutForReview('i'), /Make the video first\./)
+    await assert.rejects(sendCutForReview('i'), /Make the video in the editor first\./)
   } finally {
     g.restore()
   }

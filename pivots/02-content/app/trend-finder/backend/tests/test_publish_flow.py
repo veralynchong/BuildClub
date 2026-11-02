@@ -180,3 +180,15 @@ def test_approved_legacy_auto_cut_can_be_published(client, setup):
     client.post(f"/api/ideas/ia/takes/{other['id']}/choose")
     with server.db() as conn:
         assert publishing.approved_cut(conn, server.load, server.MEDIA_DIR.resolve(), "ia") is None
+
+
+def test_legacy_auto_cut_approved_through_the_review_link_can_be_published(client, setup):
+    first = with_take(client)
+    legacy_cut(take_ids=[first["id"]])
+    token = client.post("/api/share", json={"clientId": "a"}).json()["token"]
+    assert client.post("/api/ideas/ia/cut/review").status_code == 200
+    version = client.get(f"/api/review/{token}").json()["cuts"][0]["cut"]["version"]
+    r = client.post(f"/api/review/{token}/cuts/ia/decide", json={"decision": "approved", "version": version})
+    assert r.status_code == 200
+    r = publish(client, "ia")
+    assert r.status_code == 200 and all(p["status"] == "published" for p in r.json()["posts"])
