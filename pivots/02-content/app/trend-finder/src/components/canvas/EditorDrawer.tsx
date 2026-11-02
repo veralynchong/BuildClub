@@ -36,7 +36,10 @@ export function EditorDrawer({ open, width, onWidth }: Props) {
           if (drag.current) onWidth(drag.current.last, true)
           drag.current = null
         }}
-        onPointerCancel={() => (drag.current = null)}
+        onPointerCancel={() => {
+          if (drag.current) onWidth(drag.current.last, true)
+          drag.current = null
+        }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowLeft') onWidth(width + STEP, true)
           else if (e.key === 'ArrowRight') onWidth(width - STEP, true)

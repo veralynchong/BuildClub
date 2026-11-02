@@ -1,10 +1,12 @@
+import { useRef } from 'react'
 import { t } from '../../../lib/i18n'
 import { useCanvas } from './ctx'
 import { PortLabels, Ports } from './Ports'
 import type { CvNodeProps } from './types'
 
 export function PromptNode({ id, data: { node } }: CvNodeProps) {
-  const { readOnly, updateData } = useCanvas()
+  const focused = useRef('')
+  const { readOnly, updateData, edited } = useCanvas()
   return (
     <div className="cv-node cv-prompt">
       <div className="cv-node-title">{t('canvas.node.prompt')}</div>
@@ -16,6 +18,8 @@ export function PromptNode({ id, data: { node } }: CvNodeProps) {
         readOnly={readOnly}
         rows={3}
         onChange={(e) => updateData(id, { text: e.target.value })}
+        onFocus={() => (focused.current = node.data.text ?? '')}
+        onBlur={() => (node.data.text ?? '') !== focused.current && edited(id)}
       />
       <PortLabels node={node} />
       <Ports node={node} />

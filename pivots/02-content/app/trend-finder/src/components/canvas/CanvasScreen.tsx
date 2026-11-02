@@ -14,12 +14,13 @@ import {
 import '@xyflow/react/dist/style.css'
 import type { SavedIdea, Shot } from '../../types'
 import { t, type Key, type Vars } from '../../lib/i18n'
-import { getCanvas, NoShots, putCanvas, StaleCanvas } from '../../lib/canvas/api'
+import { getCanvas, getModels, NoShots, pollGen, putCanvas, StaleCanvas, startGen } from '../../lib/canvas/api'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '../../lib/canvas/drawer'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import { addNode } from '../../lib/canvas/graph'
+import { addNode, freeSpot, genRequest, missingInput, pendingGen, primaryFrames, markStale, versionsOf } from '../../lib/canvas/graph'
+import { mergeFrame } from '../../lib/storyboard'
 import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
-import type { CanvasDoc, CanvasState, NodeData, NodeKind } from '../../lib/canvas/types'
+import type { CanvasDoc, CanvasState, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
 import { ErrorText } from '../ErrorText'
 import { AddNodeMenu } from './AddNodeMenu'
 import { EditorDrawer } from './EditorDrawer'
@@ -32,7 +33,7 @@ const MAX_RETRIES = 5
 const NOTE_MS = 4000 // how long the reason for a blocked line stays up
 const ADD_KINDS: NodeKind[] = ['prompt', 'storyboard', 'video', 'upload']
 const MEDIA_COLOR = { text: 'var(--violet)', image: 'var(--blue)', video: 'var(--mustard)' } as const
-const NO_MODELS: never[] = [] // the model list arrives with generation; until then the model rule can't fire
+const POLL_RETRY_MS = 2000 // wait after a poll request fails before asking again
 
 interface Props {
   idea: SavedIdea
@@ -53,7 +54,7 @@ function useViewportWidth(): number {
 }
 
 // Loads the canvas (waiting a little for a just-edited shot list to reach the server), then shows the board.
-export default function CanvasScreen({ idea, shots, onBack, backLabel }: Props) {
+export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel }: Props) {
   const [state, setState] = useState<CanvasState | null>(null)
   const [loadKey, setLoadKey] = useState(0) // bumps on Reload so the board starts over from the server's copy
   const [waiting, setWaiting] = useState(false)
@@ -127,7 +128,7 @@ export default function CanvasScreen({ idea, shots, onBack, backLabel }: Props) 
 
   return (
     <ReactFlowProvider>
-      <CanvasBoard key={loadKey} ideaId={idea.id} shots={shots} readOnly={idea.status !== 'approved'} initial={state} back={back} onReload={reload} />
+      <CanvasBoard key={loadKey} ideaId={idea.id} shots={shots} onChange={onChange} readOnly={idea.status !== 'approved'} initial={state} back={back} onReload={reload} />
     </ReactFlowProvider>
   )
 }
@@ -137,6 +138,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
 function CanvasBoard({
   ideaId,
   shots,
+  onChange,
   readOnly,
   initial,
   back,
@@ -144,6 +146,7 @@ function CanvasBoard({
 }: {
   ideaId: string
   shots: Shot[]
+  onChange: (patch: Partial<SavedIdea>) => void
   readOnly: boolean
   initial: CanvasState
   back: React.ReactNode
@@ -223,7 +226,7 @@ function CanvasBoard({
 
   // ---- lines and new nodes ----
   const [dragFrom, setDragFrom] = useState<string | null>(null) // the node a line is being dragged from
-  const [note, setNote] = useState<{ key: Key; vars?: Vars } | null>(null)
+  const [note, setNote] = useState<{ key?: Key; vars?: Vars; text?: string } | null>(null)
   const noteTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(noteTimer.current), [])
   const showNote = useCallback((key: Key, vars?: Vars) => {
@@ -232,7 +235,127 @@ function CanvasBoard({
     noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
   }, [])
 
-  const check = (c: { source: string; target: string; targetHandle: string }) => canConnect(latest.current.doc, c, NO_MODELS)
+  const showText = useCallback((text: string) => {
+    setNote({ text })
+    clearTimeout(noteTimer.current)
+    noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
+  }, [])
+
+  // ---- generation ----
+  const [models, setModels] = useState<GenModel[]>([])
+  const [gens, setGens] = useState<Generation[]>(initial.generations)
+  const gensRef = useRef(gens)
+  const polls = useRef(new Map<string, AbortController>())
+
+  useEffect(() => {
+    let live = true
+    getModels().then(
+      (m) => live && setModels(m),
+      (e) => live && showText(e instanceof Error ? e.message : t('canvas.err.models')),
+    )
+    return () => {
+      live = false
+    }
+  }, [showText])
+
+  const upsertGen = useCallback((g: Generation) => {
+    gensRef.current = [...gensRef.current.filter((x) => x.id !== g.id), g]
+    setGens(gensRef.current)
+  }, [])
+
+  // Marks the generated nodes after nodeId (and nodeId itself when its own input changed) as out of date.
+  const markFrom = useCallback(
+    (nodeId: string, self: boolean) => {
+      const d = latest.current.doc
+      const ids = new Set(markStale(d, nodeId, gensRef.current).nodes.filter((n) => n.data.stale).map((n) => n.id))
+      const me = d.nodes.find((n) => n.id === nodeId)
+      if (self && me && (me.type === 'storyboard' || me.type === 'video') && versionsOf(nodeId, gensRef.current).some((g) => g.status === 'done')) ids.add(nodeId)
+      setNodes((ns) =>
+        ns.map((n) => (ids.has(n.id) && !n.data.node.data.stale ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, stale: true } } } } : n)),
+      )
+    },
+    [setNodes],
+  )
+
+  // Follows one generation until it ends. A finished one becomes the node's chosen version and dates what comes after.
+  const track = useCallback(
+    (g: Generation) => {
+      if (polls.current.has(g.id)) return
+      const ac = new AbortController()
+      polls.current.set(g.id, ac)
+      void (async () => {
+        while (!ac.signal.aborted) {
+          try {
+            const end = await pollGen(ideaId, g.id, upsertGen, { signal: ac.signal })
+            if (end?.status === 'done') {
+              setNodes((ns) =>
+                ns.map((n) => (n.id === end.nodeId ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, selected: end.id, stale: false } } } } : n)),
+              )
+              markFrom(end.nodeId, false)
+            }
+            return
+          } catch {
+            await new Promise((r) => setTimeout(r, POLL_RETRY_MS))
+          }
+        }
+      })().finally(() => {
+        if (polls.current.get(g.id) === ac) polls.current.delete(g.id)
+      })
+    },
+    [ideaId, upsertGen, setNodes, markFrom],
+  )
+
+  // Coming back to a canvas with jobs still running: keep following them. Leaving stops the polling (the server keeps working).
+  useEffect(() => {
+    const open = polls.current
+    for (const n of initial.doc.nodes) {
+      const g = pendingGen(n.id, gensRef.current)
+      if (g) track(g)
+    }
+    return () => {
+      open.forEach((ac) => ac.abort())
+      open.clear()
+    }
+  }, [initial, track])
+
+  const onGenerate = async (nodeId: string) => {
+    const d = latest.current.doc
+    const node = d.nodes.find((n) => n.id === nodeId)
+    const kind = node?.type === 'video' ? 'video' : 'image'
+    const model = models.find((m) => m.id === node?.data.model && m.kind === kind) ?? models.find((m) => m.kind === kind)
+    if (!node || !model || readOnly || pendingGen(nodeId, gensRef.current)) return
+    if (missingInput(d, nodeId, model, shots, gensRef.current)) return
+    const req = genRequest(d, nodeId, shots, gensRef.current)
+    if (kind === 'video' && req.duration === undefined && model.durations) req.duration = model.durations[0]
+    updateData(nodeId, { selected: null, model: model.id })
+    try {
+      const g = await startGen(ideaId, { nodeId, model: model.id, ...req })
+      upsertGen(g)
+      track(g)
+    } catch (e) {
+      showText(e instanceof Error ? e.message : t('canvas.err.start'))
+    }
+  }
+
+  const onSelectVersion = (nodeId: string, genId: string) => {
+    const node = latest.current.doc.nodes.find((n) => n.id === nodeId)
+    if (!node || node.data.selected === genId) return
+    updateData(nodeId, { selected: genId })
+    markFrom(nodeId, false)
+  }
+
+  // The chosen storyboard image of each shot goes into the shot list, so the plan shows the same picture.
+  const written = useRef('')
+  useEffect(() => {
+    if (readOnly) return
+    const diff = primaryFrames(doc, shots, gens)
+    const sig = JSON.stringify(diff)
+    if (!diff.length || sig === written.current) return
+    written.current = sig
+    onChange({ shots: diff.reduce((cur, d) => mergeFrame(cur, d.index, d.frameImage), shots) })
+  }, [doc, shots, gens, readOnly, onChange])
+
+  const check = (c: { source: string; target: string; targetHandle: string }) => canConnect(latest.current.doc, c, models)
 
   const onConnect = (c: Connection) => {
     if (!c.sourceHandle || !c.targetHandle) return
@@ -240,6 +363,7 @@ function CanvasBoard({
     if (!r.ok) return showNote(r.reason, r.vars)
     const edge: FlowEdge = { id: `e_${c.source}_${c.target}_${c.targetHandle}`, source: c.source, target: c.target, sourceHandle: c.sourceHandle, targetHandle: c.targetHandle }
     setEdges((es) => [...es, edge])
+    markFrom(c.target, true)
   }
 
   // A line dropped on a port that refuses it never reaches onConnect, so say why here.
@@ -249,7 +373,7 @@ function CanvasBoard({
     const fromOut = cs.fromHandle.type === 'source'
     const [out, inp] = fromOut ? [cs.fromNode, cs.toNode] : [cs.toNode, cs.fromNode]
     const handle = fromOut ? cs.toHandle : cs.fromHandle
-    if (handle.type !== 'target' || (fromOut ? cs.toHandle : cs.toHandle).type === cs.fromHandle.type) return
+    if (handle.type !== 'target' || cs.toHandle.type === cs.fromHandle.type) return
     const r = check({ source: out.id, target: inp.id, targetHandle: handle.id ?? '' })
     if (!r.ok) showNote(r.reason, r.vars)
   }
@@ -265,7 +389,19 @@ function CanvasBoard({
   const addAtCenter = (kind: NodeKind) => {
     const box = flowBox.current?.getBoundingClientRect()
     const mid = box ? screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 }) : { x: 0, y: 0 }
-    place(addNode(latest.current.doc, kind, { x: mid.x - 90, y: mid.y - 50 }))
+    place(addNode(latest.current.doc, kind, freeSpot(latest.current.doc, { x: mid.x - 90, y: mid.y - 50 })))
+  }
+
+  const updateData = (nodeId: string, patch: Partial<NodeData>) =>
+    setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, ...patch } } } } : n)))
+
+  // Taking a line away from an input dates the node it fed.
+  const onEdges: typeof onEdgesChange = (changes) => {
+    for (const c of changes) {
+      const gone = c.type === 'remove' ? edges.find((e) => e.id === c.id) : undefined
+      if (gone) markFrom(gone.target, true)
+    }
+    onEdgesChange(changes)
   }
 
   const ctx: CanvasCtx = {
@@ -275,8 +411,18 @@ function CanvasBoard({
       const order = nodes.filter((n) => n.data.node.type === 'shot').sort((a, b) => a.position.y - b.position.y)
       return new Map(order.map((n, i) => [n.id, i + 1]))
     }, [nodes]),
-    updateData: (nodeId: string, patch: Partial<NodeData>) =>
-      setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, ...patch } } } } : n))),
+    updateData,
+    models,
+    gens,
+    onGenerate: (id) => void onGenerate(id),
+    onSelectVersion,
+    edited: (id) => markFrom(id, latest.current.doc.nodes.find((n) => n.id === id)?.type !== 'prompt'),
+    incomingHandles: (id) => edges.filter((e) => e.target === id).map((e) => e.targetHandle ?? ''),
+    missing: (id) => {
+      const node = doc.nodes.find((n) => n.id === id)
+      const model = models.find((m) => m.id === node?.data.model) ?? models.find((m) => m.kind === (node?.type === 'video' ? 'video' : 'image'))
+      return model ? missingInput(doc, id, model, shots, gens) : null
+    },
     addAfterShot: (shotNodeId, kind) => {
       const shot = latest.current.doc.nodes.find((n) => n.id === shotNodeId)
       if (shot) place(addNode(latest.current.doc, kind, { x: shot.position.x + 360, y: shot.position.y }, shot.shotId))
@@ -339,7 +485,7 @@ function CanvasBoard({
             edges={shownEdges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onEdgesChange={onEdges}
             onConnect={onConnect}
             onConnectStart={(_, p) => setDragFrom(p.handleType === 'source' ? p.nodeId : null)}
             onConnectEnd={onConnectEnd}
@@ -363,7 +509,7 @@ function CanvasBoard({
           </ReactFlow>
           </CanvasContext.Provider>
           <div className="cv-conn-note" role="status">
-            {note && t(note.key, note.vars)}
+            {note && (note.text ?? (note.key && t(note.key, note.vars)))}
           </div>
         </div>
         <EditorDrawer

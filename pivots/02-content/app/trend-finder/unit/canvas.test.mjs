@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames } from '../src/lib/canvas/graph.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot } from '../src/lib/canvas/graph.ts'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer, DRAWER_KEY } from '../src/lib/canvas/drawer.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen } from '../src/lib/canvas/api.ts'
 
@@ -281,4 +281,19 @@ test('addNode with a shot moves right to a free spot on the shot row', () => {
   const v = d.nodes[d.nodes.length - 1]
   assert.equal(v.position.y, 100)
   assert.ok(v.position.x >= 720)
+})
+
+test('failedGen is the newest version only when it failed', () => {
+  const g = [gen('a', 'n_sb_s1', 'done', 1), gen('b', 'n_sb_s1', 'failed', 2)]
+  assert.equal(failedGen('n_sb_s1', g)?.id, 'b')
+  assert.equal(failedGen('n_sb_s1', [...g, gen('c', 'n_sb_s1', 'done', 3)]), null)
+  assert.equal(failedGen('n_sb_s1', [...g, gen('d', 'n_sb_s1', 'running', 3)]), null)
+  assert.equal(failedGen('n_other', g), null)
+})
+
+test('freeSpot moves a new node off the ones already there', () => {
+  const doc = docWith()
+  assert.deepEqual(freeSpot(doc, { x: 500, y: 500 }), { x: 500, y: 500 })
+  const busy = { ...doc, nodes: [...doc.nodes, { ...node('n_a', 'prompt'), position: { x: 500, y: 500 } }, { ...node('n_b', 'prompt'), position: { x: 540, y: 540 } }] }
+  assert.deepEqual(freeSpot(busy, { x: 500, y: 500 }), { x: 580, y: 580 })
 })

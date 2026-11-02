@@ -29,6 +29,13 @@ export function pendingGen(nodeId: string, gens: Generation[]): Generation | nul
   return open[open.length - 1] ?? null
 }
 
+// The node's newest version when it failed (a later finished or running one hides it), else null.
+export function failedGen(nodeId: string, gens: Generation[]): Generation | null {
+  const all = versionsOf(nodeId, gens)
+  const last = all[all.length - 1]
+  return last?.status === 'failed' ? last : null
+}
+
 // The version the node shows: the chosen one if it finished, else the newest finished one.
 export function selectedGen(node: CanvasNode, gens: Generation[]): Generation | null {
   const done = versionsOf(node.id, gens).filter((g) => g.status === 'done')
@@ -109,6 +116,16 @@ export function primaryFrames(doc: CanvasDoc, shots: Shot[], gens: Generation[])
     if (index >= 0 && url && url !== shots[index].frameImage) out.push({ index, frameImage: url })
   }
   return out.sort((a, b) => a.index - b.index)
+}
+
+// The first place at or below-right of `at` that no node already sits on, so toolbar-added nodes don't stack.
+export function freeSpot(doc: CanvasDoc, at: { x: number; y: number }): { x: number; y: number } {
+  const p = { x: Math.round(at.x), y: Math.round(at.y) }
+  for (let i = 0; i < 200 && doc.nodes.some((n) => Math.abs(n.position.x - p.x) < 30 && Math.abs(n.position.y - p.y) < 30); i++) {
+    p.x += 40
+    p.y += 40
+  }
+  return p
 }
 
 const ROW_STEP = 360 // matches the backend's column spacing
