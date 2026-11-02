@@ -23,8 +23,6 @@ import type { Step } from "../lib/steps.ts";
 import type { Decision } from "../lib/memory";
 import { useApp, useManagerName } from "../lib/appContext";
 import { t, tp } from "../lib/i18n";
-import { inTwoWeeks } from "../state";
-import { createShareLink, revokeClientLinks } from "../lib/share";
 import { postedThisMonth, stageOf } from "../lib/stage";
 import { needsConfirm, patchFor, stepOf, targetsOf } from "../lib/steps.ts";
 import { useProduction } from "../lib/production.ts";
@@ -77,8 +75,8 @@ const reducedMotion = () =>
 
 // One client's plans as a Kanban board (the Plans tab): Still planning → Waiting for approval → Approved, ready to
 // film, with the approved plans that are being filmed, edited or posted in a row below. Which column a plan is in is
-// worked out from its data (lib/steps.ts), so a drag only does what the plan can really do: send it for approval,
-// approve it (manager only), or take an approval back.
+// worked out from its data (lib/steps.ts). Any card can move to any column, both ways, with or without shots: Waiting
+// sends it, Approved approves it (manager only), and Still planning takes the send or the approval back.
 export function ShortlistBoard(p: Props) {
   const [dragId, setDragId] = useState<string | null>(null);
   // A plan dropped on Waiting without shots: it stays put and says why.
@@ -87,14 +85,8 @@ export function ShortlistBoard(p: Props) {
   const focusAfter = useRef<string | null>(null);
   const canDecide = useApp().role === "manager";
   const manager = useManagerName();
-  const [dueDate, setDueDate] = useState(inTwoWeeks);
-  const [note, setNote] = useState("");
-  // The approved plan waiting for "Continue?" before its approval is taken back.
-  const [confirm, setConfirm] = useState<string | null>(null);
-  // The approver's link for the client being shown: null url = turned off here.
-  const [link, setLink] = useState<{ clientId: string; url: string | null } | null>(null);
-  const [linkError, setLinkError] = useState("");
-  const [copied, setCopied] = useState(false);
+  // The approved plan (and where it is going) waiting for "Continue?" before its approval is taken back.
+  const [confirm, setConfirm] = useState<{ id: string; to: Column } | null>(null);
 
   const mine = p.ideas.filter((i) => i.clientId === p.client.id);
   const signalsById = useProduction(p.client.id);
@@ -109,10 +101,17 @@ export function ShortlistBoard(p: Props) {
     const shots = shotsOf(i, formatOf(i));
     const sig = signalsById[i.id] ?? {};
     const step = stepOf(i, shots, sig);
+    const column = columnOf(step, i.status === "waiting");
     const targets = targetsOf(i, shots, sig, canDecide)
       .map((st) => COLUMNS.find((c) => stepOfColumn(c) === st))
       .filter((c): c is Column => !!c);
-    return { step, column: columnOf(step, i.status === "waiting"), targets };
+    // Cards move freely: a plan with no shots can still be sent (it reads "No shots yet"), and any plan that is
+    // sent or approved can go back to Still planning, unless it has already been posted.
+    if (column === "planning" && i.status !== "approved" && !targets.includes("waiting")) targets.push("waiting");
+    // The manager can approve a plan straight from Still planning.
+    if (column === "planning" && canDecide && i.status !== "approved" && !targets.includes("approved")) targets.push("approved");
+    if (column !== "planning" && !sig.published && step !== "posted") targets.push("planning");
+    return { step, column, targets };
   };
   const infos = new Map(mine.map((i) => [i.id, infoOf(i)]));
   const byDue = (a: SavedIdea, b: SavedIdea) => a.dueDate.localeCompare(b.dueDate);
@@ -134,11 +133,6 @@ export function ShortlistBoard(p: Props) {
   const postedCount = postedThisMonth(mine, postedNow);
   const approvedCount = mine.filter((i) => i.status === "approved").length;
   const progress = Math.min(approvedCount / Math.max(p.client.monthlyTarget, 1), 1) * 100;
-  const shownLink = link?.clientId === p.client.id ? link.url : null;
-  // Plans still being written (saved or sent back) that can be sent now, and those with no shots at all.
-  const shortlisted = mine.filter((i) => i.status === "saved" || i.status === "rejected");
-  const ready = shortlisted.filter((i) => shotsOf(i, formatOf(i)).length > 0);
-  const needShots = shortlisted.filter((i) => shotsOf(i, formatOf(i)).length === 0);
   const dragging = mine.find((i) => i.id === dragId);
   const dragTargets = dragging ? (infos.get(dragging.id)?.targets ?? null) : null;
 
@@ -182,53 +176,19 @@ export function ShortlistBoard(p: Props) {
       prev.map((i) => (ids.has(i.id) ? { ...i, ...patch(i) } : i)),
     );
 
-  // Making the link again returns the client's existing one, so this is safe to call more than once.
-  const makeLink = () => {
-    setLinkError("");
-    createShareLink(p.client.id)
-      .then((l) => setLink({ clientId: p.client.id, url: l.url }))
-      .catch((e: Error) => setLinkError(e.message));
-  };
-  const turnOff = () => {
-    setLinkError("");
-    revokeClientLinks(p.client.id)
-      .then(() => setLink({ clientId: p.client.id, url: null }))
-      .catch((e: Error) => setLinkError(e.message));
-  };
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shownLink ?? "");
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setLinkError(t("plan.board.copyFailed"));
-    }
-  };
-
-  // Send for approval (dragging a card into Waiting for approval, or the batch button).
-  const send = (ids: Set<string>, extra?: Partial<SavedIdea>) => {
+  // Send for approval (dragging a card into Waiting for approval). The due date and the note to the approver are
+  // set on the plan page. A plan with no shots of its own keeps the ones it shows now (none for a saved idea), so it
+  // still reads "No shots yet" instead of borrowing the original video's shots.
+  const send = (ids: Set<string>) => {
     const sentAt = Date.now();
     update(ids, (i) => ({
       status: "waiting",
       sentAt,
       rejectReason: undefined,
       rejectTags: undefined,
-      ...extra,
-      noteToApprover: extra?.noteToApprover || i.noteToApprover,
+      ...(i.shots ? {} : { shots: shotsOf(i, formatOf(i)) }),
     }));
-    // The approver opens this link, so it is made as soon as there is something for them to review.
-    makeLink();
   };
-  const sendReady = () => {
-    send(new Set(ready.map((i) => i.id)), { dueDate, noteToApprover: note.trim() || undefined });
-    setNote("");
-  };
-
-  // Copy each idea's reference shot list. Live videos have none, so they stay empty and editable in the plan.
-  const generate = () =>
-    update(new Set(needShots.map((i) => i.id)), (i) => ({
-      shots: (formatOf(i)?.shotList ?? []).map((sh) => ({ ...sh })),
-    }));
 
   const remove = (id: string) =>
     p.onChangeIdeas((prev) => prev.filter((i) => i.id !== id));
@@ -237,37 +197,59 @@ export function ShortlistBoard(p: Props) {
   // plan can really do (send, approve, stage); the card then lands in the step its data says.
   const move = (idea: SavedIdea, to: Column) => {
     const step = stepOfColumn(to);
-    if (!step || !infos.get(idea.id)?.targets.includes(to)) return;
+    if (!infos.get(idea.id)?.targets.includes(to)) return;
     // Taking an approval back asks first; nothing changes until "Continue".
-    if (needsConfirm(idea, step)) {
-      setConfirm(idea.id);
-      setSaid(t("plan.board.said.confirm", { name: nameOf(idea) }));
+    if (to === "planning" ? idea.status === "approved" : !!step && needsConfirm(idea, step)) {
+      setConfirm({ id: idea.id, to });
+      setSaid(t(to === "planning" ? "plan.board.said.confirmPlanning" : "plan.board.said.confirm", { name: nameOf(idea) }));
       return;
     }
     apply(idea, to);
   };
   const apply = (idea: SavedIdea, to: Column) => {
     const name = nameOf(idea);
+    if (to === "planning") {
+      backToPlanning(idea);
+      setSaid(t("plan.board.said.moved", { name, step: columnTitle(to) }));
+      return;
+    }
     const step = stepOfColumn(to);
-    const patch = step && patchFor(idea, step, signalsById[idea.id] ?? {}, canDecide);
-    if (!step || !patch) return;
-    if (step === "storyboard" && idea.status !== "approved") send(new Set([idea.id]));
-    else if (step === "filming" && idea.status === "waiting")
+    if (step === "filming" && idea.status !== "approved") {
+      // Approve (manager only; targets already checked). From Still planning too, so it skips patchFor, which
+      // only approves waiting plans. Keep the shots it shows now, so a plan approved with none reads "No shots yet".
+      if (!canDecide) return;
+      if (!idea.shots) update(new Set([idea.id]), () => ({ shots: shotsOf(idea, formatOf(idea)) }));
       p.onDecide(idea.id, { kind: "approved" });
-    else update(new Set([idea.id]), () => patch);
+    } else {
+      const patch = step && patchFor(idea, step, signalsById[idea.id] ?? {}, canDecide);
+      if (!step || !patch) return;
+      if (step === "storyboard" && idea.status !== "approved") send(new Set([idea.id]));
+      else update(new Set([idea.id]), () => patch);
+    }
     focusAfter.current = idea.id;
     setSaid(t("plan.board.said.moved", { name, step: columnTitle(to) }));
   };
 
-  // Take a plan back from waiting: it returns to the team's list with the shots written so far.
-  const withdraw = (idea: SavedIdea) => {
+  // Back to Still planning (from waiting or approved): it returns to the team's list with the shots written so far,
+  // ready to send again. Moving out of Approved undoes the approval and the production stage.
+  const backToPlanning = (idea: SavedIdea) => {
     update(new Set([idea.id]), () => ({
       status: "saved",
       sentAt: undefined,
       rejectReason: undefined,
+      rejectTags: undefined,
+      approvedAt: undefined,
+      managerNote: undefined,
+      shotComments: undefined,
+      stage: undefined,
+      postedAt: undefined,
       shots: shotsOf(idea, formatOf(idea)),
     }));
     focusAfter.current = idea.id;
+  };
+  // "Take back" on a waiting card.
+  const withdraw = (idea: SavedIdea) => {
+    backToPlanning(idea);
     setSaid(t("plan.board.said.tookBack", { name: nameOf(idea) }));
   };
 
@@ -339,73 +321,16 @@ export function ShortlistBoard(p: Props) {
   };
 
   const extra: Partial<Record<Column, React.ReactNode>> = {
-    planning: shortlisted.length > 0 && (
-      <div className="board-batch">
-        <div className="board-batch-row">
-          <span className="small muted">
-            {needShots.length
-              ? tp("plan.board.needShots", needShots.length)
-              : t("plan.board.allHaveShots")}
-          </span>
-          <button className="btn btn-ghost btn-sm" disabled={!needShots.length} onClick={generate}>
-            {t("plan.board.addSuggested")}
-          </button>
-        </div>
-        <label className="field">
-          <span className="field-label">{t("plan.board.dueDate")}</span>
-          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value || inTwoWeeks())} />
-        </label>
-        <label className="field">
-          <span className="field-label">{t("plan.board.noteTo", { manager })}</span>
-          <textarea
-            rows={2}
-            value={note}
-            placeholder={t("plan.board.notePlaceholder", { client: p.client.name })}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </label>
-        <button className="btn btn-primary" disabled={!ready.length} onClick={sendReady}>
-          {ready.length ? t("plan.board.sendN", { n: ready.length }) : t("plan.common.sendForApproval")}
-        </button>
-        {ready.length > 0 && needShots.length > 0 && (
-          <span className="small muted">{t("plan.board.staysHere")}</span>
-        )}
-      </div>
-    ),
     waiting: lists.waiting.length > 0 && (
       <div className="board-link">
-        {shownLink ? (
-          <>
-            <label className="field">
-              <span className="field-label">{t("plan.board.linkFor", { manager })}</span>
-              <input readOnly value={shownLink} onFocus={(e) => e.currentTarget.select()} />
-            </label>
-            <div className="board-link-row">
-              <button className="btn btn-primary btn-sm" onClick={copyLink}>
-                {copied ? t("plan.common.copied") : t("plan.board.copyLink")}
-              </button>
-              <button className="btn btn-ghost btn-sm" onClick={turnOff}>
-                {t("plan.board.turnOff")}
-              </button>
-            </div>
-          </>
-        ) : (
-          <button className="btn btn-primary btn-sm" onClick={makeLink}>
-            {link?.clientId === p.client.id ? t("plan.board.newLink") : t("plan.board.getLink")}
-          </button>
-        )}
-        {linkError && (
-          <p className="error" role="alert">
-            {linkError}
-          </p>
-        )}
         <button className="btn btn-ghost btn-sm board-review" onClick={p.onReview}>
           {canDecide ? t("plan.board.review", { n: lists.waiting.length }) : t("plan.board.preview", { manager })}
         </button>
       </div>
     ),
   };
-  const confirmIdea = mine.find((i) => i.id === confirm && i.status === "approved");
+  const confirmIdea = mine.find((i) => i.id === confirm?.id && i.status === "approved");
+  const confirmTo = confirm?.to ?? "waiting";
   const productionCol = (title: string, list: SavedIdea[], emptyText: string, tone: string, more?: React.ReactNode) => (
     <section className={`board-col board-col-${tone}`} aria-label={title}>
       <header className="board-col-head">
@@ -492,7 +417,7 @@ export function ShortlistBoard(p: Props) {
           {confirmIdea && (
             <div className="plan-bar pb-confirm" role="alertdialog" aria-label={t("plan.board.confirmAria")}>
               <span className="pb-confirm-text">
-                {t("plan.board.confirmText", { name: nameOf(confirmIdea) })}
+                {t(confirmTo === "planning" ? "plan.board.confirmTextPlanning" : "plan.board.confirmText", { name: nameOf(confirmIdea) })}
               </span>
               <button className="btn btn-ghost" onClick={() => setConfirm(null)}>
                 {t("plan.common.cancel")}
@@ -502,7 +427,7 @@ export function ShortlistBoard(p: Props) {
                 autoFocus
                 onClick={() => {
                   setConfirm(null);
-                  apply(confirmIdea, "waiting");
+                  apply(confirmIdea, confirmTo);
                 }}
               >
                 {t("plan.common.continue")}

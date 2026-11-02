@@ -15,7 +15,8 @@ export const columnOf = (step: Step, sent: boolean): Column =>
   step === 'idea' || step === 'script' ? 'planning' : step === 'storyboard' ? (sent ? 'waiting' : 'planning') : 'approved'
 
 // A drop on a column is a drop on the step that does the work: Waiting sends (or takes the approval back),
-// Approved approves (or moves a staged plan back to ready to film). Still planning takes no drops.
+// Approved approves (or moves a staged plan back to ready to film). A drop on Still planning takes the send or the
+// approval back; the board handles that itself (ShortlistBoard backToPlanning), so it has no step here.
 export const stepOfColumn = (col: Column): Step | null => (col === 'waiting' ? 'storyboard' : col === 'approved' ? 'filming' : null)
 
 // The plan's name on the board: the format name, or how a live video starts.
