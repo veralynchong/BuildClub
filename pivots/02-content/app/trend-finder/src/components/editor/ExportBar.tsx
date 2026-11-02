@@ -66,6 +66,19 @@ export function ExportBar({ ideaId, edit, timeline, readOnly }: Props) {
     }
   }, [ideaId, track])
 
+  // A saved edit can make the finished video out of date (for example after applying a newer version): look again.
+  useEffect(() => {
+    if (edit.save !== 'saved') return
+    const ac = new AbortController()
+    getCut(ideaId).then(
+      (state) => {
+        if (!ac.signal.aborted) setCut((prev) => (isActive(prev) ? prev : state))
+      },
+      () => undefined, // the polling and the export button report real failures
+    )
+    return () => ac.abort()
+  }, [ideaId, edit.save])
+
   const blockOf = (project: EditProject | null): Key | null =>
     project ? exportBlocked(project, Object.fromEntries(project.clips.map((c) => [c.id, timeline.statusOf(c).state] as [string, ClipStatus['state']]))) : 'editor.export.empty'
   const reason = blockOf(edit.project)
