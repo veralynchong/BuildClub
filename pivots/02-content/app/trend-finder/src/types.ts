@@ -1,5 +1,12 @@
 export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'reddit' | 'x'
 
+// What kind of video a search result is. Same list as backend/models.py (CONTENT_TYPES).
+export const CONTENT_TYPES = [
+  'street_interview', 'recipe_cooking', 'skit_comedy', 'review_taste_test', 'unboxing_product',
+  'day_in_life_vlog', 'challenge', 'tutorial_tips', 'other',
+] as const
+export type ContentType = (typeof CONTENT_TYPES)[number]
+
 export type Denominator = 'median' | 'followers'
 
 // How a video's multiple was measured. All null on data written before the details were kept.
@@ -37,17 +44,31 @@ export interface Video {
   hashtags?: string[]
   // Reddit only: it shows no views, so `views` holds the upvotes (and medianViews the subreddit's usual upvotes).
   comments?: number
+  // Live results only: the like and comment counts the search returned (comments above is Reddit-only), for re-checking.
+  likes?: number
+  commentCount?: number
   baseline?: Baseline
   // When this search fetched the video, in ms.
   fetchedAt?: number
   // True when the search result came from the cache.
   fromCache?: boolean
+  // Sorted by the API after the search; missing until then, or when sorting failed.
+  contentType?: ContentType
 }
+
+export type Framing = 'wide' | 'medium' | 'close_up' | 'extreme_close_up' | 'overhead' | 'pov'
+export type Angle = 'eye_level' | 'high' | 'low' | 'top_down'
+export type Movement = 'static' | 'pan' | 'tilt' | 'push_in' | 'handheld' | 'tracking'
 
 export interface Shot {
   time: string
   shot: string
   text?: string
+  // Camera direction and a one-line filming tip. Optional: older plans and breakdowns have none.
+  framing?: Framing
+  angle?: Angle
+  movement?: Movement
+  tip?: string
   // Script and storyboard (set once the shot is written and drawn; old plans have neither).
   line?: string
   frameImage?: string
@@ -59,6 +80,9 @@ export interface Shot {
   // Hex colours read from the frame in the browser.
   palette?: string[]
 }
+
+export type HookType = 'visual' | 'question_or_text' | 'rage_bait' | 'informative' | 'challenge' | 'other'
+export type Emotion = 'curious' | 'excited' | 'craving' | 'funny' | 'angry_comment' | 'relatable'
 
 export interface Format {
   id: string
@@ -76,6 +100,12 @@ export interface Format {
     length: string
     format: string
     sound: string
+    // Added later; breakdowns saved before them lack all five.
+    concept?: string
+    hookType?: HookType
+    scrollStopper?: string
+    emotion?: Emotion
+    saveReason?: string
   }
   shotList: Shot[]
   props: string[]

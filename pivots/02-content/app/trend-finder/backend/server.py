@@ -48,13 +48,16 @@ import production
 import publishing
 import cut_review
 import grading
+import recheck
 import renders
+import shotlist
 import storyboard
 import subtitles
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
-from models import (AnalyzeJob, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Client,
-                    Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
+from compare import CompareJobs, compare_id_for
+from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Client,
+                    CompareJob, CompareRequest, CompareStarted, Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
 
 HERE = Path(__file__).resolve().parent
 CACHE_DIR = HERE / "cache"
@@ -113,9 +116,11 @@ X_USD_PER_TWEET = 0.0004  # the dearer of the two candidate actors; account medi
 REDDIT_USD_PER_SUB = 0.02
 APIFY_USD_PER_VIDEO = 0.0037  # TikTok actor; account medians cost this per video fetched (134 videos: 0.497)
 ANALYZE_USD = 0.08  # one Claude breakdown
+COMPARE_USD = 0.05  # one Claude call that compares finished breakdowns (text only, no images)
 NEEDS_USD = 0.01  # one small Claude call that fills in a finished breakdown's needs
 IMAGE_USD = 0.02  # one small Claude call that reads a screenshot
 ASK_USD = 0.01  # one small Claude call that answers a search from its results
+CLASSIFY_USD = 0.01  # one small Claude call that sorts a search's results into content types
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # decoded; the base64 request body is about a third bigger
 LIKE_USD = 0.01  # one small Claude call that turns a finished breakdown into search keywords
 
@@ -686,6 +691,53 @@ def search(q: str = "", fresh: str = "", platform: str = "tiktok", cachedOnly: s
     return {**payload, "cached": False}
 
 
+def types_file(query: str, platform: str) -> str:
+    return cache_name(query, platform) + ".types"  # not *.json, so saved_files() never reads it as a search
+
+
+def read_types(query: str, platform: str, fetched_at: int):
+    """Saved content types of this search, or None. Pinned searches keep theirs next to them (in git, for offline
+    demos); the rest sit in the cache folder. Types of an older fetch of the same search are not used."""
+    for folder in (PINNED_DIR, CACHE_DIR):
+        try:
+            saved = json.loads((folder / types_file(query, platform)).read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(saved, dict) and saved.get("fetchedAt") == fetched_at and isinstance(saved.get("types"), dict):
+            return saved["types"]
+    return None
+
+
+@app.get("/api/search/types", response_model=ContentTypes)
+def search_types(q: str = "", platform: str = "tiktok"):
+    """Content type of each video in a saved search. One cheap Claude call the first time, then free.
+    Never starts a search: without a saved search it is a 404. The front end shows the results without types if this fails."""
+    query = q.strip()[:120]
+    if not query or platform not in ("tiktok", "instagram", "youtube", "reddit", "x"):
+        return error(400, "Give a saved search and a platform.")
+    saved = read_cache(query, platform)
+    if not saved:
+        return error(404, "No saved search for that. Search it first.")
+    known = read_types(query, platform, saved["fetchedAt"])
+    if known is not None:
+        return {"types": known}
+    videos = saved["videos"][:60]
+    if not videos:
+        return {"types": {}}
+    if not spend("claude", CLASSIFY_USD, DAILY_CLAUDE_USD):
+        return over_budget("Claude", DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD")
+    try:
+        types = assist.classify_content_types(videos)
+    except Exception as e:
+        return error(502, "Could not sort the videos by type.", str(e))
+    CACHE_DIR.mkdir(exist_ok=True)
+    target = CACHE_DIR / types_file(query, platform)
+    partial = target.with_suffix(f".{threading.get_ident()}.tmp")
+    partial.write_text(json.dumps({"fetchedAt": saved["fetchedAt"], "types": types}))
+    os.replace(partial, target)
+    return {"types": types}
+
+
 # Clients and ideas are saved as whole lists, the way the front end already holds them.
 # GET returns null until something is saved, so the front end keeps its sample data.
 def migrate_medians(conn: sqlite3.Connection) -> None:
@@ -701,7 +753,7 @@ def db() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
     migrate_medians(conn)
-    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + renders.SCHEMA + grading.SCHEMA:
+    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + renders.SCHEMA + grading.SCHEMA + recheck.SCHEMA:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
@@ -848,9 +900,11 @@ def storyboard_budget(wallet: str, usd: float):
 
 
 app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget))
+app.include_router(shotlist.make_router(storyboard_budget))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(grading.make_router(db, lambda: MEDIA_DIR))
+app.include_router(recheck.make_router(db, lambda u: is_video_link(u)))
 app.include_router(subtitles.make_router(lambda: MEDIA_DIR, lambda i: any(x["id"] == i for x in load("ideas") or [])))
 publishing.seed_demo(db)
 
@@ -908,16 +962,20 @@ jobs = Jobs()
 X_STATUS = re.compile(r"https://(www\.|mobile\.)?(x|twitter)\.com/\w+/status/\d+")
 
 
+def is_video_link(url: str) -> bool:
+    return url.startswith(("https://www.tiktok.com/", "https://www.instagram.com/", "https://www.youtube.com/shorts/",
+                           "https://youtube.com/shorts/", "https://www.reddit.com/r/", "https://v.redd.it/")) or bool(X_STATUS.match(url))
+
+
 @app.post("/api/analyze", response_model=AnalyzeStarted)
 def start_analyze(body: AnalyzeRequest):
     url = body.url.strip()
-    if not (url.startswith(("https://www.tiktok.com/", "https://www.instagram.com/", "https://www.youtube.com/shorts/",
-                            "https://youtube.com/shorts/", "https://www.reddit.com/r/", "https://v.redd.it/")) or X_STATUS.match(url)):
+    if not is_video_link(url):
         return error(400, "Paste a TikTok, Instagram, YouTube Shorts, Reddit video or X link.")
-    current = jobs.get(job_id_for(url))
-    if (not current or current.status == "failed") and not spend("claude", ANALYZE_USD, DAILY_CLAUDE_USD):
+    if jobs.will_run(url, body.force) and not spend("claude", ANALYZE_USD, DAILY_CLAUDE_USD):
         return over_budget("Claude", DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD")
-    return {"job": jobs.submit(url, body.needs) if body.needs else jobs.submit(url)}
+    args = (url, body.needs) if body.needs else (url,)
+    return {"job": jobs.submit(*args, force=True) if body.force else jobs.submit(*args)}
 
 
 @app.get("/api/analyze/{job_id}", response_model=AnalyzeJob, response_model_exclude_none=True)
@@ -925,6 +983,36 @@ def get_analyze(job_id: str):
     job = jobs.get(job_id)
     if not job:
         return error(404, "No breakdown with that id. Start one with POST /api/analyze.")
+    return job
+
+
+# Compare viral videos: a breakdown per video (free when it was done before), then one synthesis call.
+compares = CompareJobs(jobs)
+
+
+@app.post("/api/compare", response_model=CompareStarted)
+def start_compare(body: CompareRequest):
+    urls = list(dict.fromkeys(u.strip() for u in body.urls))
+    if len(urls) < 2:
+        return error(400, "Add at least 2 different videos to compare.", code="few")
+    if len(urls) > 5:
+        return error(400, "Compare up to 5 videos at a time.", code="many")
+    bad = [u for u in urls if not is_video_link(u)]
+    if bad:
+        return error(400, f"That is not a TikTok, Instagram, YouTube Shorts, Reddit video or X link: {bad[0]}", code="link")
+    current = compares.get(compare_id_for(urls))
+    if not current or current.status == "failed":
+        new = [u for u in urls if not (jobs.get(job_id_for(u)) and jobs.get(job_id_for(u)).status != "failed")]
+        if not spend("claude", ANALYZE_USD * len(new) + COMPARE_USD, DAILY_CLAUDE_USD):
+            return over_budget("Claude", DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD")
+    return {"job": compares.submit(urls)}
+
+
+@app.get("/api/compare/{job_id}", response_model=CompareJob, response_model_exclude_none=True)
+def get_compare(job_id: str):
+    job = compares.get(job_id)
+    if not job:
+        return error(404, "No comparison with that id. Start one with POST /api/compare.")
     return job
 
 

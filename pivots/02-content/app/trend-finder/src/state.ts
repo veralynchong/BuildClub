@@ -4,7 +4,7 @@ import { sampleIdeas } from './data/sample'
 import type { ResearchEntry, ResearchSlot } from './lib/research'
 import { sampleResearch, sampleResearchSlots } from './data/sampleResearch'
 
-export type Sort = 'outlier' | 'ratio' | 'newest' | 'fastest'
+export type Sort = 'outlier' | 'views' | 'ratio' | 'newest' | 'fastest'
 
 export interface Query {
   keyword: string

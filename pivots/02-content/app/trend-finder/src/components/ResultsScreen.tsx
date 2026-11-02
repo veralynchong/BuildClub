@@ -20,6 +20,8 @@ import { SearchBox } from './SearchBox'
 import type { PulseInfo } from './ClientChips'
 import type { ChipGroup } from '../lib/clientChips'
 import { useManagerName } from '../lib/appContext'
+import { FilterButtonPanel, FilterChips } from './find/FilterPanel'
+import { DEFAULT_FILTERS, applyFilters, followersPending, type ResultFilters } from '../lib/resultFilters'
 
 export type Chip =
   | { kind: 'keyword'; value: string }
@@ -83,7 +85,9 @@ interface Props {
 
 export function ResultsScreen(p: Props) {
   const manager = useManagerName()
-  const shown = p.formatFilter ? p.results.filter((v) => v.formatId === p.formatFilter) : p.results
+  const [filters, setFilters] = useState<ResultFilters>(DEFAULT_FILTERS)
+  const byFormat = p.formatFilter ? p.results.filter((v) => v.formatId === p.formatFilter) : p.results
+  const shown = applyFilters(byFormat, filters)
   const activeTrend = p.trends.find((tr) => tr.format.id === p.formatFilter)
   const [draft, setDraft] = useState(p.interp.text)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -169,6 +173,7 @@ export function ResultsScreen(p: Props) {
         <span>{t('find.res.sortBy')}</span>
         <select id="toolbar-sort" value={p.sort} onChange={(e) => p.setSort(e.target.value as Sort)}>
           <option value="outlier">{t('find.res.sortOutlier')}</option>
+          <option value="views">{t('find.filter.sortViews')}</option>
           <option value="ratio">{t('find.res.sortRatio')}</option>
           <option value="newest">{t('find.res.sortNewest')}</option>
           <option value="fastest">{t('find.res.sortFastest')}</option>
@@ -375,10 +380,12 @@ export function ResultsScreen(p: Props) {
               </p>
             </div>
             <div className="filters">
+              <FilterButtonPanel filters={filters} setFilters={setFilters} sort={p.sort} setSort={p.setSort} videos={byFormat} />
               {filterControls}
               <ShortcutsHint open={helpOpen} setOpen={setHelpOpen} />
             </div>
           </div>
+          <FilterChips filters={filters} setFilters={setFilters} kept={shown.length} />
 
           <div className="grid">
             {shown.map((v) => (
@@ -392,6 +399,7 @@ export function ResultsScreen(p: Props) {
                 where={p.savedIn(v.id)}
                 onOpenInResearch={() => p.onOpenInResearch(v.id)}
                 cohort={p.cohorts.get(v.id)}
+                followersLoading={followersPending(v, filters)}
               />
             ))}
           </div>

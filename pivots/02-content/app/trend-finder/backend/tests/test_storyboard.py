@@ -263,3 +263,18 @@ def test_openai_request_shape(monkeypatch):
     assert storyboard.openai_image("draw", "sk-x") == "QUJD"
     assert sent["url"] == "https://api.openai.com/v1/images/generations" and sent["auth"] == "Bearer sk-x"
     assert sent["body"]["model"] == "gpt-image-1" and sent["body"]["quality"] == "low" and sent["body"]["n"] == 1
+
+
+def test_camera_fields_round_trip_and_old_plans_have_none(client, setup):
+    cam = {"framing": "wide", "angle": "high", "movement": "pan", "tip": "Walk slowly"}
+    r = client.put("/api/ideas", json=[idea("c1", [{**SHOTS[0], **cam}, SHOTS[1]])])
+    assert r.status_code == 200
+    got = client.get("/api/ideas").json()[0]["shots"]
+    assert got[0]["framing"] == "wide" and got[0]["angle"] == "high" and got[0]["movement"] == "pan"
+    assert got[0]["tip"] == "Walk slowly"
+    assert "framing" not in got[1]
+
+
+def test_bad_camera_value_is_rejected(client, setup):
+    r = client.put("/api/ideas", json=[idea("c2", [{**SHOTS[0], "framing": "giant"}])])
+    assert r.status_code == 422

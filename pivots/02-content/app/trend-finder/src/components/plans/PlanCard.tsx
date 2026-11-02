@@ -109,6 +109,9 @@ export function PlanCard(p: Props) {
       className={`board-card plans-card${isDragging ? " is-placeholder" : ""}${p.targets.length === 0 ? " is-locked" : ""}`}
       {...attributes}
       {...listeners}
+      // dnd-kit sets aria-disabled on a card that cannot be dragged. On a group it is inherited by the
+      // buttons inside, so Open plan and Remove read as unavailable to screen readers (and to Playwright).
+      aria-disabled={undefined}
       role="group"
       aria-roledescription={t("plan.card.roleDescription")}
       aria-label={name}

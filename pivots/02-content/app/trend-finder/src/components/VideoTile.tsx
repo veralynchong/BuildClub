@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { IdeaStatus, Video } from '../types'
-import { compact, hasDate } from '../lib/metrics'
-import { beatUsual, daysAgoWords, viewsLabel } from './find/words'
+import { byFollowers, compact, hasDate } from '../lib/metrics'
+import { beatUsual, contentTypeLabel, daysAgoWords, viewsLabel } from './find/words'
 import { t } from '../lib/i18n'
 import { Thumb } from './Thumb'
 import { useManagerName } from '../lib/appContext'
 import { EvidenceChip } from './EvidenceChip'
+import { NumbersSource } from './NumbersSource'
 import { COPY, EVIDENCE_TEXT, BASELINE_PLATFORMS, cachedLabel, evidenceOf, plainLine, type Cohort } from '../lib/evidence'
 
 interface Props {
@@ -23,6 +24,8 @@ interface Props {
   where?: { short: string; full: string } | null
   // Opens Research on that video with this row in view.
   onOpenInResearch?: () => void
+  // A followers filter is on and this video's followers aren't known yet, so it was kept rather than dropped.
+  followersLoading?: boolean
 }
 
 // Where the plan stands, as a plain line under the video (no coloured badge on the cover).
@@ -34,7 +37,7 @@ const statusLine = (manager: string): Record<IdeaStatus, string> => ({
 })
 
 // One video in the results grid: cover, views, one sentence comparing them with usual, what it says and who posted it.
-export function VideoTile({ video, onOpen, onToggleSave, status, inResearch, cohort, where, onOpenInResearch }: Props) {
+export function VideoTile({ video, onOpen, onToggleSave, status, inResearch, cohort, followersLoading, where, onOpenInResearch }: Props) {
   const manager = useManagerName()
   const compare = beatUsual(video)
   // The button pops only when it's clicked, not when a tile shows up already saved.
@@ -56,8 +59,16 @@ export function VideoTile({ video, onOpen, onToggleSave, status, inResearch, coh
           <span className="tile-views">
             <span className="tile-compare">{compact(video.views)}</span> {viewsLabel(video)}
           </span>
+          {(byFollowers(video) || followersLoading) && (
+            <span className="tile-facts">
+              {byFollowers(video)
+                ? t('find.filter.tileLine', { followers: video.followers.toLocaleString('en-US'), views: compact(video.views) })
+                : t('find.filter.followersLoading')}
+            </span>
+          )}
           <span className="tile-cap">{compare}</span>
           <EvidenceChip video={video} cohort={cohort} compact />
+          {video.contentType && <span className="tile-type">{contentTypeLabel(video.contentType)}</span>}
           <span className="tile-hook">{video.hook}</span>
           <span className="tile-meta">
             {video.handle}
@@ -68,6 +79,7 @@ export function VideoTile({ video, onOpen, onToggleSave, status, inResearch, coh
           {status && <span className="tile-plan">{statusLine(manager)[status]}</span>}
         </div>
       </button>
+      <NumbersSource video={video} />
       {/* Once it has a plan, the line above shows where it stands and the Save button goes away. */}
       {!status && (
         <button

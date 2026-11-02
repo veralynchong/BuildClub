@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import type { Client, Format, IdeaStatus, Video } from '../types'
+import type { Client, Emotion, Format, HookType, IdeaStatus, Video } from '../types'
 import {
   clientFit,
   compact,
@@ -20,6 +20,7 @@ import { useCountUp } from '../lib/motion'
 import { Thumb } from './Thumb'
 import { useManagerName } from '../lib/appContext'
 import { EvidenceChip } from './EvidenceChip'
+import { NumbersSource } from './NumbersSource'
 import { fetchedLine, formulaLine, limitLines, sourceLine, type Cohort } from '../lib/evidence'
 
 interface Props {
@@ -41,11 +42,18 @@ interface Props {
   onPlan: () => void
   // Goes to the Research tab (left out when the drawer is open on Research itself).
   onGoResearch?: () => void
+  // Run the AI breakdown again (live videos whose saved breakdown lacks newer fields).
+  onReanalyse: () => void
+  // Set while it runs (step) or after it failed.
+  reanalysis: { step: string; failed: boolean } | null
 }
+
+const hookTypes: HookType[] = ['visual', 'question_or_text', 'rage_bait', 'informative', 'challenge', 'other']
+const emotions: Emotion[] = ['curious', 'excited', 'craving', 'funny', 'angry_comment', 'relatable']
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAccounts, client, status, inResearch, onClose, onSave, onPlan, onGoResearch }: Props) {
+export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAccounts, client, status, inResearch, onClose, onSave, onPlan, onGoResearch, onReanalyse, reanalysis }: Props) {
   const manager = useManagerName()
   // Play the slide-out before App unmounts the panel (skipped under reduced motion).
   const [closing, setClosing] = useState(false)
@@ -141,6 +149,16 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
     },
   ]
 
+  // Hook and emotion fields come from the AI breakdown; breakdowns saved before they existed lack them.
+  const why = format.why
+  const hookKey = why.hookType && hookTypes.includes(why.hookType) ? (`find.hook.${why.hookType}.label` as const) : null
+  const emotionKey = why.emotion && emotions.includes(why.emotion) ? (`find.emotion.${why.emotion}.label` as const) : null
+  const hasFields = Boolean(hookKey || emotionKey || why.concept || why.scrollStopper || why.saveReason)
+  const missingFields = !hasFields && video.live && format.shotList.length > 0
+  // Shots written before camera directions were required have no framing.
+  const missingFraming = video.live && format.shotList.length > 0 && format.shotList.some((s) => !s.framing)
+  const running = Boolean(reanalysis && !reanalysis.failed)
+
   return (
     <div
       className={`drawer-wrap${closing ? ' is-closing' : ''}`}
@@ -230,6 +248,12 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
           )}
 
           {video.live && (
+            <section className="block">
+              <NumbersSource video={video} open />
+            </section>
+          )}
+
+          {video.live && (
             <section className="block live-facts">
               {video.url && (
                 <a className="btn btn-ghost watch-link" href={video.url} target="_blank" rel="noreferrer">
@@ -274,6 +298,48 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
               </div>
             </dl>
           </section>
+
+          {(hasFields || missingFields || missingFraming) && (
+            <section className="block">
+              <h3>{t('find.bd.fields.title')}</h3>
+              {hasFields ? (
+                <>
+                  <div className="tag-chips">
+                    {hookKey && <span className="tag-chip tag-hook">{t(hookKey)}</span>}
+                    {emotionKey && <span className="tag-chip tag-emotion">{t(emotionKey)}</span>}
+                  </div>
+                  <dl className="why">
+                    {([['concept', why.concept], ['scrollStopper', why.scrollStopper], ['saveReason', why.saveReason]] as const).map(
+                      ([key, text]) =>
+                        text && (
+                          <div key={key}>
+                            <dt>{t(`find.bd.fields.${key}`)}</dt>
+                            <dd>{text}</dd>
+                          </div>
+                        ),
+                    )}
+                  </dl>
+                </>
+              ) : (
+                <p className="small muted">{t('find.bd.fields.missing')}</p>
+              )}
+              {hasFields && missingFraming && <p className="small muted">{t('find.bd.shots.missing')}</p>}
+              {(missingFields || missingFraming) && (
+                <>
+                  <button className="btn btn-ghost" onClick={onReanalyse} disabled={running}>
+                    {t('find.bd.reanalyse')}
+                  </button>
+                  <p className="small muted" role="status" aria-live="polite">
+                    {running
+                      ? t('find.bd.reanalysing', { step: reanalysis?.step || t('shell.breakdown.waiting') })
+                      : reanalysis?.failed
+                        ? t('find.bd.reanalyse.failed')
+                        : ''}
+                  </p>
+                </>
+              )}
+            </section>
+          )}
 
           {format.lines && format.lines.length > 0 && (
             <section className="block">

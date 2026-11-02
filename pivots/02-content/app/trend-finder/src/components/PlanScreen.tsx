@@ -15,6 +15,10 @@ import { ShotChecklist } from './ShotChecklist'
 import { CutPanel } from './CutPanel'
 import { PublishPanel } from './publish/PublishPanel'
 import { StoryboardSection } from './storyboard/StoryboardSection'
+import { CameraTags } from './CameraTags'
+import { CameraSelects } from './CameraSelects'
+import { FromScript } from './FromScript'
+import { cameraLabels, looksLikeInterview } from '../lib/shots'
 import { getActiveLang, t } from '../lib/i18n'
 import { approverNote } from '../lib/approverNote'
 
@@ -125,7 +129,7 @@ export function PlanScreen(p: Props) {
     t('plan.brief.video', { video: video.url ?? `${video.handle}, "${video.hook}"` }),
     '',
     t('plan.brief.shots'),
-    ...shots.map((s, i) => `${i + 1}. ${s.time ? `[${s.time}] ` : ''}${s.shot}${s.text ? ` ${t('plan.brief.textOnScreen', { text: s.text })}` : ''}`),
+    ...shots.map((s, i) => `${i + 1}. ${s.time ? `[${s.time}] ` : ''}${s.shot}${s.text ? ` ${t('plan.brief.textOnScreen', { text: s.text })}` : ''}${cameraLabels(s).length ? ` (${cameraLabels(s).join(', ')})` : ''}${s.tip ? ` - ${s.tip}` : ''}`),
     ...(format.props.length ? ['', t('plan.brief.props', { props: format.props.join(', ') })] : []),
     ...(idea.notes ? ['', t('plan.brief.notes', { notes: idea.notes })] : []),
   ].join('\n')
@@ -254,6 +258,18 @@ export function PlanScreen(p: Props) {
                 {t('plan.screen.noBreakdown')}
               </p>
             )}
+            {editable && (
+              <FromScript
+                key={idea.id}
+                shots={shots}
+                interviewGuess={looksLikeInterview(format.name, format.why.concept, format.why.format)}
+                onShots={(next) => {
+                  setRemoved(null)
+                  setAddedAt(null)
+                  setShots(next)
+                }}
+              />
+            )}
             <ol className="shot-edit">
               {shots.map((s, i) => (
                 <li key={i} className={i === addedAt ? 'shot-added' : undefined}>
@@ -281,6 +297,7 @@ export function PlanScreen(p: Props) {
                           placeholder={t('plan.screen.textOptional')}
                           onChange={(e) => updateShot(i, { text: e.target.value || undefined })}
                         />
+                        <CameraSelects shot={s} n={i + 1} onChange={(patch) => updateShot(i, patch)} />
                         {shotComment(i)}
                       </div>
                       <button
@@ -302,6 +319,7 @@ export function PlanScreen(p: Props) {
                       <span>
                         {s.shot}
                         {s.text && <span className="shot-text">{t('plan.screen.textShown', { text: s.text })}</span>}
+                        <CameraTags shot={s} />
                         {shotComment(i)}
                       </span>
                     </>

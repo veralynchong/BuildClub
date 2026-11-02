@@ -75,10 +75,21 @@ class Client(BaseModel):
 Hex = Annotated[str, StringConstraints(pattern=r"^#[0-9a-fA-F]{6}$")]
 
 
+Framing = Literal["wide", "medium", "close_up", "extreme_close_up", "overhead", "pov"]
+Angle = Literal["eye_level", "high", "low", "top_down"]
+Movement = Literal["static", "pan", "tilt", "push_in", "handheld", "tracking"]
+
+
 class Shot(BaseModel):
     time: str
     shot: str
     text: Optional[str] = None
+    # Camera direction and a one-line filming tip. Optional so plans and breakdowns saved before they existed
+    # still load; a new AI breakdown must carry the three camera fields (see ShotOut).
+    framing: Optional[Framing] = None
+    angle: Optional[Angle] = None
+    movement: Optional[Movement] = None
+    tip: Optional[str] = Field(default=None, max_length=300)
     # Per-shot script and storyboard (all optional, so plans saved before they existed still load).
     # line: what is said; options: up to 3 other lines; edited: the user changed the line, so a
     # regeneration must not overwrite it unless asked. frameImage: a URL from the frame endpoint.
@@ -183,12 +194,32 @@ class Library(BaseModel):
     formats: list[dict]
 
 
+HookType = Literal["visual", "question_or_text", "rage_bait", "informative", "challenge", "other"]
+Emotion = Literal["curious", "excited", "craving", "funny", "angry_comment", "relatable"]
+
+
 class Why(BaseModel):
     hook: str
     first3s: str
     length: str
     format: str
     sound: str
+    # The five fields below are optional so breakdowns saved before they existed still load.
+    # New AI answers must carry all five: see WhyFull.
+    concept: Optional[str] = None
+    hookType: Optional[HookType] = None
+    scrollStopper: Optional[str] = None
+    emotion: Optional[Emotion] = None
+    saveReason: Optional[str] = None
+
+
+class WhyFull(Why):
+    """Why as the AI must answer it: the five newer fields are required."""
+    concept: str
+    hookType: HookType
+    scrollStopper: str
+    emotion: Emotion
+    saveReason: str
 
 
 class Line(BaseModel):
@@ -196,6 +227,13 @@ class Line(BaseModel):
     time: str
     text: str
     role: Literal["hook", "setup", "proof", "payoff", "cta"]
+
+
+class ShotOut(Shot):
+    """Shot as the AI must answer it in a breakdown: the camera fields are required."""
+    framing: Framing
+    angle: Angle
+    movement: Movement
 
 
 class Breakdown(BaseModel):
@@ -209,10 +247,18 @@ class Breakdown(BaseModel):
     needs: list[str] = []
 
 
+class BreakdownOut(Breakdown):
+    """Breakdown as the AI must answer it (output_format for the analyze call)."""
+    shotList: list[ShotOut]
+    why: WhyFull
+
+
 class AnalyzeRequest(BaseModel):
     url: str
     # The things a client may be unable to do; the breakdown picks its needs from this list only.
     needs: list[str] = []
+    # Re-run the AI breakdown of a video that already has one (reusing its frames and transcript).
+    force: bool = False
 
 
 class NeedsRequest(BaseModel):
@@ -257,6 +303,29 @@ class AnswerRequest(BaseModel):
 class AnswerResult(BaseModel):  # same fields as the front end's Answer (src/lib/answer.ts)
     lines: list[str]
     basis: str
+
+
+CONTENT_TYPES = ("street_interview", "recipe_cooking", "skit_comedy", "review_taste_test", "unboxing_product",
+                 "day_in_life_vlog", "challenge", "tutorial_tips", "other")
+ContentType = Literal["street_interview", "recipe_cooking", "skit_comedy", "review_taste_test", "unboxing_product",
+                      "day_in_life_vlog", "challenge", "tutorial_tips", "other"]  # same list as src/types.ts
+
+
+class ContentTypes(BaseModel):
+    """What kind of video each result is, by the video's id in the search (ids with no type are left out)."""
+    types: dict[str, ContentType]
+
+
+class ClassifyAnswer(BaseModel):
+    """The AI's answer: video number (as sent) -> type. A type outside the list becomes "other"."""
+    types: dict[str, ContentType]
+
+    @field_validator("types", mode="before")
+    @classmethod
+    def unknown_is_other(cls, value):
+        if not isinstance(value, dict):
+            raise ValueError("types must be an object")
+        return {str(k): (v if v in CONTENT_TYPES else "other") for k, v in value.items()}
 
 
 class LikeJob(BaseModel):
@@ -389,3 +458,59 @@ class CutDecideRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(max_length=320)
     password: str = Field(max_length=1024)
+
+
+# ---- compare viral videos -----------------------------------------------------------------------
+
+class CompareRequest(BaseModel):
+    urls: list[str] = Field(min_length=2, max_length=5)
+
+
+class CompareBeat(BaseModel):
+    beat: str  # short name, e.g. "No, no, no"
+    what: str  # what happens in this beat
+    timing: str  # typical timing, e.g. "0-8s"
+
+
+class CompareHook(BaseModel):
+    pattern: str
+    # The hookType values the videos share, from their breakdowns (empty when none was recorded).
+    hookTypes: list[HookType]
+
+
+class CompareOut(BaseModel):
+    """The synthesis as the AI must answer it (output_format for the compare call)."""
+    commonFormat: str
+    structure: list[CompareBeat] = Field(min_length=1, max_length=8)
+    typicalLength: str
+    hookPattern: CompareHook
+    emotionPattern: str
+    whatToCopy: list[str] = Field(min_length=3, max_length=5)
+    whatDiffers: list[str] = Field(max_length=6)
+    confidence: str
+
+
+class CompareVideo(BaseModel):
+    """One video in a comparison and the state of its breakdown."""
+    url: str
+    job: str
+    status: Literal["queued", "running", "done", "failed"]
+    progress: float = 0
+    step: str = ""
+    error: Optional[str] = None
+    concept: Optional[str] = None
+    lengthSec: Optional[float] = None
+
+
+class CompareStarted(BaseModel):
+    job: str
+
+
+class CompareJob(BaseModel):
+    job: str
+    status: Literal["queued", "running", "done", "failed"]
+    progress: float
+    step: str = ""
+    videos: list[CompareVideo] = []
+    result: Optional[CompareOut] = None
+    error: Optional[str] = None

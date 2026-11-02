@@ -26,9 +26,11 @@ import { applyDecision, type Decision } from './lib/memory'
 import { SettingsScreen } from './components/SettingsScreen'
 import { PreferencesScreen } from './components/PreferencesScreen'
 import { ChannelScreen } from './components/ChannelScreen'
+import { CompareScreen } from './components/CompareScreen'
+import type { PickVideo } from './components/CompareScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { LandingAltitude } from './components/landing/LandingAltitude'
-import type { Client, Format, Platform, Video } from './types'
+import type { Client, ContentType, Format, Platform, Video } from './types'
 import {
   analyzeVideo,
   applyBreakdown,
@@ -48,6 +50,7 @@ import {
   saveLibrary,
   saveList,
   searchAll,
+  fetchContentTypes,
   searchLive,
 } from './lib/live'
 import { buildChipGroups, clientTopic, pulseFrom } from './lib/clientChips'
@@ -88,6 +91,7 @@ const SEARCH_PLATFORMS: Platform[] = ['tiktok', 'instagram', 'youtube', 'reddit'
 
 const sorters: Record<Sort, (a: (typeof videos)[number], b: (typeof videos)[number]) => number> = {
   outlier: (a, b) => outlierScore(b) - outlierScore(a),
+  views: (a, b) => b.views - a.views,
   ratio: (a, b) => viewsPerFollower(b) - viewsPerFollower(a),
   newest: (a, b) => a.daysAgo - b.daysAgo,
   fastest: (a, b) => viewsPerDay(b) - viewsPerDay(a),
@@ -631,10 +635,20 @@ export default function App() {
           formats: keep(prev.formats, formats, pinnedFormats) as Format[],
         }
       })
+      // Sort the results by content type in the background; a failure leaves them without types.
+      const typed = fetchContentTypes(q, platforms)
+      const applyTypes = (types: Map<string, ContentType>) => {
+        if (types.size === 0) return
+        const tag = (v: Video) => (types.has(v.id) ? { ...v, contentType: types.get(v.id) } : v)
+        setLiveStore((prev) => ({ ...prev, videos: prev.videos.map(tag) }))
+        setLiveResults((prev) => prev.map(tag))
+      }
+      void typed.then(applyTypes)
       // The results screen takes over only if the person is on this client's search page; otherwise a toast offers them.
       const show = () => {
         setLiveResults(res.videos)
         setLiveQuery(q)
+        void typed.then(applyTypes)
         // One answer per search, from the videos it found. A failure just means no answer block.
         setLiveAnswer(null)
         if (res.videos.length) {
@@ -875,6 +889,24 @@ export default function App() {
       .finally(() => analyzing.current.delete(videoId))
   }
 
+  // Re-run the AI breakdown of a video that already has an older one. The saved copy (live store, which
+  // the library syncs) is replaced only when the new answer arrives; a failure leaves it as it was.
+  const [reanalysis, setReanalysis] = useState<{ videoId: string; step: string; failed: boolean } | null>(null)
+  const reanalyse = (videoId: string) => {
+    const v = videoById.get(videoId)
+    const f = v && formatById.get(v.formatId)
+    if (!v?.live || !v.url || !f || analyzing.current.has(videoId)) return
+    analyzing.current.add(videoId)
+    setReanalysis({ videoId, step: '', failed: false })
+    analyzeVideo(v.url, (step) => setReanalysis({ videoId, step, failed: false }), true)
+      .then((b) => {
+        setLiveStore((prev) => ({ ...prev, formats: prev.formats.map((x) => (x.id === f.id ? applyBreakdown(x, b) : x)) }))
+        setReanalysis(null)
+      })
+      .catch(() => setReanalysis({ videoId, step: '', failed: true }))
+      .finally(() => analyzing.current.delete(videoId))
+  }
+
   // Makes the plan for a video (Still planning), or returns the one it already has. `format` is for a video
   // added in the same click (not in formatById yet).
   const saveIdea = (videoId: string, format?: Format): SavedIdea => {
@@ -1104,6 +1136,25 @@ export default function App() {
   const blockedFormatIds = new Set(
     [...formatById.values()].filter((f) => f.needs.some((n) => client.cannot.includes(n))).map((f) => f.id),
   )
+  // Videos the Compare screen offers: the saved plans' videos (this client's, or everyone's from All
+  // clients), then the latest live search results. Only real videos with a link can be compared.
+  const comparePicks = (() => {
+    const label = (v: Video) => `@${v.handle} · ${v.hook || v.caption || ''}`.slice(0, 120)
+    const pick = (v: Video): PickVideo => ({ url: v.url!, label: label(v), thumbnail: v.thumbnail })
+    const seen = new Set<string>()
+    const fresh = (v: Video | undefined): v is Video => {
+      if (!v?.url || seen.has(v.url)) return false
+      seen.add(v.url)
+      return true
+    }
+    const shortlist = shownIdeas
+      .filter((i) => workspace === 'all' || i.clientId === client.id)
+      .map((i) => videoById.get(i.videoId))
+      .filter(fresh)
+      .map(pick)
+    const results = liveStore.videos.filter(fresh).slice(0, 30).map(pick)
+    return { shortlist, results }
+  })()
   const backLabel: Record<View, string> = {
     overview: t('shell.back.overview'),
     home: t('shell.back.home'),
@@ -1115,6 +1166,7 @@ export default function App() {
     preferences: t('shell.back.preferences'),
     channel: t('shell.back.channel'),
     research: t('shell.back.research'),
+    compare: t('shell.back.compare'),
     shortlist: t('shell.back.shortlist'),
     'add-client': t('shell.back.addClient'),
   }
@@ -1279,7 +1331,7 @@ export default function App() {
             />
           )}
 
-          {((!inClient && view !== 'add-client' && view !== 'channel' && view !== 'preferences') || view === 'overview') && (
+          {((!inClient && view !== 'add-client' && view !== 'channel' && view !== 'compare' && view !== 'preferences') || view === 'overview') && (
             <OverviewScreen
               clients={clients}
               ideas={shownIdeas}
@@ -1324,6 +1376,8 @@ export default function App() {
           )}
 
           {view === 'channel' && <ChannelScreen />}
+
+          {view === 'compare' && <CompareScreen shortlist={comparePicks.shortlist} results={comparePicks.results} />}
 
           {view === 'preferences' && <PreferencesScreen />}
 
@@ -1560,6 +1614,8 @@ export default function App() {
                   setView('research')
                 }
           }
+          onReanalyse={() => reanalyse(openVideo.id)}
+          reanalysis={reanalysis?.videoId === openVideo.id ? reanalysis : null}
         />
       )}
 

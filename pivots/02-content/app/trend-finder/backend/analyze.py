@@ -18,7 +18,7 @@ from pathlib import Path
 
 import anthropic
 
-from models import AnalyzeJob, Breakdown
+from models import AnalyzeJob, Breakdown, BreakdownOut
 
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
@@ -51,7 +51,20 @@ any quoted speech or on-screen text.
 - why.hook: what makes people stop scrolling.
 - why.first3s: what happens in the first 3 seconds and why it holds attention.
 - why.length, why.format, why.sound: how the length, filming style and sound help it.
-- shotList: the shots in order, time as "0-2s"; text is on-screen text, if any.
+- why.concept: one short sentence saying what the video is, e.g. "Street interview asking if
+  noodles were invented in China".
+- why.hookType: the one best fit of visual (looks tasty or striking), question_or_text (a question
+  or on-screen text opens it), rage_bait (provokes anger or disagreement), informative (teaches a
+  fact or tip), challenge, other.
+- why.scrollStopper: why a viewer stops scrolling in the first 2 seconds, in one short sentence.
+- why.emotion: the main feeling it triggers, one of curious, excited, craving, funny,
+  angry_comment (makes you want to comment), relatable.
+- why.saveReason: why a viewer would save it, in one short sentence. Think of what saving says
+  about interest in the product or idea shown.
+- shotList: the shots in order, time as "0-2s"; text is on-screen text, if any. For each shot also
+  give its camera direction: framing (wide, medium, close_up, extreme_close_up, overhead or pov),
+  angle (eye_level, high, low or top_down) and movement (static, pan, tilt, push_in, handheld or
+  tracking), as the frames show it, and tip: one short line on how to film that shot well.
 - props: things the client would need to film it.
 - editorNotes: 2-3 short instructions for an editor matching this style.
 - lines: the key spoken or on-screen lines in order, each with the job it does.
@@ -172,7 +185,7 @@ def breakdown(prepared: dict, work: Path, vocab: list[str] | None = None) -> Bre
         max_tokens=AI_MAX_TOKENS,
         thinking={"type": "adaptive"},
         output_config={"effort": "high"},
-        output_format=Breakdown,
+        output_format=BreakdownOut,
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
         messages=[{"role": "user", "content": content}],
@@ -205,11 +218,23 @@ class Jobs:
         self._lock = threading.Lock()
         threading.Thread(target=self._work, name="analyze-worker", daemon=True).start()
 
-    def submit(self, url: str, vocab: list[str] | None = None) -> str:
+    def will_run(self, url: str, force: bool = False) -> bool:
+        """Whether submit(url, force=force) would start a paid AI run (the caller counts it against the budget)."""
+        current = self.get(job_id_for(url))
+        if current and current.status in ("queued", "running"):
+            return False
+        return force or not current or (current.status == "failed" and not current.result)
+
+    def submit(self, url: str, vocab: list[str] | None = None, force: bool = False) -> str:
+        """force re-runs the AI step for a video that already has a result, reusing its saved frames and
+        transcript. The saved breakdown is replaced only when the new run succeeds."""
         job_id = job_id_for(url)
         with self._lock:
             current = self.get(job_id)
-            if current and current.status != "failed":
+            if current and current.status in ("queued", "running"):
+                return job_id
+            if current and not force and (current.status != "failed" or current.result):
+                self._jobs.pop(job_id, None)  # after a failed re-run: back to the saved breakdown
                 return job_id
             self._jobs[job_id] = AnalyzeJob(job=job_id, status="queued", progress=0, step="Waiting to start")
         self._q.put((job_id, url, vocab))
@@ -218,6 +243,9 @@ class Jobs:
     def get(self, job_id: str):
         if job_id in self._jobs:
             return self._jobs[job_id]
+        return self._saved(job_id)
+
+    def _saved(self, job_id: str):
         saved = JOBS_DIR / job_id / "breakdown.json"
         if saved.exists():
             result = Breakdown.model_validate_json(saved.read_text(encoding="utf-8"))
@@ -243,6 +271,8 @@ class Jobs:
                 self._set(job_id, status="done", progress=1, step="Done", result=result)
             except Exception as e:
                 print(f"[analyze] {job_id} failed: {e}", flush=True)
-                self._set(job_id, status="failed", error=str(e))
+                # A failed re-run leaves the saved breakdown alone, and the failed job still carries it.
+                old = self._saved(job_id)
+                self._set(job_id, status="failed", error=str(e), result=old.result if old else None)
                 for leftover in work.glob("video.*"):
                     leftover.unlink(missing_ok=True)

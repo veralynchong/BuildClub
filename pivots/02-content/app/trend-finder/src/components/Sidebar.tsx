@@ -18,6 +18,7 @@ export type View =
   | 'settings'
   | 'preferences'
   | 'channel'
+  | 'compare'
   | 'add-client'
 
 const paths: Record<string, string> = {
@@ -27,6 +28,7 @@ const paths: Record<string, string> = {
   plans: 'M8 4h11v16H8zM5 4v16M11 8h5M11 12h5M11 16h3',
   research: 'M4 5h16v14H4zM4 10h16M4 14.5h16M10 10v9',
   settings: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4',
+  compare: 'M4 5h7v14H4zM13 5h7v14h-7zM7 9h1M16 9h1',
   channel: 'M4 6h16M4 12h10M4 18h6M17 14l3 3-3 3',
   overview: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
   home: 'M4 11 12 4l8 7M6 9.5V20h12V9.5M10 20v-5h4v5',
@@ -227,6 +229,7 @@ export function Sidebar(p: Props) {
               )}
               {/* Research = the sheet of saved reference videos; plans are made from it */}
               {item('research', 'research', t('shell.side.research'), p.counts.research)}
+              {item('compare', 'compare', t('shell.side.compare'))}
               {/* Plans = the board of plans + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
               <div className="side-sep" />
@@ -237,6 +240,7 @@ export function Sidebar(p: Props) {
             <>
               {/* All clients Home (the view is still called 'overview' inside the app) */}
               {item('overview', 'home', t('shell.side.home'))}
+              {item('compare', 'compare', t('shell.side.compare'))}
               {item('channel', 'channel', t('shell.side.channel'))}
               <p className="side-hint">{t('shell.side.pickClient')}</p>
             </>

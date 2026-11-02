@@ -1,4 +1,4 @@
-import type { Baseline, Format, Line, Platform, SavedIdea, Shot, Video } from '../types'
+import type { Baseline, ContentType, Format, Line, Platform, SavedIdea, Shot, Video } from '../types'
 import type { Answer } from './answer'
 import { t } from './i18n.ts'
 import { UNKNOWN_DAYS, hasScore, meanScore, outlierScore } from './metrics.ts'
@@ -118,6 +118,8 @@ function toVideo(item: LiveItem, query: string, platform: Platform, search: { fe
     music: item.music,
     hashtags: item.hashtags ?? [],
     comments: platform === 'reddit' ? item.comments : undefined,
+    likes: item.likes,
+    commentCount: item.comments,
     baseline: baselineOf(item),
     fetchedAt: search.fetchedAt,
     fromCache: search.cached,
@@ -169,6 +171,21 @@ export async function searchLive(
     formats.push(toFormat(item, v))
   }
   return { videos, formats, cached: Boolean(body.cached), fetchedAt: body.fetchedAt, mediansPending: Boolean(body.mediansPending) }
+}
+
+// What kind of video each result is, by app video id. The API sorts a saved search with one cheap AI call the first
+// time and remembers it. Resolves to an empty map when that fails, so the results just show without types.
+export async function fetchContentTypes(query: string, platforms: Platform[]): Promise<Map<string, ContentType>> {
+  const found = new Map<string, ContentType>()
+  await Promise.allSettled(
+    platforms.map(async (platform) => {
+      const r = await fetch(`/api/search/types?q=${encodeURIComponent(query)}&platform=${platform}`)
+      if (!r.ok) return
+      const body = (await r.json().catch(() => ({}))) as { types?: Record<string, ContentType> }
+      for (const [id, type] of Object.entries(body.types ?? {})) found.set(`${idPrefix[platform]}-${id}`, type)
+    }),
+  )
+  return found
 }
 
 export interface SearchAll {
@@ -233,11 +250,12 @@ interface AnalyzeJob {
 
 // Starts a breakdown and polls until it's done. The first run of a video takes about a minute;
 // asking again for the same link returns the saved result.
-export async function analyzeVideo(url: string, onStep: (step: string) => void): Promise<Breakdown> {
+// force re-runs the AI step for a video that already has a breakdown (older ones lack newer fields).
+export async function analyzeVideo(url: string, onStep: (step: string) => void, force = false): Promise<Breakdown> {
   const r = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify(force ? { url, force: true } : { url }),
   })
   const started = await r.json().catch(() => ({}))
   if (!r.ok) throw new Error(started.error ?? t('find.live.err.startBreakdown'))

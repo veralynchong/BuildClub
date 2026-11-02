@@ -1,0 +1,35 @@
+/* Compare videos (shares the channel page's form, progress and bar styles) */
+.compare textarea { width: 100%; resize: vertical; min-height: 96px; }
+.cmp-pickers, .cmp-pick-group { display: grid; gap: var(--space-sm); border: 0; padding: 0; margin: 0; min-width: 0; }
+.cmp-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-sm); max-height: 260px; overflow-y: auto; }
+.cmp-pick { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--space-sm); align-items: center; padding: var(--space-xs); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.cmp-pick-on { border-color: var(--accent); background: var(--accent-soft); }
+.cmp-pick:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cmp-thumb { width: 44px; height: 58px; }
+.cmp-pick-text { font-size: var(--text-sm); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.cmp-hint { margin: 0; color: var(--danger, var(--fg)); }
+.cmp-progress { display: grid; gap: var(--space-base); max-width: 760px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-xl); }
+.cmp-progress ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-md); }
+.cmp-progress li { display: grid; gap: var(--space-2xs); min-width: 0; }
+.cmp-vname { overflow-wrap: anywhere; font-weight: 600; }
+.cmp-vstate-failed .cmp-vname { color: var(--muted); text-decoration: line-through; }
+.cmp-progress .bar { height: 6px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+.cmp-progress .bar span { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--accent); transition: width var(--dur-fast) var(--ease); }
+.cmp-result { display: grid; gap: var(--space-lg); max-width: 920px; }
+.cmp-card { display: grid; gap: var(--space-sm); align-content: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-lg); min-width: 0; }
+.cmp-card p { margin: 0; overflow-wrap: anywhere; }
+.cmp-big { font-size: var(--text-lg, 1.25rem); font-weight: 700; }
+.cmp-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-base); margin: 0; }
+.cmp-facts dt { font-size: var(--text-xs); color: var(--muted); }
+.cmp-facts dd { margin: 0; }
+.cmp-beats { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-md); }
+.cmp-beats li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: var(--space-md); align-items: start; }
+.cmp-beats p { margin: var(--space-2xs) 0 0; }
+.cmp-chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.cmp-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-lg); }
+.cmp-bullets { margin: 0; padding-left: 1.1em; display: grid; gap: var(--space-xs); }
+.cmp-confidence { background: var(--surface-2); }
+.cmp-videos { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-xs); }
+.cmp-videos a { overflow-wrap: anywhere; }
+@media (max-width: 520px) { .cmp-two { grid-template-columns: minmax(0, 1fr); } .cmp-picks { grid-template-columns: minmax(0, 1fr); } }
+.cmp-result > .btn { justify-self: start; }
