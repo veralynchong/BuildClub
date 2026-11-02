@@ -52,7 +52,9 @@ import {
 } from './lib/live'
 import { buildChipGroups, clientTopic, pulseFrom } from './lib/clientChips'
 import type { Pulse } from './lib/clientChips'
+import { isOnSearchPage } from './lib/searchStatus'
 import { LiveLoading } from './components/LiveLoading'
+import { SearchToast, type SearchNotice } from './components/SearchToast'
 import { withScreenTransition } from './lib/motion'
 import { htmlLang, readLang, setActiveLang, t, writeLang } from './lib/i18n'
 import type { Key, Lang, Vars } from './lib/i18n'
@@ -219,7 +221,10 @@ export default function App() {
   const [liveQuery, setLiveQuery] = useState('')
   // The written answer to the latest live search; null while it is being written or if that failed.
   const [liveAnswer, setLiveAnswer] = useState<Answer | null>(null)
-  const [searching, setSearching] = useState<{ q: string; platforms: Platform[]; step?: string } | null>(null)
+  // The one search running in the background, and the client it belongs to.
+  const [searching, setSearching] = useState<{ q: string; platforms: Platform[]; step?: string; clientId: string; startedAt: number } | null>(null)
+  // What a search that finished while the person was elsewhere leaves behind (shown as a toast).
+  const [notice, setNotice] = useState<SearchNotice | null>(null)
   const searchSeq = useRef(0)
   // A search whose account medians (each account's usual views) are still being fetched.
   const [scoring, setScoring] = useState<string | null>(null)
@@ -495,13 +500,20 @@ export default function App() {
   // overrides the dropdowns; everything else keeps its current value.
   const [reading, setReading] = useState<MediaSource | null>(null)
 
+  // A failed search says so where the person is: inline on that client's search page, otherwise as a toast.
+  const failSearch = (clientId: string, message: string) => {
+    const at = here.current
+    if (isOnSearchPage(at, clientId)) setSearchError(message)
+    else setNotice({ kind: 'error', message })
+  }
+
   // A pasted link: read the real video, then search for its first keyword.
   const runLinkSearch = async (text: string) => {
     const url = text.match(/https?:\/\/\S+/)?.[0] ?? text
     const source = interpretMedia(url, null, formats)?.source ?? null
     const seq = ++searchSeq.current
     setSearchError(null)
-    setSearching({ q: url, platforms: [], step: t('shell.search.readingVideo') })
+    setSearching({ q: url, platforms: [], step: t('shell.search.readingVideo'), clientId: client.id, startedAt: Date.now() })
     let like
     try {
       like = await likeVideo(url, (step) => {
@@ -510,7 +522,7 @@ export default function App() {
     } catch (e) {
       if (seq !== searchSeq.current) return
       setSearching(null)
-      setSearchError(e instanceof Error ? e.message : t('shell.search.linkFailed'))
+      failSearch(client.id, e instanceof Error ? e.message : t('shell.search.linkFailed'))
       return
     }
     if (seq !== searchSeq.current) return
@@ -529,14 +541,14 @@ export default function App() {
     const seq = ++searchSeq.current
     const previewUrl = URL.createObjectURL(file)
     setSearchError(null)
-    setSearching({ q: file.name, platforms: [], step: t('shell.search.readingImage') })
+    setSearching({ q: file.name, platforms: [], step: t('shell.search.readingImage'), clientId: client.id, startedAt: Date.now() })
     let like
     try {
       like = await likeImage(file)
     } catch (e) {
       if (seq !== searchSeq.current) return
       setSearching(null)
-      setSearchError(e instanceof Error ? e.message : t('shell.search.imageFailed'))
+      failSearch(client.id, e instanceof Error ? e.message : t('shell.search.imageFailed'))
       return
     }
     if (seq !== searchSeq.current) return
@@ -565,7 +577,8 @@ export default function App() {
     if (!q) return
     const seq = ++searchSeq.current
     setSearchError(null)
-    setSearching({ q, platforms })
+    setNotice(null)
+    setSearching({ q, platforms, clientId: client.id, startedAt: Date.now() })
     try {
       const res = await searchAll(q, platforms)
       // A newer search has started since; its results win.
@@ -586,31 +599,46 @@ export default function App() {
         const formats = res.formats.map((f) => broken.get(f.id) ?? f)
         return { videos: keep(prev.videos, res.videos) as Video[], formats: keep(prev.formats, formats) as Format[] }
       })
-      setLiveResults(res.videos)
-      setLiveQuery(q)
-      // One answer per search, from the videos it found. A failure just means no answer block.
-      setLiveAnswer(null)
-      if (res.videos.length) {
-        askAnswer(text, res.videos)
-          .then((a) => {
-            if (seq === searchSeq.current) setLiveAnswer(a)
-          })
-          .catch(() => {})
+      // The results screen takes over only if the person is on this client's search page; otherwise a toast offers them.
+      const show = () => {
+        setLiveResults(res.videos)
+        setLiveQuery(q)
+        // One answer per search, from the videos it found. A failure just means no answer block.
+        setLiveAnswer(null)
+        if (res.videos.length) {
+          askAnswer(text, res.videos)
+            .then((a) => {
+              if (seq === searchSeq.current) setLiveAnswer(a)
+            })
+            .catch(() => {})
+        }
+        setInterp({
+          ...parsed, text, keywords: [q], topics: like ? [{ formatId: like.formatId, word: 'this video' }] : [],
+          audience: null, isQuestion: false, source: like?.source ?? null,
+        })
+        setQuery((qq) => ({ ...qq, keyword: text, platforms, days: parsed.days ?? qq.days, maxLength: parsed.maxLength ?? qq.maxLength }))
+        setPatternFilter(null)
+        setFormatFilter(null)
+        setLastSearches((prev) => ({ ...prev, [client.id]: text }))
+        setShownSearch(`${client.id}|${text}`)
+        if (res.pending.length) void fillScores(q, res.pending)
+        setView('results')
       }
-      setInterp({
-        ...parsed, text, keywords: [q], topics: like ? [{ formatId: like.formatId, word: 'this video' }] : [],
-        audience: null, isQuestion: false, source: like?.source ?? null,
-      })
-      setQuery((qq) => ({ ...qq, keyword: text, platforms, days: parsed.days ?? qq.days, maxLength: parsed.maxLength ?? qq.maxLength }))
-      setPatternFilter(null)
-      setFormatFilter(null)
-      setLastSearches((prev) => ({ ...prev, [client.id]: text }))
-      setShownSearch(`${client.id}|${text}`)
-      if (res.pending.length) void fillScores(q, res.pending)
-      setView('results')
+      const at = here.current
+      if (isOnSearchPage(at, client.id)) show()
+      else
+        setNotice({
+          kind: 'ready',
+          q,
+          onView: () => {
+            setNotice(null)
+            if (here.current.workspace !== client.id) enterClient(client.id, 'results')
+            show()
+          },
+        })
     } catch (e) {
       if (seq !== searchSeq.current) return
-      setSearchError(e instanceof Error ? e.message : t('shell.search.failed'))
+      failSearch(client.id, e instanceof Error ? e.message : t('shell.search.failed'))
     } finally {
       if (seq === searchSeq.current) setSearching(null)
     }
@@ -641,7 +669,8 @@ export default function App() {
 
   const runSearch = (text: string) => {
     if (live) {
-      void runLiveSearch(text)
+      // One live search at a time (the search button is disabled meanwhile; this covers Enter, chips and voice).
+      if (!searching) void runLiveSearch(text)
       return
     }
     // Screenshot attachments are switched off for now; pasted video links still work in sample mode.
@@ -897,6 +926,7 @@ export default function App() {
     lang,
     setLang,
     recordEvent,
+    searching,
   }
 
   const openVideo = openVideoId ? videoById.get(openVideoId) : undefined
@@ -1126,6 +1156,19 @@ export default function App() {
 
           {view === 'preferences' && <PreferencesScreen />}
 
+          {/* The search runs in the background: progress shows here only while its client's search page is open. */}
+          {searching && inClient && searching.clientId === client.id && (view === 'search' || view === 'results') && (
+            <LiveLoading
+              query={searching.q}
+              startedAt={searching.startedAt}
+              title={
+                searching.step
+                  ? `${searching.step}…`
+                  : t('shell.search.searching', { platforms: searching.platforms.map((p) => platformName[p]).join(', '), q: searching.q })
+              }
+            />
+          )}
+
           {inClient && view === 'search' && (
             <SearchScreen
               query={query}
@@ -1283,16 +1326,7 @@ export default function App() {
       )}
 
       {reading && <ReadingOverlay source={reading} onDone={finishReading} />}
-      {searching && (
-        <LiveLoading
-          query={searching.q}
-          title={
-            searching.step
-              ? `${searching.step}…`
-              : t('shell.search.searching', { platforms: searching.platforms.map((p) => platformName[p]).join(', '), q: searching.q })
-          }
-        />
-      )}
+      {notice && <SearchToast notice={notice} onDismiss={() => setNotice(null)} />}
     </div>
     </AppContext.Provider>
   )
