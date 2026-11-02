@@ -28,3 +28,12 @@ test('stored tab is checked and keyed per plan', () => {
   assert.equal(isPlanTab('nope'), false)
   assert.equal(isPlanTab(null), false)
 })
+
+test('locked tab message depends on the status', async () => {
+  const { lockedNotice } = await import('../src/lib/planTabs.ts')
+  assert.equal(lockedNotice('script', 'saved'), null)
+  assert.equal(lockedNotice('edit', 'approved'), null)
+  assert.deepEqual(lockedNotice('edit', 'saved'), { titleKey: 'plan.tab.locked.edit.saved.title', bodyKey: 'plan.tab.locked.edit.saved.body', toStoryboard: true })
+  assert.deepEqual(lockedNotice('post', 'waiting'), { titleKey: 'plan.tab.locked.post.waiting.title', bodyKey: 'plan.tab.locked.post.waiting.body', toStoryboard: false })
+  assert.deepEqual(lockedNotice('edit', 'rejected'), { titleKey: 'plan.tab.locked.edit.rejected.title', bodyKey: 'plan.tab.locked.edit.rejected.body', toStoryboard: true })
+})

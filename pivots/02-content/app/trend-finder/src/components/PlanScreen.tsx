@@ -18,7 +18,7 @@ import { StoryboardSection } from './storyboard/StoryboardSection'
 import { getActiveLang, t } from '../lib/i18n'
 import { approverNote } from '../lib/approverNote'
 import { stepOf } from '../lib/steps'
-import { defaultTab, isPlanTab, panelId, planTabKey, tabId, tabLocked } from '../lib/planTabs'
+import { defaultTab, isPlanTab, panelId, planTabKey, tabId, tabLocked, lockedNotice } from '../lib/planTabs'
 import type { PlanTab } from '../lib/planTabs'
 import { PlanTabs } from './plan/PlanTabs'
 
@@ -235,7 +235,7 @@ export function PlanScreen(p: Props) {
 
       <PlanTabs tab={tab} current={defaultTab(stepOf(idea, shots))} onTab={chooseTab} locked={(x) => !!tabLocked(x, idea.status)} idBase={idBase} />
 
-      <div role="tabpanel" id={panelId(idBase, 'script')} aria-labelledby={tabId(idBase, 'script')} className="pt-panel" hidden={tab !== 'script'}>
+      <div role="tabpanel" id={panelId(idBase, 'script')} aria-labelledby={tabId(idBase, 'script')} className="pt-panel" tabIndex={0} hidden={tab !== 'script'}>
         <div className="plan-grid">
         <aside className="plan-ref">
           <BestVideo key={video.id} video={video} control={playerControl} />
@@ -325,7 +325,7 @@ export function PlanScreen(p: Props) {
         </div>
         </div>
       </div>
-      <div role="tabpanel" id={panelId(idBase, 'storyboard')} aria-labelledby={tabId(idBase, 'storyboard')} className="pt-panel" hidden={tab !== 'storyboard'}>
+      <div role="tabpanel" id={panelId(idBase, 'storyboard')} aria-labelledby={tabId(idBase, 'storyboard')} className="pt-panel" tabIndex={0} hidden={tab !== 'storyboard'}>
         <div className="plan-main">
           <section className="block">
             <h3>{t('plan.screen.shots')}</h3>
@@ -445,7 +445,7 @@ export function PlanScreen(p: Props) {
 
         </div>
       </div>
-      <div role="tabpanel" id={panelId(idBase, 'shoot')} aria-labelledby={tabId(idBase, 'shoot')} className="pt-panel" hidden={tab !== 'shoot'}>
+      <div role="tabpanel" id={panelId(idBase, 'shoot')} aria-labelledby={tabId(idBase, 'shoot')} className="pt-panel" tabIndex={0} hidden={tab !== 'shoot'}>
         <div className="plan-main">
           <ShotChecklist key={idea.id} ideaId={idea.id} status={idea.status} shots={shots} onProgress={onTakesProgress} />
           {idea.status === 'approved' && idea.managerNote && (
@@ -485,33 +485,47 @@ export function PlanScreen(p: Props) {
 
         </div>
       </div>
-      <div role="tabpanel" id={panelId(idBase, 'edit')} aria-labelledby={tabId(idBase, 'edit')} className="pt-panel" hidden={tab !== 'edit'}>
+      <div role="tabpanel" id={panelId(idBase, 'edit')} aria-labelledby={tabId(idBase, 'edit')} className="pt-panel" tabIndex={0} hidden={tab !== 'edit'}>
         <div className="plan-main">
-          {tabLocked('edit', idea.status) && (
-            <div className="pt-locked" role="status">
-              <h3>{t('plan.tab.locked.edit.title')}</h3>
-              <p className="muted">{t('plan.tab.locked.edit.body')}</p>
-              <button type="button" className="btn btn-primary" onClick={() => chooseTab('storyboard')}>
-                {t('plan.tab.locked.go')}
-              </button>
-            </div>
-          )}
+          {(() => {
+            const n = lockedNotice('edit', idea.status)
+            return (
+              n && (
+                <div className="pt-locked" role="status">
+                  <h3>{t(n.titleKey)}</h3>
+                  <p className="muted">{t(n.bodyKey)}</p>
+                  {n.toStoryboard && (
+                    <button type="button" className="btn btn-primary" onClick={() => chooseTab('storyboard')}>
+                      {t('plan.tab.locked.go')}
+                    </button>
+                  )}
+                </div>
+              )
+            )
+          })()}
           <div hidden={!!tabLocked('edit', idea.status)}>
           <CutPanel key={idea.id} ideaId={idea.id} status={idea.status} shotCount={shots.length} shotsDone={shotsDone} takesRevision={takesRevision} />
           </div>
         </div>
       </div>
-      <div role="tabpanel" id={panelId(idBase, 'post')} aria-labelledby={tabId(idBase, 'post')} className="pt-panel" hidden={tab !== 'post'}>
+      <div role="tabpanel" id={panelId(idBase, 'post')} aria-labelledby={tabId(idBase, 'post')} className="pt-panel" tabIndex={0} hidden={tab !== 'post'}>
         <div className="plan-main">
-          {tabLocked('post', idea.status) && (
-            <div className="pt-locked" role="status">
-              <h3>{t('plan.tab.locked.post.title')}</h3>
-              <p className="muted">{t('plan.tab.locked.post.body')}</p>
-              <button type="button" className="btn btn-primary" onClick={() => chooseTab('storyboard')}>
-                {t('plan.tab.locked.go')}
-              </button>
-            </div>
-          )}
+          {(() => {
+            const n = lockedNotice('post', idea.status)
+            return (
+              n && (
+                <div className="pt-locked" role="status">
+                  <h3>{t(n.titleKey)}</h3>
+                  <p className="muted">{t(n.bodyKey)}</p>
+                  {n.toStoryboard && (
+                    <button type="button" className="btn btn-primary" onClick={() => chooseTab('storyboard')}>
+                      {t('plan.tab.locked.go')}
+                    </button>
+                  )}
+                </div>
+              )
+            )
+          })()}
           <div hidden={!!tabLocked('post', idea.status)}>
           <PublishPanel key={`pub-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} />
           </div>
