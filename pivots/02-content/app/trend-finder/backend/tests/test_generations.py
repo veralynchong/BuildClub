@@ -152,3 +152,67 @@ def test_mock_video_spec(gen):
     assert (v["codec_name"], v["width"], v["height"], v["r_frame_rate"]) == ("h264", 1080, 1920, "30/1")
     assert a["codec_name"] == "aac"
     assert abs(float(out["format"]["duration"]) - 4) < 0.1
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
+JPG = b"\xff\xd8\xff\xe0" + b"\0" * 32
+WEBP = b"RIFF\0\0\0\0WEBP" + b"\0" * 32
+
+
+def upload_node(client, idea_id="ia", node_id="n_up"):
+    c = client.get(f"/api/ideas/{idea_id}/canvas").json()
+    c["doc"]["nodes"].append({"id": node_id, "type": "upload", "position": {"x": 0, "y": 0}, "data": {}})
+    assert client.put(f"/api/ideas/{idea_id}/canvas", json={"version": c["version"], "doc": c["doc"]}).status_code == 200
+
+
+def up_img(client, body=PNG, ctype="image/png", idea_id="ia", node="n_up"):
+    return client.post(f"/api/ideas/{idea_id}/gen/upload?nodeId={node}", content=body, headers={"content-type": ctype})
+
+
+def test_upload_image(gen):
+    upload_node(gen)
+    for body, ctype, ext in ((PNG, "image/png", "png"), (JPG, "image/jpeg", "jpg"), (WEBP, "image/webp", "webp")):
+        r = up_img(gen, body, ctype)
+        assert r.status_code == 200, r.text
+        row = r.json()
+        assert row["model"] == "upload" and row["status"] == "done" and row["kind"] == "image" and row["nodeId"] == "n_up"
+        f = gen.get(row["url"])
+        assert f.status_code == 200 and f.headers["content-type"] == ctype and f.content == body
+        assert (server.MEDIA_DIR / "ia" / "gen" / f"{row['id']}.{ext}").is_file() or any(
+            (server.MEDIA_DIR / "ia" / "gen").glob(f"*.{ext}"))
+    listed = gen.get("/api/ideas/ia/gen").json()
+    assert [g["model"] for g in listed] == ["upload"] * 3
+
+
+def test_upload_rejects_wrong_type_or_header(gen):
+    upload_node(gen)
+    assert up_img(gen, PNG, "text/plain").status_code == 415
+    assert up_img(gen, PNG, "image/svg+xml").status_code == 415
+    assert up_img(gen, b"not a png at all", "image/png").status_code == 415
+    assert up_img(gen, PNG, "image/jpeg").status_code == 415  # header must match the declared type
+    assert gen.get("/api/ideas/ia/gen").json() == []
+    assert not list((server.MEDIA_DIR / "ia" / "gen").glob("*")) if (server.MEDIA_DIR / "ia" / "gen").exists() else True
+
+
+def test_upload_too_big(gen, monkeypatch):
+    upload_node(gen)
+    monkeypatch.setattr(generations, "MAX_UPLOAD_BYTES", 100)
+    assert up_img(gen, PNG + b"\0" * 200).status_code == 413
+    assert gen.get("/api/ideas/ia/gen").json() == []
+    assert not list((server.MEDIA_DIR / "ia" / "gen").glob("*")) if (server.MEDIA_DIR / "ia" / "gen").exists() else True
+
+
+def test_upload_needs_upload_node(gen):
+    assert up_img(gen, node="n_sb_s1").status_code == 422  # a storyboard node
+    assert up_img(gen, node="nope").status_code == 422
+    assert gen.post("/api/ideas/ia/gen/upload", content=PNG, headers={"content-type": "image/png"}).status_code == 422
+
+
+def test_upload_needs_approved_plan(gen):
+    assert up_img(gen, idea_id="iw").status_code == 409
+    assert up_img(gen, idea_id="nope").status_code == 404
+
+
+def test_upload_path_safety(gen):
+    assert up_img(gen, idea_id="%2e%2e").status_code in (404, 405, 422)
+    assert not (server.MEDIA_DIR.parent / "gen").exists()

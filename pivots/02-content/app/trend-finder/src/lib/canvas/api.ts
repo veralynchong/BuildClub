@@ -1,4 +1,5 @@
 import { t } from '../i18n.ts'
+import { imageError, imageType } from './upload.ts'
 import type { CanvasDoc, CanvasState, GenModel, Generation } from './types.ts'
 
 // A plan with no saved shots has no canvas yet.
@@ -107,14 +108,14 @@ export async function pollGen(
   return null
 }
 
-const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
-
-// An image for an upload node; the route is added in the upload task (POST /gen/upload?nodeId=).
+// An image for an upload node. A file the server would refuse is rejected here, without sending it.
 export async function uploadImage(ideaId: string, nodeId: string, file: File): Promise<Generation> {
+  const bad = imageError(file)
+  if (bad) throw new Error(bad)
   const r = await fetch(`${base(ideaId)}/gen/upload?nodeId=${encodeURIComponent(nodeId)}`, {
     method: 'POST',
     body: file,
-    headers: { 'content-type': IMAGE_TYPES.includes(file.type) ? file.type : '' },
+    headers: { 'content-type': imageType(file) ?? '' },
   })
   return send(r, t('canvas.err.upload'))
 }

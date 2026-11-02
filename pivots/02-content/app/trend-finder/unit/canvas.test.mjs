@@ -318,3 +318,32 @@ test('finishedWhileAway picks up a new version made while away, not a legacy imp
   doc.nodes.find((n) => n.id === 'n_sb_s1').data.selected = 'gone'
   assert.deepEqual(finishedWhileAway(doc, made), [{ nodeId: 'n_sb_s1', genId: 'a' }])
 })
+
+import { checkImage, imageType, uploadKind } from '../src/lib/canvas/upload.ts'
+
+test('upload: image and video types, by type then by extension', () => {
+  assert.equal(imageType({ name: 'a.png', type: 'image/png' }), 'image/png')
+  assert.equal(imageType({ name: 'a.JPEG', type: '' }), 'image/jpeg')
+  assert.equal(imageType({ name: 'a.webp', type: '' }), 'image/webp')
+  assert.equal(imageType({ name: 'a.png', type: 'image/gif' }), null)
+  assert.equal(uploadKind({ name: 'a.mov', type: '' }), 'video')
+  assert.equal(uploadKind({ name: 'a.png', type: 'image/png' }), 'image')
+  assert.equal(uploadKind({ name: 'a.txt', type: 'text/plain' }), null)
+})
+
+test('upload: checkImage rejects unsupported and oversize', () => {
+  assert.equal(checkImage({ name: 'a.png', type: 'image/png', size: 10 }), null)
+  assert.equal(checkImage({ name: 'a.gif', type: 'image/gif', size: 10 }), 'canvas.err.upload')
+  assert.equal(checkImage({ name: 'a.png', type: 'image/png', size: 21 * 1024 * 1024 }), 'canvas.upload.tooBig')
+})
+
+test('uploadImage rejects an unsupported file without a request', async () => {
+  const { uploadImage } = await import('../src/lib/canvas/api.ts')
+  const real = globalThis.fetch
+  let called = false
+  globalThis.fetch = async () => { called = true; return new Response('{}') }
+  try {
+    await assert.rejects(uploadImage('i', 'n', { name: 'a.gif', type: 'image/gif', size: 3 }), /upload/i)
+    assert.equal(called, false)
+  } finally { globalThis.fetch = real }
+})

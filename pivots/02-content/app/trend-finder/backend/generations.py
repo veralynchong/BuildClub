@@ -36,8 +36,20 @@ COLUMNS = ("id, idea_id, node_id, kind, model, inputs, input_hash, status, est_u
 MAX_PROMPT = 4000
 CSP = {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"}
 NODE_FOR_KIND = {"image": "storyboard", "video": "video"}  # the canvas node type each model kind fills
-FILE_TYPES = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "mp4": "video/mp4",
-              "mp3": "audio/mpeg"}
+FILE_TYPES = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "webp": "image/webp",
+              "mp4": "video/mp4", "mp3": "audio/mpeg"}
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+UPLOAD_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+NOT_IMAGE = "Upload a PNG, JPEG or WebP image."
+UPLOAD_LIMIT = "The image is over the 20 MB limit."
+
+
+def image_header_ok(ext: str, head: bytes) -> bool:
+    if ext == "png":
+        return head.startswith(b"\x89PNG")
+    if ext == "jpg":
+        return head.startswith(b"\xff\xd8\xff")
+    return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
 
 
 def load_models() -> list[dict]:
@@ -236,6 +248,53 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         out = to_json(row)
         router.jobs.submit(gid)
         return JSONResponse(out, status_code=201)
+
+    @router.post("/api/ideas/{idea_id}/gen/upload")
+    async def upload(idea_id: str, request: Request, nodeId: str = ""):
+        found = find_idea(idea_id)
+        if found is None:
+            return error(404, "That plan doesn't exist.")
+        if found["status"] != "approved":
+            return error(409, "Only an approved plan can take uploads.")
+        with db() as conn:
+            canvas_row = conn.execute("SELECT doc FROM canvases WHERE idea_id = ?", (idea_id,)).fetchone()
+        nodes = json.loads(canvas_row[0])["nodes"] if canvas_row else []
+        if not any(n.get("id") == nodeId and n.get("type") == "upload" for n in nodes):
+            return error(422, "That node isn't an upload node on this plan's canvas.")
+        ext = UPLOAD_TYPES.get(request.headers.get("content-type", "").split(";")[0].strip().lower())
+        if ext is None:
+            return error(415, NOT_IMAGE)
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
+            return error(413, UPLOAD_LIMIT)
+        folder = gen_folder(media_dir(), idea_id)
+        if folder is None:
+            return error(404, "That plan doesn't exist.")
+        folder.mkdir(parents=True, exist_ok=True)
+        name = f"up_{secrets.token_urlsafe(9)}.{ext}"
+        part = folder / f".{name}.part"
+        size = 0
+        try:
+            with part.open("wb") as f:
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > MAX_UPLOAD_BYTES:
+                        break
+                    f.write(chunk)
+            if size > MAX_UPLOAD_BYTES:
+                part.unlink(missing_ok=True)
+                return error(413, UPLOAD_LIMIT)
+            with part.open("rb") as f:
+                head = f.read(12)
+            if not image_header_ok(ext, head):
+                part.unlink(missing_ok=True)
+                return error(415, NOT_IMAGE)
+            os.replace(part, folder / name)
+        except BaseException:
+            part.unlink(missing_ok=True)
+            raise
+        with db() as conn:
+            return insert_done(conn, idea_id, nodeId, "image", "upload", file=name)
 
     @router.get("/api/ideas/{idea_id}/gen")
     def listing(idea_id: str):

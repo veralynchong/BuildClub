@@ -14,11 +14,13 @@ import {
 import '@xyflow/react/dist/style.css'
 import type { SavedIdea, Shot } from '../../types'
 import { t, type Key, type Vars } from '../../lib/i18n'
-import { getCanvas, getModels, NoShots, pollGen, putCanvas, StaleCanvas, startGen } from '../../lib/canvas/api'
+import { getCanvas, getModels, NoShots, pollGen, putCanvas, StaleCanvas, startGen, uploadImage } from '../../lib/canvas/api'
 import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '../../lib/canvas/drawer'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { addNode, freeSpot, genRequest, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { mergeFrame } from '../../lib/storyboard'
+import { chooseTake, checkFile, listTakes, uploadTake, type Take } from '../../lib/takes'
+import { uploadKind } from '../../lib/canvas/upload'
 import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
 import type { CanvasDoc, CanvasState, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
 import { ErrorText } from '../ErrorText'
@@ -358,6 +360,80 @@ function CanvasBoard({
     }
   }
 
+  // ---- uploads and takes ----
+  const [takes, setTakes] = useState<Take[]>(initial.takes)
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
+  const shotIndex = (shotId: string | undefined) => (shotId ? shots.findIndex((s) => s.id === shotId) : -1)
+  const working = async (nodeId: string, run: () => Promise<void>, fallback: Key) => {
+    if (readOnly || busy.has(nodeId)) return
+    setBusy((b) => new Set(b).add(nodeId))
+    try {
+      await run()
+    } catch (e) {
+      if (mounted.current) showText(e instanceof Error ? e.message : t(fallback))
+    } finally {
+      if (mounted.current) setBusy((b) => (b.has(nodeId) ? new Set([...b].filter((x) => x !== nodeId)) : b))
+    }
+  }
+  const refreshTakes = async () => {
+    const next = await listTakes(ideaId)
+    if (mounted.current) setTakes(next)
+  }
+
+  const addTake = (nodeId: string, file: File) => {
+    const node = latest.current.doc.nodes.find((n) => n.id === nodeId)
+    const index = shotIndex(node?.shotId)
+    const bad = checkFile(file)
+    if (index < 0 || bad) return showText(bad ?? t('canvas.footage.gone'))
+    void working(nodeId, async () => {
+      await uploadTake(ideaId, index, file)
+      await refreshTakes()
+    }, 'canvas.err.upload')
+  }
+
+  const uploadToNode = (nodeId: string, file: File) => {
+    const node = latest.current.doc.nodes.find((n) => n.id === nodeId)
+    const kind = uploadKind(file)
+    if (!node || !kind) return showText(t('canvas.upload.unsupported'))
+    if (kind === 'video') {
+      const index = shotIndex(node.shotId)
+      if (index < 0) return showText(t('canvas.upload.needsShot'))
+      const bad = checkFile(file)
+      if (bad) return showText(bad)
+      void working(nodeId, async () => {
+        const take = await uploadTake(ideaId, index, file)
+        await refreshTakes()
+        if (!mounted.current) return
+        dropLinesFrom(nodeId, node.data.media === 'image')
+        updateData(nodeId, { media: 'video', takeId: take.id })
+      }, 'canvas.err.upload')
+      return
+    }
+    void working(nodeId, async () => {
+      const g = await uploadImage(ideaId, nodeId, file)
+      if (!mounted.current) return
+      upsertGen(g)
+      dropLinesFrom(nodeId, node.data.media === 'video')
+      updateData(nodeId, { media: 'image', takeId: undefined, selected: g.id })
+      markFrom(nodeId, false)
+    }, 'canvas.err.upload')
+  }
+
+  // An upload node that changes from an image to a video (or back) can't keep lines made for the other kind.
+  const dropLinesFrom = (nodeId: string, changes: boolean) => {
+    if (!changes) return
+    markFrom(nodeId, false)
+    setEdges((es) => es.filter((e) => e.source !== nodeId))
+  }
+
+  const onUseTake = (takeId: string) => {
+    if (readOnly) return
+    chooseTake(ideaId, takeId).then(
+      (next) => mounted.current && setTakes(next),
+      (e) => showText(e instanceof Error ? e.message : t('canvas.err.upload')),
+    )
+  }
+
   const onSelectVersion = (nodeId: string, genId: string) => {
     const node = latest.current.doc.nodes.find((n) => n.id === nodeId)
     if (!node || node.data.selected === genId) return
@@ -438,6 +514,12 @@ function CanvasBoard({
     onGenerate: (id) => void onGenerate(id),
     onSelectVersion,
     edited: (id) => markFrom(id, latest.current.doc.nodes.find((n) => n.id === id)?.type !== 'prompt'),
+    takes,
+    shotIndex,
+    uploading: (id) => busy.has(id),
+    uploadToNode,
+    addTake,
+    pickTake: onUseTake,
     incomingHandles: (id) => edges.filter((e) => e.target === id).map((e) => e.targetHandle ?? ''),
     missing: (id) => {
       const node = doc.nodes.find((n) => n.id === id)

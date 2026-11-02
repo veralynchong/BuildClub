@@ -147,3 +147,13 @@
 .cv-spin { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--line-strong); border-top-color: var(--accent); border-radius: 50%; animation: cv-spin 0.8s linear infinite; }
 @keyframes cv-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .cv-spin { animation-duration: 3s; } }
+
+/* Upload and footage nodes */
+.cv-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.cv-upload, .cv-footage { width: 220px; }
+.cv-upload .cv-preview img, .cv-upload .cv-preview video, .cv-footage .cv-preview video { display: block; width: 100%; max-height: 110px; object-fit: contain; border-radius: var(--radius-sm); }
+.cv-footage-name { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-takes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); max-height: 120px; overflow-y: auto; }
+.cv-takes li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.cv-takes .cv-take-name { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-takes .is-chosen .cv-take-name { font-weight: 600; }
