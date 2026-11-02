@@ -126,7 +126,7 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
       )}
       <VersionStrip versions={versions} selectedId={shown?.id ?? null} disabled={readOnly} onSelect={(g) => onSelectVersion(id, g)} />
       <div className="cv-gen-foot">
-        <button type="button" className="btn btn-primary btn-sm nodrag" disabled={readOnly || !!pending || !model || retired || need !== null} onClick={() => onGenerate(id)}>
+        <button type="button" className="btn btn-primary btn-sm nodrag" disabled={readOnly || !!pending || !model || !model.available || retired || need !== null} onClick={() => onGenerate(id)}>
           {label}
         </button>
         {model && (
@@ -140,6 +140,7 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
           {chaining ? t('canvas.chain.quoting') : t('canvas.chain.run')}
         </button>
       )}
+      {model && !model.available && !pending && <p className="cv-gen-need small muted">{t('canvas.gen.needsKey')}</p>}
       {need && !pending && <p className="cv-gen-need small muted">{t(need)}</p>}
       <PortLabels node={node} />
       <Ports node={node} />

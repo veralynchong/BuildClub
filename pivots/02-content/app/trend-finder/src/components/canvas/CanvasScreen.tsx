@@ -371,23 +371,27 @@ function CanvasBoard({
   const [chaining, setChaining] = useState(false) // a quote or a confirmed start is on its way
   const [ask, setAsk] = useState<{ body: ChainBody; quote: Quote } | null>(null)
 
+  const chainStarting = useRef(false) // a ref, so a double click can't start the chain twice before state updates
   const onChain = async (nodeId: string) => {
     const d = latest.current.doc
     const pair = chainPair(d, nodeId)
-    if (!pair || blocked || chaining || chainBusy(d, nodeId, gensRef.current)) return
+    if (!pair || blocked || chaining || chainStarting.current || chainBusy(d, nodeId, gensRef.current)) return
+    if (starting.current.has(pair.imageNodeId) || starting.current.has(pair.videoNodeId)) return
     const image = d.nodes.find((n) => n.id === pair.imageNodeId)
     const video = d.nodes.find((n) => n.id === pair.videoNodeId)
     const imageModel = models.find((m) => m.id === image?.data.model && m.kind === 'image')
     const videoModel = models.find((m) => m.id === video?.data.model && m.kind === 'video')
     if (!image || !video || !imageModel || !videoModel || !imageModel.available || !videoModel.available) return showNote('canvas.chain.noKey')
     if (missingInput(d, pair.imageNodeId, imageModel, shots, gensRef.current)) return showNote('canvas.chain.missing')
+    const imageReq = genRequest(d, pair.imageNodeId, shots, gensRef.current)
     const videoReq = genRequest(d, pair.videoNodeId, shots, gensRef.current)
+    if (imageReq.reference || videoReq.reference) return showNote('canvas.chain.noRef')
     const body: ChainBody = {
       imageNodeId: pair.imageNodeId,
       videoNodeId: pair.videoNodeId,
       imageModel: imageModel.id,
       videoModel: videoModel.id,
-      prompt: genRequest(d, pair.imageNodeId, shots, gensRef.current).prompt,
+      prompt: imageReq.prompt,
       videoPrompt: videoReq.prompt,
       duration: videoReq.duration ?? videoModel.durations?.[0],
     }
@@ -415,8 +419,14 @@ function CanvasBoard({
   }, [ask, chaining])
 
   const confirmChain = async () => {
-    if (!ask || chaining) return
+    if (!ask || chaining || chainStarting.current) return
     const { body } = ask
+    // a Generate may have begun since the quote was shown
+    if (chainBusy(latest.current.doc, body.imageNodeId, gensRef.current) || starting.current.has(body.imageNodeId) || starting.current.has(body.videoNodeId)) {
+      setAsk(null)
+      return showNote('canvas.chain.busy')
+    }
+    chainStarting.current = true
     setChaining(true)
     try {
       const { image, video } = await startChain(ideaId, body)
@@ -439,6 +449,7 @@ function CanvasBoard({
         showText(e instanceof Error ? e.message : t('canvas.err.start'))
       }
     } finally {
+      chainStarting.current = false
       if (mounted.current) setChaining(false)
     }
   }
