@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import analyze  # noqa: E402
 import channels  # noqa: E402
+import covers  # noqa: E402
 import server  # noqa: E402
 
 
@@ -47,6 +48,9 @@ def offline(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "APP_PASSWORD", "")
     monkeypatch.setattr(server, "CACHE_DIR", tmp_path / "cache")
     monkeypatch.setattr(server, "PINNED_DIR", tmp_path / "pinned")
+    monkeypatch.setattr(server, "COVERS_DIR", tmp_path / "covers")
+    monkeypatch.setattr(server, "PINNED_COVERS_DIR", tmp_path / "pinned" / "covers")
+    monkeypatch.setattr(covers, "download", lambda url: None)  # no test fetches a cover from the internet
     monkeypatch.setattr(server, "DB_PATH", tmp_path / "data.db")
     monkeypatch.setattr(server, "MEDIA_DIR", tmp_path / "media")
     monkeypatch.setattr(analyze, "JOBS_DIR", tmp_path / "jobs")
