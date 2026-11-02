@@ -1,8 +1,21 @@
 # STATUS
 
-Current (2026-11-02 AEDT): fork main is at 6fe1772 with PRs #19-#25 merged (storyboard, publish, grade and subtitles UI, Settings, Chinese UI); `bash bin/verify.sh` GREEN at #25 head 7166ca5; client demo for Mercif is up (details in the private handoff).
+Current (2026-11-03 AEDT): node canvas P1 (PR #28) and P2 real models (branch feat/canvas-p2-models) are built and verified with mock models only; neither is merged. Before that (2026-11-02 AEDT): fork main is at 6fe1772 with PRs #19-#25 merged (storyboard, publish, grade and subtitles UI, Settings, Chinese UI); `bash bin/verify.sh` GREEN at #25 head 7166ca5; client demo for Mercif is up (details in the private handoff).
 
 Earlier: remake phase 1 (PR #4) and 2a stage board (PR #5) are merged into fork main (2026-10-31). Phase 2b (shot checklist and real-footage takes) is merged (PR #6, 4277192, 2026-10-31). Phase 2c (edit to a publishable MP4, then Annie's approval) is split into 2c-1 and 2c-2. 2c-1 ("Make the video") is merged (PR #7, 359791c, 2026-11-01). 2c-2 (Annie approves the finished video on the no-login review link) is merged (PR #8, 27496cb, 2026-11-01) after an e2e re-run at 1440 and 390 (35/35 each). Phase 2 (2a-2c) is done. `bash bin/verify.sh` GREEN on the merged tree (2026-11-01).
+
+## 2026-11-03 (AEDT): node canvas P1 + P2 (real AI models)
+- P1 (canvas skeleton, mock models only) is PR #28 to veralynchong/BuildClub (branch `feat/node-canvas-p1`, head 7db7614). It is open and not merged; it waits for the user to say merge.
+- P2 (real models, plan `pivots/02-content/docs/plans/2026-11-03-canvas-p2-plan.md`) is on branch `feat/canvas-p2-models`, with a PR stacked on `feat/node-canvas-p1`. Not merged.
+  - Providers: mock, fal (Seedream 4.5, Hailuo 2.3 Fast, Kling 2.6 Pro, Veo 3.1 Fast), Gemini (Nano Banana 2 / Pro). Daily wallets `DAILY_GEN_IMAGE_USD` 0.50 and `DAILY_GEN_VIDEO_USD` 1.00. Refunds happen only when nothing was sent or the provider reported failure; a lost result is `unknown` with no refund.
+  - Run-the-whole-shot (storyboard image, then video from it) has a quote-and-confirm step. Takes are now keyed by shot id. The storyboard "Make frame" uses `FRAME_IMAGE_MODEL`, and the gpt-image-1 path is removed.
+- Last verification (2026-11-03): `bash bin/verify.sh` GREEN at dad12ba. Mock-only browser E2E at 1440 on port 8871 passed 5/5 scenarios: real models disabled without keys, the chain US$0.00, `#fail`, a click straight after connecting, and the button disabled while running.
+- Not verified: no real model has been called (no keys in .env, and the user chose no spend on 2026-11-03). fal/Gemini request fields, 9:16 support on Hailuo/Kling, Seedream portrait size, fal data-URI inputs and the Kling price are checked against docs only.
+- Next steps:
+  1. The user adds `FAL_KEY` and `GEMINI_API_KEY` to .env, then a paid smoke test (about US$0.45, cap US$1).
+  2. Decide on the consistency research proposals (Artifact https://claude.ai/artifact/GcK6aCdw7L3XUn5fsAbMUu): replace Veo 3.1 with Gemini Omni Flash 1.1 (the fal Veo reference endpoint retires 2026-11-17), add Nano Banana 2.1, and P2.5 "consistency kit" node.
+  3. Merge PR #28, then the P2 PR (user's call).
+  4. Parked from review: refund counted on the refund day, not the spend day (M1); stale docs (spec §3, README, .env.example, decision-log gpt-image-1).
 
 ## 2026-11-02 (AEDT): phase 3 from Mercif feedback
 PRs merged into veralynchong/BuildClub main (#18-#26):

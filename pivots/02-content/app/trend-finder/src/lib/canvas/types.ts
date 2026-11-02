@@ -41,7 +41,8 @@ export interface CanvasDoc {
   viewport?: { x: number; y: number; zoom: number }
 }
 
-export type GenStatus = 'queued' | 'running' | 'done' | 'failed'
+// waiting: a video held until its storyboard image is done; unknown: the provider lost the result (may have charged)
+export type GenStatus = 'queued' | 'waiting' | 'running' | 'done' | 'failed' | 'unknown'
 
 export interface Generation {
   id: string
@@ -55,6 +56,7 @@ export interface Generation {
   actualUsd: number | null
   url: string | null
   error: string | null
+  after?: string // waiting: the generation id it is held for
   createdAt: number
   finishedAt: number | null
 }
@@ -65,8 +67,11 @@ export interface GenModel {
   label: string
   kind: 'image' | 'video'
   provider: string
+  endpoint: string
   tier: string
   price: { per: string; usd: number }
+  priceCheckedAt: string
+  available: boolean
   inputs: { text?: InputNeed; startFrame?: InputNeed; reference?: InputNeed }
   durations?: number[]
   aspects: string[]
@@ -77,4 +82,27 @@ export interface CanvasState {
   doc: CanvasDoc
   generations: Generation[]
   takes: Take[]
+}
+
+// GET /api/gen/budget: per kind, what was spent today and the daily cap.
+export interface Budget {
+  image: { spent: number; cap: number }
+  video: { spent: number; cap: number }
+}
+
+export interface ChainBody {
+  imageNodeId: string
+  videoNodeId: string
+  imageModel: string
+  videoModel: string
+  prompt: string
+  videoPrompt?: string
+  duration?: number
+}
+
+// The answer to a chain request that was not confirmed: nothing is started.
+export interface Quote {
+  total: number
+  remaining: { image: number; video: number }
+  items: { nodeId: string; model: string; usd: number }[]
 }

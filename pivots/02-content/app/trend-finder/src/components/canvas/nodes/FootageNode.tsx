@@ -5,13 +5,13 @@ import { useCanvas } from './ctx'
 import { PortLabels, Ports } from './Ports'
 import type { CvNodeProps } from './types'
 
-// The takes of this node's shot (matched by the shot's place in the list): which one is used, add one, use another.
+// The takes of this node's shot (matched by the shot's id): which one is used, add one, use another.
 export function FootageNode({ id, data: { node } }: CvNodeProps) {
   const input = useRef<HTMLInputElement>(null)
   const { takes, readOnly, shotIndex, uploading, addTake, pickTake } = useCanvas()
   const index = shotIndex(node.shotId)
   const gone = index < 0
-  const mine = gone ? [] : takes.filter((x) => x.shot === index)
+  const mine = gone ? [] : takes.filter((x) => x.shotId === node.shotId)
   const chosen = mine.find((x) => x.chosen)
   const busy = uploading(id)
   return (

@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 import cutting
 import grading
 import subtitles
+import takes
 from cutting import CutError
 
 # Job columns describe the latest run; the out_* columns describe the video on disk and are written only
@@ -124,8 +125,7 @@ class CutRequest(BaseModel):
 
 def chosen_ids(conn, idea_id: str, shots: int) -> list[tuple[str, str]]:
     """(take id, ext) of the chosen take of each shot below `shots`, in shot order; shots with none are skipped."""
-    return conn.execute("SELECT id, ext FROM takes WHERE idea_id = ? AND chosen = 1 AND shot < ? ORDER BY shot",
-                        (idea_id, shots)).fetchall()
+    return [(r[0], r[3]) for r, _ in takes.chosen_takes(conn, idea_id, shots)]
 
 
 def music_row(conn, idea_id: str):
@@ -479,8 +479,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         with db() as conn:
             picked = chosen_ids(conn, idea_id, body.shotCount)
             music = music_row(conn, idea_id)
-            shots_with_pick = {r[0] for r in conn.execute(
-                "SELECT shot FROM takes WHERE idea_id = ? AND chosen = 1 AND shot < ?", (idea_id, body.shotCount))}
+            shots_with_pick = {i for _, i in takes.chosen_takes(conn, idea_id, body.shotCount)}
         for shot in range(body.shotCount):
             if shot not in shots_with_pick:
                 return error(409, f"Choose a take for shot {shot + 1} first.")

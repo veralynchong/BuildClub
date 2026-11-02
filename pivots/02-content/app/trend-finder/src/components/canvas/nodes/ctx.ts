@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 import type { Shot } from '../../../types'
 import type { Key } from '../../../lib/i18n'
 import type { Take } from '../../../lib/takes'
-import type { GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
+import type { Budget, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
 
 // What the node components need from the board: the shot list, whether editing is allowed, and a few actions.
 export interface CanvasCtx {
@@ -14,6 +14,10 @@ export interface CanvasCtx {
   models: GenModel[]
   gens: Generation[]
   onGenerate: (nodeId: string) => void
+  budget: Budget | null // today's spending; null until loaded
+  chainOf: (nodeId: string) => { imageNodeId: string; videoNodeId: string } | null // storyboard -> video pair
+  onChain: (nodeId: string) => void // quote the pair, then ask before starting it
+  chaining: boolean // a quote or a confirmed start is on its way
   onSelectVersion: (nodeId: string, genId: string) => void
   // The node's own prompt or a prompt node's text was edited: the generated nodes it feeds are out of date.
   edited: (nodeId: string) => void
