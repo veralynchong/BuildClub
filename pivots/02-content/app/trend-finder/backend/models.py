@@ -303,6 +303,29 @@ class AnswerResult(BaseModel):  # same fields as the front end's Answer (src/lib
     basis: str
 
 
+CONTENT_TYPES = ("street_interview", "recipe_cooking", "skit_comedy", "review_taste_test", "unboxing_product",
+                 "day_in_life_vlog", "challenge", "tutorial_tips", "other")
+ContentType = Literal["street_interview", "recipe_cooking", "skit_comedy", "review_taste_test", "unboxing_product",
+                      "day_in_life_vlog", "challenge", "tutorial_tips", "other"]  # same list as src/types.ts
+
+
+class ContentTypes(BaseModel):
+    """What kind of video each result is, by the video's id in the search (ids with no type are left out)."""
+    types: dict[str, ContentType]
+
+
+class ClassifyAnswer(BaseModel):
+    """The AI's answer: video number (as sent) -> type. A type outside the list becomes "other"."""
+    types: dict[str, ContentType]
+
+    @field_validator("types", mode="before")
+    @classmethod
+    def unknown_is_other(cls, value):
+        if not isinstance(value, dict):
+            raise ValueError("types must be an object")
+        return {str(k): (v if v in CONTENT_TYPES else "other") for k, v in value.items()}
+
+
 class LikeJob(BaseModel):
     status: Literal["queued", "running", "done", "failed"]
     step: str = ""
@@ -433,3 +456,59 @@ class CutDecideRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(max_length=320)
     password: str = Field(max_length=1024)
+
+
+# ---- compare viral videos -----------------------------------------------------------------------
+
+class CompareRequest(BaseModel):
+    urls: list[str] = Field(min_length=2, max_length=5)
+
+
+class CompareBeat(BaseModel):
+    beat: str  # short name, e.g. "No, no, no"
+    what: str  # what happens in this beat
+    timing: str  # typical timing, e.g. "0-8s"
+
+
+class CompareHook(BaseModel):
+    pattern: str
+    # The hookType values the videos share, from their breakdowns (empty when none was recorded).
+    hookTypes: list[HookType]
+
+
+class CompareOut(BaseModel):
+    """The synthesis as the AI must answer it (output_format for the compare call)."""
+    commonFormat: str
+    structure: list[CompareBeat] = Field(min_length=1, max_length=8)
+    typicalLength: str
+    hookPattern: CompareHook
+    emotionPattern: str
+    whatToCopy: list[str] = Field(min_length=3, max_length=5)
+    whatDiffers: list[str] = Field(max_length=6)
+    confidence: str
+
+
+class CompareVideo(BaseModel):
+    """One video in a comparison and the state of its breakdown."""
+    url: str
+    job: str
+    status: Literal["queued", "running", "done", "failed"]
+    progress: float = 0
+    step: str = ""
+    error: Optional[str] = None
+    concept: Optional[str] = None
+    lengthSec: Optional[float] = None
+
+
+class CompareStarted(BaseModel):
+    job: str
+
+
+class CompareJob(BaseModel):
+    job: str
+    status: Literal["queued", "running", "done", "failed"]
+    progress: float
+    step: str = ""
+    videos: list[CompareVideo] = []
+    result: Optional[CompareOut] = None
+    error: Optional[str] = None

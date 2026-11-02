@@ -4,6 +4,7 @@ import * as find from './strings/find.ts'
 import * as plan from './strings/plan.ts'
 import * as cut from './strings/cut.ts'
 import * as shots from './strings/shots.ts'
+import * as compare from './strings/compare.ts'
 
 export type Lang = 'en' | 'zh-Hant'
 
@@ -45,12 +46,12 @@ export function writeLang(lang: Lang, store: Store | null = defaultStore()): voi
 export const htmlLang = (lang: Lang): string => lang
 
 // Per-area dictionaries, exported so the unit test can check each one.
-export const areas = { shell, home, find, plan, cut, shots }
+export const areas = { shell, home, find, plan, cut, shots, compare }
 
 const dictEn: Record<string, string> = Object.assign({}, ...Object.values(areas).map((a) => a.en))
 const dictZh: Record<string, string> = Object.assign({}, ...Object.values(areas).map((a) => a.zhHant))
 
-type AllEn = typeof shell.en & typeof home.en & typeof find.en & typeof plan.en & typeof cut.en & typeof shots.en
+type AllEn = typeof shell.en & typeof home.en & typeof find.en & typeof plan.en & typeof cut.en & typeof shots.en & typeof compare.en
 export type Key = keyof AllEn
 // "x.one" / "x.other" pairs, picked by tp(): the base name is "x".
 export type PluralKey = Key extends infer K ? (K extends `${infer B}.one` ? B : never) : never

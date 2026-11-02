@@ -1,7 +1,11 @@
 import json
 import sqlite3
+import time
 from pathlib import Path
 
+import pytest
+
+import assist
 import server
 from conftest import item, median_search
 from models import SearchResult
@@ -300,3 +304,106 @@ def test_old_median_rows_load_without_details(client, monkeypatch):
     assert video["baselineFrom"] is None
     assert video["medianFetchedAt"] == int(now * 1000)
     assert video["denominator"] == "median"
+
+
+# --- content types (GET /api/search/types) ---
+
+def two_videos():
+    return [server.trim(item(1, "a", 500)), server.trim(item(2, "b", 900))]
+
+
+def fake_classifier(monkeypatch, answer):
+    calls = []
+
+    def fake(model, system, content, max_tokens):
+        calls.append((model, content[0]["text"]))
+        return answer
+
+    monkeypatch.setattr(assist, "call_claude", fake)
+    return calls
+
+
+def test_types_are_sorted_once_then_free(client, monkeypatch):
+    videos = two_videos()
+    write_search(server.CACHE_DIR, "tofu", int(time.time() * 1000), videos)
+    calls = fake_classifier(monkeypatch, 'Here: {"types": {"0": "recipe_cooking", "1": "street_interview"}}')
+    for _ in range(2):
+        r = client.get("/api/search/types", params={"q": "tofu"})
+        assert (r.status_code, r.json()) == (200, {"types": {videos[0]["id"]: "recipe_cooking", videos[1]["id"]: "street_interview"}})
+    assert [c[0] for c in calls] == [assist.CHEAP_MODEL]  # the second ask came from the saved types
+    sent = json.loads(calls[0][1])
+    assert set(sent[0]) == {"n", "caption", "hashtags", "author", "sound"}  # text only: no cover, url or counts
+
+
+def test_pinned_search_types_are_sorted_on_demand(client, monkeypatch):
+    videos = two_videos()
+    write_search(server.PINNED_DIR, "tofu", 0, videos)
+    fake_classifier(monkeypatch, '{"types": {"0": "challenge", "1": "other"}}')
+    assert client.get("/api/search/types", params={"q": "tofu"}).json()["types"][videos[0]["id"]] == "challenge"
+    assert not list(server.PINNED_DIR.glob("*.types"))  # the pinned folder is in git: nothing is written there
+    assert list(server.CACHE_DIR.glob("*.types"))
+
+
+def test_pinned_types_file_is_used_without_a_call(client, monkeypatch):
+    videos = two_videos()
+    write_search(server.PINNED_DIR, "tofu", 0, videos)
+    (server.PINNED_DIR / server.types_file("tofu", "tiktok")).write_text(json.dumps({"fetchedAt": 0, "types": {videos[0]["id"]: "skit_comedy"}}))
+    calls = fake_classifier(monkeypatch, "{}")
+    assert client.get("/api/search/types", params={"q": "tofu"}).json() == {"types": {videos[0]["id"]: "skit_comedy"}}
+    assert calls == []
+
+
+def test_unknown_type_becomes_other_and_missing_ones_are_left_out(client, monkeypatch):
+    videos = two_videos()
+    write_search(server.CACHE_DIR, "tofu", int(time.time() * 1000), videos)
+    fake_classifier(monkeypatch, '{"types": {"0": "cooking show", "7": "challenge", "x": "challenge"}}')
+    assert client.get("/api/search/types", params={"q": "tofu"}).json() == {"types": {videos[0]["id"]: "other"}}
+
+
+def test_types_of_an_older_fetch_are_not_reused(client, monkeypatch):
+    videos = two_videos()
+    now = int(time.time() * 1000)
+    write_search(server.CACHE_DIR, "tofu", now, videos)
+    (server.CACHE_DIR / server.types_file("tofu", "tiktok")).write_text(json.dumps({"fetchedAt": now - 5, "types": {videos[0]["id"]: "skit_comedy"}}))
+    calls = fake_classifier(monkeypatch, '{"types": {"0": "tutorial_tips"}}')
+    assert client.get("/api/search/types", params={"q": "tofu"}).json() == {"types": {videos[0]["id"]: "tutorial_tips"}}
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("answer", ["no json at all", '{"types": ["recipe_cooking"]}', '{"nope": 1}'])
+def test_unusable_answer_is_a_502_and_not_saved(client, monkeypatch, answer):
+    write_search(server.CACHE_DIR, "tofu", int(time.time() * 1000), two_videos())
+    fake_classifier(monkeypatch, answer)
+    assert client.get("/api/search/types", params={"q": "tofu"}).status_code == 502
+    assert not list(server.CACHE_DIR.glob("*.types"))
+
+
+def test_failed_call_is_a_502(client, monkeypatch):
+    write_search(server.CACHE_DIR, "tofu", int(time.time() * 1000), two_videos())
+
+    def boom(*a, **k):
+        raise RuntimeError("api down")
+
+    monkeypatch.setattr(assist, "call_claude", boom)
+    assert client.get("/api/search/types", params={"q": "tofu"}).status_code == 502
+
+
+def test_types_need_a_saved_search_and_never_search(client, monkeypatch):
+    calls = fake_classifier(monkeypatch, "{}")
+    assert client.get("/api/search/types", params={"q": "tofu"}).status_code == 404  # run_actor would fail the test if called
+    assert client.get("/api/search/types", params={"q": ""}).status_code == 400
+    assert calls == []
+
+
+def test_types_respect_the_claude_budget(client, monkeypatch):
+    write_search(server.CACHE_DIR, "tofu", int(time.time() * 1000), two_videos())
+    calls = fake_classifier(monkeypatch, "{}")
+    monkeypatch.setattr(server, "DAILY_CLAUDE_USD", 0)
+    assert client.get("/api/search/types", params={"q": "tofu"}).status_code == 429
+    assert calls == []
+
+
+def test_types_files_are_not_read_as_searches(client):
+    write_search(server.CACHE_DIR, "tofu", 0, [])
+    (server.CACHE_DIR / server.types_file("tofu", "tiktok")).write_text("{}")
+    assert [name for name, _, _ in server.saved_files()] == [server.cache_name("tofu")]

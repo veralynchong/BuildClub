@@ -1,7 +1,21 @@
-import type { Platform, Video } from '../../types'
+import type { ContentType, Platform, Video } from '../../types'
+import type { Key } from '../../lib/i18n'
 import type { FormatTrend } from '../../lib/metrics'
 import { byFollowers, compact, outlierScore, platformName } from '../../lib/metrics'
 import { t, tp } from '../../lib/i18n'
+
+const TYPE_KEY: Record<ContentType, Key> = {
+  street_interview: 'find.ctype.street_interview',
+  recipe_cooking: 'find.ctype.recipe_cooking',
+  skit_comedy: 'find.ctype.skit_comedy',
+  review_taste_test: 'find.ctype.review_taste_test',
+  unboxing_product: 'find.ctype.unboxing_product',
+  day_in_life_vlog: 'find.ctype.day_in_life_vlog',
+  challenge: 'find.ctype.challenge',
+  tutorial_tips: 'find.ctype.tutorial_tips',
+  other: 'find.ctype.misc',
+}
+export const contentTypeLabel = (c: ContentType) => t(TYPE_KEY[c])
 
 // Plain-English sentences for the Find ideas pages. No tags or badges: every number says what it is,
 // so an agency owner who has never seen the app can read it straight away.

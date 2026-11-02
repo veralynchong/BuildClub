@@ -1,4 +1,4 @@
-import type { Baseline, Format, Line, Platform, SavedIdea, Shot, Video } from '../types'
+import type { Baseline, ContentType, Format, Line, Platform, SavedIdea, Shot, Video } from '../types'
 import type { Answer } from './answer'
 import { t } from './i18n.ts'
 import { UNKNOWN_DAYS, hasScore, meanScore, outlierScore } from './metrics.ts'
@@ -169,6 +169,21 @@ export async function searchLive(
     formats.push(toFormat(item, v))
   }
   return { videos, formats, cached: Boolean(body.cached), fetchedAt: body.fetchedAt, mediansPending: Boolean(body.mediansPending) }
+}
+
+// What kind of video each result is, by app video id. The API sorts a saved search with one cheap AI call the first
+// time and remembers it. Resolves to an empty map when that fails, so the results just show without types.
+export async function fetchContentTypes(query: string, platforms: Platform[]): Promise<Map<string, ContentType>> {
+  const found = new Map<string, ContentType>()
+  await Promise.allSettled(
+    platforms.map(async (platform) => {
+      const r = await fetch(`/api/search/types?q=${encodeURIComponent(query)}&platform=${platform}`)
+      if (!r.ok) return
+      const body = (await r.json().catch(() => ({}))) as { types?: Record<string, ContentType> }
+      for (const [id, type] of Object.entries(body.types ?? {})) found.set(`${idPrefix[platform]}-${id}`, type)
+    }),
+  )
+  return found
 }
 
 export interface SearchAll {

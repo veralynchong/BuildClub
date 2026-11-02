@@ -1,5 +1,12 @@
 export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'reddit' | 'x'
 
+// What kind of video a search result is. Same list as backend/models.py (CONTENT_TYPES).
+export const CONTENT_TYPES = [
+  'street_interview', 'recipe_cooking', 'skit_comedy', 'review_taste_test', 'unboxing_product',
+  'day_in_life_vlog', 'challenge', 'tutorial_tips', 'other',
+] as const
+export type ContentType = (typeof CONTENT_TYPES)[number]
+
 export type Denominator = 'median' | 'followers'
 
 // How a video's multiple was measured. All null on data written before the details were kept.
@@ -42,6 +49,8 @@ export interface Video {
   fetchedAt?: number
   // True when the search result came from the cache.
   fromCache?: boolean
+  // Sorted by the API after the search; missing until then, or when sorting failed.
+  contentType?: ContentType
 }
 
 export type Framing = 'wide' | 'medium' | 'close_up' | 'extreme_close_up' | 'overhead' | 'pov'

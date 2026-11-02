@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { IdeaStatus, Video } from '../types'
 import { byFollowers, compact, hasDate } from '../lib/metrics'
-import { beatUsual, daysAgoWords, viewsLabel } from './find/words'
+import { beatUsual, contentTypeLabel, daysAgoWords, viewsLabel } from './find/words'
 import { t } from '../lib/i18n'
 import { Thumb } from './Thumb'
 import { useManagerName } from '../lib/appContext'
@@ -61,6 +61,7 @@ export function VideoTile({ video, onOpen, onToggleSave, status, cohort, followe
           )}
           <span className="tile-cap">{compare}</span>
           <EvidenceChip video={video} cohort={cohort} compact />
+          {video.contentType && <span className="tile-type">{contentTypeLabel(video.contentType)}</span>}
           <span className="tile-hook">{video.hook}</span>
           <span className="tile-meta">
             {video.handle}
