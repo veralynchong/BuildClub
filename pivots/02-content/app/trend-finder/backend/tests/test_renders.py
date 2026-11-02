@@ -1,5 +1,8 @@
 """The cut: music upload, starting a job, progress, restart handling, stale detection and serving the MP4."""
 
+import json
+import os
+import shutil
 import threading
 import time
 from collections import namedtuple
@@ -8,6 +11,8 @@ from urllib.parse import quote
 import pytest
 
 import cutting
+import editing
+import publishing
 import renders
 import server
 from models import Shot
@@ -599,3 +604,242 @@ def test_auto_cut_summary_is_served_and_old_videos_have_none(client, setup, monk
     assert start(client).status_code == 202 and wait_for(client)["status"] == "done"
     got = client.get("/api/ideas/ia/cut").json()
     assert got["autoCut"] == {"originalSec": 9.0, "trims": [{"shot": 0, "kind": "pause", "start": 1.0, "end": 2.0}]}
+
+
+# ---- the editor export (renders.run_editor is swapped for a fake) ----
+
+EDIT_STALE = "The edit changed after this was exported. Export it again before sending it."
+
+
+@pytest.fixture
+def editor(client, setup, monkeypatch):
+    """A plan with one uploaded take, an edit project that uses it, and fake render tools and ffprobe."""
+    monkeypatch.setattr(editing, "missing_render_tools", lambda: None)
+    monkeypatch.setattr(cutting, "probe", lambda path: {"duration": 4.5, "width": 720, "height": 1280, "hasAudio": True})
+    editing._probe_cache.clear()
+    take = with_take(client)
+    put_project(client, take["id"])
+    return take
+
+
+def project_of(take_id, *spans):
+    clips = [{"id": f"c{i}", "source": {"kind": "take", "id": take_id}, "in": a, "out": b, "volume": 1, "muted": False}
+             for i, (a, b) in enumerate(spans or [(0.0, 2.0)])]
+    return {**editing.empty_project(), "clips": clips}
+
+
+def put_project(client, take_id, *spans, idea_id="ia"):
+    version = client.get(f"/api/ideas/{idea_id}/edit").json()["version"]
+    r = client.put(f"/api/ideas/{idea_id}/edit", json={"version": version, "project": project_of(take_id, *spans)})
+    assert r.status_code == 200, r.text
+
+
+def export(client, idea_id="ia"):
+    return client.post(f"/api/ideas/{idea_id}/edit/export")
+
+
+def saved_project(conn, idea_id):
+    row = conn.execute("SELECT doc FROM edit_projects WHERE idea_id = ?", (idea_id,)).fetchone()
+    return json.loads(row[0]) if row else editing.empty_project()
+
+
+def fake_editor_ok(monkeypatch):
+    def run(db, media, idea_id, work, out, step):
+        step(0.5, "Exporting")
+        out.write_bytes(FINAL)
+        with db() as conn:
+            sig = editing.signature(conn, media, {"id": idea_id}, saved_project(conn, idea_id))
+        return {"size": len(FINAL), "durationSec": 2.0, "signature": sig, "clips": 1}
+
+    monkeypatch.setattr(renders, "run_editor", run)
+
+
+@pytest.fixture
+def slow_editor(monkeypatch):
+    release, started = threading.Event(), threading.Event()
+
+    def run(db, media, idea_id, work, out, step):
+        started.set()
+        release.wait(5)
+        out.write_bytes(FINAL)
+        return {"size": len(FINAL), "durationSec": 2.0, "signature": "x", "clips": 1}
+
+    monkeypatch.setattr(renders, "run_editor", run)
+    yield started, release
+    release.set()
+
+
+def test_export_writes_final_and_cut_row(client, editor, monkeypatch):
+    fake_editor_ok(monkeypatch)
+    r = export(client)
+    assert r.status_code == 202
+    state = wait_for(client)
+    assert state["status"] == "done" and state["source"] == "editor" and state["output"]["url"]
+    assert (cut_dir() / "final.mp4").read_bytes() == FINAL
+    assert not list(cut_dir().glob("*.part")) and not (cut_dir() / "work").exists()  # F33
+    with server.db() as conn:
+        row = conn.execute("SELECT out_shots, out_speed, out_source FROM renders WHERE idea_id = 'ia'").fetchone()
+    assert row == (1, 1.0, "editor")
+
+
+def test_export_returns_202_while_render_blocks(client, editor, slow_editor):
+    started, release = slow_editor
+    r = export(client)
+    assert r.status_code == 202 and r.json()["status"] in ("queued", "running")
+    assert started.wait(5)
+    assert client.get("/api/ideas/ia/cut").json()["status"] == "running"
+    release.set()
+    assert wait_for(client)["status"] == "done"
+
+
+def test_export_busy_with_auto_cut(client, editor, slow_pipeline):
+    started, release = slow_pipeline
+    assert start(client).status_code == 202 and started.wait(5)
+    r = export(client)
+    assert r.status_code == 409 and r.json()["error"] == "A cut is already being made for this plan."
+
+
+def test_cut_busy_with_editor_export(client, editor, slow_editor, fake_pipeline):  # F31
+    started, release = slow_editor
+    assert export(client).status_code == 202 and started.wait(5)
+    r = start(client)
+    assert r.status_code == 409 and r.json()["error"] == "A cut is already being made for this plan."
+
+
+def test_export_refuses_empty_project(client, setup, monkeypatch):
+    monkeypatch.setattr(editing, "missing_render_tools", lambda: None)
+    r = export(client)
+    assert r.status_code == 409 and r.json()["error"] == "Put at least one clip on the timeline first."
+
+
+def test_export_refuses_missing_source(client, editor):
+    assert client.delete(f"/api/ideas/ia/takes/{editor['id']}").status_code in (200, 204)
+    r = export(client)
+    assert r.status_code == 409 and r.json()["error"] == "A clip's video was deleted. Remove it from the timeline first."
+
+
+def test_export_503_without_render_tools(client, editor, monkeypatch):
+    monkeypatch.setattr(editing, "missing_render_tools", lambda: "no node")
+    r = export(client)
+    assert r.status_code == 503 and r.json()["error"] == "no node"
+
+
+def test_export_needs_approved_plan(client, editor):
+    assert export(client, "iw").status_code == 409
+    assert export(client, "nope").status_code == 404
+
+
+def test_export_refuses_when_disk_is_full(client, editor, monkeypatch):
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: usage(1))
+    r = export(client)
+    assert r.status_code == 409 and r.json()["error"] == "There isn't enough free disk space to make the cut."
+
+
+def test_failed_editor_render_keeps_old_final(client, editor, monkeypatch):
+    cut_dir().mkdir(parents=True, exist_ok=True)
+    (cut_dir() / "final.mp4").write_bytes(b"old-video")
+    with server.db() as conn:
+        conn.execute("INSERT INTO renders (idea_id, status, progress, step, speed, signature, started_at, "
+                     "out_size, out_duration, out_signature, out_speed, out_shots) "
+                     "VALUES ('ia', 'done', 1, 'Done', 1.0, 's', 1, 9, 1.0, 's', 1.0, 1)")
+
+    def boom(db, media, idea_id, work, out, step):
+        out.write_bytes(b"half")
+        raise CutError("The export failed: boom")
+
+    monkeypatch.setattr(renders, "run_editor", boom)
+    assert export(client).status_code == 202
+    state = wait_for(client)
+    assert state["status"] == "failed" and state["error"] == "The export failed: boom"
+    assert (cut_dir() / "final.mp4").read_bytes() == b"old-video"
+    assert not (cut_dir() / "work").exists() and not list(cut_dir().glob("*.part"))
+
+
+def test_editor_cut_goes_stale_after_project_change(client, editor, monkeypatch):
+    fake_editor_ok(monkeypatch)
+    export(client)
+    assert wait_for(client)["stale"] is False
+    put_project(client, editor["id"], (0.0, 1.0))
+    assert client.get("/api/ideas/ia/cut").json()["stale"] is True
+    review_link(client)
+    r = send(client)
+    assert r.status_code == 409 and r.json()["error"] == EDIT_STALE
+
+
+def test_editor_cut_stale_after_source_swapped(client, editor, monkeypatch):  # F34
+    fake_editor_ok(monkeypatch)
+    export(client)
+    assert wait_for(client)["stale"] is False
+    path = next(server.MEDIA_DIR.glob(f"ia/{editor['id']}.*"))
+    path.write_bytes(MP4 + b"changed")
+    os.utime(path, ns=(1, 1))
+    assert client.get("/api/ideas/ia/cut").json()["stale"] is True
+
+
+def test_editor_cut_ignores_shot_count(client, editor, monkeypatch):
+    fake_editor_ok(monkeypatch)
+    export(client)
+    wait_for(client)
+    assert client.get("/api/ideas/ia/cut", params={"shots": 7}).json()["stale"] is False
+
+
+def test_editor_cut_review_and_publish_path(client, editor, monkeypatch):  # F32
+    fake_editor_ok(monkeypatch)
+    export(client)
+    wait_for(client)
+    review_link(client)
+    r = send(client)
+    assert r.status_code == 200 and r.json()["review"]["status"] == "waiting"
+    with server.db() as conn:
+        conn.execute("UPDATE cut_reviews SET status = 'approved' WHERE idea_id = 'ia'")
+        path = publishing.approved_cut(conn, server.load, server.MEDIA_DIR.resolve(), "ia")
+    assert path is not None and path.name == "final.mp4"  # the publish gate accepts the unchanged editor cut
+    put_project(client, editor["id"], (0.0, 1.0))
+    with server.db() as conn:
+        assert publishing.approved_cut(conn, server.load, server.MEDIA_DIR.resolve(), "ia") is None
+
+
+def test_recover_fails_running_editor_render(client, editor, slow_editor):
+    started, release = slow_editor
+    export(client)
+    assert started.wait(5)
+    renders.recover(server.db)
+    state = client.get("/api/ideas/ia/cut").json()
+    assert state["status"] == "failed" and state["error"] == renders.RESTARTED
+    release.set()
+
+
+def test_auto_cut_after_editor_cut_is_auto_again(client, editor, monkeypatch, fake_pipeline):
+    fake_editor_ok(monkeypatch)
+    export(client)
+    assert wait_for(client)["source"] == "editor"
+    assert start(client).status_code == 202
+    state = wait_for(client)
+    assert state["status"] == "done" and state["source"] == "auto"
+    with server.db() as conn:
+        assert conn.execute("SELECT source, out_source FROM renders WHERE idea_id = 'ia'").fetchone() == ("auto", "auto")
+
+
+def test_editor_success_clears_auto_cut_leftovers(client, editor, monkeypatch):
+    cut_dir().mkdir(parents=True, exist_ok=True)
+    (cut_dir() / "trims.json").write_text("{}")
+    (cut_dir() / "cues.json").write_text("{}")
+    fake_editor_ok(monkeypatch)
+    export(client)
+    state = wait_for(client)
+    assert "autoCut" not in state
+    assert not (cut_dir() / "trims.json").exists() and not (cut_dir() / "cues.json").exists()
+
+
+def test_old_database_gets_source_columns():
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE renders (idea_id TEXT PRIMARY KEY, status TEXT NOT NULL, progress REAL NOT NULL, "
+                 "step TEXT NOT NULL, error TEXT, speed REAL NOT NULL, shots INTEGER NOT NULL DEFAULT 1, "
+                 "signature TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER, "
+                 "out_size INTEGER, out_duration REAL, out_signature TEXT, out_speed REAL, out_shots INTEGER)")
+    conn.execute("INSERT INTO renders (idea_id, status, progress, step, speed, signature, started_at, out_size) "
+                 "VALUES ('x', 'done', 1, 's', 1.1, 's', 1, 5)")
+    renders.migrate(conn)
+    renders.migrate(conn)  # twice is fine
+    assert conn.execute("SELECT source, out_source FROM renders").fetchone() == ("auto", "auto")

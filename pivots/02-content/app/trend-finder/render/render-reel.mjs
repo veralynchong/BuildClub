@@ -1,7 +1,7 @@
-// node render/render-reel.mjs <job.json>   or   node render/render-reel.mjs --ensure-browser
+// node render/render-reel.mjs <job.json> | --ensure-browser | --bundle <cacheDir>
 // job = { input: ReelInput (urls are file names in mediaDir), mediaDir, out, cacheDir }
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,8 +10,10 @@ const APP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.REMOTION_PORT) || 8872
 const TYPES = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg' }
 
+// One line for the backend to show: paths are scrubbed (they name folders on this machine) and it is capped.
 function fail(message) {
-  process.stderr.write(`${String(message).split('\n')[0]}\n`)
+  const line = String(message).split('\n')[0].replace(/(?:\/[\w.@~+-]+){2,}/g, '<path>').slice(0, 200)
+  process.stderr.write(`${line}\n`)
   process.exit(1)
 }
 
@@ -29,15 +31,39 @@ function bundleKey() {
   const h = createHash('sha256')
   for (const dir of ['src/remotion', 'src/lib/editor'])
     for (const f of filesUnder(path.join(APP, dir))) h.update(path.relative(APP, f)).update(readFileSync(f))
+  for (const f of filesUnder(path.join(APP, 'public/fonts'))) h.update(path.relative(APP, f)).update(readFileSync(f))
   h.update(readFileSync(path.join(APP, 'package-lock.json')))
   return h.digest('hex').slice(0, 16)
+}
+
+// Bundles once per source hash. The bundle is built in a temp folder and renamed into place, so a pre-warm
+// running next to a render never serves a half-written bundle.
+async function ensureBundle(cacheDir) {
+  const serveUrl = path.join(path.resolve(cacheDir), bundleKey())
+  if (existsSync(path.join(serveUrl, 'index.html'))) return serveUrl
+  mkdirSync(path.dirname(serveUrl), { recursive: true })
+  const tmp = `${serveUrl}.tmp-${process.pid}`
+  const { bundle } = await import('@remotion/bundler')
+  await bundle({ entryPoint: path.join(APP, 'src/remotion/index.ts'), publicDir: path.join(APP, 'public'), outDir: tmp })
+  try {
+    renameSync(tmp, serveUrl)
+  } catch (err) {
+    rmSync(tmp, { recursive: true }) // another process finished first (the target is not empty)
+    if (!existsSync(path.join(serveUrl, 'index.html'))) throw err
+  }
+  return serveUrl
 }
 
 // Serves mediaDir only, with Range support. Returns { server, base }.
 function serveMedia(mediaDir) {
   const root = path.resolve(mediaDir)
   const server = http.createServer((req, res) => {
-    const rel = decodeURIComponent((req.url || '/').split('?')[0])
+    let rel
+    try {
+      rel = decodeURIComponent((req.url || '/').split('?')[0])
+    } catch {
+      return void res.writeHead(400).end()
+    }
     if (rel.split('/').includes('..')) return void res.writeHead(403).end()
     const file = path.join(root, rel)
     if (!file.startsWith(root + path.sep) || !existsSync(file) || !statSync(file).isFile()) return void res.writeHead(404).end()
@@ -69,16 +95,17 @@ async function main() {
     await ensureBrowser()
     return
   }
+  if (arg === '--bundle') {
+    if (!process.argv[3]) fail('Usage: render-reel.mjs --bundle <cacheDir>')
+    await ensureBundle(process.argv[3])
+    return
+  }
   const job = JSON.parse(readFileSync(arg, 'utf8'))
   const { input, mediaDir, out, cacheDir } = job
   if (!input || !mediaDir || !out || !cacheDir) fail('The job needs input, mediaDir, out and cacheDir.')
   await ensureBrowser()
 
-  const serveUrl = path.join(path.resolve(cacheDir), bundleKey())
-  if (!existsSync(path.join(serveUrl, 'index.html'))) {
-    const { bundle } = await import('@remotion/bundler')
-    await bundle({ entryPoint: path.join(APP, 'src/remotion/index.ts'), publicDir: path.join(APP, 'public'), outDir: serveUrl })
-  }
+  const serveUrl = await ensureBundle(cacheDir)
 
   const { server, base } = await serveMedia(mediaDir)
   try {

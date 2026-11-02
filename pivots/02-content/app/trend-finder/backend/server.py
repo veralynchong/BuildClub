@@ -135,6 +135,7 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
 async def lifespan(_app):
     generations.recover(db, gen_jobs)
     renders.recover(db)  # a cut that was running when the server stopped will never finish
+    editing.prewarm_bundle()  # builds the Remotion bundle in a background thread; never blocks startup
     yield
 
 
@@ -763,6 +764,7 @@ def db() -> sqlite3.Connection:
     auth.migrate(conn)
     publishing.migrate(conn)
     generations.migrate(conn)
+    renders.migrate(conn)
     takes.migrate(conn)
     return conn
 

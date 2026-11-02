@@ -131,3 +131,234 @@ def test_edit_needs_approved_plan(client, setup):
         assert r.status_code == 409 and r.json()["error"] == "Only an approved plan can be cut."
     assert client.put("/api/ideas/nope/edit", json={"version": 0, "project": project()}).status_code == 404
     assert client.put("/api/ideas/iw/edit", json={"version": 0, "project": project()}).status_code == 409
+
+
+# ---- the export job: helpers, the subprocess and render_project ----
+
+REAL_PREWARM = editing.prewarm_bundle  # conftest replaces editing.prewarm_bundle for every test
+
+import os  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+
+def src(key, path, **extra):
+    kind, sid = key.split(":")
+    return {"key": key, "kind": kind, "id": sid, "path": str(path), "duration": 4.0, "hasAudio": True,
+            "width": 720, "height": 1280, **extra}
+
+
+def test_missing_sources_lists_clip_ids():
+    p = project(clip("c1"), clip("c2"))
+    p["clips"][1]["source"] = {"kind": "generation", "id": "g9"}
+    assert editing.missing_sources(p, {"take:t1": {}}) == ["c2"]
+    assert editing.missing_sources(p, {"take:t1": {}, "generation:g9": {}}) == []
+
+
+def test_missing_render_tools_messages(monkeypatch, tmp_path):
+    monkeypatch.setattr(editing, "NODE", None)
+    assert editing.missing_render_tools() == "Node.js isn't installed on this computer, so the video can't be exported."
+    monkeypatch.setattr(editing, "NODE", sys.executable)
+    monkeypatch.setattr(editing, "APP_DIR", tmp_path)
+    assert editing.missing_render_tools() == "The video export tools aren't installed. Run npm ci in the app folder."
+    (tmp_path / "node_modules" / "@remotion" / "renderer").mkdir(parents=True)
+    assert editing.missing_render_tools() is None
+
+
+def test_signature_is_stable_and_follows_project_and_source(client, setup, monkeypatch):
+    fake_probe(monkeypatch)
+    t = up(client).json()
+    f = next(server.MEDIA_DIR.glob(f"ia/{t['id']}.*"))
+    p = project(clip())
+    p["clips"][0]["source"]["id"] = t["id"]
+    q = project(clip(b=1.5))
+    q["clips"][0]["source"]["id"] = t["id"]
+    media = server.MEDIA_DIR
+    with server.db() as conn:
+        one = editing.signature(conn, media, {"id": "ia"}, p)
+        assert one == editing.signature(conn, media, {"id": "ia"}, project(*p["clips"]))
+        assert len(one) == 16
+        assert one != editing.signature(conn, media, {"id": "ia"}, q)
+        os.utime(f, ns=(5, 5))
+        changed = editing.signature(conn, media, {"id": "ia"}, p)
+        assert one != changed  # a swapped file changes it
+        # the cut_music id is not part of the P3a signature (F14)
+        conn.execute("INSERT INTO cut_music (idea_id, id, ext, name, size, licensed_at) VALUES ('ia','m1','mp3','n',1,1)")
+        conn.execute("UPDATE cut_music SET id = 'm2'")
+        assert changed == editing.signature(conn, media, {"id": "ia"}, p)
+
+
+def test_render_input_names_files_by_key_hash(setup, tmp_path):
+    f = tmp_path / "whatever.MOV"
+    f.write_bytes(b"x")
+    s = {"take:t1": src("take:t1", f)}
+    inp, files = editing.render_input(None, tmp_path, {"id": "ia"}, project(clip(), clip("c2")), s)
+    name = inp["urls"]["take:t1"]
+    assert name.endswith(".MOV") and "/" not in name and name != "whatever.MOV"
+    assert files == {name: f}
+    assert inp["lines"] == {} and inp["musicUrl"] is None and inp["voice"] == []
+    assert inp["project"]["clips"][0]["id"] == "c1" and inp["fontUrl"] == ""
+
+
+def test_spawn_render_reports_progress():
+    seen = []
+    code = "import sys\nfor p in (0.1, 0.5, 1.0): print('progress', p, flush=True)\nprint('other noise')"
+    editing.spawn_render([sys.executable, "-c", code], seen.append, 10)
+    assert seen == [0.1, 0.5, 1.0]
+
+
+def test_render_timeout_kills_process(tmp_path):
+    pidfile = tmp_path / "pid"
+    code = f"import os, time\nopen({str(pidfile)!r}, 'w').write(str(os.getpid()))\ntime.sleep(30)"
+    t0 = time.time()
+    with pytest.raises(cutting.CutError) as e:
+        editing.spawn_render([sys.executable, "-c", code], lambda p: None, 0.5)
+    assert str(e.value) == "The export took too long, so it was stopped."
+    assert time.time() - t0 < 10
+    pid = int(pidfile.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+
+
+def test_spawn_render_failure_message_has_no_paths():
+    code = ("import sys\nprint('first', file=sys.stderr)\n"
+            "print('Error: cannot open /Users/tommy/secret/dir/file.mp4 now', file=sys.stderr)\nsys.exit(3)")
+    with pytest.raises(cutting.CutError) as e:
+        editing.spawn_render([sys.executable, "-c", code], lambda p: None, 10)
+    msg = str(e.value)
+    assert msg == "The export failed: Error: cannot open <path> now"
+    assert "/Users" not in msg
+
+
+def test_spawn_render_failure_message_is_capped():
+    code = "import sys\nprint('x' * 900, file=sys.stderr)\nsys.exit(1)"
+    with pytest.raises(cutting.CutError) as e:
+        editing.spawn_render([sys.executable, "-c", code], lambda p: None, 10)
+    assert len(str(e.value)) <= len("The export failed: ") + 200
+
+
+def fake_tools(monkeypatch, tmp_path, probe_info=None):
+    monkeypatch.setattr(editing, "missing_render_tools", lambda: None)
+    monkeypatch.setattr(editing, "NODE", "node")
+    monkeypatch.setattr(editing, "APP_DIR", tmp_path / "app")
+    info = {"duration": 2.0, "width": 1080, "height": 1920, "hasAudio": True}
+    info.update(probe_info or {})
+    monkeypatch.setattr(cutting, "probe", lambda path: info)
+    editing._probe_cache.clear()
+
+
+def seed_take(client):
+    return up(client).json()
+
+
+def put(client, take_id, *spans):
+    clips = [clip(f"c{i}", a, b) for i, (a, b) in enumerate(spans)]
+    for c in clips:
+        c["source"]["id"] = take_id
+    v = client.get("/api/ideas/ia/edit").json()["version"]
+    assert client.put("/api/ideas/ia/edit", json={"version": v, "project": project(*clips)}).status_code == 200
+
+
+def test_render_project_builds_job_and_returns_facts(client, setup, monkeypatch, tmp_path):
+    fake_tools(monkeypatch, tmp_path)
+    t = seed_take(client)
+    put(client, t["id"], (0.0, 1.0), (1.0, 2.0))
+    seen = {}
+
+    def spawn(cmd, on_progress, timeout):
+        import json
+        seen["cmd"], seen["timeout"] = cmd, timeout
+        job = json.loads(Path(cmd[2]).read_text())
+        seen["job"] = job
+        seen["linked"] = sorted(p.name for p in Path(job["mediaDir"]).iterdir())
+        on_progress(0.5)
+        Path(job["out"]).write_bytes(b"mp4")
+
+    monkeypatch.setattr(editing, "spawn_render", spawn)
+    steps = []
+    work = tmp_path / "work"
+    work.mkdir()
+    result = editing.render_project(server.db, server.MEDIA_DIR, "ia", work, work / "next.mp4",
+                                    lambda p, text: steps.append((p, text)))
+    assert seen["cmd"][0] == "node" and seen["cmd"][1].endswith("render/render-reel.mjs")
+    assert seen["timeout"] == editing.RENDER_TIMEOUT_S
+    job = seen["job"]
+    assert job["out"] == str(work / "next.mp4") and job["mediaDir"] == str(work / "media")
+    assert job["cacheDir"] == str(tmp_path / "app" / ".remotion-bundle")
+    assert len(seen["linked"]) == 1 and list(job["input"]["urls"].values()) == seen["linked"]
+    assert steps == [(0.05 + 0.9 * 0.5, "Exporting")]
+    assert result["size"] == 3 and result["clips"] == 2 and len(result["signature"]) == 16
+    assert result["durationSec"] == 2.0
+
+
+def test_render_project_refuses_empty_and_missing(client, setup, monkeypatch, tmp_path):
+    fake_tools(monkeypatch, tmp_path)
+    monkeypatch.setattr(editing, "spawn_render", lambda *a: pytest.fail("must not run"))
+    with pytest.raises(cutting.CutError, match="at least one clip"):
+        editing.render_project(server.db, server.MEDIA_DIR, "ia", tmp_path, tmp_path / "o.mp4", lambda *a: None)
+    t = seed_take(client)
+    put(client, t["id"], (0.0, 1.0))
+    client.delete(f"/api/ideas/ia/takes/{t['id']}")
+    editing._probe_cache.clear()
+    with pytest.raises(cutting.CutError, match="video was deleted"):
+        editing.render_project(server.db, server.MEDIA_DIR, "ia", tmp_path, tmp_path / "o.mp4", lambda *a: None)
+
+
+@pytest.mark.parametrize("info", [{"width": 720}, {"hasAudio": False}, {"duration": 2.5}],
+                         ids=["size", "no-audio", "length"])
+def test_render_project_rejects_bad_output(client, setup, monkeypatch, tmp_path, info):
+    fake_tools(monkeypatch, tmp_path)
+    t = seed_take(client)
+    put(client, t["id"], (0.0, 1.0), (1.0, 2.0))
+    real_probe = cutting.probe
+    out = tmp_path / "w" / "next.mp4"
+    out.parent.mkdir()
+
+    def spawn(cmd, on_progress, timeout):
+        out.write_bytes(b"mp4")
+        # the checks read the output; sources probe fine, the output probe is the bad one
+        monkeypatch.setattr(cutting, "probe", lambda path: {"duration": 2.0, "width": 1080, "height": 1920,
+                                                             "hasAudio": True, **info})
+
+    monkeypatch.setattr(editing, "spawn_render", spawn)
+    with pytest.raises(cutting.CutError):
+        editing.render_project(server.db, server.MEDIA_DIR, "ia", out.parent, out, lambda *a: None)
+    assert real_probe
+
+
+def test_prewarm_never_blocks_and_runs_the_bundle_command(monkeypatch, tmp_path):
+    monkeypatch.setattr(editing, "missing_render_tools", lambda: None)
+    monkeypatch.setattr(editing, "NODE", "node")
+    monkeypatch.setattr(editing, "APP_DIR", tmp_path)
+    gate, ran = threading.Event(), []
+
+    def slow(cmd, **kw):
+        ran.append(cmd)
+        gate.wait(5)
+
+    monkeypatch.setattr(editing.subprocess, "run", slow)
+    t0 = time.time()
+    thread = REAL_PREWARM()
+    assert time.time() - t0 < 1  # returned while the "bundle" is still running
+    time.sleep(0.2)
+    assert ran and ran[0][0] == "node" and "--bundle" in ran[0]
+    gate.set()
+    thread.join(5)
+
+
+def test_prewarm_swallows_failures_and_skips_without_tools(monkeypatch):
+    monkeypatch.setattr(editing, "missing_render_tools", lambda: "nope")
+    assert REAL_PREWARM() is None
+    monkeypatch.setattr(editing, "missing_render_tools", lambda: None)
+    monkeypatch.setattr(editing, "NODE", "node")
+
+    def boom(cmd, **kw):
+        raise OSError("x")
+
+    monkeypatch.setattr(editing.subprocess, "run", boom)
+    thread = REAL_PREWARM()
+    thread.join(5)
+    assert not thread.is_alive()

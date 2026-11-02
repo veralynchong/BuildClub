@@ -1,8 +1,15 @@
 """The edit project of one plan: a JSON document per plan with a version number (a stale write is a 409),
 plus the list of footage the editor can cut from. Only signed-in staff reach these routes."""
 
+import collections
+import hashlib
 import json
 import math
+import os
+import re
+import shutil
+import signal
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -29,6 +36,17 @@ EPS = 1e-6  # the client rounds to 1/30 s, so a 0.2 s clip can arrive as 0.19999
 MAX_BYTES = 512 * 1024
 
 edit_lock = threading.Lock()
+
+# The export runs Remotion (render/render-reel.mjs) as a child process. The tests swap spawn_render.
+APP_DIR = Path(os.environ.get("REMOTION_APP_DIR") or Path(__file__).resolve().parents[1])
+NODE = os.environ.get("REMOTION_NODE") or shutil.which("node")
+RENDER_TIMEOUT_S = 600
+LENGTH_GUARD_S = 0.2  # a hard guard only; the export's acceptance bar is 0.1 s and is tested by the smoke script
+
+MISSING_SOURCE = "A clip's video was deleted. Remove it from the timeline first."
+EMPTY = "Put at least one clip on the timeline first."
+EDIT_STALE = "The edit changed after this was exported. Export it again before sending it."
+BAD_OUTPUT = "The exported video doesn't look right. Export it again."
 
 
 def empty_project() -> dict:
@@ -167,6 +185,175 @@ def list_sources(conn, media: Path, idea_id: str) -> list[dict]:
             t = takes.to_json(row, _index)
             out.append(_entry(f"take:{t['id']}", "take", t["id"], t["url"], path, info, shot_id=t["shotId"]))
     return out
+
+
+def missing_render_tools() -> Optional[str]:
+    if not NODE:
+        return "Node.js isn't installed on this computer, so the video can't be exported."
+    if not (APP_DIR / "node_modules" / "@remotion" / "renderer").is_dir():
+        return "The video export tools aren't installed. Run npm ci in the app folder."
+    return None
+
+
+def missing_sources(project: dict, sources: dict) -> list[str]:
+    """Ids of the clips whose source video is gone."""
+    return [c["id"] for c in project["clips"] if source_key(c["source"]) not in sources]
+
+
+def _source_files(conn, media: Path, idea_id: str) -> dict[str, Path]:
+    """key -> file of every generation and take of the plan, without probing."""
+    out: dict[str, Path] = {}
+    folder = generations.gen_folder(media, idea_id)
+    if folder is not None:
+        for row in conn.execute(f"SELECT {generations.COLUMNS} FROM generations WHERE idea_id = ? AND kind = 'video' "
+                                "AND status = 'done'", (idea_id,)):
+            if row[10]:
+                out[f"generation:{row[0]}"] = folder / row[10]
+    for row, _index in takes.rows_of(conn, idea_id):
+        out[f"take:{row[0]}"] = media / idea_id / f"{row[0]}.{row[3]}"
+    return out
+
+
+def signature(conn, media: Path, idea: dict, project: dict) -> str:
+    """A fingerprint of what an export was made from: the project and the modified time of each footage file.
+    Music, brand, lines and voiceover join it in P3b."""
+    files = _source_files(conn, media, idea["id"])
+    stamps = {}
+    for c in project["clips"]:
+        key = source_key(c["source"])
+        try:
+            stamps[key] = files[key].stat().st_mtime_ns
+        except (KeyError, OSError):
+            stamps[key] = 0
+    text = json.dumps([project, sorted(stamps.items())], sort_keys=True)
+    return hashlib.sha1(text.encode()).hexdigest()[:16]
+
+
+def render_input(conn, media: Path, idea: dict, project: dict, sources: dict) -> tuple[dict, dict[str, Path]]:
+    """The ReelInput for the renderer, and {file name in mediaDir: source file} for the links to make."""
+    urls: dict[str, str] = {}
+    files: dict[str, Path] = {}
+    for c in project["clips"]:
+        key = source_key(c["source"])
+        if key in urls:
+            continue
+        path = Path(sources[key]["path"])
+        name = f"{hashlib.sha1(key.encode()).hexdigest()[:16]}{path.suffix}"
+        urls[key] = name
+        files[name] = path
+    reel = {"project": project, "urls": urls, "lines": {}, "musicUrl": None, "voice": [],
+            "brand": {"font": "Noto Sans TC", "color": None, "logoUrl": None}, "fontUrl": ""}
+    return reel, files
+
+
+PATH_RE = re.compile(r"(?:/[\w.@~+-]+){2,}")
+MAX_ERROR_CHARS = 200
+
+
+def spawn_render(cmd: list, on_progress: Callable[[float], None], timeout: float) -> None:
+    """Run the renderer in its own process group. stdout lines `progress 0.4` feed on_progress. A run past
+    `timeout` is killed with everything it started; a failure reports the last stderr line without paths."""
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace",
+                            start_new_session=True, cwd=APP_DIR if APP_DIR.is_dir() else None)
+    tail: collections.deque = collections.deque(maxlen=20)
+
+    def read_out() -> None:
+        for line in proc.stdout:
+            word, _, value = line.strip().partition(" ")
+            if word == "progress":
+                try:
+                    on_progress(float(value))
+                except ValueError:
+                    pass
+
+    def read_err() -> None:
+        for line in proc.stderr:
+            if line.strip():
+                tail.append(line.strip())
+
+    readers = [threading.Thread(target=read_out, daemon=True), threading.Thread(target=read_err, daemon=True)]
+    for r in readers:
+        r.start()
+    try:
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(proc)
+            raise cutting.CutError("The export took too long, so it was stopped.")
+    finally:
+        if proc.poll() is None:
+            _kill_group(proc)
+        for r in readers:
+            r.join(5)
+    if proc.returncode != 0:
+        last = PATH_RE.sub("<path>", tail[-1])[:MAX_ERROR_CHARS] if tail else ""
+        raise cutting.CutError(f"The export failed: {last}" if last else "The export failed.")
+
+
+def _kill_group(proc) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait()
+
+
+def render_project(db, media_dir: Path, idea_id: str, work: Path, out: Path, step: Callable) -> dict:
+    """Export the plan's edit project to `out`. The project is read once; the signature comes from that
+    snapshot, so an edit made during the render reads as stale afterwards."""
+    tools = missing_render_tools()
+    if tools:
+        raise cutting.CutError(tools)
+    media = Path(media_dir)
+    with db() as conn:
+        row = conn.execute("SELECT doc FROM edit_projects WHERE idea_id = ?", (idea_id,)).fetchone()
+        project = json.loads(row[0]) if row else empty_project()
+        sources = {s["key"]: s for s in list_sources(conn, media, idea_id)}
+        idea = {"id": idea_id}
+        sig = signature(conn, media, idea, project)
+        if not project["clips"]:
+            raise cutting.CutError(EMPTY)
+        if missing_sources(project, sources):
+            raise cutting.CutError(MISSING_SOURCE)
+        reel, files = render_input(conn, media, idea, project, sources)
+    linked = work / "media"
+    linked.mkdir(parents=True, exist_ok=True)
+    for name, path in files.items():
+        try:
+            os.link(path, linked / name)
+        except OSError:  # another disk
+            os.symlink(path, linked / name)
+    job = work / "job.json"
+    job.write_text(json.dumps({"input": reel, "mediaDir": str(linked), "out": str(out),
+                               "cacheDir": str(APP_DIR / ".remotion-bundle")}))
+    spawn_render([NODE, str(APP_DIR / "render" / "render-reel.mjs"), str(job)],
+                 lambda p: step(0.05 + 0.9 * p, "Exporting"), RENDER_TIMEOUT_S)
+    info = cutting.probe(out)
+    total = sum(c["out"] - c["in"] for c in project["clips"])
+    if (info.get("width"), info.get("height")) != (1080, 1920) or not info.get("hasAudio") \
+            or abs(info["duration"] - total) > LENGTH_GUARD_S:
+        raise cutting.CutError(BAD_OUTPUT)
+    return {"size": out.stat().st_size, "durationSec": info["duration"], "signature": sig,
+            "clips": len(project["clips"])}
+
+
+def prewarm_bundle() -> Optional[threading.Thread]:
+    """Build the Remotion bundle in the background so the first export doesn't wait for it. Never raises
+    and never blocks the caller; returns the thread, or None when the tools are missing."""
+    if missing_render_tools():
+        return None
+
+    def run() -> None:
+        try:
+            subprocess.run([NODE, str(APP_DIR / "render" / "render-reel.mjs"), "--bundle",
+                            str(APP_DIR / ".remotion-bundle")], cwd=APP_DIR, capture_output=True,
+                           timeout=RENDER_TIMEOUT_S, check=False)
+        except Exception as e:
+            print(f"[editing] bundle pre-warm skipped: {e!r}", flush=True)
+
+    thread = threading.Thread(target=run, name="remotion-prewarm", daemon=True)
+    thread.start()
+    return thread
 
 
 def error(status: int, message: str, **extra) -> JSONResponse:
