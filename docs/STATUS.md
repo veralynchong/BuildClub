@@ -4,6 +4,37 @@ Current (2026-11-02 AEDT): fork main is at 6fe1772 with PRs #19-#25 merged (stor
 
 Earlier: remake phase 1 (PR #4) and 2a stage board (PR #5) are merged into fork main (2026-10-31). Phase 2b (shot checklist and real-footage takes) is merged (PR #6, 4277192, 2026-10-31). Phase 2c (edit to a publishable MP4, then Annie's approval) is split into 2c-1 and 2c-2. 2c-1 ("Make the video") is merged (PR #7, 359791c, 2026-11-01). 2c-2 (Annie approves the finished video on the no-login review link) is merged (PR #8, 27496cb, 2026-11-01) after an e2e re-run at 1440 and 390 (35/35 each). Phase 2 (2a-2c) is done. `bash bin/verify.sh` GREEN on the merged tree (2026-11-01).
 
+## 2026-11-02 (AEDT): phase 3 from Mercif feedback
+PRs merged into veralynchong/BuildClub main (#18-#26):
+- #18 phase 3 plan doc (docs/phase3 feedback plan).
+- #19 results filter panel (recency, length, content type, sort; 1M+ views default chip).
+- #20 hook and emotion fields in the video breakdown.
+- #21 research reports: Instagram algorithm 2026 and competitor USPs.
+- #22 content types: type tag on cards and a Content type filter group with counts.
+- #23 Compare videos page.
+- #24 shot framing (framing, angle, movement) and script to shot list.
+- #25 verifiable numbers: "Where these numbers come from" (source, fetched time, link, score formula) and a free yt-dlp re-check.
+- #26 real re-analyse (force re-run, behind auth and the daily Claude budget; a failed re-run keeps the saved breakdown) and the Open plan aria fix.
+
+Last verification (2026-11-02): `bash bin/verify.sh` GREEN (compile, backend load, backend tests, frontend unit tests) on the #26 head 3d83da0, which already contained origin/main, so its tree equals merged main 4343366; `npx tsc -b`, `npm run lint`, `npm run build` all exit 0.
+
+E2E on merged main 4343366 (isolated backend, port 8960, `--demo-data`, no paid calls, no Apify), 1440 and 390, no horizontal scroll at either width:
+- Find, search tofu recipe: filter panel opens, "Views: 1M+" chip, Content type group with counts (Recipe / cooking 8, Review / taste test 2, Tutorial / tips 2, Other 3), type tag and "followers · views" line on cards: pass / pass.
+- "Where these numbers come from": source, fetched time, original post link, score formula (Re-check not clicked): pass / pass.
+- Breakdown panel shows an enabled Re-analyse button for a saved breakdown (not run; budget is 0 in isolated mode): pass / pass.
+- Compare videos page renders with link box and shortlist picker (no run started): pass / pass.
+- Plan page shows "From script" and Framing / Angle / Movement selects; Plans board "Open plan" is enabled: pass / pass.
+- Language set to Traditional Chinese: Find, filter panel (內容類型), Compare page show no raw i18n keys: pass / pass.
+
+Not verified: zh-Hant visuals beyond the key check above; real AI output for street-interview or Chinese scripts; ShotChecklist framing tags after approval; live Apify searches; YouTube and X re-check; Compare from the shortlist picker.
+
+Open items:
+- 1c research table waits for teammates (layout decision).
+- 2d Mercif one-week trial.
+- 3c notifications deferred.
+- Product suggestions from the research: share rate before comment rate, originality check, Trial Reels.
+- Consider raising RESULTS_PER_SEARCH (about 100) once Apify is upgraded (cost check first).
+
 ## Teammate UI integration (2026-11-02 AEDT, branch feat/integrate-teammate-ui-1102)
 - Merged origin/main (b3f8737: design system, client Home, Find ideas, drag Plans board, copy) and fix/instagram-followers (PR #11). Look and copy from the teammate; login, persistence, review link, stages, takes and cuts kept on our backend.
 - Score rule changed (user decision 2026-11-02): views ÷ followers on every platform; usual views only when followers are unknown or 0 (Reddit). Usual-views multiple stays as secondary info in the breakdown and the evidence chip.
