@@ -1,0 +1,9 @@
+{ "models": [
+  { "id": "mock-image", "label": "Mock image (free)", "kind": "image", "provider": "mock", "tier": "cheap",
+    "price": { "per": "image", "usd": 0 },
+    "inputs": { "text": "required", "reference": "optional" }, "aspects": ["9:16"] },
+  { "id": "mock-video", "label": "Mock video (free)", "kind": "video", "provider": "mock", "tier": "cheap",
+    "price": { "per": "second", "usd": 0 },
+    "inputs": { "text": "optional", "startFrame": "optional", "reference": "optional" },
+    "durations": [4, 6], "aspects": ["9:16"] }
+] }
