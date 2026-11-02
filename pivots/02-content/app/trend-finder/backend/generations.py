@@ -149,7 +149,9 @@ def recover(db, jobs) -> None:
                                "LEFT JOIN generations u ON u.id = g.after "
                                "WHERE g.status = 'waiting'").fetchall()
     for upstream, status in waiting:
-        if status in (None, "done", "failed", "unknown"):
+        if upstream is None:  # waits for nothing: it can never start
+            jobs.fail_orphans()
+        elif status in (None, "done", "failed", "unknown"):
             jobs.release(upstream, status or "failed")
 
 
@@ -204,6 +206,19 @@ class GenJobs:
         if closed:
             self.release(gen_id, status)
         return closed
+
+    def fail_orphans(self) -> None:
+        """Waiting rows with no upstream id were never sent: fail them and give the estimate back."""
+        with self._db() as conn:
+            rows = conn.execute("SELECT id, kind, est_usd FROM generations "
+                                "WHERE status = 'waiting' AND after IS NULL").fetchall()
+        for gid, kind, est in rows:
+            with self._db() as conn:
+                moved = conn.execute("UPDATE generations SET status = 'failed', error = ?, finished_at = ? "
+                                     "WHERE id = ? AND status = 'waiting'",
+                                     (START_FRAME_LOST, int(time.time() * 1000), gid)).rowcount > 0
+            if moved:
+                self.refund(kind, est)
 
     def release(self, upstream_id: str, status: str) -> None:
         """A row has closed: start the waiting rows that follow it (done), or fail them and give their estimate
@@ -365,7 +380,7 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
     def models():
         return {"models": menu_models()}
 
-    def check(idea_id: str, nodes: list, node_id, model_id, prompt, start, ref, duration):
+    def check(idea_id: str, nodes: list, node_id, model_id, prompt, start, ref, duration, pending_start=False):
         """The rules every generation follows. Returns (model, duration, None), or (None, None, the error)."""
         if not isinstance(node_id, str) or not node_id or not isinstance(prompt, str) or len(prompt) > MAX_PROMPT:
             return None, None, error(422, "Send the node, the model and a prompt.")
@@ -385,11 +400,13 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         elif model["kind"] == "video":
             duration = model["durations"][0]
         for ref_id in (start, ref):
-            if ref_id is None or ref_id == PENDING:
+            if ref_id is None:
                 continue
             source = one(idea_id, ref_id) if isinstance(ref_id, str) else None
             if source is None or source[3] != "image" or source[7] != "done":  # kind, status columns
                 return None, None, error(422, "An input image must be a finished image generated for this plan.")
+        if pending_start:  # a chained video: its start frame is the image being made now
+            start = PENDING
         for field, given, what in (("startFrame", start, "a start frame"), ("reference", ref, "a reference image")):
             rule = (model.get("inputs") or {}).get(field, "none")
             if rule == "required" and given is None:
@@ -470,9 +487,14 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         if bad is not None:
             return bad
         video_model, duration, bad = check(idea_id, doc["nodes"], video_node, body.get("videoModel"), video_prompt,
-                                           PENDING, None, body.get("duration"))
+                                           None, None, body.get("duration"), pending_start=True)
         if bad is not None:
             return bad
+        if image_model["kind"] != "image" or video_model["kind"] != "video":
+            return error(422, "Pick an image model for the storyboard and a video model for the video.")
+        types = {n.get("id"): n.get("type") for n in doc["nodes"]}
+        if types.get(image_node) != "storyboard" or types.get(video_node) != "video":
+            return error(422, "The first node must be a storyboard and the second a video.")
         if not any(e.get("source") == image_node and e.get("target") == video_node
                    and e.get("targetHandle") == "in:start" for e in doc["edges"]):
             return error(422, "Connect the storyboard to the video's start frame first.")

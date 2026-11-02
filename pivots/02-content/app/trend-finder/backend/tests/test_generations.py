@@ -822,3 +822,35 @@ def test_budget_endpoint(client):
     r = client.get("/api/gen/budget")
     assert r.status_code == 200 and r.json() == server.gen_remaining()
     assert set(r.json()) == {"image", "video"} and set(r.json()["image"]) == {"spent", "cap"}
+
+
+def test_chain_image_step_must_be_an_image_model_on_a_storyboard(real, monkeypatch):
+    chain_canvas()
+    with server.db() as conn:  # a second video node wired as if it were the storyboard
+        doc = json.loads(conn.execute("SELECT doc FROM canvases WHERE idea_id = 'ia'").fetchone()[0])
+        doc["nodes"].append({"id": "n_vid2", "type": "video", "position": {"x": 0, "y": 0}, "data": {}})
+        doc["edges"].append({"id": "e2", "source": "n_vid2", "sourceHandle": "out", "target": "n_vid",
+                             "targetHandle": "in:start"})
+        conn.execute("UPDATE canvases SET doc = ? WHERE idea_id = 'ia'", (json.dumps(doc),))
+    r = chain(real, imageNodeId="n_vid2", imageModel="mock-video", videoModel="mock-video", duration=4)
+    assert r.status_code == 422 and "image model" in r.json()["error"]
+    r = chain(real, imageNodeId="n_vid2", imageModel="seedream-4.5")  # right kind, wrong node type
+    assert r.status_code == 422
+    assert real.spent == [] and real.get("/api/ideas/ia/gen").json() == []
+
+
+def test_create_rejects_the_pending_sentinel(real):
+    r = post(real, model="seedream-4.5", startFrame=generations.PENDING)
+    assert r.status_code == 422 and real.spent == []
+    chain_canvas()
+    r = post(real, nodeId="n_vid", model="hailuo-2.3-fast", startFrame=generations.PENDING, duration=6)
+    assert r.status_code == 422 and real.spent == []
+
+
+def test_recover_fails_waiting_row_without_upstream(real):
+    insert_row("w_null", "waiting", model="hailuo-2.3-fast", est=0.192, kind="video")
+    generations.recover(server.db, server.gen_jobs)
+    got = row_of(real, "w_null")
+    assert got["status"] == "failed" and got["error"] == generations.START_FRAME_LOST
+    generations.recover(server.db, server.gen_jobs)
+    assert real.refunds == [("video", 0.192)]
