@@ -7,6 +7,7 @@ import type { PulseInfo } from "./ClientChips";
 import { VoiceButton } from "./VoiceButton";
 import { usePastSearches } from "../lib/usePastSearches";
 import { t } from "../lib/i18n";
+import { useApp } from "../lib/appContext";
 
 interface Props {
   inputId: string;
@@ -36,6 +37,8 @@ export function SearchBox(p: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const listId = useId();
   const past = usePastSearches(p.value, p.live);
+  // One search at a time: the button waits while another runs in the background.
+  const busy = Boolean(useApp().searching);
   const trending = p.chipGroups.find((g) => g.id === "trending");
   const oneRow = trending
     ? [trending]
@@ -102,14 +105,16 @@ export function SearchBox(p: Props) {
         <button
           type="submit"
           className="btn btn-primary"
-          disabled={!p.value.trim()}
-          title={p.value.trim() ? undefined : t('find.box.typeFirst')}
+          disabled={!p.value.trim() || busy}
+          title={busy ? t('find.bg.busy') : p.value.trim() ? undefined : t('find.box.typeFirst')}
         >
           {/https?:\/\//.test(p.value)
             ? t('find.box.findMore')
             : t('find.box.findTrending')}
         </button>
       </div>
+
+      {busy && <p className="small muted" role="note">{t('find.bg.busy')}</p>}
 
       {p.onImage && (
         <div className="search-upload">
