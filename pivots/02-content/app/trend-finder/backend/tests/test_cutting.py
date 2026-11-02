@@ -28,6 +28,28 @@ def test_parse_words_drops_starred_sound_notes():
     assert cutting.parse_words(data) == [(4.0, 4.5, "hi")]
 
 
+def test_parse_words_uses_dtw_token_times():
+    # Real whisper-cli 1.9.5 output: the segment offsets put "of the um" inside the 1.9-3.6 s pause; the
+    # DTW token times (t_dtw, 10 ms units, about where each token ends) do not.
+    data = json.loads((FIXTURES / "whisper_words_dtw.json").read_text())
+    words = cutting.parse_words(data)
+    assert [w[2] for w in words] == ["hello", "um", "this", "is", "a", "test", "of", "the", "um", "video", "tool"]
+    assert words[0] == pytest.approx((0.55, 0.78, "hello"))  # first word starts at its segment offset
+    assert words[1] == pytest.approx((0.78, 1.0, "um"))      # previous token's t_dtw to its own
+    assert words[8] == pytest.approx((3.82, 3.96, "um"))
+    assert words[6] == pytest.approx((1.84, 3.72, "of"))     # swallows the pause; keep_intervals moves it
+
+
+def test_dtw_word_start_skips_the_silence_before_it():
+    # "of" starts where "test" ended, before the pause; the pause must still be cut, the fillers too
+    data = json.loads((FIXTURES / "whisper_words_dtw.json").read_text())
+    sil = [(0.0, 0.53), (1.908, 3.617), (4.881, 5.584)]  # silencedetect=n=-35dB on the same audio
+    keeps = cutting.keep_intervals(cutting.parse_words(data), sil, 5.584)
+    kept = lambda a, b: any(ka < b and kb > a for ka, kb in keeps)
+    assert not kept(0.8, 0.99) and not kept(3.83, 3.95) and not kept(2.1, 3.4)
+    assert kept(0.6, 0.75) and kept(1.2, 1.8) and kept(4.0, 4.8)  # hello, "this is a test", "video tool"
+
+
 def test_filler_removed_and_gap_trimmed():
     keeps = cutting.keep_intervals(W, SIL, 3.5)
     # um 1.0-1.3 and the gap up to 2.9 are one cut; keep 0.12 only on the world side

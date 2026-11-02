@@ -15,6 +15,7 @@ FILLERS = {"um", "umm", "uh", "uhh", "er", "erm", "hm", "hmm"}  # English only; 
 MIN_FRAGMENT = 0.08  # seconds; shorter keep intervals are dropped
 FADE = 0.012         # seconds of fade at every seam
 WHISPER_TIMEOUT = 900
+DTW_PRESET = "large.v3.turbo"  # alignment heads of analyze.MODEL; DTW needs flash attention off (-nfa)
 FFMPEG_TIMEOUT = 1800  # seconds; any single ffmpeg/ffprobe call, so a hung process can't stall the worker
 
 NO_FFMPEG = ("ffmpeg isn't installed on this computer, so the cut can't be made. "
@@ -29,15 +30,25 @@ def num(x: float) -> str:
 
 
 def parse_words(data: dict) -> list[Word]:
-    """whisper-cli JSON (one word per segment, offsets in ms) to sorted (start, end, text) in seconds."""
-    words = []
+    """whisper-cli JSON (one word per segment, offsets in ms) to sorted (start, end, text) in seconds.
+    With -dtw each token has t_dtw (10 ms units, about where the token ends): a word then runs from the
+    previous token's t_dtw to its own last token's (a trailing comma's time is where the next word
+    starts). The segment offsets drift badly after a pause, so they are only the fallback (and the
+    first word's start)."""
+    words, prev = [], None
     for seg in data.get("transcription", []):
         text = seg.get("text", "").strip()
+        start, end = seg["offsets"]["from"] / 1000, seg["offsets"]["to"] / 1000
+        toks = [t for t in seg.get("tokens", []) if t.get("t_dtw", -1) >= 0 and not t["text"].startswith("[_")]
+        if toks:
+            end = toks[-1]["t_dtw"] / 100
+            start = min(prev if prev is not None else start, end)
+            prev = end
         if not text or (text[0], text[-1]) in {("[", "]"), ("(", ")")}:
             continue
         if text[0] == "*" or text[-1] == "*":  # a sound note such as "*phone rings*", split per word
             continue
-        words.append((seg["offsets"]["from"] / 1000, seg["offsets"]["to"] / 1000, text))
+        words.append((start, end, text))
     return sorted(words, key=lambda w: w[0])
 
 
@@ -56,6 +67,12 @@ def _effective_ends(words: list[Word], silences: list[tuple[float, float]]) -> l
     return ends
 
 
+def _effective_starts(words: list[Word], silences: list[tuple[float, float]]) -> list[float]:
+    """A DTW word start is the previous word's end (often a little early), so it can swallow the silence
+    before it; start after the latest silence that ends inside the word."""
+    return [max([e for _, e in silences if start < e < end], default=start) for start, end, _ in words]
+
+
 def keep_intervals(words: list[Word], silences: list[tuple[float, float]], total: float,
                    *, keep: float = 0.12, min_gap: float = 0.4,
                    protected: list[tuple[float, float]] = ()) -> list[tuple[float, float]]:
@@ -65,14 +82,15 @@ def keep_intervals(words: list[Word], silences: list[tuple[float, float]], total
         return [(0.0, total)]
     words = sorted(words, key=lambda w: w[0])
     ends = _effective_ends(words, silences)
+    starts = _effective_starts(words, silences)
     removals = []
-    for (start, _, text), end in zip(words, ends):
+    for (_, _, text), start, end in zip(words, starts, ends):
         if is_filler(text):
             removals.append((start, end))
     # gaps: head, between words, tail; each side next to a filler gets no keep (the filler goes whole)
-    edges = [(0.0, words[0][0], False, is_filler(words[0][2]))]
+    edges = [(0.0, starts[0], False, is_filler(words[0][2]))]
     for i in range(len(words) - 1):
-        edges.append((ends[i], words[i + 1][0], is_filler(words[i][2]), is_filler(words[i + 1][2])))
+        edges.append((ends[i], starts[i + 1], is_filler(words[i][2]), is_filler(words[i + 1][2])))
     edges.append((ends[-1], total, is_filler(words[-1][2]), False))
     for lo, hi, left_filler, right_filler in edges:
         if hi - lo > min_gap:
@@ -214,7 +232,7 @@ def transcribe_words(wav: Path, work: Path) -> list[Word]:
     base = Path(work) / "words"
     base.with_suffix(".json").unlink(missing_ok=True)
     r = run([analyze.WHISPER, "-m", str(analyze.MODEL), "-f", str(wav), "-l", "auto", "-ml", "1", "-sow",
-             "-ojf", "-of", str(base), "-np"], timeout=WHISPER_TIMEOUT)
+             "-dtw", DTW_PRESET, "-nfa", "-ojf", "-of", str(base), "-np"], timeout=WHISPER_TIMEOUT)
     if r.returncode != 0:
         raise CutError(f"Finding the words failed: {r.stderr.strip()[-200:]}")
     try:
