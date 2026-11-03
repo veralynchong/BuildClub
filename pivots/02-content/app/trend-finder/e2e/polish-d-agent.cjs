@@ -40,6 +40,7 @@ const LEAK = 'SECRET-DETAIL-do-not-show'
   const panelTotal = async () => (await panel.locator('.cv-panel-cost', { hasText: 'Total' }).innerText()).trim()
   const dialogTotal = async () => (await page.locator('.cv-run-modal strong').last().innerText()).trim()
   const nodesOf = (c, shotId, type) => c.doc.nodes.filter((n) => n.shotId === shotId && n.type === type)
+  const usd = (t) => { const m = /US\$(\d+(?:\.\d+)?)/.exec(t); return m ? Number(m[1]) : null }
   const settle = () => page.waitForTimeout(1600) // lets an autosave land
 
   // every POST that starts a generation, with its body
@@ -61,17 +62,6 @@ const LEAK = 'SECRET-DETAIL-do-not-show'
     await L.seed(page) // approved plan with s1..s3
     await page.evaluate(() => localStorage.removeItem('remake.canvas.fullscreen'))
 
-    // display-only prices for the two mock models (see the header)
-    await page.route('**/api/gen/models', async (route) => {
-      const res = await route.fetch()
-      const body = await res.json()
-      for (const m of body.models) {
-        if (m.id === 'mock-image') m.price = { per: 'image', usd: 0.04 }
-        if (m.id === 'mock-video') m.price = { per: 'second', usd: 0.05 }
-      }
-      await route.fulfill({ response: res, json: body })
-    })
-
     // ---- setup: bare frames, one kit item, a kit node ----
     const cur = await canvas()
     const bare = { ...cur.doc, nodes: cur.doc.nodes.filter((n) => n.type === 'shot'), edges: [] }
@@ -84,7 +74,6 @@ const LEAK = 'SECRET-DETAIL-do-not-show'
     const kitId = await page.locator('.react-flow__node-kit').getAttribute('data-id')
     L.ok('setup: a kit node on the board', !!kitId, String(kitId))
     await settle()
-    const gens0 = (await gens()).length
 
     // ---- 1. ✦ on an empty frame: two cards and a total (§10.10) ----
     await fit()
@@ -99,6 +88,13 @@ const LEAK = 'SECRET-DETAIL-do-not-show'
     L.ok('✦ asked the server once and the plan names the mock models', planPosts === 1 && /Mock image/.test(await panel.locator('.cv-agent-card').nth(0).innerText()) && /Mock video/.test(await panel.locator('.cv-agent-card').nth(1).innerText()), String(planPosts))
     L.ok('✦ planning added nothing to the canvas yet', (await node('n_shot_s1').count()) === 1 && (await page.locator('.react-flow__node-storyboard, .react-flow__node-video').count()) === 0, '')
     await shot('01-panel')
+    // no stub yet: the real model menu and the panel on it
+    const realModels = await L.api(page, '/api/gen/models')
+    const mm = (realModels.body && realModels.body.models) || []
+    const mi = mm.find((m) => m.id === 'mock-image'), mv = mm.find((m) => m.id === 'mock-video')
+    L.ok('real GET /api/gen/models (no stub): mock-image and mock-video have the fields the panel reads, and the panel rendered on it without errors',
+      realModels.status === 200 && !!mi && !!mv && mi.kind === 'image' && mi.available === true && typeof mi.price?.usd === 'number' && mv.kind === 'video' && mv.available === true && Array.isArray(mv.durations) && !!mv.inputs && errs.length === at.login,
+      JSON.stringify({ mi: !!mi, mv: !!mv, errs: errs.length - at.login }))
 
     // ---- 2. Cancel: canvas and generations byte-for-byte the same, nothing started ----
     await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -122,6 +118,19 @@ const LEAK = 'SECRET-DETAIL-do-not-show'
     await page.waitForTimeout(400)
     L.ok('a second Esc leaves full screen', !/is-full/.test(await shell()), '')
 
+    // from here the dialogs and totals need numbers: display-only prices for the two mock models (see the header)
+    const MODELS = '**/api/gen/models'
+    await page.route(MODELS, async (route) => {
+      const res = await route.fetch()
+      const body = await res.json()
+      for (const m of body.models) {
+        if (m.id === 'mock-image') m.price = { per: 'image', usd: 0.04 }
+        if (m.id === 'mock-video') m.price = { per: 'second', usd: 0.05 }
+      }
+      await route.fulfill({ response: res, json: body })
+    })
+    await L.gotoCanvas(page) // the menu is read on load
+
     // ---- 4. Approve and run, double-clicked: one dialog, exactly one generation per node ----
     await openAgent('s1')
     const sbPrompt = await panel.locator('textarea').nth(0).inputValue()
@@ -142,7 +151,8 @@ const LEAK = 'SECRET-DETAIL-do-not-show'
     const sbId = sb1[0]?.id, vidId = v1[0]?.id
     L.ok('Approve: the nodes carry the plan prompts and models', sb1[0]?.data.prompt === sbPrompt && v1[0]?.data.prompt === vidPrompt && sb1[0]?.data.model === 'mock-image' && v1[0]?.data.model === 'mock-video', '')
     L.ok('Approve: the storyboard is wired to the kit node (in:kit)', c.doc.edges.some((e) => e.source === kitId && e.target === sbId && e.targetHandle === 'in:kit'), '')
-    L.ok('Approve: the video starts from the storyboard (in:start edge, drawn on the board)', c.doc.edges.some((e) => e.source === sbId && e.target === vidId && e.targetHandle === 'in:start') && (await edgeIds()).includes(`e_${sbId}_${vidId}_in:start`), '')
+    const edgeDom = await edgeIds()
+    L.ok('Approve: the video starts from the storyboard (in:start edge, drawn on the board)', (() => { const e = c.doc.edges.find((x) => x.source === sbId && x.target === vidId && x.targetHandle === 'in:start'); return !!e && edgeDom.includes(e.id) })(), '')
     const done4 = (await waitStatus(sbId, '^v1 / 1$')) && (await waitStatus(vidId, '^v1 / 1$'))
     L.ok('Approve: both generations finish (v1 / 1)', done4, '')
     await shot('04-approved')
@@ -244,10 +254,12 @@ const LEAK = 'SECRET-DETAIL-do-not-show'
     await page.locator('.cv-runall-btn').click()
     await page.locator('.cv-run-modal').waitFor({ timeout: 10000 })
     const shotRows = await page.locator('.cv-run-modal .cv-run-shot').allInnerTexts()
-    L.ok('removed shot: the Run all dialog lists only live shots (the unrun extra node of shot 2 is left out)', shotRows.length === 1 && /^Shot 1 /.test(shotRows[0]) && !/Shot 0/.test(await page.locator('.cv-run-modal').innerText()), JSON.stringify(shotRows))
-    L.ok('removed shot: the dialog total equals the toolbar total', totalAfter.includes((await dialogTotal()).replace('Total ', '')), `${totalAfter} | ${await dialogTotal()}`)
+    L.ok('removed shot: the Run all dialog lists only live shots (the unrun extra node of shot 2 is left out)', shotRows.length === 1 && /^Shot 1 /.test(shotRows[0]), JSON.stringify(shotRows))
+    L.ok('removed shot: the dialog total equals the toolbar total', usd(totalAfter) !== null && usd(totalAfter) === usd(await dialogTotal()), `${totalAfter} | ${await dialogTotal()}`)
     await shot('07-runall')
     await page.locator('.cv-run-modal .btn-ghost').click()
+
+    await page.unroute('**/api/gen/models') // the price stub is only for steps 4 to 7
 
     // ---- 8. the 502 path: the sentence, never the detail, canvas untouched ----
     at.s8 = errs.length
@@ -274,18 +286,21 @@ const LEAK = 'SECRET-DETAIL-do-not-show'
     ideas9.find((i) => i.id === IDEA).status = 'waiting'
     L.ok('setup: the plan is waiting (read-only)', (await L.api(page, '/api/ideas', json(ideas9))).status === 200, '')
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
-    await page.waitForFunction(() => !document.querySelector('.cv-runall-btn'), null, { timeout: 8000 }).catch(() => {})
-    L.ok('read-only: no ✦ on any frame and no ✦ in the rail', (await page.locator('.cv-frame-agent-btn').count()) === 0 && (await page.locator('.cv-agent-pick').count()) === 0 && (await page.locator('.cv-runall-btn').count()) === 0, '')
+    const gone = await page.waitForFunction(() => !document.querySelector('.cv-runall-btn'), null, { timeout: 8000 }).then(() => true, () => false)
+    L.ok('read-only: frames and nodes are rendered, with no ✦ on any frame and none in the rail', gone && (await page.locator('.react-flow__node').count()) > 0 && (await page.locator('.cv-frame').count()) === 3 && (await page.locator('.cv-frame-agent-btn').count()) === 0 && (await page.locator('.cv-agent-pick').count()) === 0 && (await page.locator('.cv-runall-btn').count()) === 0, '')
     await shot('09-read-only')
 
     // ---- failed responses: only the stubbed 502 and the read-only plan's 409s (and 401s before login) ----
-    const allowed = (b) => (b.i < at.login && b.status === 401) || (b.i >= at.s8 && b.i <= at.s8end && b.status === 502 && /agent\/plan/.test(b.url)) || (b.i >= at.s9 && b.status === 409)
+    const allowed = (b) => (b.i < at.login && b.status === 401) || (b.i >= at.s8 && b.i <= at.s8end && b.status === 502 && /agent\/plan/.test(b.url)) || (b.i >= at.s9 && b.status === 409 && /^\/api\/ideas(\/[^/]+\/canvas)?$/.test(b.url))
     const badLeft = bad.filter((b) => !allowed(b))
     L.ok('no unexpected 4xx or 5xx response', badLeft.length === 0, JSON.stringify(badLeft.slice(0, 3)))
-    const okErr = (e, i) => (i < at.login && /401/.test(e)) || (i >= at.s8 && i <= at.s8end && /502/.test(e)) || (i >= at.s9 && /409/.test(e))
+    // a console 409 has no URL, so allow no more of them than the 409s the canvas and ideas endpoints answered
+    const ok409 = bad.filter((b) => b.i >= at.s9 && b.status === 409 && /^\/api\/ideas(\/[^/]+\/canvas)?$/.test(b.url)).length
+    let n409 = 0
+    const okErr = (e, i) => (i < at.login && /401/.test(e)) || (i >= at.s8 && i <= at.s8end && /502/.test(e)) || (i >= at.s9 && /409/.test(e) && ++n409 <= ok409)
     const real = errs.filter((e, i) => !okErr(e, i))
     L.ok('no console errors', real.length === 0, real.slice(0, 3).join(' | '))
-    L.ok('only the three Approve runs started a generation (the other chain requests are price quotes)', starts.filter((s) => s.chain && s.body.confirm === true).length === 3 && starts.every((s) => s.chain) && gens0 >= 0, JSON.stringify(starts.map((s) => [s.chain, s.body.nodeId || s.body.imageNodeId])))
+    L.ok('only the three Approve runs started a generation (the other chain requests are price quotes)', starts.filter((s) => s.chain && s.body.confirm === true).length === 3 && starts.every((s) => s.chain), JSON.stringify(starts.map((s) => [s.chain, s.body.nodeId || s.body.imageNodeId])))
   } catch (e) {
     L.ok('script ran to the end', false, String((e && e.stack) || e))
     await page.screenshot({ path: out + '/zz-error.png' }).catch(() => {})
