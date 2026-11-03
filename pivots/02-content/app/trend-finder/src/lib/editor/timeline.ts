@@ -72,6 +72,56 @@ export function insertClip(p: EditProject, src: ClipSource, duration: number, in
   return withClips(p, [...p.clips.slice(0, at), clip, ...p.clips.slice(at)])
 }
 
+// One clip per shot (spec 7.1). Puts `src` (whole, from 0) as its shot's clip: it replaces the shot's clip in place, or goes
+// after the clips of earlier shots. A source without a shot of `shotOrder`, or one that does not fit in the 180 s, leaves
+// the project alone. The shot's pin follows the source.
+export function placeShotClip(p: EditProject, src: ClipSource, duration: number, shotOrder: string[], id: string): EditProject {
+  const rank = src.shotId ? shotOrder.indexOf(src.shotId) : -1
+  if (rank < 0) return p
+  const len = Math.min(floorFrames(duration), MAX_F)
+  const mine = p.clips.filter((c) => c.source.shotId === src.shotId)
+  const room = MAX_F - (totalFrames(p) - mine.reduce((sum, c) => sum + frames(clipLength(c)), 0))
+  if (len < MIN_F || len > room) return p
+  const clip: Clip = { id, source: src, in: 0, out: secs(len), volume: 1, muted: false }
+  const at = p.clips.findIndex((c) => c.source.shotId === src.shotId)
+  let clips: Clip[]
+  if (at >= 0) {
+    clips = p.clips.flatMap((c, k) => (k === at ? [clip] : c.source.shotId === src.shotId ? [] : [c]))
+  } else {
+    let after = -1
+    p.clips.forEach((c, k) => {
+      const r = c.source.shotId ? shotOrder.indexOf(c.source.shotId) : -1
+      if (r >= 0 && r < rank) after = k
+    })
+    clips = [...p.clips.slice(0, after + 1), clip, ...p.clips.slice(after + 1)]
+  }
+  return { ...p, clips, primaries: { ...p.primaries, [src.shotId as string]: src } }
+}
+
+// Old edits may hold several clips of one shot: keep the one that matches the shot's pin, else its first. Clips without
+// a shot stay. `removed` counts the clips dropped.
+export function oneClipPerShot(p: EditProject): { project: EditProject; removed: number } {
+  const keep = new Map<string, string>()
+  for (const c of p.clips) {
+    const sid = c.source.shotId
+    if (!sid) continue
+    const pin = p.primaries[sid]
+    const cur = p.clips.find((x) => x.id === keep.get(sid))
+    const isPin = !!pin && pin.kind === c.source.kind && pin.id === c.source.id
+    const curIsPin = !!cur && !!pin && pin.kind === cur.source.kind && pin.id === cur.source.id
+    if (!cur || (isPin && !curIsPin)) keep.set(sid, c.id)
+  }
+  const clips = p.clips.filter((c) => !c.source.shotId || keep.get(c.source.shotId) === c.id)
+  return clips.length === p.clips.length ? { project: p, removed: 0 } : { project: { ...p, clips }, removed: p.clips.length - clips.length }
+}
+
+// What the Timeline node shows: seconds in total and how many of the shots have a clip.
+export function timelineSummary(p: EditProject | null, shotOrder: string[]): { seconds: number; ready: number; total: number } {
+  if (!p) return { seconds: 0, ready: 0, total: shotOrder.length }
+  const have = new Set(p.clips.map((c) => c.source.shotId))
+  return { seconds: totalLength(p), ready: shotOrder.filter((id) => have.has(id)).length, total: shotOrder.length }
+}
+
 export function trimClip(p: EditProject, clipId: string, edge: 'in' | 'out', value: number, sourceDuration: number): EditProject {
   const i = p.clips.findIndex((c) => c.id === clipId)
   if (i < 0) return p
