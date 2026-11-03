@@ -84,7 +84,7 @@ import { ClientHome } from './components/ClientHome'
 import { ResearchScreen } from './components/research/ResearchScreen'
 import type { RowPick } from './components/research/ResearchScreen'
 import { SaveToVideo } from './components/research/SaveToVideo'
-import { entryFromVideo, newSlot, planOf, researchId, researchStatus, slotSummary, videoFromLink, withPlanRows } from './lib/research'
+import { entryFromVideo, newSlot, planOf, researchId, researchStatus, rowDueDate, slotSummary, videoFromLink, withPlanRows } from './lib/research'
 import type { LinkInput, ResearchEntry } from './lib/research'
 
 // The platforms Find ideas can search, offered by Research's "Add from link".
@@ -914,7 +914,7 @@ export default function App() {
 
   // Makes the plan for a video (Still planning), or returns the one it already has. `format` is for a video
   // added in the same click (not in formatById yet).
-  const saveIdea = (videoId: string, format?: Format): SavedIdea => {
+  const saveIdea = (videoId: string, format?: Format, dueDate?: string): SavedIdea => {
     breakDown(videoId)
     const existing = ideas.find((i) => i.videoId === videoId && i.clientId === client.id)
     if (existing) return existing
@@ -924,7 +924,7 @@ export default function App() {
       videoId,
       clientId: client.id,
       status: 'saved',
-      dueDate: inTwoWeeks(),
+      dueDate: dueDate ?? inTwoWeeks(),
       notes: f.editorNotes,
     }
     setIdeas((prev) => [...prev, idea])
@@ -1040,13 +1040,13 @@ export default function App() {
   }
 
   // Makes the plan for a video (Still planning), keeping its Research row, and opens it unless `open` is false.
-  const planNow = (videoId: string, format?: Format, open = true) => {
+  const planNow = (videoId: string, format?: Format, open = true, dueDate?: string) => {
     const v = videoById.get(videoId)
     if (v && !inResearch.has(videoId)) {
       const row = entryFromVideo(client.id, v, 'search')
       setResearch((prev) => (prev.some((e) => e.id === row.id) ? prev : [...prev, row]))
     }
-    const idea = saveIdea(videoId, format)
+    const idea = saveIdea(videoId, format, dueDate)
     if (!open) return
     setOpenVideoId(null)
     openPlan(idea.id)
@@ -1056,14 +1056,15 @@ export default function App() {
   const planRow = (rowId: string, open = true) => {
     const row = research.find((e) => e.id === rowId)
     if (!row) return
-    if (videoById.has(row.videoId) || hasPlan(row.videoId)) return planNow(row.videoId, undefined, open)
+    const due = rowDueDate(row, researchSlots) // the client video's due date, when the row is filed under one
+    if (videoById.has(row.videoId) || hasPlan(row.videoId)) return planNow(row.videoId, undefined, open, due)
     const { video, format } = videoFromLink(rowLink(row))
     const restored = { ...video, id: row.videoId }
     setLiveStore((prev) => ({
       videos: [restored, ...prev.videos.filter((x) => x.id !== restored.id)],
       formats: prev.formats.some((x) => x.id === format.id) ? prev.formats : [format, ...prev.formats],
     }))
-    planNow(row.videoId, format, open)
+    planNow(row.videoId, format, open, due)
   }
 
   // Research's Status dropdown. Only plans still being planned are deleted here; one sent for approval or further
