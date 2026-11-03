@@ -97,6 +97,14 @@ export function reviewLine(r: CutReview | null, manager: string, day: (ms: numbe
   return t(r.status === 'approved' ? 'cut.review.approved' : 'cut.review.sentBack', { name: manager, when })
 }
 
+// The editor's export button: once the current video is with the approver (or approved) it says so; a stale or
+// sent-back video needs a new export, so the button offers that again.
+export function exportButtonKey(c: CutState | null): 'editor.exportMenu' | 'editor.exportMenu.sent' | 'editor.exportMenu.approved' {
+  if (!c?.output || c.stale) return 'editor.exportMenu'
+  if (c.review?.status === 'waiting') return 'editor.exportMenu.sent'
+  return c.review?.status === 'approved' ? 'editor.exportMenu.approved' : 'editor.exportMenu'
+}
+
 // Resolves after ms, or early when the signal aborts.
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {

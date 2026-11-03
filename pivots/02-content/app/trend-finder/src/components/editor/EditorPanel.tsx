@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import type { Shot } from '../../types'
 import { useApp } from '../../lib/appContext'
-import { getCut, type CutState } from '../../lib/cut'
+import { exportButtonKey, getCut, type CutState } from '../../lib/cut'
 import { t } from '../../lib/i18n'
 import { serverText } from '../../lib/serverText'
 import type { SourcesHook } from '../../lib/editor/useSources'
@@ -268,7 +268,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
             {readOnly && <span className="muted">{t('editor.readOnly')}</span>}
           </div>
           <button type="button" className="btn btn-primary btn-sm" aria-expanded={exportOpen} aria-controls="cv-ed-export" onClick={() => setExportOpen((o) => !o)}>
-            {t('editor.exportMenu')}
+            {t(exportButtonKey(cut))}
           </button>
         </div>
         {/* always mounted, so a running export keeps being followed while this is closed */}
