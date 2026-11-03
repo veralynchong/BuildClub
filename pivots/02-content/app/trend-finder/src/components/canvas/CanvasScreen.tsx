@@ -343,8 +343,8 @@ function CanvasBoard({
 
   // Marks the generated nodes after nodeId (and nodeId itself when its own input changed) as out of date.
   const markFrom = useCallback(
-    (nodeId: string, self: boolean) => {
-      const ids = new Set(staleIds(latest.current.doc, nodeId, gensRef.current, self))
+    (nodeId: string, self: boolean, d: CanvasDoc = latest.current.doc) => {
+      const ids = new Set(staleIds(d, nodeId, gensRef.current, self))
       setNodes((ns) =>
         ns.map((n) => (ids.has(n.id) && !n.data.node.data.stale ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, stale: true } } } } : n)),
       )
@@ -616,6 +616,7 @@ function CanvasBoard({
 
   // ---- the "Build this shot" agent: ask for a plan, show it in the right panel, apply it on approval ----
   const [agent, setAgent] = useState<{ shotId: string; plan: AgentPlan | null; loading: boolean; error: string | null } | null>(null)
+  const runAfter = useRef<string | null>(null) // a shot to run once the board shows the applied plan
   const agentAsk = useRef(0) // which request is current; an answer for a closed or replaced plan is dropped
   const buildShot = (shotId: string) => {
     if (blocked) return
@@ -631,6 +632,15 @@ function CanvasBoard({
     agentAsk.current++
     setAgent(null)
   }
+  // Esc closes the plan panel (the shell key handler leaves it alone while the panel is open)
+  useEffect(() => {
+    if (!agent || runAsk || paidAsk) return
+    const on = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.querySelector('.cv-model-list')) closeAgent()
+    }
+    window.addEventListener('keydown', on)
+    return () => window.removeEventListener('keydown', on)
+  }, [agent, runAsk, paidAsk])
   // Puts the plan on the shot's frame (new nodes in the next free slots, changed settings on existing nodes; those with
   // results are only dated, never re-run here). With `run`, the usual Run the whole shot dialog then asks about the price.
   const applyAgent = async (run: boolean) => {
@@ -639,6 +649,10 @@ function CanvasBoard({
     const cur = latest.current.doc
     const shotNodeId = shotNodeOf(cur, a.shotId)
     if (!shotNodeId) return
+    if (cur.nodes.find((n) => n.id === shotNodeId)?.data.removed) {
+      closeAgent()
+      return showNote('canvas.frame.removed', undefined, true)
+    }
     const sizes = drawnSizes()
     let made
     try {
@@ -654,21 +668,25 @@ function CanvasBoard({
       next = { ...next, nodes: [...next.nodes, { ...n, position: slotInFrame(next, shotNodeId, sizes) }] }
     }
     next = { ...next, edges: made.doc.edges }
+    // this is the applied doc: the board, the stale marks and (after the next render) the price dialog all use it
     adopt(next)
     const plan = a.plan
+    // adopt only merges kit fields into nodes already on the board, so the plan's settings go in here
     updateData(made.storyboardId, { model: plan.storyboard.model, prompt: plan.storyboard.prompt })
     updateData(made.videoId, { model: plan.video.model, prompt: plan.video.prompt, duration: plan.video.duration })
-    for (const id of made.changed) markFrom(id, true)
+    for (const id of made.changed) markFrom(id, true, next)
     closeAgent()
-    if (!run) return
-    // wait for the board to hold the new nodes before the dialog saves and prices them
-    for (let i = 0; i < 40 && !(latest.current.doc.nodes.some((n) => n.id === made.videoId) && latest.current.doc.nodes.find((n) => n.id === made.videoId)?.data.model === plan.video.model); i++) {
-      await new Promise((r) => setTimeout(r, 25))
-    }
-    if (!mounted.current) return
-    await onRunScope({ shotId: a.shotId, includeStale: false })
+    // the run starts in an effect after the board has rendered the applied doc, so it prices and sends that doc
+    if (run) runAfter.current = a.shotId
   }
   const agentShots = shots.flatMap((s, i) => (s.id && liveShotIds(doc, shots, s.id).length ? [{ id: s.id, label: [t('canvas.node.shot', { n: i + 1 }), s.line?.trim() || s.shot || ''].filter(Boolean).join(' · ') }] : []))
+
+  useEffect(() => {
+    const shotId = runAfter.current
+    if (shotId === null) return
+    runAfter.current = null
+    void onRunScope({ shotId, includeStale: false })
+  })
 
   // ---- uploads and takes ----
   const [takes, setTakes] = useState<Take[]>(initial.takes)
@@ -1057,7 +1075,7 @@ function CanvasBoard({
   )
   // F enters and Esc leaves full screen, unless typing, a dialog or the editor has the key.
   const keyState = useRef({ fullscreen, dialogOpen: false, editorOpen: false })
-  keyState.current = { fullscreen, dialogOpen: !!runAsk || !!paidAsk, editorOpen: editing }
+  keyState.current = { fullscreen, dialogOpen: !!runAsk || !!paidAsk || !!agent, editorOpen: editing }
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return

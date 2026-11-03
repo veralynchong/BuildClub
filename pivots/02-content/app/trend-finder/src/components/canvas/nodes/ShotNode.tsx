@@ -7,7 +7,7 @@ import type { CvNodeProps } from './types'
 // A shot is drawn as a frame around its nodes (spec §5.1). The header row is the frame's drag handle; the shot's text
 // reaches the nodes inside through their shotId, so the frame has no ports.
 export function ShotNode({ id, data: { node } }: CvNodeProps) {
-  const { shots, shotNumbers, readOnly, addAfterShot, shotHasClip, buildShot } = useCanvas()
+  const { shots, shotNumbers, readOnly, addAfterShot, shotHasClip, buildShot, blocked } = useCanvas()
   const shot = shots.find((s) => s.id === node.shotId)
   const line = shot?.line?.trim() ? shot.line : (shot?.shot ?? '')
   const chip = shot ? shotChip(shot) : null
@@ -23,7 +23,7 @@ export function ShotNode({ id, data: { node } }: CvNodeProps) {
         {removed && <span className="cv-chip cv-frame-removed">{t('canvas.frame.removed')}</span>}
         <span className="cv-frame-status">{!removed && shotHasClip(node.shotId) ? t('canvas.clip.main') : null}</span>
         <span className="cv-frame-agent">
-          {!readOnly && !removed && node.shotId ? (
+          {!blocked && !removed && node.shotId ? (
             <button type="button" className="cv-frame-agent-btn nodrag" onClick={() => buildShot(node.shotId!)}>
               {t('canvas.agent.build')}
             </button>

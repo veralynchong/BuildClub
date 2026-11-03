@@ -33,7 +33,7 @@ export function AgentPanel({ shotId, plan, loading, error, onChange, onApprove, 
   return (
     <aside className="cv-panel cv-agent nokey" aria-label={t('canvas.agent.build')}>
       <div className="cv-panel-head">
-        <h2 className="cv-panel-title">{t('canvas.agent.title', { n: shotNo })}</h2>
+        <h2 className="cv-panel-title">{shotNo > 0 ? t('canvas.agent.title', { n: shotNo }) : t('canvas.node.shotGone')}</h2>
         <button type="button" className="cv-panel-x" aria-label={t('canvas.panel.close')} title={t('canvas.panel.close')} onClick={onCancel}>
           ×
         </button>
@@ -61,6 +61,7 @@ export function AgentPanel({ shotId, plan, loading, error, onChange, onApprove, 
               <textarea
                 className="cv-textarea nowheel"
                 rows={4}
+                disabled={blocked}
                 value={plan.storyboard.prompt}
                 onChange={(e) => onChange({ ...plan, storyboard: { ...plan.storyboard, prompt: e.target.value } })}
               />
@@ -87,6 +88,7 @@ export function AgentPanel({ shotId, plan, loading, error, onChange, onApprove, 
               <textarea
                 className="cv-textarea nowheel"
                 rows={4}
+                disabled={blocked}
                 value={plan.video.prompt}
                 onChange={(e) => onChange({ ...plan, video: { ...plan.video, prompt: e.target.value } })}
               />

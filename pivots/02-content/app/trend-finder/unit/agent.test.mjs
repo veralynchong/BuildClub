@@ -75,3 +75,10 @@ test('applyAgentPlan reuses the newest video and wires it from the chosen storyb
   assert.equal(startOf(r.doc, 'n_v2'), 'n_sb_a')
   assert.equal(r.doc.nodes.filter((n) => n.type === 'video').length, 2)
 })
+
+test('applyAgentPlan marks an existing video changed when it gains a start line', () => {
+  const doc = { ...empty, nodes: [...empty.nodes, node('n_sb_s1', 'storyboard', 's1', { primary: true, model: 'mock-image', prompt: 'A' }), node('n_vid_s1', 'video', 's1', { model: 'mock-video', prompt: 'B', duration: 6 })] }
+  const r = applyAgentPlan(doc, 's1', plan, models)
+  assert.ok(r.doc.edges.some((e) => e.target === 'n_vid_s1' && e.targetHandle === 'in:start'))
+  assert.deepEqual(r.changed, ['n_vid_s1'])
+})

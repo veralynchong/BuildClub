@@ -92,6 +92,8 @@ export function applyAgentPlan(
     if (!model || (model.inputs.startFrame ?? 'none') !== 'none') {
       const edge = { id: `e_${sbId}_${vidId}_in:start`, source: sbId, sourceHandle: 'out', target: vidId, targetHandle: 'in:start' }
       next = { ...next, edges: [...next.edges, edge] }
+      // a new start line changes what an existing video is made from
+      if (!vidNew && !changed.includes(vidId)) changed.push(vidId)
     }
   }
   next = wireKit(next)
