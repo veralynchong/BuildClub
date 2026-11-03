@@ -9,3 +9,14 @@ test('approvedPlans: this client approved plans only, soonest due first', () => 
   assert.deepEqual(approvedPlans(ideas, 'c').map((i) => i.id), ['c', 'a'])
   assert.deepEqual(approvedPlans([], 'c'), [])
 })
+
+test('videoOf / formatOf: a plan whose video is gone falls back to its own data', async () => {
+  const { videoOf, formatOf } = await import('../src/lib/missingVideo.ts')
+  const shots = [{ n: 1 }]
+  const idea = { ...mk('a', 'approved', '2026-11-20'), videoId: 'gone', shots }
+  const v = videoOf(idea, new Map())
+  assert.equal(v.id, 'gone')
+  assert.equal(formatOf(idea, v, new Map()).shotList, shots)
+  const real = { id: 'gone', formatId: 'f' }
+  assert.equal(videoOf(idea, new Map([['gone', real]])), real)
+})
