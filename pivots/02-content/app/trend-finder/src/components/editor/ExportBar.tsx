@@ -36,6 +36,8 @@ export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, read
   const [busy, setBusy] = useState(false) // saving the edit or starting the export
   const [sending, setSending] = useState(false)
   const [noLink, setNoLink] = useState(false) // the review link could not be turned on
+  const [linkMade, setLinkMade] = useState(false) // "Create link" just turned the link on
+  const sendingRef = useRef(false) // two clicks in one tick send once
   const manager = useManagerName()
   const doneRef = useRef<HTMLDivElement>(null)
   const sendRef = useRef<HTMLButtonElement>(null)
@@ -147,8 +149,11 @@ export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, read
   }
 
   const send = async () => {
+    if (sendingRef.current) return
+    sendingRef.current = true
     setError(null)
     setNoLink(false)
+    setLinkMade(false)
     setSending(true)
     try {
       setCut(await sendWithLink(ideaId, clientId))
@@ -156,6 +161,7 @@ export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, read
       if (e instanceof NoLinkError) setNoLink(true)
       setError((e as Error).message) // the server's reason, including EDIT_STALE; NoLinkError when the link could not be turned on
     } finally {
+      sendingRef.current = false
       setSending(false)
     }
   }
@@ -165,6 +171,7 @@ export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, read
     try {
       await createShareLink(clientId)
       setNoLink(false)
+      setLinkMade(true)
     } catch {
       setError(t('cut.err.link'))
     }
@@ -176,11 +183,13 @@ export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, read
   const canSend = !readOnly && !!output && !cut?.stale && !active && review?.status !== 'waiting' && review?.status !== 'approved' && review?.status !== 'rejected'
   const line = reviewLine(review, manager, formatDay)
 
-  // Opened from the toolbar's Send for approval: focus Send once it exists (the export state loads after opening).
+  // Opened from the toolbar's Send for approval: focus Send the first time it exists (the export state loads after
+  // opening), and only when nothing else has the focus yet, or the Export button the editor focused while waiting.
   useEffect(() => {
     if (focus !== 'send' || !canSend || focusedSend.current) return
     focusedSend.current = true
-    sendRef.current?.focus()
+    const at = document.activeElement
+    if (!at || at === document.body || (at instanceof HTMLElement && at.dataset.step === 'export')) sendRef.current?.focus()
   }, [focus, canSend])
 
   return (
@@ -232,6 +241,7 @@ export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, read
               {t('cut.panel.makeLink')}
             </button>
           )}
+          {linkMade && canSend && <p className="muted small" role="status">{t('cut.panel.linkMade')}</p>}
           {canSend && <p className="muted small">{t('editor.export.approver', { name: manager })}</p>}
           {review?.status === 'rejected' && !cut?.stale && <p className="muted small">{t('cut.panel.sentBackExport', { name: manager })}</p>}
           {line && <p className="small cut-review-line">{line}</p>}
