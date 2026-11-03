@@ -8,7 +8,6 @@
 /* Cards | Script table */
 .sb-toggle { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); padding: 2px; background: var(--surface); }
 .sb-toggle-btn { border: 0; background: transparent; color: var(--muted); border-radius: var(--radius-pill); padding: 5px 14px; min-height: 32px; font-size: var(--text-ms); font-weight: 500; }
-.sb-toggle-btn:hover { color: var(--fg); }
 .sb-toggle-btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-soft-fg); }
 
 /* Card list */
@@ -62,7 +61,6 @@
   display: inline-flex; align-items: center; gap: var(--space-sm); min-height: 40px; padding: 4px 12px 4px 8px;
   border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface); color: var(--fg);
 }
-.sb-swatch:hover { background: var(--surface-2); border-color: var(--line-strong); }
 .sb-swatch-dot { flex: none; width: var(--swatch-size); height: var(--swatch-size); border-radius: 50%; background: var(--sw); box-shadow: 0 0 0 1px var(--swatch-ring); }
 .sb-swatch-hex { font-family: var(--font-mono); font-size: var(--text-sm); font-variant-numeric: tabular-nums; min-width: 7ch; }
 
@@ -98,20 +96,49 @@
 }
 .hook-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-xs); font-size: var(--text-sm); color: var(--muted); }
 .hook-facts li { overflow-wrap: anywhere; }
-.hook-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-sm); }
+/* Suggested hooks as cards (studio layout): three side by side, each its number, the line, and its button.
+   Same card padding, label and body type as the shot cards (the plan's type scale in drawer-plan.css).
+   The picked card gets a blue ring and a solid button. Under 620px of panel width they become rows. */
+.hook-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-base); }
 .hook-option {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-base);
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px;
-  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+  min-width: 0; display: grid; grid-template-rows: auto 1fr auto; gap: var(--plan-card-gap); min-height: 196px; padding: var(--plan-card-pad);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
 }
-.hook-option.is-picked { border-color: var(--blue); background: var(--blue-soft); }
-.hook-option-text { overflow-wrap: anywhere; }
+.hook-option.is-picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.hook-option-no { font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--label); font-variant-numeric: tabular-nums; }
+.hook-option-text { font-family: var(--font-sans); font-size: var(--plan-body-size); font-weight: 400; line-height: var(--plan-body-lh); color: var(--fg); overflow-wrap: anywhere; }
+.hook-option .btn { justify-self: start; align-self: end; margin-top: calc(var(--space-xl) - var(--plan-card-gap)); }
+/* Label row: "HOOK n" on the left, what the viewer feels on the right */
+.hook-head { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2xs) var(--space-sm); min-height: 22px; }
+/* Emotion tag (hookEmotion.ts): a fixed label, never a control. Square corners, mono caps, same-hue text on a pale
+   tint, so nothing about it reads like a Remake button (pill, Inter, sentence case, blue). No hover, pointer or focus. */
+.hook-emo {
+  display: inline-flex; align-items: center; flex: none; max-width: 100%; padding: 3px 7px; border-radius: var(--radius-xs);
+  background: var(--emo-bg); color: var(--emo-fg); cursor: default; user-select: text; white-space: nowrap;
+  font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 16px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.emo-curiosity { --emo-bg: var(--emo-curiosity-bg); --emo-fg: var(--emo-curiosity-fg); }
+.emo-surprise { --emo-bg: var(--emo-surprise-bg); --emo-fg: var(--emo-surprise-fg); }
+.emo-relief { --emo-bg: var(--emo-relief-bg); --emo-fg: var(--emo-relief-fg); }
+.emo-insider { --emo-bg: var(--emo-insider-bg); --emo-fg: var(--emo-insider-fg); }
+.emo-humour { --emo-bg: var(--emo-humour-bg); --emo-fg: var(--emo-humour-fg); }
+.emo-desire { --emo-bg: var(--emo-desire-bg); --emo-fg: var(--emo-desire-fg); }
+.emo-recognition { --emo-bg: var(--emo-recognition-bg); --emo-fg: var(--emo-recognition-fg); }
+.emo-alarm { --emo-bg: var(--emo-alarm-bg); --emo-fg: var(--emo-alarm-fg); }
+/* Locked: the tag sits above the line it describes */
+.hook-yours .hook-emo { display: flex; width: fit-content; margin-bottom: var(--space-sm); }
 .hook-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm) var(--space-lg); }
-.hook-yours { margin: 0; font-size: var(--text-sm); font-weight: 500; overflow-wrap: anywhere; }
-.plan-board-link { display: flex; justify-content: flex-end; }
-.plan-more > summary { cursor: pointer; font-size: var(--text-lg); font-weight: 600; min-height: 32px; display: flex; align-items: center; }
-@media (max-width: 560px) {
-  .hook-option { grid-template-columns: minmax(0, 1fr); }
-  .hook-option .btn { justify-self: stretch; min-height: 44px; }
-  .plan-board-link .btn { flex: 1 1 auto; min-height: 44px; }
+.hook-yours { margin: 0; padding: var(--plan-card-pad); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); font-family: var(--font-sans); font-size: var(--plan-body-size); line-height: var(--plan-body-lh); overflow-wrap: anywhere; }
+@container plan-panel (max-width: 620px) {
+  .hook-list { grid-template-columns: minmax(0, 1fr); }
+  /* Rows: the label row across the top, then the line and its button */
+  .hook-option { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: none; align-items: center; gap: var(--space-sm) var(--space-base); min-height: 0; padding: var(--plan-card-pad); }
+  .hook-head { grid-column: 1 / -1; }
+  .hook-option .btn { align-self: center; margin-top: 0; }
 }
+@container plan-panel (max-width: 420px) {
+  /* Phone: the button drops under its line, lined up with the text */
+  .hook-option { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-md); }
+  .hook-option .btn { justify-self: start; min-height: 44px; }
+}
+.plan-more > summary { cursor: pointer; font-size: var(--text-lg); font-weight: 600; min-height: 32px; display: flex; align-items: center; }

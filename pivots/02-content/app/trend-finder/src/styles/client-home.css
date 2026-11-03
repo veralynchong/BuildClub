@@ -91,8 +91,7 @@
   padding: 8px; margin: 0 -8px; width: calc(100% + 16px); background: none; border: 0; border-radius: var(--radius-sm);
   color: var(--fg); text-align: left; font: inherit;
 }
-:root[data-ui="altitude"] button.ch-steps-row { cursor: pointer; transition: background-color var(--dur-fast) var(--ease); }
-:root[data-ui="altitude"] button.ch-steps-row:hover { background: var(--canvas-alt); }
+:root[data-ui="altitude"] button.ch-steps-row { cursor: pointer; }
 :root[data-ui="altitude"] .ch-steps-row .ch-count { font-size: 18px; line-height: 1.3; text-align: right; }
 :root[data-ui="altitude"] .ch-steps-text { display: grid; gap: 6px; padding-top: 2px; }
 :root[data-ui="altitude"] .ch-steps-list .is-zero :is(.ch-count, .ch-steps-text) { color: var(--muted); }
@@ -150,7 +149,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root[data-ui="altitude"] :is(.ch-card, .ch-steps-row, .ch-bar > span) { animation: none; transition: none; }
+  :root[data-ui="altitude"] :is(.ch-card, .ch-bar > span) { animation: none; transition: none; }
 }
 
 /* Film next: confirmation after saving an idea (the next suggestion shows underneath). */

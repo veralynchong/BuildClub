@@ -78,7 +78,6 @@
 :root[data-ui="altitude"] .btn-sm { border-radius: var(--radius-pill); padding-inline: 14px; }
 :root[data-ui="altitude"] .btn-primary { box-shadow: none; }
 :root[data-ui="altitude"] .btn-ghost { background: transparent; border-color: var(--fg); }
-:root[data-ui="altitude"] .btn-ghost:hover:not(:disabled) { background: var(--surface); }
 :root[data-ui="altitude"] .review-actions .btn { border-radius: var(--radius-pill); }
 :root[data-ui="altitude"] .pill { border-radius: var(--radius-pill); }
 

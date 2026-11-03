@@ -1,6 +1,8 @@
 import type { Client, Format, HookType, Shot, Video } from '../types'
 import type { Key } from './i18n.ts'
-import { t } from './i18n.ts'
+import { inLang, t } from './i18n.ts'
+import { classifyHookEmotion } from './hookEmotion.ts'
+import type { HookEmotion } from './hookEmotion.ts'
 import { editLine } from './storyboard.ts'
 import type { WrittenShot } from './storyboard.ts'
 
@@ -47,6 +49,9 @@ export interface SuggestedHook {
   // 'written': lines the script writer offered for the first shot (saved on the plan).
   // 'sample': built here from the idea, so the demo always has something to pick.
   source: 'written' | 'sample'
+  // What the viewer feels (hookEmotion.ts). Fixed, never edited by the user. When set it wins over the text rules,
+  // so the backend can send it later. Samples carry the emotion of their English wording, so both languages agree.
+  emotion?: HookEmotion
 }
 
 // What the video is about, short enough to drop into a sentence. Live formats copy the caption into `short`,
@@ -90,12 +95,15 @@ export function suggestedHooks(
   count = 3,
 ): SuggestedHook[] {
   const out: SuggestedHook[] = []
-  const add = (text: string, source: SuggestedHook['source']) => {
+  const add = (text: string, source: SuggestedHook['source'], emotion?: HookEmotion) => {
     const x = clean(text)
-    if (x && out.length < count && !out.some((h) => same(h.text, x))) out.push({ text: x, source })
+    if (x && out.length < count && !out.some((h) => same(h.text, x))) out.push(emotion ? { text: x, source, emotion } : { text: x, source })
   }
   for (const o of shots[0]?.options ?? []) add(o, 'written')
-  for (const s of sampleHooks(format, video, client, SAMPLE_ORDER.length)) add(s, 'sample')
+  const english = inLang('en', () => sampleHooks(format, video, client, SAMPLE_ORDER.length))
+  sampleHooks(format, video, client, SAMPLE_ORDER.length).forEach((s, i) =>
+    add(s, 'sample', classifyHookEmotion(english[i] ?? s)),
+  )
   return out
 }
 

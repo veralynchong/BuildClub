@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plan screen concepts</title><link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Geist+Mono:wght@400;500&display=swap" />
+<style>
+:root {
+  /* theme-remake.css: design-system tokens */
+  --canvas: #ffffff; --canvas-alt: #f5f5f7; --ink: #1a1a22; --ink-muted: #5d5f6e;
+  --navy: #060a47; --navy-deep: #070b24; --navy-dot: #2a3170; --on-navy: #f4f5ff; --on-navy-muted: #a9b0e0; --sky: #7ab8ff;
+  --blue: #1a33f2; --blue-hover: #1426c4; --blue-soft: #e9ecff; --label: #1a33f2;
+  --violet: #7b1fe0; --violet-soft: #f2e9ff; --mustard: #f2b705; --on-mustard: #060a47;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --shadow-card: 0 1px 2px rgb(10 12 40 / 0.04), 0 8px 24px rgb(10 12 40 / 0.06);
+  --shadow-float: 0 2px 6px rgb(10 12 40 / 0.05), 0 32px 64px rgb(10 12 40 / 0.16);
+  /* app tokens mapped onto the design system */
+  --bg: var(--canvas); --surface: #ffffff; --surface-2: var(--canvas-alt); --surface-3: #e8e8ee;
+  --fg: var(--ink); --muted: var(--ink-muted); --line: #e8e8ee; --line-strong: #c9cad6;
+  --frost: rgb(255 255 255 / 0.86); --accent: var(--blue); --accent-hover: var(--blue-hover); --accent-fg: #ffffff;
+  --accent-soft: var(--blue-soft); --accent-soft-fg: var(--blue);
+  --early: #1a7a44; --early-soft: #e5f4ea; --rising: #8a5a06; --rising-soft: #fbf3e1;
+  --radius-xs: 4px; --radius-sm: 8px; --radius: 12px; --radius-lg: 20px; --radius-pill: 999px;
+  --focus-ring: 0 0 0 3px var(--blue-soft);
+  /* tokens.css: type, space, motion */
+  --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-ms: 14px; --text-base: 15px; --text-body: 16px;
+  --text-md: 17px; --text-lg: 18px; --text-xl: 22px; --text-2xl: 24px; --text-3xl: 28px; --text-4xl: 30px; --text-display: 52px;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 6px; --space-sm: 8px; --space-md: 10px; --space-base: 12px; --space-lg: 14px;
+  --space-xl: 16px; --space-2xl: 18px; --space-3xl: 24px; --space-4xl: 28px;
+  --dur-fast: 150ms; --dur: 220ms; --dur-slow: 300ms; --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --tracking-tight: -0.02em;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: var(--text-base); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: var(--font-serif); font-weight: 400; letter-spacing: var(--tracking-tight); margin: 0; }
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.mono { font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+.muted { color: var(--muted); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); min-height: 40px; padding: 0 20px; border-radius: var(--radius-pill); border: 1px solid transparent; font-weight: 500; font-size: var(--text-ms); white-space: nowrap; transition: background-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.btn:active { transform: scale(0.98); }
+.btn-sm { min-height: 34px; padding: 0 14px; font-size: var(--text-sm); }
+.btn-primary { background: var(--blue); color: var(--accent-fg); }
+.btn-primary:hover { background: var(--blue-hover); }
+.btn-ghost { background: var(--accent-soft); color: var(--accent-soft-fg); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--accent) 16%, var(--accent-soft)); }
+.link-btn { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); font-size: var(--text-ms); }
+.link-btn:hover { color: var(--fg); }
+
+/* App shell: same sidebar as the app (264px), a phone bar under 860px */
+.shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
+.sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: var(--space-xl); padding: 20px 12px; border-right: 1px solid var(--line); background: var(--bg); overflow-y: auto; }
+.brand { font-family: var(--font-serif); font-size: 26px; letter-spacing: -0.02em; padding: 0 6px; }
+.client { display: flex; align-items: center; gap: var(--space-md); padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.client-mark { width: 28px; height: 28px; border-radius: var(--radius-xs); background: var(--blue-soft); color: var(--blue); display: grid; place-items: center; font-size: var(--text-2xs); font-weight: 600; }
+.client small { display: block; color: var(--muted); }
+.client strong { font-size: var(--text-ms); font-weight: 600; }
+.nav { display: grid; gap: 2px; }
+.nav a { display: flex; align-items: center; gap: var(--space-md); min-height: 36px; padding: 0 10px; border-radius: var(--radius-pill); color: var(--fg); text-decoration: none; font-size: var(--text-ms); }
+.nav a svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.nav a.on { background: var(--surface-2); font-weight: 600; }
+.nav a.on svg { color: var(--violet); }
+.nav .count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--navy); color: var(--on-navy); font-family: var(--font-mono); font-size: var(--text-3xs); text-align: center; line-height: 18px; }
+.nav .count.soft { background: var(--surface-2); color: var(--muted); }
+.nav hr { border: 0; border-top: 1px solid var(--line); margin: 8px 10px; }
+.side-foot { margin-top: auto; display: grid; gap: var(--space-base); padding: 0 6px; font-size: var(--text-sm); }
+.sample { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: var(--radius-pill); background: var(--rising-soft); color: var(--rising); font-size: var(--text-xs); font-weight: 600; }
+.sample::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.user { display: flex; align-items: center; gap: var(--space-md); padding-top: var(--space-base); border-top: 1px solid var(--line); }
+.user-mark { width: 30px; height: 30px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-size: var(--text-2xs); font-weight: 600; }
+.user small { display: block; color: var(--muted); font-size: var(--text-xs); }
+.mobile-bar { display: none; }
+.main { min-width: 0; }
+
+/* Bottom bar, as in the app: frosted, fixed */
+.bar { position: fixed; left: 264px; right: 0; bottom: 0; z-index: 25; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-md); padding: 14px max(16px, 3vw); background: var(--frost); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: 1px solid var(--line); }
+.bar-text { margin-right: auto; color: var(--muted); font-size: var(--text-ms); }
+
+/* The sample video cover: navy with the brand dot grid */
+.cover { position: relative; aspect-ratio: 9 / 16; border-radius: var(--radius-sm); overflow: hidden; background: var(--navy-deep); background-image: radial-gradient(var(--navy-dot) 1.2px, transparent 1.4px); background-size: 14px 14px; color: var(--on-navy); }
+.cover .play { position: absolute; inset: 0; margin: auto; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: rgb(0 0 0 / 0.38); color: var(--on-navy); font-size: 18px; padding-left: 3px; border: 0; }
+.cover .len { position: absolute; top: 10px; right: 10px; font-family: var(--font-mono); font-size: var(--text-3xs); }
+.cover .tt { position: absolute; top: 10px; left: 10px; width: 16px; height: 16px; border-radius: 50%; background: rgb(0 0 0 / 0.6); display: grid; place-items: center; font-size: 9px; }
+.cover .note { position: absolute; left: 10px; bottom: 10px; padding: 3px 9px; border-radius: var(--radius-pill); background: rgb(0 0 0 / 0.5); font-size: var(--text-2xs); font-weight: 500; }
+
+.cmp { display: grid; grid-template-columns: auto auto auto; column-gap: 8px; row-gap: 2px; align-items: baseline; justify-content: start; }
+.cmp b { font-family: var(--font-serif); font-weight: 400; font-variant-numeric: tabular-nums; line-height: 1; }
+.cmp .from { font-size: var(--text-lg); color: var(--muted); }
+.cmp .to { font-size: var(--text-4xl); }
+.cmp .arrow { color: var(--muted); font-size: 14px; }
+.cmp small { font-size: var(--text-xs); color: var(--muted); }
+.vid-title { font-weight: 600; font-size: var(--text-base); margin: 6px 0 0; }
+.vid-handle { font-size: var(--text-xs); color: var(--muted); margin: 0; }
+
+.concept-note { margin: 0; padding: 10px max(16px, 3vw); background: var(--navy); color: var(--on-navy); font-size: var(--text-sm); }
+.concept-note strong { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--mustard); margin-right: 8px; font-weight: 500; }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { display: none; }
+  .mobile-bar { display: flex; align-items: center; gap: var(--space-base); position: sticky; top: 0; z-index: 20; padding: 12px 16px; background: var(--frost); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border-bottom: 1px solid var(--line); font-weight: 600; font-size: var(--text-ms); }
+  .bar { left: 0; }
+}
+@media (max-width: 560px) {
+  .bar { gap: var(--space-sm); padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
+  .bar .btn { flex: 1 1 0; min-height: 44px; }
+  .bar-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.ix { padding: 48px max(16px, 4vw) 64px; display: grid; gap: 32px; }
+.ix header { display: grid; gap: 10px; max-width: 70ch; }
+.ix h1 { font-size: clamp(34px, 5vw, 52px); line-height: 1.05; }
+.ix-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.ix-card { display: grid; gap: 10px; align-content: start; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--fg); text-decoration: none; transition: box-shadow var(--dur) var(--ease); }
+.ix-card:hover { box-shadow: var(--shadow-card); }
+.ix-card h2 { font-size: var(--text-3xl); }
+.ix-card p { margin: 0; color: var(--muted); font-size: var(--text-ms); min-height: 4.5em; }
+.thumb { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.thumb iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0; pointer-events: none; transform-origin: 0 0; }
+.open { color: var(--blue); font-weight: 500; font-size: var(--text-ms); }
+@media (max-width: 960px) { .ix-grid { grid-template-columns: minmax(0, 1fr); } }
+</style></head><body>
+<main class="ix">
+<header><span class="mono" style="color:var(--label)">Remake &middot; plan screen &middot; 3 Nov 2026</span><h1>Three directions for the plan screen</h1>
+<p class="muted" style="margin:0">Mockups only, not built into the app. Same content as the real "Pressing tofu without a press" demo plan, on the Remake tokens (Newsreader, Inter, Geist Mono; blue for the one main action). Each opens on its own and works at phone width. Click "Use this" to move the Picked state.</p></header>
+<div class="ix-grid"><a class="ix-card" href="concept-a-blueprint.html"><span class="mono" style="color:var(--label)">Concept A</span><h2>Blueprint</h2><p>The current direction tightened up: one 8px grid, a ruled header strip, three tabbed blocks with the big serif title on the left and hairline rows on the right. Labels, text and controls line up in the same columns across both sections.</p><span class="thumb"><iframe src="concept-a-blueprint.html" title="Concept A: Blueprint preview" loading="lazy" tabindex="-1"></iframe></span><span class="open">Open Concept A &rarr;</span></a><a class="ix-card" href="concept-b-guided-steps.html"><span class="mono" style="color:var(--label)">Concept B</span><h2>Guided steps</h2><p>One calm editorial column read top to bottom: 1 watch the video, 2 pick how it starts, 3 plan the shots. Big serif numerals on a rail show where you are; each step has one job.</p><span class="thumb"><iframe src="concept-b-guided-steps.html" title="Concept B: Guided steps preview" loading="lazy" tabindex="-1"></iframe></span><span class="open">Open Concept B &rarr;</span></a><a class="ix-card" href="concept-c-studio-split.html"><span class="mono" style="color:var(--label)">Concept C</span><h2>Studio split</h2><p>The video gets a full-height navy stage on the left, big enough to watch while you plan. The right panel is the work: hooks as three side-by-side cards, then the shots as numbered storyboard frames.</p><span class="thumb"><iframe src="concept-c-studio-split.html" title="Concept C: Studio split preview" loading="lazy" tabindex="-1"></iframe></span><span class="open">Open Concept C &rarr;</span></a></div>
+</main>
+<script>
+// Previews show each mockup at desktop width, scaled down to fit the card
+function fit() { document.querySelectorAll('.thumb').forEach(function (t) { t.querySelector('iframe').style.transform = 'scale(' + t.clientWidth / 1440 + ')'; }); }
+fit(); addEventListener('resize', fit);
+</script>
+</body></html>

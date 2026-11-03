@@ -20,7 +20,7 @@
   --xy-selection-background-color: var(--accent-soft);
   --xy-selection-border: 1px dotted var(--accent);
   --xy-controls-button-background-color: var(--surface);
-  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-background-color-hover: var(--hover-tint);
   --xy-controls-button-color: var(--fg);
   --xy-controls-button-color-hover: var(--fg);
   --xy-controls-button-border-color: var(--line);
@@ -43,16 +43,13 @@
   width: 28px; height: 28px; padding: 0; border-radius: var(--radius-pill);
   border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg);
   font-size: var(--text-md); line-height: 1; cursor: pointer;
-  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
 }
-.board-edge-add:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-soft-fg); }
 
 /* Cards */
 .board-node {
   width: 240px; display: grid; gap: var(--space-sm); padding: 12px;
   background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius);
   font-size: var(--text-sm); box-shadow: var(--shadow-sm);
-  transition: border-color var(--duration-hover) var(--ease);
 }
 .board-node.is-selected { border-color: var(--accent); box-shadow: var(--focus-ring); }
 .board-node.is-loose { border-style: dashed; border-color: var(--line-strong); }
@@ -116,7 +113,4 @@
   .board-tools { order: -1; }
   .board-canvas { height: 68dvh; min-height: 360px; }
   .board-minimap { display: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .board-node, .board-edge-add { transition: none; }
 }
