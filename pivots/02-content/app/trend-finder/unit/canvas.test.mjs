@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, roomBelow, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy, shotTextSource, reuseSettings } from '../src/lib/canvas/graph.ts'
+import { canConnect, outMedia } from '../src/lib/canvas/ports.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy, shotTextSource, reuseSettings } from '../src/lib/canvas/graph.ts'
 import { slotInFrame } from '../src/lib/canvas/frames.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen, getBudget, quoteChain, startChain } from '../src/lib/canvas/api.ts'
 
@@ -35,9 +35,6 @@ test('image into a video start frame is allowed and labelled', () => {
   const doc = docWith()
   doc.edges = doc.edges.filter((e) => e.target !== 'n_vid')
   assert.deepEqual(canConnect(doc, { source: 'n_sb_s1', target: 'n_vid', targetHandle: 'in:start' }, models), { ok: true })
-  assert.equal(edgeLabel({ targetHandle: 'in:start' }), 'canvas.edge.start')
-  assert.equal(edgeLabel({ targetHandle: 'in:ref' }), 'canvas.edge.ref')
-  assert.equal(edgeLabel({ targetHandle: 'in:text' }), null)
 })
 
 test('a port takes one line, no self or cycle, empty upload blocked', () => {
@@ -255,14 +252,6 @@ test('failedGen is the newest version only when it failed', () => {
   assert.equal(failedGen('n_sb_s1', [...g, gen('c', 'n_sb_s1', 'done', 3)]), null)
   assert.equal(failedGen('n_sb_s1', [...g, gen('d', 'n_sb_s1', 'running', 3)]), null)
   assert.equal(failedGen('n_other', g), null)
-})
-
-test('roomBelow keeps the spot when it is empty and steps down past nodes in the way', () => {
-  const at = (x, y) => ({ ...node(`n_${x}_${y}`, 'video'), position: { x, y } })
-  assert.deepEqual(roomBelow(docWith({ nodes: [at(900, 0)] }), { x: 360, y: 0 }), { x: 360, y: 0 })
-  assert.deepEqual(roomBelow(docWith({ nodes: [at(360, 0)] }), { x: 360, y: 0 }), { x: 360, y: 280 })
-  const stacked = docWith({ nodes: [at(360, 0), at(380, 280), at(360, 560)] })
-  assert.deepEqual(roomBelow(stacked, { x: 360, y: 0 }), { x: 360, y: 840 })
 })
 
 test('freeSpot moves a new node off the ones already there', () => {

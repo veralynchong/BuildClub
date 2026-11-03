@@ -1,7 +1,7 @@
 import { t, type Key, type Vars } from '../i18n.ts'
 import { shotNodeOf } from './frames.ts'
 import { downstream } from './graph.ts'
-import type { CanvasDoc, CanvasEdge, CanvasNode, GenModel, Media, NodeKind } from './types.ts'
+import type { CanvasDoc, CanvasNode, GenModel, Media, NodeKind } from './types.ts'
 
 type PortId = 'in:text' | 'in:start' | 'in:ref' | 'in:kit'
 interface Port {
@@ -70,10 +70,6 @@ export function canConnect(doc: CanvasDoc, c: { source: string; target: string; 
     if (model && (model.inputs[port.modelInput] ?? 'none') === 'none') return { ok: false, reason: 'canvas.conn.model', vars: { model: modelId } }
   }
   return { ok: true }
-}
-
-export function edgeLabel(edge: Pick<CanvasEdge, 'targetHandle'>): Key | null {
-  return edge.targetHandle === 'in:start' ? 'canvas.edge.start' : edge.targetHandle === 'in:ref' ? 'canvas.edge.ref' : null
 }
 
 // The kinds a new node can be when a line is dragged from sourceId into empty space, with the input the line goes into.

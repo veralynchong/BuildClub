@@ -1,5 +1,5 @@
 import type { CanvasDoc, CanvasEdge, CanvasNode, NodeKind } from './types.ts'
-import { boxAround, frameBoxes, frameOf, kitSpot, NODE_SIZE, type Box } from './frames.ts'
+import { boxAround, frameBoxes, frameOf, kitSpot, NODE_SIZE, spreadFrames, type Box } from './frames.ts'
 
 // Conversion between the saved canvas document and what React Flow shows. Pure, so it can be tested.
 // The saved node/edge rides along in `data`, so everything React Flow doesn't know about survives a save.
@@ -50,8 +50,19 @@ function memberNode(base: FlowNode, parent: string, frame: { x: number; y: numbe
   return { ...base, position: { x: abs.x - frame.x, y: abs.y - frame.y }, parentId: parent, extent: 'parent', expandParent: true }
 }
 
+// Moves the frames spreadFrames says overlap; returns how far each one went down.
+function spread(boxes: Map<string, Box>): Map<string, number> {
+  const dy = spreadFrames(boxes)
+  for (const [id, d] of dy) {
+    const b = boxes.get(id)!
+    boxes.set(id, { ...b, y: b.y + d })
+  }
+  return dy
+}
+
 export function toFlow(doc: CanvasDoc, sizes?: Map<string, { w: number; h: number }>) {
   const boxes = frameBoxes(doc, sizes)
+  const dy = spread(boxes)
   const frames: FlowNode[] = doc.nodes.filter((n) => n.type === 'shot').map((n) => frameNode(n, boxes.get(n.id)!))
   const rest: FlowNode[] = doc.nodes
     .filter((n) => n.type !== 'shot')
@@ -59,7 +70,7 @@ export function toFlow(doc: CanvasDoc, sizes?: Map<string, { w: number; h: numbe
       const base: FlowNode = { id: n.id, type: n.type, position: { ...n.position }, data: { node: n }, deletable: true }
       if (n.type === 'kit') return { ...base, position: boxes.size ? kitSpot(boxes) : base.position, draggable: false }
       const parent = frameOf(doc, n)
-      return parent ? memberNode(base, parent, boxes.get(parent)!, n.position) : base
+      return parent ? memberNode(base, parent, boxes.get(parent)!, { x: n.position.x, y: n.position.y + (dy.get(parent) ?? 0) }) : base
     })
   const nodes = [...frames, ...rest]
   const edges: FlowEdge[] = doc.edges.map((e) => ({
@@ -80,7 +91,8 @@ function absolute(n: FlowNode, byId: Map<string, FlowNode>): { x: number; y: num
 }
 
 // Recomputes every frame from where its members now are (and their measured sizes), and re-bases the members.
-// A node with a shotId but no parent yet (just added, absolute position) is taken into its shot's frame.
+// A node with a shotId but no parent yet (just added, absolute position) is taken into its shot's frame. Frames that
+// would overlap are spread down the board, and the kit goes back left of them all.
 export function reframe(nodes: FlowNode[]): FlowNode[] {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const frameByShot = new Map<string, FlowNode>()
@@ -96,6 +108,11 @@ export function reframe(nodes: FlowNode[]): FlowNode[] {
       .map((n) => ({ ...abs.get(n.id)!, w: n.measured?.width ?? NODE_SIZE.w, h: n.measured?.height ?? NODE_SIZE.h }))
     boxes.set(f.id, boxAround(members, f.position))
   }
+  const dy = spread(boxes)
+  for (const n of nodes) {
+    const d = dy.get(frameFor(n)?.id ?? '')
+    if (d) abs.set(n.id, { ...abs.get(n.id)!, y: abs.get(n.id)!.y + d })
+  }
   const frames = nodes
     .filter((n) => n.type === 'shot')
     .map((f) => {
@@ -105,6 +122,7 @@ export function reframe(nodes: FlowNode[]): FlowNode[] {
   const rest = nodes
     .filter((n) => n.type !== 'shot')
     .map((n) => {
+      if (n.type === 'kit' && boxes.size) return { ...n, position: kitSpot(boxes) } // stays left of every frame
       const f = frameFor(n)
       return f ? memberNode(n, f.id, boxes.get(f.id)!, abs.get(n.id)!) : n
     })

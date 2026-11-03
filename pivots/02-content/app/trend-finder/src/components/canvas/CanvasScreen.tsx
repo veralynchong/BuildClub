@@ -15,18 +15,21 @@ import '@xyflow/react/dist/style.css'
 import type { Kit, SavedIdea, Shot } from '../../types'
 import { t, type Key, type Vars } from '../../lib/i18n'
 import { getBudget, getCanvas, getKit, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
-import { fromFlow, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import { addNode, chainBusy, chainPair, isRetired, freeSpot, roomBelow, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
+import { fromFlow, reframe, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
+import { frameBoxes, frameOf, migrateDoc, slotInFrame } from '../../lib/canvas/frames'
+import { edgeLook, focusSet } from '../../lib/canvas/edges'
+import { addNode, chainBusy, chainPair, isRetired, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, NothingToCut, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
-import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
+import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
 import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
 import { ErrorText } from '../ErrorText'
 import { CanvasToolbar } from './CanvasToolbar'
 import { ToolRail } from './ToolRail'
+import { DropMenu } from './DropMenu'
 import { QueuePill } from './QueuePill'
 import { ZoomBar } from './ZoomBar'
 import { runningQueue, shellKey, writeFullscreen } from '../../lib/canvas/shell'
@@ -43,7 +46,6 @@ const MAX_RETRIES = 5
 const NOTE_MS = 8000 // how long an info note (e.g. clean-up done) stays up; errors stay until dismissed
 const ADD_KINDS: NodeKind[] = ['prompt', 'storyboard', 'video', 'upload']
 const ADD_KINDS_WITH_KIT: NodeKind[] = [...ADD_KINDS, 'kit']
-const MEDIA_COLOR = { text: 'var(--violet)', image: 'var(--blue)', video: 'var(--mustard)', kit: 'var(--muted)' } as const
 const POLL_RETRY_MS = 2000 // wait after a poll request fails before asking again
 
 interface Props {
@@ -172,7 +174,8 @@ function CanvasBoard({
   fullscreen: boolean
   onFullscreen: (on: boolean) => void
 }) {
-  const first = useMemo(() => toFlow(initial.doc), [initial])
+  // migrateDoc runs on every load: the backend still writes a shot text line for each new shot.
+  const first = useMemo(() => toFlow(migrateDoc(initial.doc)), [initial])
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(first.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(first.edges)
   const { screenToFlowPosition, getZoom, getViewport, setViewport: moveTo, fitView } = useReactFlow()
@@ -347,16 +350,19 @@ function CanvasBoard({
       const nodeIds = new Set(cur.nodes.map((n) => n.id))
       const lineIds = new Set(cur.edges.map((e) => e.id))
       const added = toFlow({ nodes: next.nodes.filter((n) => !nodeIds.has(n.id)), edges: next.edges.filter((e) => !lineIds.has(e.id)) })
-      setNodes((ns) => [
-        ...ns.map((n) => {
-          const m = next.nodes.find((x) => x.id === n.id)
-          const base = cur.nodes.find((x) => x.id === n.id)
-          if (!m || !base) return n
-          const data = mergeKitData(base.data, m.data, n.data.node.data) // only what the sync changed; newer edits stay
-          return data === n.data.node.data ? n : { ...n, data: { node: { ...n.data.node, data } } }
-        }),
-        ...added.nodes,
-      ])
+      setNodes((ns) => {
+        const out = [
+          ...ns.map((n) => {
+            const m = next.nodes.find((x) => x.id === n.id)
+            const base = cur.nodes.find((x) => x.id === n.id)
+            if (!m || !base) return n
+            const data = mergeKitData(base.data, m.data, n.data.node.data) // only what the sync changed; newer edits stay
+            return data === n.data.node.data ? n : { ...n, data: { node: { ...n.data.node, data } } }
+          }),
+          ...added.nodes,
+        ]
+        return added.nodes.length ? reframe(out) : out // a new node joins its frame, a new kit goes left of the frames
+      })
       if (added.edges.length) setEdges((es) => [...es, ...added.edges])
     },
     [setNodes, setEdges],
@@ -662,9 +668,21 @@ function CanvasBoard({
     markFrom(c.target, true)
   }
 
-  // A line dropped on a port that refuses it never reaches onConnect, so say why here.
-  const onConnectEnd = (_: unknown, cs: FinalConnectionState) => {
+  // A line let go on empty board (not on a node; a frame's empty space counts as board) offers the kinds of node it
+  // could feed. A line dropped on a port that refuses it never reaches onConnect, so say why here.
+  const [drop, setDrop] = useState<{ source: string; screen: { x: number; y: number }; at: { x: number; y: number }; options: { kind: NodeKind; handle: string }[] } | null>(null)
+  const onConnectEnd = (event: MouseEvent | TouchEvent, cs: FinalConnectionState) => {
     setDragFrom(null)
+    if (!cs.toNode && cs.fromNode && cs.fromHandle?.type === 'source' && !blocked) {
+      const p = 'changedTouches' in event ? event.changedTouches[0] : event
+      const onNode = event.target instanceof Element && event.target.closest('.react-flow__node:not(.react-flow__node-shot)')
+      const options = compatibleKinds(latest.current.doc, cs.fromNode.id, models)
+      const box = flowBox.current?.getBoundingClientRect()
+      if (p && box && !onNode && options.length) {
+        setDrop({ source: cs.fromNode.id, screen: { x: p.clientX - box.left, y: p.clientY - box.top }, at: screenToFlowPosition({ x: p.clientX, y: p.clientY }), options })
+      }
+      return
+    }
     if (cs.isValid !== false || !cs.fromHandle || !cs.toHandle || !cs.fromNode || !cs.toNode) return
     const fromOut = cs.fromHandle.type === 'source'
     const [out, inp] = fromOut ? [cs.fromNode, cs.toNode] : [cs.toNode, cs.fromNode]
@@ -674,12 +692,55 @@ function CanvasBoard({
     if (!r.ok) showNote(r.reason, r.vars)
   }
 
+  // Puts the doc's last node (just added) and its new lines on the board; reframe takes it into its shot's frame.
   const place = (doc: CanvasDoc) => {
     const node = doc.nodes[doc.nodes.length - 1]
     const have = new Set(latest.current.doc.edges.map((e) => e.id))
     const f = toFlow({ nodes: [node], edges: doc.edges.filter((e) => !have.has(e.id)) })
-    setNodes((ns) => [...ns, ...f.nodes])
+    setNodes((ns) => reframe([...ns, ...f.nodes]))
     setEdges((es) => [...es, ...f.edges])
+  }
+
+  // The nodes' sizes as drawn, so a new node lands clear of the ones already in its frame.
+  const drawnSizes = () => new Map(nodes.filter((n) => n.measured?.width && n.measured?.height).map((n) => [n.id, { w: n.measured!.width!, h: n.measured!.height! }]))
+
+  // A new node in a shot's frame: at `at` when that is inside the frame, else right of the frame's last node. A video
+  // gets the frame's newest storyboard on its start frame; a storyboard joins the kit.
+  const addInShot = (d: CanvasDoc, kind: NodeKind, shotNodeId: string, at?: { x: number; y: number }, line?: { source: string; handle: string }) => {
+    const shotId = d.nodes.find((n) => n.id === shotNodeId)?.shotId
+    if (!shotId) return null
+    const sizes = drawnSizes()
+    const box = frameBoxes(d, sizes).get(shotNodeId)
+    const inside = at && box && at.x >= box.x && at.y >= box.y && at.x < box.x + box.w && at.y < box.y + box.h
+    let next = addNode(d, kind, at ?? { x: 0, y: 0 }, shotId)
+    const id = next.nodes[next.nodes.length - 1].id
+    const spot = inside ? { x: Math.round(at.x), y: Math.round(at.y) } : slotInFrame(d, shotNodeId, sizes)
+    next = { ...next, nodes: next.nodes.map((n) => (n.id === id ? { ...n, position: spot } : n)) }
+    if (line) next = withLine(next, line.source, id, line.handle)
+    if (kind === 'video') next = wireStart(next, id, models)
+    return { doc: wireKit(next), id }
+  }
+
+  const withLine = (d: CanvasDoc, source: string, target: string, handle: string): CanvasDoc => ({
+    ...d,
+    edges: [...d.edges, { id: `e_${source}_${target}_${handle}`, source, sourceHandle: 'out', target, targetHandle: handle }],
+  })
+
+  const pickDrop = (o: { kind: NodeKind; handle: string }) => {
+    if (!drop) return
+    setDrop(null)
+    const d = latest.current.doc
+    const src = d.nodes.find((n) => n.id === drop.source)
+    if (!src || blocked) return
+    const frame = frameOf(d, src)
+    if (frame) {
+      const made = addInShot(d, o.kind, frame, drop.at, { source: src.id, handle: o.handle })
+      if (made) place(made.doc)
+      return
+    }
+    if (o.kind === 'footage') return // a footage node needs a shot
+    const added = addNode(d, o.kind, drop.at)
+    place(wireKit(withLine(added, src.id, added.nodes[added.nodes.length - 1].id, o.handle)))
   }
 
   // The kit node goes left of (or above) the shots; it starts with every kit item picked and is wired to every storyboard.
@@ -778,16 +839,15 @@ function CanvasBoard({
       return model ? missingInput(doc, id, model, shots, gens) : null
     },
     addAfterShot: (shotNodeId, kind) => {
-      const shot = latest.current.doc.nodes.find((n) => n.id === shotNodeId)
-      if (!shot) return
-      const at = roomBelow(latest.current.doc, { x: shot.position.x + 360, y: shot.position.y })
-      const next = wireKit(addNode(latest.current.doc, kind, at, shot.shotId)) // a new storyboard joins the kit at once
-      place(next)
-      // Once the new node is on screen and measured, bring it and its shot into view without zooming in.
-      const ids = [{ id: shot.id }, { id: next.nodes[next.nodes.length - 1].id }]
+      const made = addInShot(latest.current.doc, kind, shotNodeId)
+      if (!made) return
+      place(made.doc)
+      // Once the new node is on screen and measured, bring it and its frame into view without zooming in.
+      const ids = [{ id: shotNodeId }, { id: made.id }]
       requestAnimationFrame(() => requestAnimationFrame(() => void fitView({ nodes: ids, padding: 0.3, maxZoom: getZoom(), duration: 300 })))
     },
     acceptsDrop: (nodeId, handleId) => dragFrom === null || check({ source: dragFrom, target: nodeId, targetHandle: handleId }).ok,
+    dragging: dragFrom !== null,
     clientId,
     kit,
     kitFailed,
@@ -833,7 +893,7 @@ function CanvasBoard({
       const typing = !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
       const { fullscreen: full, dialogOpen: dlg, editorOpen } = keyState.current
       // an open add-node menu or queue list takes Esc first (this listener runs in the capture phase, before they close)
-      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list')
+      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list, .cv-drop')
       const act = shellKey({ key: e.key, typing, dialogOpen, editorOpen }, full)
       if (act) setFull(act === 'enter')
     }
@@ -856,14 +916,20 @@ function CanvasBoard({
     void fitView({ nodes: [{ id }], padding: 0.6, maxZoom: 1, duration: 250 })
   }
 
-  const dragSource = dragFrom ? doc.nodes.find((n) => n.id === dragFrom) : undefined
-  const dragMedia = dragSource ? outMedia(dragSource) : null
+  // Lines are thin and grey; selection, a running job and an upstream with no result yet change their look (spec §5.2).
+  const selectedKey = nodes.filter((n) => n.selected).map((n) => n.id).join(',')
+  const focus = useMemo(() => focusSet(doc, selectedKey ? selectedKey.split(',') : []), [doc, selectedKey])
   const shownEdges = edges.map((e) => {
-    const src = doc.nodes.find((n) => n.id === e.source)
-    const media = src && outMedia(src)
-    const label = edgeLabel({ targetHandle: e.targetHandle ?? '' })
-    return { ...e, className: media ? `cv-media-${media}${media === 'kit' && selectedKit ? ' is-kit-on' : ''}` : undefined, label: label ? t(label) : undefined }
+    const look = edgeLook({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? '', targetHandle: e.targetHandle ?? '' }, doc, gens, takes, focus, selectedKit)
+    return { ...e, className: look.className, animated: look.animated }
   })
+
+  // A node that moved or got its drawn size: frames fit their nodes again and never overlap.
+  const onNodes: typeof onNodesChange = (changes) => {
+    onNodesChange(changes)
+    const frames = new Set(nodes.filter((n) => n.type === 'shot').map((n) => n.id))
+    if (changes.some((c) => c.type === 'dimensions' && !frames.has(c.id))) setNodes((ns) => reframe(ns))
+  }
 
   return (
     <section className="cv-screen">
@@ -906,13 +972,14 @@ function CanvasBoard({
             nodes={nodes}
             edges={shownEdges}
             nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
+            onNodesChange={onNodes}
+            onNodeDragStop={() => setNodes((ns) => reframe(ns))}
             onEdgesChange={onEdges}
             onConnect={onConnect}
             onConnectStart={(_, p) => setDragFrom(p.handleType === 'source' ? p.nodeId : null)}
             onConnectEnd={onConnectEnd}
             isValidConnection={(c) => !!c.targetHandle && check({ source: c.source, target: c.target, targetHandle: c.targetHandle }).ok}
-            connectionLineStyle={{ stroke: dragMedia ? MEDIA_COLOR[dragMedia] : 'var(--muted)', strokeWidth: 2 }}
+            connectionLineStyle={{ stroke: 'var(--accent)', strokeWidth: 1.4 }}
             onMoveEnd={(event, vp) => {
               if (event) setViewport(vp) // only the user's own pan or zoom, not the first fit
             }}
@@ -934,6 +1001,7 @@ function CanvasBoard({
           </CanvasContext.Provider>
           <ToolRail mode={tool} onMode={setTool} addKinds={clientId ? ADD_KINDS_WITH_KIT : ADD_KINDS} disabledKinds={kitNode ? ['kit'] : undefined} onAdd={addAtCenter} readOnly={readOnly} />
           <QueuePill items={queue} onJump={jumpTo} />
+          {drop && <DropMenu at={drop.screen} options={drop.options} onPick={pickDrop} onClose={() => setDrop(null)} />}
           {ask && (
             <div className="cv-modal-back">
               <div className="cv-modal" role="dialog" aria-modal="true" aria-label={t('canvas.chain.title')}>

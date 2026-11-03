@@ -40,6 +40,7 @@ export interface CanvasCtx {
   isPrimary: (shotId: string, src: ClipSource) => boolean
   // While a line is being dragged: whether it could end on this input (true when nothing is being dragged).
   acceptsDrop: (nodeId: string, handleId: string) => boolean
+  dragging: boolean // a line is being dragged from an output
   // Consistency kit. kit is null while it loads, when it failed, or when the idea has no client.
   clientId: string
   kit: Kit | null

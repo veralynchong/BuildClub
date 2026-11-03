@@ -119,9 +119,27 @@
 }
 .react-flow__node.selected .cv-node { box-shadow: 0 0 0 2px var(--accent); }
 .cv-node-title { font-weight: 600; letter-spacing: var(--tracking-tight); }
-.cv-shot-line { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--fg); }
-.cv-shot.is-removed { opacity: 0.5; }
-.cv-shot-removed { margin: 0; color: var(--muted); }
+
+/* Shot frames (spec §5.1): the shot node is drawn as a frame around its nodes; the header row drags it. */
+.cv-flow .react-flow__node-shot { padding: 0; border: 0; background: transparent; }
+.cv-frame {
+  width: 100%; height: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+.react-flow__node-shot.selected .cv-frame { border-color: var(--accent); }
+.cv-frame-head {
+  display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-base);
+  white-space: nowrap; cursor: grab; min-width: 0;
+}
+.cv-frame-title { flex: none; font-weight: 600; letter-spacing: var(--tracking-tight); }
+.cv-chip { flex: none; padding: 0 var(--space-sm); border-radius: var(--radius-pill); background: var(--surface-3); color: var(--muted); font-size: var(--text-xs); }
+.cv-frame-line { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.cv-frame-status:empty, .cv-frame-agent:empty { display: none; }
+.cv-frame-add { flex: none; margin-left: auto; }
+.cv-frame.is-removed { border-style: dashed; background: var(--surface-2); }
+.cv-frame.is-removed .cv-frame-title { color: var(--muted); }
+/* An open + menu drops over the frame's own nodes, which React Flow stacks above their frame. */
+.cv-flow .react-flow__node-shot:has(.cv-add-list) { z-index: 2000 !important; }
 .cv-preview {
   display: flex; align-items: center; justify-content: center; min-height: 72px; padding: var(--space-sm); text-align: center;
   border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2);
@@ -135,28 +153,51 @@
 .cv-prompt { width: 240px; }
 .cv-node:has(.cv-port-label) { width: 248px; padding-left: 88px; } /* room for the port names beside the ports */
 
-/* Ports: inputs left, the output right; colour says what flows through. */
-.cv-flow .react-flow__handle.cv-handle { width: 12px; height: 12px; border: 2px solid var(--surface); }
+/* Ports (spec §5.3): small dots on the node's edge; the border colour says what they carry, the name shows on hover. */
+.cv-flow .react-flow__handle.cv-handle {
+  width: 10px; height: 10px; border: 1.5px solid var(--cv-media, var(--muted)); background: var(--surface);
+  transition: background-color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+}
 .cv-media-text { --cv-media: var(--violet); }
 .cv-media-image { --cv-media: var(--blue); }
 .cv-media-video { --cv-media: var(--mustard); }
 .cv-media-none { --cv-media: var(--muted); }
 .cv-media-kit { --cv-media: var(--muted); }
-.cv-flow .react-flow__handle.cv-handle { background: var(--cv-media, var(--muted)); }
-.cv-flow .react-flow__handle.is-blocked { background: var(--surface-3); opacity: 0.6; }
+.cv-flow .react-flow__handle.cv-handle.is-fit { background: var(--cv-media); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cv-flow .react-flow__handle.cv-handle.is-blocked { border-color: var(--line-strong); opacity: 0.5; }
 .cv-flow .react-flow__handle.connectingto.valid { box-shadow: 0 0 0 3px var(--accent-soft); }
+.cv-flow .react-flow__handle.cv-handle::after {
+  content: attr(data-label); position: absolute; top: 50%; transform: translateY(-50%); padding: 0 var(--space-2xs);
+  border-radius: var(--radius-xs); background: var(--surface); color: var(--muted); font-size: var(--text-xs); white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity var(--dur-fast) var(--ease);
+}
+.cv-flow .react-flow__handle-left.cv-handle::after { right: calc(100% + var(--space-2xs)); }
+.cv-flow .react-flow__handle-right.cv-handle::after { left: calc(100% + var(--space-2xs)); }
+.cv-flow .react-flow__handle.cv-handle:hover::after { opacity: 1; }
 .cv-port-label { position: absolute; left: var(--space-md); transform: translateY(-50%); font-size: var(--text-xs); color: var(--cv-media); pointer-events: none; }
 
-/* Lines coloured by the media they carry */
-.cv-flow .react-flow__edge.cv-media-text,
-.cv-flow .react-flow__edge.cv-media-image,
-.cv-flow .react-flow__edge.cv-media-video { --xy-edge-stroke: var(--cv-media); --xy-edge-stroke-width: 2; }
-.cv-flow .react-flow__edge-textbg { fill: var(--surface); }
-.cv-flow .react-flow__edge-text { fill: var(--fg); font-size: var(--text-xs); }
+/* Lines (spec §5.2): thin neutral grey; blue for the selected node's chain and for a running job (flowing dashes);
+   faint dashes while the upstream has no result yet. Kit lines stay faint until the kit node is selected. */
+.cv-flow .react-flow__edge.cv-edge { --xy-edge-stroke: var(--line-strong); --xy-edge-stroke-width: 1.4; }
+.cv-flow .react-flow__edge.cv-edge.is-idle { opacity: 0.7; }
+.cv-flow .react-flow__edge.cv-edge.is-idle .react-flow__edge-path { stroke-dasharray: 3 4; }
+.cv-flow .react-flow__edge.cv-edge.is-kit { opacity: 0.6; }
+.cv-flow .react-flow__edge.cv-edge.is-kit .react-flow__edge-path { stroke-dasharray: 6 4; }
+.cv-flow .react-flow__edge.cv-edge.is-focus,
+.cv-flow .react-flow__edge.cv-edge.is-kit-on { --xy-edge-stroke: var(--accent); --xy-edge-stroke-width: 1.8; opacity: 1; }
+.cv-flow .react-flow__edge.cv-edge.is-kit-on .react-flow__edge-path { stroke-dasharray: none; }
+.cv-flow .react-flow__edge.cv-edge.is-running { --xy-edge-stroke: var(--accent); --xy-edge-stroke-width: 1.8; opacity: 1; }
+.cv-flow .react-flow__edge.cv-edge.is-running .react-flow__edge-path { stroke-dasharray: 6 4; }
+@media (prefers-reduced-motion: reduce) { .cv-flow .react-flow__edge.animated .react-flow__edge-path { animation: none; } }
+
+/* The menu a line let go on empty board opens */
+.cv-drop {
+  position: absolute; z-index: 10; margin: 0; padding: var(--space-2xs); list-style: none; min-width: 140px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-md);
+}
 
 /* Add menus */
 .cv-add { position: relative; }
-.cv-add-corner { position: absolute; right: var(--space-xs); bottom: var(--space-xs); }
 .cv-add-plus {
   width: 24px; height: 24px; padding: 0; line-height: 1; font-size: var(--text-md); cursor: pointer;
   border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); color: var(--fg);
@@ -166,9 +207,8 @@
   position: absolute; z-index: 10; top: 100%; right: 0; margin: var(--space-2xs) 0 0; padding: var(--space-2xs); list-style: none; min-width: 140px;
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-md);
 }
-.cv-add-corner .cv-add-list { top: 0; right: auto; left: 100%; margin: 0 0 0 var(--space-2xs); } /* beside the node: above or below it the board's edge clips it */
-.cv-add-list button { width: 100%; text-align: left; padding: var(--space-xs) var(--space-sm); border: 0; border-radius: var(--radius-sm); background: none; color: var(--fg); font: inherit; cursor: pointer; }
-.cv-add-list button:hover, .cv-add-list button:focus-visible { background: var(--surface-2); outline: none; }
+.cv-add-list button, .cv-drop button { width: 100%; text-align: left; padding: var(--space-xs) var(--space-sm); border: 0; border-radius: var(--radius-sm); background: none; color: var(--fg); font: inherit; cursor: pointer; }
+.cv-add-list button:hover, .cv-add-list button:focus-visible, .cv-drop button:hover, .cv-drop button:focus-visible { background: var(--surface-2); outline: none; }
 
 /* Why a line was refused */
 .cv-conn-note:empty { display: none; }
@@ -257,8 +297,3 @@
 .cv-kit-sent pre { margin: var(--space-xs) 0 0; max-height: 120px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; user-select: text; }
 .cv-kit-drawer { flex: 0 0 340px; min-width: 0; overflow: auto; padding: var(--space-base); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 @media (max-width: 860px) { .cv-kit-drawer { flex: none; } }
-/* kit lines: faint and thin, stronger while the kit node is selected */
-.cv-flow .react-flow__edge.cv-media-kit { --xy-edge-stroke: var(--muted); --xy-edge-stroke-width: 1.5; opacity: 0.7; }
-.cv-flow .react-flow__edge.cv-media-kit .react-flow__edge-path { stroke-dasharray: 6 4; }
-.cv-flow .react-flow__edge.cv-media-kit.is-kit-on { --xy-edge-stroke: var(--accent); --xy-edge-stroke-width: 2; opacity: 1; }
-.cv-flow .react-flow__edge.cv-media-kit.is-kit-on .react-flow__edge-path { stroke-dasharray: none; }

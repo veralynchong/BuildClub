@@ -181,17 +181,6 @@ export function freeSpot(doc: CanvasDoc, at: { x: number; y: number }): { x: num
   return p
 }
 
-// The first place at or below `at` that has room for a whole node, stepping down a row at a time. For a node added
-// beside a shot, so it never lands on one that is already there.
-export function roomBelow(doc: CanvasDoc, at: { x: number; y: number }): { x: number; y: number } {
-  const p = { x: Math.round(at.x), y: Math.round(at.y) }
-  for (let i = 0; i < 100 && doc.nodes.some((n) => Math.abs(n.position.x - p.x) < NODE_W && Math.abs(n.position.y - p.y) < ROW_GAP); i++) p.y += ROW_GAP
-  return p
-}
-
-const NODE_W = 240 // a node is 200 wide; the rest is a margin
-const ROW_GAP = 280 // a row is 480 apart in the backend; nodes in one row sit well inside this
-
 function startData(kind: NodeKind): NodeData {
   switch (kind) {
     case 'prompt':
