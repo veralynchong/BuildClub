@@ -73,7 +73,7 @@ export function canConnect(doc: CanvasDoc, c: { source: string; target: string; 
 }
 
 // The kinds a new node can be when a line is dragged from sourceId into empty space, with the input the line goes into.
-export function compatibleKinds(doc: CanvasDoc, sourceId: string, _models: GenModel[]): { kind: NodeKind; handle: string }[] {
+export function compatibleKinds(doc: CanvasDoc, sourceId: string): { kind: NodeKind; handle: string }[] {
   const source = doc.nodes.find((n) => n.id === sourceId)
   const from = source ? outMedia(source) : null
   if (!source || from === null) return []

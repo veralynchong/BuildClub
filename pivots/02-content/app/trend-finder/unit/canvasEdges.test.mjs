@@ -63,11 +63,11 @@ test('focusSet walks both ways from the selection', () => {
 })
 
 test('compatibleKinds from a storyboard offers storyboard ref and video start, from a prompt the text inputs', () => {
-  assert.deepEqual(compatibleKinds(doc, 'n_sb_s1', models), [{ kind: 'storyboard', handle: 'in:ref' }, { kind: 'video', handle: 'in:start' }])
-  assert.deepEqual(compatibleKinds(doc, 'n_p', models), [{ kind: 'prompt', handle: 'in:text' }, { kind: 'storyboard', handle: 'in:text' }, { kind: 'video', handle: 'in:text' }])
-  assert.deepEqual(compatibleKinds(doc, 'n_p1', models).at(-1), { kind: 'footage', handle: 'in:text' })
-  assert.deepEqual(compatibleKinds(doc, 'n_kit', models), [{ kind: 'storyboard', handle: 'in:kit' }])
-  assert.deepEqual(compatibleKinds(doc, 'n_vid_s1', models), [])
+  assert.deepEqual(compatibleKinds(doc, 'n_sb_s1'), [{ kind: 'storyboard', handle: 'in:ref' }, { kind: 'video', handle: 'in:start' }])
+  assert.deepEqual(compatibleKinds(doc, 'n_p'), [{ kind: 'prompt', handle: 'in:text' }, { kind: 'storyboard', handle: 'in:text' }, { kind: 'video', handle: 'in:text' }])
+  assert.deepEqual(compatibleKinds(doc, 'n_p1').at(-1), { kind: 'footage', handle: 'in:text' })
+  assert.deepEqual(compatibleKinds(doc, 'n_kit'), [{ kind: 'storyboard', handle: 'in:kit' }])
+  assert.deepEqual(compatibleKinds(doc, 'n_vid_s1'), [])
 })
 
 test('wireStart picks the newest storyboard of the frame and leaves a taken port alone', () => {

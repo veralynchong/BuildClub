@@ -721,9 +721,14 @@ function CanvasBoard({
     if (!cs.toNode && cs.fromNode && cs.fromHandle?.type === 'source' && !blocked) {
       const p = 'changedTouches' in event ? event.changedTouches[0] : event
       const onNode = event.target instanceof Element && event.target.closest('.react-flow__node:not(.react-flow__node-shot)')
-      const options = compatibleKinds(latest.current.doc, cs.fromNode.id, models)
+      const d = latest.current.doc
+      const options = compatibleKinds(d, cs.fromNode.id)
       const box = flowBox.current?.getBoundingClientRect()
       if (p && box && !onNode && options.length) {
+        // nothing new goes into a frame whose shot left the plan (its "+" is gone too)
+        const src = d.nodes.find((n) => n.id === cs.fromNode?.id)
+        const frame = src && frameOf(d, src)
+        if (frame && d.nodes.find((n) => n.id === frame)?.data.removed) return showNote('canvas.drop.removed')
         setDrop({ source: cs.fromNode.id, screen: { x: p.clientX - box.left, y: p.clientY - box.top }, at: screenToFlowPosition({ x: p.clientX, y: p.clientY }), options })
       }
       return

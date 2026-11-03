@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { t } from '../../lib/i18n'
 import type { NodeKind } from '../../lib/canvas/types'
 
@@ -12,6 +12,14 @@ interface Props {
 // The kinds of node a line let go on empty board can make (spec §5.3): picking one adds it there, joined to the line.
 export function DropMenu({ at, options, onPick, onClose }: Props) {
   const list = useRef<HTMLUListElement>(null)
+  // Kept inside the board: a line let go near an edge opens the menu toward the middle.
+  useLayoutEffect(() => {
+    const el = list.current
+    const board = el?.offsetParent
+    if (!el || !(board instanceof HTMLElement)) return
+    el.style.left = `${Math.max(0, Math.min(at.x, board.clientWidth - el.offsetWidth))}px`
+    el.style.top = `${Math.max(0, Math.min(at.y, board.clientHeight - el.offsetHeight))}px`
+  }, [at])
   useEffect(() => {
     list.current?.querySelector('button')?.focus()
   }, [])
