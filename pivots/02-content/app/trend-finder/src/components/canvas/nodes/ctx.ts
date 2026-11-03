@@ -43,6 +43,7 @@ export interface CanvasCtx {
   // Consistency kit. kit is null while it loads, when it failed, or when the idea has no client.
   clientId: string
   kit: Kit | null
+  kitFailed: boolean // the load failed (or the idea has no client), as opposed to still loading
   openKit: () => void
   // A storyboard's kit as it sees it: the items its kit line carries and which of them it switched off, plus the
   // names of deleted items its shown version used. Null when it has no kit line.

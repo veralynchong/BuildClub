@@ -17,7 +17,7 @@ import { t, type Key, type Vars } from '../../lib/i18n'
 import { getBudget, getCanvas, getKit, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { addNode, chainBusy, chainPair, isRetired, freeSpot, roomBelow, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
-import { kitRefs, kitStale, kitTargets, syncKit, wireKit } from '../../lib/canvas/kit'
+import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, NothingToCut, uploadTake, type Take } from '../../lib/takes'
@@ -316,6 +316,7 @@ function CanvasBoard({
   // ---- consistency kit ----
   // null while loading, when the load failed, or when the idea has no client; after a good load it is never null.
   const [kit, setKit] = useState<Kit | null>(null)
+  const [kitFailed, setKitFailed] = useState(false)
   const kitRef = useRef(kit)
   useEffect(() => {
     kitRef.current = kit
@@ -332,7 +333,10 @@ function CanvasBoard({
       setNodes((ns) => [
         ...ns.map((n) => {
           const m = next.nodes.find((x) => x.id === n.id)
-          return m && m.data !== n.data.node.data ? { ...n, data: { node: { ...n.data.node, data: m.data } } } : n
+          const base = cur.nodes.find((x) => x.id === n.id)
+          if (!m || !base) return n
+          const data = mergeKitData(base.data, m.data, n.data.node.data) // only what the sync changed; newer edits stay
+          return data === n.data.node.data ? n : { ...n, data: { node: { ...n.data.node, data } } }
         }),
         ...added.nodes,
       ])
@@ -356,7 +360,7 @@ function CanvasBoard({
     let live = true
     getKit(clientId).then(
       (k) => live && applyKit(k && Array.isArray(k.items) ? k : { items: [] }),
-      () => {}, // the kit node says it couldn't load
+      () => live && setKitFailed(true), // the kit node says it couldn't load
     )
     return () => {
       live = false
@@ -655,8 +659,8 @@ function CanvasBoard({
 
   const place = (doc: CanvasDoc) => {
     const node = doc.nodes[doc.nodes.length - 1]
-    const edge = doc.edges.length > latest.current.doc.edges.length ? doc.edges[doc.edges.length - 1] : undefined
-    const f = toFlow({ nodes: [node], edges: edge ? [edge] : [] })
+    const have = new Set(latest.current.doc.edges.map((e) => e.id))
+    const f = toFlow({ nodes: [node], edges: doc.edges.filter((e) => !have.has(e.id)) })
     setNodes((ns) => [...ns, ...f.nodes])
     setEdges((es) => [...es, ...f.edges])
   }
@@ -681,7 +685,7 @@ function CanvasBoard({
     if (kind === 'kit') return addKit()
     const box = flowBox.current?.getBoundingClientRect()
     const mid = box ? screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 }) : { x: 0, y: 0 }
-    place(addNode(latest.current.doc, kind, freeSpot(latest.current.doc, { x: mid.x - 90, y: mid.y - 50 })))
+    place(wireKit(addNode(latest.current.doc, kind, freeSpot(latest.current.doc, { x: mid.x - 90, y: mid.y - 50 }))))
   }
 
   const updateData = (nodeId: string, patch: Partial<NodeData>) =>
@@ -760,7 +764,7 @@ function CanvasBoard({
       const shot = latest.current.doc.nodes.find((n) => n.id === shotNodeId)
       if (!shot) return
       const at = roomBelow(latest.current.doc, { x: shot.position.x + 360, y: shot.position.y })
-      const next = addNode(latest.current.doc, kind, at, shot.shotId)
+      const next = wireKit(addNode(latest.current.doc, kind, at, shot.shotId)) // a new storyboard joins the kit at once
       place(next)
       // Once the new node is on screen and measured, bring it and its shot into view without zooming in.
       const ids = [{ id: shot.id }, { id: next.nodes[next.nodes.length - 1].id }]
@@ -769,6 +773,7 @@ function CanvasBoard({
     acceptsDrop: (nodeId, handleId) => dragFrom === null || check({ source: dragFrom, target: nodeId, targetHandle: handleId }).ok,
     clientId,
     kit,
+    kitFailed,
     openKit: () => setKitOpen(true),
     kitView: (id) => {
       const src = doc.edges.find((e) => e.target === id && e.targetHandle === 'in:kit')
@@ -786,6 +791,9 @@ function CanvasBoard({
   }
 
   const kitNode = doc.nodes.find((n) => n.type === 'kit')
+  useEffect(() => {
+    if (!kitNode) setKitOpen(false) // a kit node added later must not bring the drawer back
+  }, [kitNode])
   const selectedKit = nodes.some((n) => n.selected && n.data.node.type === 'kit')
 
   const dragSource = dragFrom ? doc.nodes.find((n) => n.id === dragFrom) : undefined

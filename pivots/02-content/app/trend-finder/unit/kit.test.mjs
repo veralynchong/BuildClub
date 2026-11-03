@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { kitRefs, wireKit, pruneKit, kitStale, kitTargets, syncKit } from '../src/lib/canvas/kit.ts'
+import { kitRefs, wireKit, pruneKit, kitStale, kitTargets, syncKit, mergeKitData } from '../src/lib/canvas/kit.ts'
 import { checkImage } from '../src/lib/canvas/upload.ts'
 import { getKit, createKitItem, updateKitItem, deleteKitItem, addKitImage, deleteKitImage, kitFileUrl } from '../src/lib/canvas/api.ts'
 
@@ -251,4 +251,12 @@ test('syncKit returns the same doc when nothing changes', () => {
   assert.equal(out.doc, doc)
   assert.deepEqual(out.removed, {})
   assert.equal(syncKit(doc, null, []).doc, doc)
+})
+
+test('mergeKitData carries only what the sync changed onto newer live data', () => {
+  const base = { kitItems: ['a', 'b'], selected: 'g1', stale: false }
+  const next = { kitItems: ['a'], selected: 'g1', stale: true }
+  const live = { kitItems: ['a', 'b'], selected: 'g2', awaiting: 'g3', stale: false }
+  assert.deepEqual(mergeKitData(base, next, live), { kitItems: ['a'], selected: 'g2', awaiting: 'g3', stale: true })
+  assert.equal(mergeKitData(base, base, live), live)
 })

@@ -93,7 +93,7 @@ export const en = {
   "canvas.chain.cancel": "Cancel",
   "canvas.chain.noKey": "A model in this shot needs a key or is no longer available.",
   "canvas.chain.missing": "The shot needs a prompt or a connected text first.",
-  "canvas.chain.noRef": "Run the whole shot doesn't send reference images yet. Use Generate on each node.",
+  "canvas.chain.noRef": "Run the whole shot starts the video from the storyboard image only, so it can't take reference images on the video. Use Generate on that node.",
   "canvas.chain.busy": "A generation is already running on this shot.",
   "canvas.upload.empty": "No file yet",
   "canvas.footage.empty": "No footage yet",
@@ -164,6 +164,7 @@ export const en = {
   "canvas.kit.node.edit": "Edit kit",
   "canvas.kit.node.empty": "No kit items picked.",
   "canvas.kit.node.unavailable": "The kit couldn't be loaded.",
+  "canvas.kit.node.loading": "Loading the kit…",
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -259,7 +260,7 @@ export const zhHant: Record<keyof typeof en, string> = {
   "canvas.chain.cancel": "取消",
   "canvas.chain.noKey": "這個鏡頭有模型需要金鑰，或已不能使用。",
   "canvas.chain.missing": "請先輸入提示詞，或連接文字節點。",
-  "canvas.chain.noRef": "「整條跑完」還不會送出參考圖，請在各節點分別按生成。",
+  "canvas.chain.noRef": "「整條跑完」的影片只會用分鏡圖當起點，不能在影片上加參考圖。請在該節點單獨按生成。",
   "canvas.chain.busy": "這個鏡頭已有生成正在進行。",
   "canvas.upload.empty": "尚未上傳檔案",
   "canvas.footage.empty": "尚未有實拍素材",
@@ -330,4 +331,5 @@ export const zhHant: Record<keyof typeof en, string> = {
   "canvas.kit.node.edit": "編輯套組",
   "canvas.kit.node.empty": "還沒有選套組項目。",
   "canvas.kit.node.unavailable": "無法載入套組。",
+  "canvas.kit.node.loading": "載入套組中…",
 }

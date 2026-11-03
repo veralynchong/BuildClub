@@ -7,14 +7,14 @@ import type { CvNodeProps } from './types'
 
 // The cast of this video: the kit items it uses, with a button that opens the kit panel. One output, to the storyboards.
 export function KitNode({ data: { node } }: CvNodeProps) {
-  const { kit, clientId, readOnly, openKit } = useCanvas()
+  const { kit, kitFailed, clientId, readOnly, openKit } = useCanvas()
   const used = new Set(node.data.kitItems ?? [])
   const items = (kit?.items ?? []).filter((i) => used.has(i.id))
   return (
     <div className="cv-node cv-kit-node">
       <div className="cv-node-title">{t('canvas.node.kit')}</div>
       {!kit ? (
-        <p className="small muted">{t('canvas.kit.node.unavailable')}</p>
+        <p className="small muted">{kitFailed || !clientId ? t('canvas.kit.node.unavailable') : t('canvas.kit.node.loading')}</p>
       ) : items.length === 0 ? (
         <p className="small muted">{t('canvas.kit.node.empty')}</p>
       ) : (

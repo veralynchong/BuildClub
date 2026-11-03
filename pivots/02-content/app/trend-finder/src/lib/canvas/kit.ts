@@ -1,6 +1,6 @@
 import type { Kit, KitItem, KitKind } from '../../types.ts'
 import { selectedGen, staleIds } from './graph.ts'
-import type { CanvasDoc, CanvasEdge, CanvasNode, GenModel, Generation } from './types.ts'
+import type { CanvasDoc, CanvasEdge, CanvasNode, GenModel, Generation, NodeData } from './types.ts'
 
 // A reference as the app sends it. A kit ref without `image` is text only: it adds the item's line to the prompt (a
 // style with no pictures) and sends no file.
@@ -130,4 +130,14 @@ export function syncKit(doc: CanvasDoc, kit: Kit | null, gens: Generation[]): { 
   const fresh = next.nodes.filter((n) => ids.has(n.id) && !n.data.stale)
   if (fresh.length) next = { ...next, nodes: next.nodes.map((n) => (ids.has(n.id) && !n.data.stale ? { ...n, data: { ...n.data, stale: true } } : n)) }
   return { doc: next, removed }
+}
+
+// Carries what a kit sync changed (kitItems, kitOff, stale: `next` against the `base` it was computed from) onto the
+// node's live data, leaving every other field as it is now. Returns `live` itself when the sync changed nothing.
+export function mergeKitData(base: NodeData, next: NodeData, live: NodeData): NodeData {
+  let out = live
+  for (const f of ['kitItems', 'kitOff', 'stale'] as const) {
+    if (next[f] !== base[f]) out = { ...out, [f]: next[f] }
+  }
+  return out
 }
