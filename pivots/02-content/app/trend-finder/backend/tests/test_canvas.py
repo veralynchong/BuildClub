@@ -27,7 +27,7 @@ def plan(id="ia", status="approved", ids=("s1", "s2"), frame=None):
 def test_first_build_rows():
     doc, imports = canvas.reconcile(None, shots("s1", "s2", "s3"), {"s2"}, [])
     shot_nodes = [n for n in doc["nodes"] if n["type"] == "shot"]
-    assert [n["position"]["y"] for n in shot_nodes] == [0, 400, 800]
+    assert [n["position"]["y"] for n in shot_nodes] == [0, 480, 960]
     assert [n["id"] for n in doc["nodes"] if n["type"] == "storyboard"] == ["n_sb_s1", "n_sb_s2", "n_sb_s3"]
     assert all(n["data"]["primary"] for n in doc["nodes"] if n["type"] == "storyboard")
     assert [n["shotId"] for n in doc["nodes"] if n["type"] == "footage"] == ["s2"]
@@ -40,7 +40,7 @@ def test_first_build_rows():
 def test_new_shot_appends_row():
     first, _ = canvas.reconcile(None, shots("s1", "s2"), set(), [])
     doc, _ = canvas.reconcile(first, shots("s1", "sh_new", "s2"), set(), [])
-    assert node(doc, "n_shot_sh_new")["position"]["y"] == 800
+    assert node(doc, "n_shot_sh_new")["position"]["y"] == 960
     for n in first["nodes"]:
         assert node(doc, n["id"])["position"] == n["position"]
 
@@ -172,7 +172,7 @@ def test_legacy_shots_without_ids(client):
     server.save("ideas", [old])
     r = client.get("/api/ideas/il/canvas").json()
     assert [n["id"] for n in r["doc"]["nodes"] if n["type"] == "shot"] == ["n_shot_s1", "n_shot_s2", "n_shot_s3"]
-    assert [n["position"]["y"] for n in r["doc"]["nodes"] if n["type"] == "shot"] == [0, 400, 800]
+    assert [n["position"]["y"] for n in r["doc"]["nodes"] if n["type"] == "shot"] == [0, 480, 960]
     assert put(client, r["version"], r["doc"], "il").json() == {"version": 2}
 
 
@@ -183,7 +183,7 @@ def test_shot_list_change_after_canvas_exists(cv):
     store_ideas(plan("ia", ids=("s1", "s3"), frame={"s1": "/api/frame/a.svg"}), plan("iw", "waiting"))
     r = cv.get("/api/ideas/ia/canvas").json()
     by_id = {n["id"]: n for n in r["doc"]["nodes"]}
-    assert by_id["n_shot_s3"]["position"]["y"] == 800
+    assert by_id["n_shot_s3"]["position"]["y"] == 960
     assert by_id["n_shot_s2"]["data"]["removed"] is True and "n_sb_s2" in by_id
     assert by_id["n_shot_s1"]["data"]["removed"] is False
     assert len([g for g in r["generations"] if g["model"] == "imported"]) == 1 and r["version"] == 2
@@ -206,3 +206,15 @@ def test_canvas_footage_follows_shot_id(client):
     r = client.get("/api/ideas/ia/canvas").json()
     assert [n["shotId"] for n in r["doc"]["nodes"] if n["type"] == "footage"] == ["s2"]
     assert r["takes"][0]["shotId"] == "s2" and r["takes"][0]["shot"] == 2
+
+
+def test_one_kit_node_only(cv):
+    doc = cv.get("/api/ideas/ia/canvas").json()["doc"]
+    kit = {"id": "n_kit_1", "type": "kit", "position": {"x": 0, "y": 0}, "data": {}}
+    one = copy.deepcopy(doc)
+    one["nodes"].append(kit)
+    assert put(cv, 1, one).status_code == 200
+    two = copy.deepcopy(one)
+    two["nodes"].append({**kit, "id": "n_kit_2"})
+    r = put(cv, 2, two)
+    assert r.status_code == 422 and r.json()["error"] == "A canvas can have one kit node."

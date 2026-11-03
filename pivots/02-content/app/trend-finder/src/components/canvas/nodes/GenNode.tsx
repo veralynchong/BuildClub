@@ -18,7 +18,7 @@ const price = (m: GenModel, seconds: number | undefined): string => {
 // A storyboard or video node: model, optional prompt, the chosen version, the version strip and the Generate button.
 export function GenNode({ id, data: { node } }: CvNodeProps) {
   const focused = useRef('')
-  const { models, gens, readOnly, updateData, onGenerate, onSelectVersion, edited, incomingHandles, missing, budget, chainOf, onChain, chaining } = useCanvas()
+  const { models, gens, readOnly, updateData, onGenerate, onSelectVersion, edited, incomingHandles, missing, budget, chainOf, onChain, chaining, kitView, kitSent, setKitOff } = useCanvas()
   const kind = node.type === 'video' ? 'video' : 'image'
   const options = models.filter((m) => m.kind === kind)
   const retired = isRetired(models, kind, node.data.model)
@@ -35,6 +35,9 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
   const usd = model ? priceOf(model, seconds) : 0
   const pair = node.type === 'storyboard' ? chainOf(id) : null
   const lost = failed?.status === 'unknown'
+  const kitSeen = node.type === 'storyboard' ? kitView(id) : null
+  const sent = node.type === 'storyboard' ? kitSent(id, model) : null
+  const sentPrompt = shown?.inputs.sentPrompt
 
   // Why a model can't be picked: it has no use for an input that already has a line.
   const refuses = (m: GenModel): string | null => {
@@ -120,6 +123,29 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
         <p className={lost ? 'cv-gen-notice small' : 'cv-gen-error small'} role="alert">
           {lost ? t('canvas.gen.unknown') : t('canvas.gen.failed', { error: serverText(failed.error) })}
         </p>
+      )}
+      {kitSeen && kitSeen.items.length > 0 && (
+        <fieldset className="cv-kit-pick nodrag" disabled={readOnly || !!pending}>
+          <legend className="small muted">{t('canvas.kit.pick')}</legend>
+          {kitSeen.items.map((i) => (
+            <label key={i.id} className="small">
+              <input type="checkbox" checked={!kitSeen.off.includes(i.id)} onChange={(e) => setKitOff(id, i.id, !e.target.checked)} /> {i.name}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {kitSeen && sent?.unused && <p className="cv-gen-need small muted">{t('canvas.kit.unused')}</p>}
+      {sent && sent.dropped.length + sent.droppedManual.length > 0 && (
+        <p className="cv-gen-notice small">
+          {t('canvas.kit.dropped', { max: model?.maxRefs ?? 1, names: [...sent.dropped, ...sent.droppedManual.map((n) => t('canvas.kit.droppedImage', { n }))].join(', ') })}
+        </p>
+      )}
+      {kitSeen && kitSeen.removed.length > 0 && <p className="cv-gen-notice small">{t('canvas.kit.removed', { names: kitSeen.removed.join(', ') })}</p>}
+      {sentPrompt && sentPrompt !== shown?.inputs.prompt && (
+        <details className="cv-kit-sent small nodrag nowheel">
+          <summary>{t('canvas.kit.sent')}</summary>
+          <pre>{sentPrompt}</pre>
+        </details>
       )}
       {retired && (
         <p className="cv-gen-retired small" role="alert">

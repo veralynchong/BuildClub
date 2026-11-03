@@ -1,8 +1,9 @@
 import { createContext, useContext } from 'react'
-import type { Shot } from '../../../types'
+import type { Kit, KitItem, Shot } from '../../../types'
 import type { Key } from '../../../lib/i18n'
 import type { Take } from '../../../lib/takes'
 import type { ClipSource } from '../../../lib/editor/types'
+import type { KitRefs } from '../../../lib/canvas/kit'
 import type { Budget, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
 
 // What the node components need from the board: the shot list, whether editing is allowed, and a few actions.
@@ -39,6 +40,16 @@ export interface CanvasCtx {
   isPrimary: (shotId: string, src: ClipSource) => boolean
   // While a line is being dragged: whether it could end on this input (true when nothing is being dragged).
   acceptsDrop: (nodeId: string, handleId: string) => boolean
+  // Consistency kit. kit is null while it loads, when it failed, or when the idea has no client.
+  clientId: string
+  kit: Kit | null
+  kitFailed: boolean // the load failed (or the idea has no client), as opposed to still loading
+  openKit: () => void
+  // A storyboard's kit as it sees it: the items its kit line carries and which of them it switched off, plus the
+  // names of deleted items its shown version used. Null when it has no kit line.
+  kitView: (nodeId: string) => { items: KitItem[]; off: string[]; removed: string[] } | null
+  kitSent: (nodeId: string, model: GenModel | undefined) => KitRefs // what the next Generate would send
+  setKitOff: (nodeId: string, itemId: string, off: boolean) => void
 }
 
 export const CanvasContext = createContext<CanvasCtx | null>(null)

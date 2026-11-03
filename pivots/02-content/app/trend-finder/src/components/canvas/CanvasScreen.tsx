@@ -12,11 +12,13 @@ import {
   type Viewport,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { SavedIdea, Shot } from '../../types'
+import type { Kit, SavedIdea, Shot } from '../../types'
 import { t, type Key, type Vars } from '../../lib/i18n'
-import { getBudget, getCanvas, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
+import { getBudget, getCanvas, getKit, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { addNode, chainBusy, chainPair, isRetired, freeSpot, roomBelow, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
+import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
+import { KitPanel } from './KitPanel'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, NothingToCut, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
@@ -36,7 +38,8 @@ const RETRY_MS = 2000
 const MAX_RETRIES = 5
 const NOTE_MS = 8000 // how long an info note (e.g. clean-up done) stays up; errors stay until dismissed
 const ADD_KINDS: NodeKind[] = ['prompt', 'storyboard', 'video', 'upload']
-const MEDIA_COLOR = { text: 'var(--violet)', image: 'var(--blue)', video: 'var(--mustard)' } as const
+const ADD_KINDS_WITH_KIT: NodeKind[] = [...ADD_KINDS, 'kit']
+const MEDIA_COLOR = { text: 'var(--violet)', image: 'var(--blue)', video: 'var(--mustard)', kit: 'var(--muted)' } as const
 const POLL_RETRY_MS = 2000 // wait after a poll request fails before asking again
 
 interface Props {
@@ -167,8 +170,10 @@ function CanvasBoard({
   // A board that first mounted hidden has no size to fit to, so it is fitted once it shows.
   const unfitted = useRef(fit && openEditor)
   const beforeEditor = useRef<Viewport | null>(null) // the view the board had when the editor covered it
+  const [kitOpen, setKitOpen] = useState(false) // the kit drawer; only one drawer is open at a time
   const showEditor = () => {
     beforeEditor.current = getViewport()
+    setKitOpen(false)
     setEditing(true)
   }
   // The hidden board may have been resized to nothing, so put its view back once it is shown and laid out.
@@ -308,6 +313,62 @@ function CanvasBoard({
     [setNodes],
   )
 
+  // ---- consistency kit ----
+  // null while loading, when the load failed, or when the idea has no client; after a good load it is never null.
+  const [kit, setKit] = useState<Kit | null>(null)
+  const [kitFailed, setKitFailed] = useState(false)
+  const kitRef = useRef(kit)
+  useEffect(() => {
+    kitRef.current = kit
+  }, [kit])
+
+  // Puts a changed doc on the board: changed node data, new nodes and new lines. The autosave picks it up.
+  const adopt = useCallback(
+    (next: CanvasDoc) => {
+      const cur = latest.current.doc
+      if (next === cur) return
+      const nodeIds = new Set(cur.nodes.map((n) => n.id))
+      const lineIds = new Set(cur.edges.map((e) => e.id))
+      const added = toFlow({ nodes: next.nodes.filter((n) => !nodeIds.has(n.id)), edges: next.edges.filter((e) => !lineIds.has(e.id)) })
+      setNodes((ns) => [
+        ...ns.map((n) => {
+          const m = next.nodes.find((x) => x.id === n.id)
+          const base = cur.nodes.find((x) => x.id === n.id)
+          if (!m || !base) return n
+          const data = mergeKitData(base.data, m.data, n.data.node.data) // only what the sync changed; newer edits stay
+          return data === n.data.node.data ? n : { ...n, data: { node: { ...n.data.node, data } } }
+        }),
+        ...added.nodes,
+      ])
+      if (added.edges.length) setEdges((es) => [...es, ...added.edges])
+    },
+    [setNodes, setEdges],
+  )
+
+  // A kit that loaded or changed: forget deleted items, wire the storyboards, date those whose items changed.
+  const applyKit = useCallback(
+    (k: Kit) => {
+      kitRef.current = k
+      setKit(k)
+      if (!readOnly) adopt(syncKit(latest.current.doc, k, gensRef.current).doc)
+    },
+    [adopt, readOnly],
+  )
+
+  useEffect(() => {
+    if (!clientId) return
+    let live = true
+    getKit(clientId).then(
+      (k) => live && applyKit(k && Array.isArray(k.items) ? k : { items: [] }),
+      () => live && setKitFailed(true), // the kit node says it couldn't load
+    )
+    return () => {
+      live = false
+    }
+  }, [clientId, applyKit])
+
+  const removedBy = useMemo(() => new Map(kitStale(doc, gens, kit).map((s) => [s.nodeId, s.removed])), [doc, gens, kit])
+
   // Follows one generation until it ends. A finished one becomes the node's chosen version and dates what comes after.
   const track = useCallback(
     (g: Generation) => {
@@ -365,7 +426,7 @@ function CanvasBoard({
     const model = models.find((m) => m.id === node?.data.model && m.kind === kind) ?? models.find((m) => m.kind === kind)
     if (!node || !model || !model.available || isRetired(models, kind, node.data.model) || blocked || pendingGen(nodeId, gensRef.current) || starting.current.has(nodeId)) return
     if (missingInput(d, nodeId, model, shots, gensRef.current)) return
-    const req = genRequest(d, nodeId, shots, gensRef.current)
+    const req = genRequest(d, nodeId, shots, gensRef.current, kitRef.current, model)
     if (kind === 'video' && req.duration === undefined && model.durations) req.duration = model.durations[0]
     starting.current.add(nodeId)
     try {
@@ -399,9 +460,9 @@ function CanvasBoard({
     const videoModel = models.find((m) => m.id === video?.data.model && m.kind === 'video')
     if (!image || !video || !imageModel || !videoModel || !imageModel.available || !videoModel.available) return showNote('canvas.chain.noKey')
     if (missingInput(d, pair.imageNodeId, imageModel, shots, gensRef.current)) return showNote('canvas.chain.missing')
-    const imageReq = genRequest(d, pair.imageNodeId, shots, gensRef.current)
+    const imageReq = genRequest(d, pair.imageNodeId, shots, gensRef.current, kitRef.current, imageModel)
     const videoReq = genRequest(d, pair.videoNodeId, shots, gensRef.current)
-    if (imageReq.reference || videoReq.reference) return showNote('canvas.chain.noRef')
+    if (videoReq.references.length) return showNote('canvas.chain.noRef') // the video starts from the storyboard image only
     const body: ChainBody = {
       imageNodeId: pair.imageNodeId,
       videoNodeId: pair.videoNodeId,
@@ -410,6 +471,7 @@ function CanvasBoard({
       prompt: imageReq.prompt,
       videoPrompt: videoReq.prompt,
       duration: videoReq.duration ?? videoModel.durations?.[0],
+      ...(imageReq.references.length ? { references: imageReq.references } : {}),
     }
     setChaining(true)
     try {
@@ -579,6 +641,7 @@ function CanvasBoard({
     if (!r.ok) return showNote(r.reason, r.vars)
     const edge: FlowEdge = { id: `e_${c.source}_${c.target}_${c.targetHandle}`, source: c.source, target: c.target, sourceHandle: c.sourceHandle, targetHandle: c.targetHandle }
     setEdges((es) => [...es, edge])
+    if (c.targetHandle === 'in:kit') updateData(c.target, { kitCut: undefined }) // put back by hand: wire it again from now on
     markFrom(c.target, true)
   }
 
@@ -596,16 +659,33 @@ function CanvasBoard({
 
   const place = (doc: CanvasDoc) => {
     const node = doc.nodes[doc.nodes.length - 1]
-    const edge = doc.edges.length > latest.current.doc.edges.length ? doc.edges[doc.edges.length - 1] : undefined
-    const f = toFlow({ nodes: [node], edges: edge ? [edge] : [] })
+    const have = new Set(latest.current.doc.edges.map((e) => e.id))
+    const f = toFlow({ nodes: [node], edges: doc.edges.filter((e) => !have.has(e.id)) })
     setNodes((ns) => [...ns, ...f.nodes])
     setEdges((es) => [...es, ...f.edges])
   }
 
+  // The kit node goes left of (or above) the shots; it starts with every kit item picked and is wired to every storyboard.
+  const addKit = () => {
+    const cur = latest.current.doc
+    if (cur.nodes.some((n) => n.type === 'kit')) return
+    const anchor = cur.nodes.filter((n) => n.type === 'shot')
+    const x = Math.min(...anchor.map((n) => n.position.x), 0) - 280
+    const y = Math.min(...anchor.map((n) => n.position.y), 0)
+    const added = addNode(cur, 'kit', freeSpot(cur, { x, y }))
+    const last = added.nodes[added.nodes.length - 1]
+    last.data = { kitItems: (kitRef.current?.items ?? []).map((i) => i.id) }
+    const fresh = { ...added, nodes: added.nodes.map((n) => (n.type === 'storyboard' && n.data.kitCut ? { ...n, data: { ...n.data, kitCut: undefined } } : n)) }
+    const wired = wireKit(fresh)
+    adopt(wired)
+    for (const target of kitTargets(wired, last.id)) markFrom(target, true)
+  }
+
   const addAtCenter = (kind: NodeKind) => {
+    if (kind === 'kit') return addKit()
     const box = flowBox.current?.getBoundingClientRect()
     const mid = box ? screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 }) : { x: 0, y: 0 }
-    place(addNode(latest.current.doc, kind, freeSpot(latest.current.doc, { x: mid.x - 90, y: mid.y - 50 })))
+    place(wireKit(addNode(latest.current.doc, kind, freeSpot(latest.current.doc, { x: mid.x - 90, y: mid.y - 50 }))))
   }
 
   const updateData = (nodeId: string, patch: Partial<NodeData>) =>
@@ -615,7 +695,10 @@ function CanvasBoard({
   const onEdges: typeof onEdgesChange = (changes) => {
     for (const c of changes) {
       const gone = c.type === 'remove' ? edges.find((e) => e.id === c.id) : undefined
-      if (gone) markFrom(gone.target, true)
+      if (gone) {
+        markFrom(gone.target, true)
+        if (gone.targetHandle === 'in:kit') updateData(gone.target, { kitCut: true }) // cut by hand: don't wire it again
+      }
     }
     onEdgesChange(changes)
   }
@@ -681,14 +764,37 @@ function CanvasBoard({
       const shot = latest.current.doc.nodes.find((n) => n.id === shotNodeId)
       if (!shot) return
       const at = roomBelow(latest.current.doc, { x: shot.position.x + 360, y: shot.position.y })
-      const next = addNode(latest.current.doc, kind, at, shot.shotId)
+      const next = wireKit(addNode(latest.current.doc, kind, at, shot.shotId)) // a new storyboard joins the kit at once
       place(next)
       // Once the new node is on screen and measured, bring it and its shot into view without zooming in.
       const ids = [{ id: shot.id }, { id: next.nodes[next.nodes.length - 1].id }]
       requestAnimationFrame(() => requestAnimationFrame(() => void fitView({ nodes: ids, padding: 0.3, maxZoom: getZoom(), duration: 300 })))
     },
     acceptsDrop: (nodeId, handleId) => dragFrom === null || check({ source: dragFrom, target: nodeId, targetHandle: handleId }).ok,
+    clientId,
+    kit,
+    kitFailed,
+    openKit: () => setKitOpen(true),
+    kitView: (id) => {
+      const src = doc.edges.find((e) => e.target === id && e.targetHandle === 'in:kit')
+      const kitNode = src && doc.nodes.find((n) => n.id === src.source && n.type === 'kit')
+      if (!kitNode || !kit) return null
+      const used = new Set(kitNode.data.kitItems ?? [])
+      return { items: kit.items.filter((i) => used.has(i.id)), off: doc.nodes.find((n) => n.id === id)?.data.kitOff ?? [], removed: removedBy.get(id) ?? [] }
+    },
+    kitSent: (id, model) => kitRefs(doc, id, kit, gens, model),
+    setKitOff: (id, itemId, off) => {
+      const cur = latest.current.doc.nodes.find((n) => n.id === id)?.data.kitOff ?? []
+      updateData(id, { kitOff: off ? [...cur.filter((x) => x !== itemId), itemId] : cur.filter((x) => x !== itemId) })
+      markFrom(id, true)
+    },
   }
+
+  const kitNode = doc.nodes.find((n) => n.type === 'kit')
+  useEffect(() => {
+    if (!kitNode) setKitOpen(false) // a kit node added later must not bring the drawer back
+  }, [kitNode])
+  const selectedKit = nodes.some((n) => n.selected && n.data.node.type === 'kit')
 
   const dragSource = dragFrom ? doc.nodes.find((n) => n.id === dragFrom) : undefined
   const dragMedia = dragSource ? outMedia(dragSource) : null
@@ -696,7 +802,7 @@ function CanvasBoard({
     const src = doc.nodes.find((n) => n.id === e.source)
     const media = src && outMedia(src)
     const label = edgeLabel({ targetHandle: e.targetHandle ?? '' })
-    return { ...e, className: media ? `cv-media-${media}` : undefined, label: label ? t(label) : undefined }
+    return { ...e, className: media ? `cv-media-${media}${media === 'kit' && selectedKit ? ' is-kit-on' : ''}` : undefined, label: label ? t(label) : undefined }
   })
 
   return (
@@ -722,7 +828,7 @@ function CanvasBoard({
                   : ''}
         </span>
         <div className="cv-head-actions">
-          <AddNodeMenu kinds={ADD_KINDS} label={t('canvas.add')} disabled={readOnly} onPick={addAtCenter} />
+          <AddNodeMenu kinds={clientId ? ADD_KINDS_WITH_KIT : ADD_KINDS} disabledKinds={kitNode ? ['kit'] : undefined} label={t('canvas.add')} disabled={readOnly} onPick={addAtCenter} />
           <button type="button" className="btn btn-primary btn-sm" onClick={showEditor}>
             {t('canvas.editor.open')}
           </button>
@@ -812,6 +918,21 @@ function CanvasBoard({
             )}
           </div>
         </div>
+        {kitOpen && kit && kitNode && (
+          <div className="cv-kit-drawer">
+            <KitPanel
+              clientId={clientId}
+              kit={kit}
+              selected={kitNode.data.kitItems ?? []}
+              onKit={applyKit}
+              onSelected={(ids) => {
+                updateData(kitNode.id, { kitItems: ids })
+                for (const target of kitTargets(latest.current.doc, kitNode.id)) markFrom(target, true)
+              }}
+              onClose={() => setKitOpen(false)}
+            />
+          </div>
+        )}
       </div>
       </div>
     </section>

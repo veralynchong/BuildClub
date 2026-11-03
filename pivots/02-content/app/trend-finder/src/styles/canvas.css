@@ -92,6 +92,7 @@
 .cv-media-image { --cv-media: var(--blue); }
 .cv-media-video { --cv-media: var(--mustard); }
 .cv-media-none { --cv-media: var(--muted); }
+.cv-media-kit { --cv-media: var(--muted); }
 .cv-flow .react-flow__handle.cv-handle { background: var(--cv-media, var(--muted)); }
 .cv-flow .react-flow__handle.is-blocked { background: var(--surface-3); opacity: 0.6; }
 .cv-flow .react-flow__handle.connectingto.valid { box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -179,3 +180,36 @@
 .cv-clip-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
 .cv-clip-grip { flex: none; padding: 0 var(--space-xs); color: var(--muted); cursor: grab; user-select: none; letter-spacing: -2px; border-radius: var(--radius-xs); }
 .cv-clip-grip:hover { background: var(--surface-3); color: var(--fg); }
+
+/* kit panel: the client's consistency kit and which items this plan uses */
+.cv-kit { display: flex; flex-direction: column; gap: var(--space-base); min-width: 0; }
+.cv-kit-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+.cv-kit-head h2 { margin: 0; font-size: var(--text-md); }
+.cv-kit-item { padding: var(--space-base); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
+.cv-kit-name { flex: 1; min-width: 0; }
+.cv-kit-images { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.cv-kit-image { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2xs); }
+.cv-kit-image img { width: 72px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); }
+.cv-kit-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); font-size: var(--text-sm); }
+.cv-kit-error { margin: 0; color: var(--danger, var(--fg)); }
+.cv-kit-use.cv-ed-choice { flex-direction: column; align-items: flex-start; }
+
+/* kit node, per-shot picks, and the kit drawer */
+.cv-kit-node { width: 220px; }
+.cv-kit-cast { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-xs); }
+.cv-kit-cast li { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.cv-kit-cast img, .cv-kit-thumb-none { flex: none; width: 28px; height: 28px; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface-2); }
+.cv-kit-cast-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-kit-kind { flex: none; }
+.cv-kit-pick { display: flex; flex-direction: row; flex-wrap: wrap; column-gap: var(--space-sm); row-gap: var(--space-2xs); margin: 0; padding: 0; border: 0; min-width: 0; }
+.cv-kit-pick legend { width: 100%; }
+.cv-kit-pick label { display: flex; align-items: center; gap: var(--space-xs); }
+.cv-kit-sent summary { cursor: pointer; color: var(--muted); }
+.cv-kit-sent pre { margin: var(--space-xs) 0 0; max-height: 120px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; user-select: text; }
+.cv-kit-drawer { flex: 0 0 340px; min-width: 0; overflow: auto; padding: var(--space-base); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+@media (max-width: 860px) { .cv-kit-drawer { flex: none; } }
+/* kit lines: faint and thin, stronger while the kit node is selected */
+.cv-flow .react-flow__edge.cv-media-kit { --xy-edge-stroke: var(--muted); --xy-edge-stroke-width: 1.5; opacity: 0.7; }
+.cv-flow .react-flow__edge.cv-media-kit .react-flow__edge-path { stroke-dasharray: 6 4; }
+.cv-flow .react-flow__edge.cv-media-kit.is-kit-on { --xy-edge-stroke: var(--accent); --xy-edge-stroke-width: 2; opacity: 1; }
+.cv-flow .react-flow__edge.cv-media-kit.is-kit-on .react-flow__edge-path { stroke-dasharray: none; }

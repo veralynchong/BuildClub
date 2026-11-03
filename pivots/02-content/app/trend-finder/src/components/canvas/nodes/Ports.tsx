@@ -4,7 +4,7 @@ import { outMedia, PORTS } from '../../../lib/canvas/ports'
 import type { CanvasNode } from '../../../lib/canvas/types'
 import { useCanvas } from './ctx'
 
-const PORT_LABEL = { 'in:text': 'canvas.port.text', 'in:start': 'canvas.edge.start', 'in:ref': 'canvas.edge.ref' } as const
+const PORT_LABEL = { 'in:text': 'canvas.port.text', 'in:start': 'canvas.edge.start', 'in:ref': 'canvas.edge.ref', 'in:kit': 'canvas.port.kit' } as const
 
 // Inputs down the left edge, the one output on the right; each coloured by what it carries.
 export function Ports({ node }: { node: CanvasNode }) {

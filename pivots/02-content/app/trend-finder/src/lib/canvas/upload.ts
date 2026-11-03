@@ -19,9 +19,9 @@ export function uploadKind(file: { name: string; type: string }): 'image' | 'vid
 }
 
 // The reason an image can't be uploaded, or null when it can.
-export function checkImage(file: { name: string; type: string; size: number }): Key | null {
+export function checkImage(file: { name: string; type: string; size: number }, maxBytes = MAX_IMAGE_BYTES): Key | null {
   if (!imageType(file)) return 'canvas.err.upload'
-  return file.size > MAX_IMAGE_BYTES ? 'canvas.upload.tooBig' : null
+  return file.size > maxBytes ? 'canvas.upload.tooBig' : null
 }
 
 export const imageError = (file: { name: string; type: string; size: number }): string | null => {

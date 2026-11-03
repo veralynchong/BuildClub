@@ -8,11 +8,12 @@ interface Props {
   icon?: string
   className?: string
   disabled?: boolean
+  disabledKinds?: NodeKind[] // listed but not pickable (e.g. a kit node when the canvas has one)
   onPick: (kind: NodeKind) => void
 }
 
 // A button that opens a short list of node kinds.
-export function AddNodeMenu({ kinds, label, icon, className, disabled, onPick }: Props) {
+export function AddNodeMenu({ kinds, label, icon, className, disabled, disabledKinds, onPick }: Props) {
   const [open, setOpen] = useState(false)
   return (
     <div
@@ -42,6 +43,7 @@ export function AddNodeMenu({ kinds, label, icon, className, disabled, onPick }:
               <button
                 type="button"
                 role="menuitem"
+                disabled={disabledKinds?.includes(k)}
                 onClick={() => {
                   setOpen(false)
                   onPick(k)

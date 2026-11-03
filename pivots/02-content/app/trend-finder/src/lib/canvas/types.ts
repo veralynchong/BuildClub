@@ -1,8 +1,9 @@
 import type { Take } from '../takes.ts'
+import type { GenRef } from './kit.ts'
 
 // Shapes of the canvas document (backend/canvas.py) and generation rows (backend/generations.py to_json).
-export type Media = 'text' | 'image' | 'video'
-export type NodeKind = 'shot' | 'prompt' | 'storyboard' | 'video' | 'upload' | 'footage'
+export type Media = 'text' | 'image' | 'video' | 'kit'
+export type NodeKind = 'shot' | 'prompt' | 'storyboard' | 'video' | 'upload' | 'footage' | 'kit'
 export type InputNeed = 'required' | 'optional' | 'none'
 
 export interface NodeData {
@@ -17,6 +18,9 @@ export interface NodeData {
   media?: 'image' | 'video' // upload
   takeId?: string // upload of a video
   duration?: number
+  kitItems?: string[] // kit node: the kit item ids this video uses
+  kitOff?: string[] // storyboard: kit items left out of this shot
+  kitCut?: boolean // storyboard: the kit line was cut by hand, so it is not put back
 }
 
 export interface CanvasNode {
@@ -41,6 +45,9 @@ export interface CanvasDoc {
   viewport?: { x: number; y: number; zoom: number }
 }
 
+// A reference as the server keeps it: the request's GenRef plus what it showed (a kit item's name and kind, its file).
+export type StoredRef = GenRef & { name?: string; kind?: string; file?: string }
+
 // waiting: a video held until its storyboard image is done; unknown: the provider lost the result (may have charged)
 export type GenStatus = 'queued' | 'waiting' | 'running' | 'done' | 'failed' | 'unknown'
 
@@ -50,7 +57,14 @@ export interface Generation {
   nodeId: string
   kind: 'image' | 'video'
   model: string // a model id, or 'upload' / 'imported'
-  inputs: { prompt?: string; startFrame?: string | null; reference?: string | null; duration?: number | null }
+  inputs: {
+    prompt?: string
+    startFrame?: string | null
+    references?: StoredRef[]
+    kitStamp?: Record<string, number> // kit item id -> its updatedAt when this was made
+    sentPrompt?: string // the prompt the model got, kit lines included
+    duration?: number | null
+  }
   status: GenStatus
   estUsd: number
   actualUsd: number | null
@@ -74,6 +88,7 @@ export interface GenModel {
   available: boolean
   inputs: { text?: InputNeed; startFrame?: InputNeed; reference?: InputNeed }
   durations?: number[]
+  maxRefs?: number // reference images the model takes; missing counts as 1
   aspects: string[]
 }
 
@@ -98,6 +113,7 @@ export interface ChainBody {
   prompt: string
   videoPrompt?: string
   duration?: number
+  references?: GenRef[] // for the storyboard image only
 }
 
 // The answer to a chain request that was not confirmed: nothing is started.

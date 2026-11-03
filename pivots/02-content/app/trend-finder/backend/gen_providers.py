@@ -206,7 +206,8 @@ class MockAdapter:
         if job.model["kind"] == "voice":
             return self._voice(job, request_id)
         if job.model["kind"] == "image":
-            return Poll("done", data=storyboard.placeholder_svg("body", job.prompt, "", 0).encode(), ext="svg")
+            refs = f"{len(job.references)} refs" if job.references else ""
+            return Poll("done", data=storyboard.placeholder_svg("body", job.prompt, refs, 0).encode(), ext="svg")
         duration = job.duration or job.model["durations"][0]
         folder = job.scratch
         if folder is not None:

@@ -34,6 +34,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 
 import assist
 import brand
+import kit
 import canvas
 import channels
 import covers
@@ -59,7 +60,7 @@ import cleaning
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
 from compare import CompareJobs, compare_id_for
-from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Brand, Client,
+from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Brand, Client, Kit,
                     CompareJob, CompareRequest, CompareStarted, Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
 
 HERE = Path(__file__).resolve().parent
@@ -794,11 +795,12 @@ def get_clients():
 
 @app.put("/api/clients", response_model=list[Client], response_model_exclude_none=True)
 def put_clients(clients: list[Client]):
-    # The brand kit belongs to the brand routes: a brand carried by the request is dropped and the stored one kept.
+    # The brand and the consistency kit belong to their own routes: ones carried by the request are dropped and the stored ones kept.
     with brand.lock:
-        stored = {c["id"]: c.get("brand") for c in load("clients") or []}
+        old = {c["id"]: c for c in load("clients") or []}
         for c in clients:
-            c.brand = Brand(**stored[c.id]) if stored.get(c.id) else None
+            c.brand = Brand(**old[c.id]["brand"]) if old.get(c.id, {}).get("brand") else None
+            c.kit = Kit(**old[c.id]["kit"]) if old.get(c.id, {}).get("kit") else None
         save("clients", clients)
     return clients
 
@@ -959,6 +961,7 @@ app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
 app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR, gen_router))
 app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))
+app.include_router(kit.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(recheck.make_router(db, lambda u: is_video_link(u)))
 publishing.seed_demo(db)

@@ -101,9 +101,9 @@ const shots = [{ id: 's1', time: '0-3s', shot: 'Wide shot of the cafe', line: 'W
 
 test('genRequest prefers the node prompt, then the shot line', () => {
   const doc = docWith()
-  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []), { prompt: 'Welcome in' })
+  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []), { prompt: 'Welcome in', references: [] })
   doc.nodes.find((n) => n.id === 'n_sb_s1').data.prompt = 'Neon cafe'
-  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []), { prompt: 'Neon cafe' })
+  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []), { prompt: 'Neon cafe', references: [] })
   const noLine = [{ ...shots[0], line: undefined }]
   const doc2 = docWith()
   assert.equal(genRequest(doc2, 'n_sb_s1', noLine, []).prompt, 'Wide shot of the cafe')
@@ -115,7 +115,7 @@ test('genRequest follows prompt nodes and picks start frame from the selected ve
     edges: [edge('n_p2', 'n_p1'), edge('n_p1', 'n_vid')],
   })
   const gens = [gen('g1', 'n_sb_s1', 'done', 1)]
-  assert.deepEqual(genRequest(doc, 'n_vid', shots, gens), { prompt: 'Slow zoom', startFrame: 'g1' })
+  assert.deepEqual(genRequest(doc, 'n_vid', shots, gens), { prompt: 'Slow zoom', startFrame: 'g1', references: [] })
 })
 
 test('missingInput says what is needed', () => {
@@ -469,4 +469,35 @@ test('chainBusy: true when either end of the chain is queued, waiting or running
   assert.equal(chainBusy(doc, 'n_vid', [gen('a', 'n_sb_s1', 'queued', 1)]), true)
   assert.equal(chainBusy(doc, 'n_vid', [gen('a', 'n_sb_s1', 'done', 1), gen('b', 'n_vid', 'failed', 2)]), false)
   assert.equal(chainBusy(docWith(), 'n_vid2', []), false) // no chain
+})
+
+test('canConnect in:ref allows up to maxRefs', () => {
+  const model = { ...models[0], maxRefs: 2 }
+  const doc = docWith({ nodes: [node('n_a', 'upload', { media: 'image' }), node('n_b', 'upload', { media: 'image' }), node('n_c', 'upload', { media: 'image' })] })
+  const c = (source, d = doc) => canConnect(d, { source, target: 'n_sb_s1', targetHandle: 'in:ref' }, [model])
+  assert.deepEqual(c('n_a'), { ok: true })
+  const one = { ...doc, edges: [...doc.edges, edge('n_a', 'n_sb_s1', 'in:ref')] }
+  assert.deepEqual(c('n_b', one), { ok: true })
+  const two = { ...one, edges: [...one.edges, edge('n_b', 'n_sb_s1', 'in:ref')] }
+  assert.deepEqual(c('n_c', two), { ok: false, reason: 'canvas.conn.full', vars: { max: 2 } })
+  // a model without maxRefs counts as 1
+  assert.equal(canConnect(one, { source: 'n_b', target: 'n_sb_s1', targetHandle: 'in:ref' }, models).reason, 'canvas.conn.full')
+})
+
+test('canConnect kit only to in:kit', () => {
+  const doc = docWith({ nodes: [node('n_kit', 'kit', { kitItems: [] })] })
+  assert.equal(outMedia(doc.nodes.find((n) => n.id === 'n_kit')), 'kit')
+  const c = (target, targetHandle) => canConnect(doc, { source: 'n_kit', target, targetHandle }, models)
+  assert.deepEqual(c('n_sb_s1', 'in:kit'), { ok: true })
+  assert.equal(c('n_sb_s1', 'in:ref').reason, 'canvas.conn.media')
+  assert.equal(c('n_vid', 'in:ref').reason, 'canvas.conn.media')
+  assert.equal(c('n_vid', 'in:kit').reason, 'canvas.conn.media')
+  assert.equal(canConnect(doc, { source: 'n_sb_s1', target: 'n_sb_s1', targetHandle: 'in:kit' }, models).ok, false)
+})
+
+test('genRequest returns references', () => {
+  const doc = docWith({ nodes: [node('n_up', 'upload', { media: 'image' })], edges: [edge('n_up', 'n_sb_s1', 'in:ref')] })
+  const gens = [gen('g9', 'n_up', 'done', 1)]
+  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, gens).references, [{ source: 'gen', genId: 'g9' }])
+  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []).references, [])
 })
