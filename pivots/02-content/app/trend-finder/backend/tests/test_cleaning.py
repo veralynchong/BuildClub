@@ -82,6 +82,16 @@ def test_no_speech_422_and_nothing_saved(client, setup, tmp_path, monkeypatch):
     assert not any(p.name.startswith(".clean-") for p in folder().iterdir())
 
 
+def test_silent_take_is_no_speech_even_when_whisper_hears_thank_you(client, setup, tmp_path, monkeypatch):
+    # whisper writes "Thank you." for digital silence; a take with no sound at all has no speech to clean
+    monkeypatch.setattr(cleaning, "words_fn", lambda wav, work: [(0.0, 0.26, "Thank"), (0.26, 0.4, "you.")])
+    t = upload_clip(client, tmp_path, [("quiet", None, 4.0)]).json()
+    files = sorted(media_files())
+    r = clean(client, t["id"])
+    assert r.status_code == 422 and r.json()["error"] == cleaning.NO_SPEECH
+    assert len(client.get("/api/ideas/ia/takes").json()) == 1 and sorted(media_files()) == files
+
+
 def test_nothing_to_clean_422(client, setup, tmp_path, monkeypatch):
     monkeypatch.setattr(cleaning, "words_fn", lambda wav, work: [(0.0, 1.75, "hello"), (1.75, 3.5, "world")])
     t = upload_clip(client, tmp_path, [("tone", 440, 3.5)]).json()  # no silence to trust over the word times

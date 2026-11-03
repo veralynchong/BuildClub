@@ -252,3 +252,10 @@ def test_parse_words_drops_punctuation_and_symbol_only_text():
     seg = lambda a, b, text: {"offsets": {"from": a, "to": b}, "text": text}
     data = {"transcription": [seg(0, 2180, " ."), seg(2180, 3000, " ♪"), seg(3000, 3500, " ..."), seg(3500, 4000, " hi.")]}
     assert cutting.parse_words(data) == [(3.5, 4.0, "hi.")]
+
+
+def test_is_silent_only_when_the_pauses_cover_the_whole_file():
+    assert cutting.is_silent([(0.0, 8.0)], 8.0)
+    assert cutting.is_silent([(0.0, 0.1), (0.1, 7.95)], 8.0)  # silencedetect's own rounding
+    assert not cutting.is_silent([(1.0, 7.0)], 8.0)
+    assert not cutting.is_silent([], 8.0) and not cutting.is_silent([(0.0, 0.0)], 0.0)

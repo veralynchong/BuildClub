@@ -625,6 +625,15 @@ def test_transcribe_voice_starts_a_word_after_the_pause(tmp_path, monkeypatch):
     assert words["test"]["end"] == pytest.approx(1.84) and words["tool"]["end"] == pytest.approx(4.68)
 
 
+def test_transcribe_voice_of_silence_has_no_words(tmp_path, monkeypatch):
+    # whisper hears "Thank you." in digital silence; a silent voiceover must not become a caption
+    monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)
+    monkeypatch.setattr(cutting, "probe", lambda path: {"duration": 8.0})
+    monkeypatch.setattr(cutting, "find_silences", lambda wav, total: [(0.0, 8.0)])
+    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: [(0.0, 0.26, "Thank"), (0.26, 0.4, "you.")])
+    assert editing.transcribe_voice(tmp_path / "v.wav", tmp_path) == []
+
+
 def test_transcribe_voice_without_whisper_installed(tmp_path, monkeypatch):
     import analyze
     monkeypatch.setattr(cutting, "_ffmpeg", lambda *a, **k: None)

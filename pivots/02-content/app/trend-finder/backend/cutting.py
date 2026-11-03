@@ -209,6 +209,11 @@ def find_silences(wav: Path, total: float) -> list[tuple[float, float]]:
     return parse_silences(found.stderr, total)
 
 
+def is_silent(silences: list[tuple[float, float]], total: float) -> bool:
+    """True when the pauses cover the whole file. whisper invents text ("Thank you.") for such audio."""
+    return total > 0 and sum(e - s for s, e in silences) >= total * 0.98
+
+
 def parse_silences(stderr: str, total: float) -> list[tuple[float, float]]:
     """silencedetect lines to (start, end); a silence still open at the end runs to total."""
     out, start = [], None

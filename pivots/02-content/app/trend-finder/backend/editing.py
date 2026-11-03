@@ -327,7 +327,11 @@ def transcribe_voice(path: Path, work: Path) -> list[dict]:
     wav = Path(work) / "voice.wav"
     cutting._ffmpeg(["-i", str(path), "-vn", "-ac", "1", "-ar", "16000", str(wav)], "Reading the voiceover")
     words = cutting.transcribe_words(wav, Path(work))
-    words = cutting.fit_to_silences(words, cutting.find_silences(wav, cutting.probe(wav)["duration"]))
+    total = cutting.probe(wav)["duration"]
+    silences = cutting.find_silences(wav, total)
+    if cutting.is_silent(silences, total):  # whisper writes "Thank you." for silence
+        return []
+    words = cutting.fit_to_silences(words, silences)
     return [{"text": text, "start": start, "end": end} for start, end, text in words]
 
 

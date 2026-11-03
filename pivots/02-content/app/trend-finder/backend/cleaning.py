@@ -49,10 +49,13 @@ def clean_take(src: Path, work: Path, out: Path) -> dict:
         raise CutError(TOO_LONG)
     wav = work / "audio.wav"
     cutting._ffmpeg(["-i", str(src), "-vn", "-ac", "1", "-ar", "16000", str(wav)], "Reading the sound")
+    silences = cutting.find_silences(wav, total)
+    if cutting.is_silent(silences, total):
+        raise CutError(NO_SPEECH)
     words = words_fn(wav, work)
     if not words:
         raise CutError(NO_SPEECH)
-    keeps = cutting.keep_intervals(words, cutting.find_silences(wav, total), total)
+    keeps = cutting.keep_intervals(words, silences, total)
     kept = sum(b - a for a, b in keeps)
     if total - kept < MIN_CUT_S:
         raise CutError(NOTHING)
