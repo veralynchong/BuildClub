@@ -16,8 +16,8 @@ export function VersionStrip({ versions, selectedId, disabled, onSelect }: Props
     <div className="cv-versions nodrag" role="group" aria-label={t('canvas.gen.versions')}>
       {versions.map((g, i) => {
         const n = i + 1
-        const open = g.status === 'queued' || g.status === 'running'
-        const failed = g.status === 'failed'
+        const open = g.status === 'queued' || g.status === 'waiting' || g.status === 'running'
+        const failed = g.status === 'failed' || g.status === 'unknown'
         return (
           <button
             key={g.id}
@@ -25,7 +25,7 @@ export function VersionStrip({ versions, selectedId, disabled, onSelect }: Props
             className={`cv-version${failed ? ' is-failed' : ''}`}
             aria-pressed={g.id === selectedId}
             disabled={disabled || open || failed}
-            title={failed ? t('canvas.gen.versionFailed', { n, error: g.error ?? '' }) : open ? t('canvas.gen.versionRunning', { n }) : g.model === 'imported' ? `${t('canvas.gen.version', { n })} · ${t('canvas.gen.imported')}` : t('canvas.gen.version', { n })}
+            title={failed ? t('canvas.gen.versionFailed', { n, error: g.status === 'unknown' ? t('canvas.gen.unknown') : (g.error ?? '') }) : open ? t('canvas.gen.versionRunning', { n }) : g.model === 'imported' ? `${t('canvas.gen.version', { n })} · ${t('canvas.gen.imported')}` : t('canvas.gen.version', { n })}
             onClick={() => onSelect(g.id)}
           >
             {open && <span className="cv-spin" aria-hidden="true" />}

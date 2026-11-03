@@ -157,3 +157,17 @@
 .cv-takes li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
 .cv-takes .cv-take-name { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cv-takes .is-chosen .cv-take-name { font-weight: 600; }
+
+.cv-gen-foot { flex-wrap: wrap; }
+.cv-gen-notice { margin: 0; color: var(--rising); overflow-wrap: anywhere; }
+.cv-gen-retired { margin: 0; color: var(--no); }
+.cv-chain-btn { align-self: flex-start; }
+.cv-modal-back { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: var(--surface-2); }
+.cv-modal {
+  display: flex; flex-direction: column; gap: var(--space-md); width: min(420px, 90%); padding: var(--space-lg);
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow-md);
+}
+.cv-modal h2 { font-size: var(--text-md); margin: 0; }
+.cv-modal ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-sm); }
+.cv-modal li { display: flex; justify-content: space-between; gap: var(--space-md); }
+.cv-modal-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }

@@ -1,11 +1,13 @@
 import type { IdeaStatus } from '../types'
 import { t } from './i18n.ts'
 
-// One uploaded video for a shot (0-based index) of an approved plan. One take per shot is chosen.
+// One uploaded video for a shot of an approved plan. One take per shot is chosen. A take belongs to a shot by its
+// stable id (`shotId`); `shot` is that shot's current 0-based place in the list, null once the shot was removed.
 export interface Take {
   id: string
   ideaId: string
-  shot: number
+  shot: number | null
+  shotId: string | null
   name: string
   size: number
   chosen: boolean
@@ -48,7 +50,7 @@ export function formatSize(bytes: number): string {
 // Takes grouped per current shot; takes of shots since removed are left out (they stay stored).
 export function takesByShot(takes: Take[], shotCount: number): Take[][] {
   const groups: Take[][] = Array.from({ length: shotCount }, () => [])
-  for (const t of takes) if (t.shot >= 0 && t.shot < shotCount) groups[t.shot].push(t)
+  for (const t of takes) if (t.shot !== null && t.shot >= 0 && t.shot < shotCount) groups[t.shot].push(t)
   return groups
 }
 

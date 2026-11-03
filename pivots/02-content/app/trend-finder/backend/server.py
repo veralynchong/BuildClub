@@ -106,7 +106,8 @@ MEDIAN_DAYS = 30  # an account's usual views are reused this long before they ar
 # counted before it runs; cached searches and finished breakdowns are free and never counted.
 DAILY_APIFY_USD = float(os.environ.get("DAILY_APIFY_USD", 2.00))
 DAILY_CLAUDE_USD = float(os.environ.get("DAILY_CLAUDE_USD", 1.00))
-DAILY_IMAGE_USD = float(os.environ.get("DAILY_IMAGE_USD", 0.50))  # storyboard frames from gpt-image
+DAILY_GEN_IMAGE_USD = float(os.environ.get("DAILY_GEN_IMAGE_USD", 0.50))  # canvas image generations
+DAILY_GEN_VIDEO_USD = float(os.environ.get("DAILY_GEN_VIDEO_USD", 1.00))  # canvas video generations
 # Channel summaries: Jev labelling in US$; ScrapeCreators (Instagram only) in credits, 1 per 12 reels.
 DAILY_JEV_USD = float(os.environ.get("DAILY_JEV_USD", 0.50))
 DAILY_SCRAPECREATORS_CREDITS = float(os.environ.get("DAILY_SCRAPECREATORS_CREDITS", 20))
@@ -131,7 +132,7 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
 
 @contextlib.asynccontextmanager
 async def lifespan(_app):
-    generations.fail_unfinished(db)
+    generations.recover(db, gen_jobs)
     renders.recover(db)  # a cut that was running when the server stopped will never finish
     yield
 
@@ -760,6 +761,8 @@ def db() -> sqlite3.Connection:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
+    generations.migrate(conn)
+    takes.migrate(conn)
     return conn
 
 
@@ -897,15 +900,47 @@ app.include_router(publishing.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(takes.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(production.make_router(db))
 def storyboard_budget(wallet: str, usd: float):
-    """None when the paid call may go ahead, else the 429 to return."""
-    cap, env = (DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD") if wallet == "claude" else (DAILY_IMAGE_USD, "DAILY_IMAGE_USD")
-    return None if spend(wallet, usd, cap) else over_budget("Claude" if wallet == "claude" else "Image", cap, env)
+    """None when the paid call may go ahead, else the 429 to return. Frame images use the generation wallet."""
+    if wallet == "image":
+        return gen_budget("image", usd)
+    return None if spend(wallet, usd, DAILY_CLAUDE_USD) else over_budget("Claude", DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD")
 
 
-app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget))
+def storyboard_refund(wallet: str, usd: float) -> None:
+    gen_refund("image", usd)
+
+
+app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget, storyboard_refund))
 app.include_router(shotlist.make_router(storyboard_budget))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
-gen_router = generations.make_router(db, load, lambda: MEDIA_DIR)
+GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_video", "DAILY_GEN_VIDEO_USD")}
+
+
+def gen_cap(kind: str) -> float:
+    return DAILY_GEN_IMAGE_USD if kind == "image" else DAILY_GEN_VIDEO_USD
+
+
+def gen_budget(kind: str, usd: float):
+    """None when a generation of this kind may be paid for, else the 429 to return."""
+    wallet, env = GEN_WALLETS[kind]
+    cap = gen_cap(kind)
+    if spend(wallet, usd, cap):
+        return None
+    left = remaining(wallet, cap)
+    return error(429, f"Today's {kind} generation budget has US${left:.2f} left, and this needs US${usd:.2f}. "
+                      f"The budget resets at midnight; to allow more, raise {env} in .env and restart the API.")
+
+
+def gen_refund(kind: str, usd: float) -> None:
+    refund(GEN_WALLETS[kind][0], usd)
+
+
+def gen_remaining() -> dict:
+    return {k: {"spent": round(gen_cap(k) - remaining(w, gen_cap(k)), 4), "cap": gen_cap(k)}
+            for k, (w, _) in GEN_WALLETS.items()}
+
+
+gen_router = generations.make_router(db, load, lambda: MEDIA_DIR, gen_budget, gen_refund, gen_remaining)
 gen_jobs = gen_router.jobs
 app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
@@ -936,6 +971,22 @@ def spend(wallet: str, usd: float, cap: float) -> bool:
                          (key, json.dumps({**spent, wallet: total})))
     print(f"[budget] {wallet} US${total:.4f} of US${cap:.2f} today", flush=True)
     return True
+
+
+def refund(wallet: str, usd: float) -> None:
+    """Take money back off today's count after a paid call that did not produce anything. Never below 0."""
+    key = f"spend:{today()}"
+    with budget_lock:
+        spent = load(key) or {}
+        total = round(max(0.0, spent.get(wallet, 0) - usd), 4)
+        with db() as conn:
+            conn.execute("INSERT OR REPLACE INTO store (key, value) VALUES (?, ?)",
+                         (key, json.dumps({**spent, wallet: total})))
+    print(f"[budget] {wallet} refunded US${usd:.4f}, now US${total:.4f} today", flush=True)
+
+
+def remaining(wallet: str, cap: float) -> float:
+    return round(max(0.0, cap - (load(f"spend:{today()}") or {}).get(wallet, 0)), 4)
 
 
 def saved_searches(limit: int = 3) -> list[str]:

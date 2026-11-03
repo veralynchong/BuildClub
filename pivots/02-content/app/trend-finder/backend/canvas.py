@@ -53,7 +53,7 @@ def _row(shot_id: str, y: int, with_footage: bool) -> tuple[list[dict], list[dic
     return nodes, edges
 
 
-def reconcile(doc: Optional[dict], shots: list[Shot], take_shots: set[int],
+def reconcile(doc: Optional[dict], shots: list[Shot], take_shots: set[str],
               gens: list[dict]) -> tuple[dict, list[tuple[str, str]]]:
     """Bring a canvas in step with the shot list. Returns the new doc (the input is not changed) and the
     (node id, frameImage) pairs to import as generations."""
@@ -62,12 +62,12 @@ def reconcile(doc: Optional[dict], shots: list[Shot], take_shots: set[int],
     have = {n["shotId"]: n for n in nodes if n.get("type") == "shot"}
     ids = {s.id for s in shots}
     y = max((n["position"]["y"] for n in have.values()), default=-ROW_H)
-    for i, s in enumerate(shots):
+    for s in shots:
         if s.id in have:
             have[s.id]["data"]["removed"] = False
             continue
         y += ROW_H
-        new_nodes, new_edges = _row(s.id, y, i in take_shots)
+        new_nodes, new_edges = _row(s.id, y, s.id in take_shots)
         nodes.extend(new_nodes)
         edges.extend(new_edges)
     for shot_id, n in have.items():
@@ -157,18 +157,17 @@ def make_router(db, load) -> APIRouter:
         shots = shots_of(found)
         with canvas_lock, db() as conn:
             version, doc = read(conn, idea_id)
-            take_rows = conn.execute(f"SELECT {takes.COLUMNS} FROM takes WHERE idea_id = ? "
-                                     "ORDER BY shot, created_at, rowid", (idea_id,)).fetchall()
+            take_rows = takes.rows_of(conn, idea_id)
             gen_rows = conn.execute(f"SELECT {generations.COLUMNS} FROM generations WHERE idea_id = ? "
                                     "ORDER BY created_at, rowid", (idea_id,)).fetchall()
             gens = [generations.to_json(r) for r in gen_rows]
-            new, imports = reconcile(doc, shots, {r[2] for r in take_rows}, gens)
+            new, imports = reconcile(doc, shots, {r[8] for r, _ in take_rows if r[8]}, gens)
             for node_id, url in imports:
                 gens.append(generations.insert_done(conn, idea_id, node_id, "image", "imported", source_url=url))
             if new != doc:
                 version += 1
                 write(conn, idea_id, version, new)
-        return {"version": version, "doc": new, "generations": gens, "takes": [takes.to_json(r) for r in take_rows]}
+        return {"version": version, "doc": new, "generations": gens, "takes": [takes.to_json(r, i) for r, i in take_rows]}
 
     @router.put("/api/ideas/{idea_id}/canvas")
     async def put_canvas(idea_id: str, request: Request):
