@@ -3,6 +3,7 @@
 // review link turned off. Mock models only; the one stubbed request (a refused POST /api/share) never reaches a paid path.
 // Run: (repo root) MOCK_GEN_DELAY_S=2 REMOTION_PORT=8872 bash bin/isolated-backend.sh 8871 --user test@example.com:pw-for-e2e
 //      then (app dir, after npm run build) node e2e/polish-c-timeline.cjs <out_dir>
+// Needs a fresh isolated backend for every run: it adds videos, rewrites the edit and leaves the plan waiting (read-only).
 // Exits 1 when a check fails.
 const L = require('./lib.cjs')
 const fs = require('fs')
@@ -73,6 +74,7 @@ const EXPORT_MS = 240000
 
   try {
     await L.login(page)
+    const at = { login: errs.length } // where each step's allowed console errors start and end
     await L.seed(page)
 
     // ---- setup: a mock video in shot 1 and shot 2, one version each ----
@@ -205,6 +207,7 @@ const EXPORT_MS = 240000
     await page.waitForSelector('.cv-ed-timeline', { timeout: 10000 })
     const exportFocused = await page.waitForFunction(() => document.activeElement?.getAttribute('data-step') === 'export', null, { timeout: 6000 }).then(() => true, () => false)
     await page.locator('.cv-ed-zoom input').focus()
+    L.ok('Send focus: Send is not there yet before the export state arrives', (await page.locator('#cv-ed-export [data-step=send]').count()) === 0, '')
     release()
     await page.waitForSelector('#cv-ed-export [data-step=send]', { timeout: 10000 })
     await page.waitForTimeout(500)
@@ -219,6 +222,7 @@ const EXPORT_MS = 240000
     L.ok('Send focus: opened from the toolbar, Send has the focus', sendFocused, '')
     await shot('09-send-focused')
 
+    at.s10 = errs.length
     // ---- 10. turning the link on fails: "Create link", then Send works; two clicks send once (carry-in 4, fixes 6, 8) ----
     L.ok('setup: the client\'s review link is turned off', (await L.api(page, '/api/share?clientId=evergreen', { method: 'DELETE' })).status === 204, '')
     let refuse = 1
@@ -249,6 +253,7 @@ const EXPORT_MS = 240000
     L.ok('two clicks in one tick send once (fix 6)', reviewPosts.length === 1, String(reviewPosts.length))
     await shot('10b-sent')
 
+    at.s10end = errs.length
     // ---- 11. a new export, the link turned off first: Send for approval works in one click (§10.9) ----
     await page.locator('#cv-ed-export [data-step=export]').click()
     await page.waitForSelector('#cv-ed-export [data-step=send]', { timeout: EXPORT_MS })
@@ -297,6 +302,7 @@ const EXPORT_MS = 240000
     await L.gotoCanvas(page)
     L.ok('legacy edit: no trim toast on the next load (once)', !(await noteSays('more than one clip per shot', 3000)), '')
 
+    at.s14 = errs.length
     // ---- 14. read-only board: the Timeline node's Open editing still opens the editor (carry-in 5) ----
     const ideas = (await L.api(page, '/api/ideas')).body
     ideas.find((i) => i.id === IDEA).status = 'waiting'
@@ -308,8 +314,10 @@ const EXPORT_MS = 240000
     L.ok('read-only: "⤢ Open editing" opens the editor', await editorOpen(), '')
     await shot('14-read-only-editor')
 
-    // pre-login 401s; the stubbed 403; the 409s a read-only plan answers (voice, edit)
-    const real = errs.filter((e) => !/401/.test(e) && !/403/.test(e) && !/409/.test(e))
+    // allowed only where they are expected: 401s before login, the stubbed 403 in step 10, the 409s a read-only plan
+    // answers (voice, edit) in step 14
+    const allowed = (e, i) => (i < at.login && /401/.test(e)) || (i >= at.s10 && i < at.s10end && /403/.test(e)) || (i >= at.s14 && /409/.test(e))
+    const real = errs.filter((e, i) => !allowed(e, i))
     L.ok('no console errors', real.length === 0, real.slice(0, 3).join(' | '))
   } catch (e) {
     L.ok('script ran to the end', false, String((e && e.stack) || e))
