@@ -2,6 +2,19 @@
 
 Newest first. Dates are when the decision was made (from the Miro board), except sync entries.
 
+## 3 Nov 2026
+
+### Decision: Canvas redesign modelled on Flora; AI may now write content on the canvas
+- **Look:** light theme with a narrow icon sidebar and a full-screen immersion toggle. Thin grey wires; a shot becomes a frame whose title is the shot text, instead of a Shot node.
+- **Timeline:** a Timeline node on the canvas (one per idea). Detailed editing opens a full-screen editor from that node, replacing the right-side editor drawer.
+- **One clip per shot on the timeline:** "Add to timeline" and "Main clip" merge into one button.
+- **AI writes content:** a minimal agent ("✦ 幫我建好") proposes a plan card with editable prompts, models and prices; nothing runs until the user approves. This replaces the earlier rule, stated only in the `backend/assist.py` comment, that Claude "only describes, never writes new content". Analysing real videos (`assist.py`, `analyze.py`) still only describes.
+- First audience: the founder's own user test.
+
+**Why:** Founder decisions, 3 Nov 2026, after the canvas UI flow comparison (https://claude.ai/artifact/WsHvz7UPQSefTN5aHEHpvE). Design: `pivots/02-content/docs/specs/2026-11-03-canvas-product-polish-design.md`.
+
+**Status:** Current. Design approved; nothing built yet. Overrides §4.2, §4.3 and §5 of `pivots/02-content/docs/specs/2026-11-02-node-canvas-editor-design.md`.
+
 ## 2 Nov 2026
 
 ### Decision: Remake production moves to a node canvas with a Remotion editor panel; AI generation is optional; users pick from 3-5 curated models
