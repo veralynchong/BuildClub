@@ -67,6 +67,8 @@ import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
 import { CanvasPick } from './components/CanvasPick'
 import { approvedPlans } from './lib/canvasPick'
+import { readFullscreen, writeFullscreen } from './lib/canvas/shell'
+import { planName } from './components/plans/moves'
 import { AddClientScreen } from './components/AddClientScreen'
 import { logout, me, type Account } from './lib/auth'
 import { nextView, onUnauthorized } from './lib/authGate'
@@ -159,6 +161,11 @@ export default function App() {
   const [researchFocus, setResearchFocus] = useState<string | null>(null)
   const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void } | null>(null)
   const [planIdeaId, setPlanIdeaId] = useState<string | null>(null)
+  const [canvasFull, setCanvasFull] = useState(readFullscreen)
+  const setFull = (on: boolean) => {
+    setCanvasFull(on)
+    writeFullscreen(on)
+  }
   const [canvasEditor, setCanvasEditor] = useState(false) // the canvas opens with the editor showing
   // The screen a plan was opened from, so Back returns there.
   const [planFrom, setPlanFrom] = useState<View>('results')
@@ -1332,7 +1339,7 @@ export default function App() {
   return (
     <AppContext.Provider value={appContext}>
     {/* Keyed by language so every screen redraws in the new one (the switch happens on Settings, which holds no work in progress). */}
-    <div className="shell" key={lang}>
+    <div className={`shell${view === 'canvas' ? ' is-compact' : ''}${view === 'canvas' && canvasFull ? ' is-full' : ''}`} key={lang}>
       <Sidebar
         clients={clients}
         workspace={workspace}
@@ -1349,6 +1356,7 @@ export default function App() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         live={live}
+        compact={view === 'canvas'}
       />
 
       <div className="shell-main">
@@ -1629,6 +1637,10 @@ export default function App() {
                 onBack={() => setView('plan')}
                 backLabel={t('shell.back.plan')}
                 openEditor={canvasEditor}
+                title={planName(planVideo, planFormat)}
+                clientName={planClient.name}
+                fullscreen={canvasFull}
+                onFullscreen={setFull}
               />
             </Suspense>
           )}

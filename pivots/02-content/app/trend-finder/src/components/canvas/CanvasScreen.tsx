@@ -49,6 +49,10 @@ interface Props {
   onBack: () => void
   backLabel: string
   openEditor?: boolean // arrive with the editor already open
+  title: string // the plan's name, shown in the canvas toolbar
+  clientName: string
+  fullscreen: boolean // the app frame is hidden
+  onFullscreen: (on: boolean) => void
 }
 
 // Loads the canvas (waiting a little for a just-edited shot list to reach the server), then shows the board.

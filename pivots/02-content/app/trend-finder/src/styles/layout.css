@@ -30,6 +30,24 @@
     border-bottom: 1px solid var(--line);
   }
 }
+/* Canvas view: icon-only sidebar; full screen drops the sidebar and the phone bar altogether. */
+.shell.is-compact { grid-template-columns: 44px minmax(0, 1fr); }
+.shell.is-compact .sidebar { padding: 12px 4px; gap: var(--space-md); align-items: center; }
+.shell.is-compact .sidebar > * { width: 100%; }
+.shell.is-compact .side-link { justify-content: center; padding-inline: 0; }
+.shell.is-compact .side-link > span,
+.shell.is-compact .side-foot > :not(.side-link):not(.side-user),
+.shell.is-compact .side-sep,
+.shell.is-compact .side-hint,
+.shell.is-compact .switcher-text,
+.shell.is-compact .switcher-caret,
+.shell.is-compact .side-user-text,
+.shell.is-compact .side-user .avatar { display: none; }
+.shell.is-compact .side-user { justify-content: center; padding-inline: 0; }
+.shell.is-compact .switcher-btn { justify-content: center; padding: 6px 0; }
+.shell.is-full { grid-template-columns: minmax(0, 1fr); }
+.shell.is-full .sidebar,
+.shell.is-full .mobile-bar { display: none; }
 @keyframes fade-in { from { opacity: 0; } }
 
 /* Client switcher */
