@@ -65,6 +65,8 @@ import type { Key, Lang, Vars } from './lib/i18n'
 import { AppContext } from './lib/appContext'
 import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
+import { CanvasPick } from './components/CanvasPick'
+import { approvedPlans } from './lib/canvasPick'
 import { AddClientScreen } from './components/AddClientScreen'
 import { logout, me, type Account } from './lib/auth'
 import { nextView, onUnauthorized } from './lib/authGate'
@@ -1020,6 +1022,16 @@ export default function App() {
     setView('canvas')
   }
 
+  // The plan's canvas with the editor closed, as the sidebar's Canvas opens it.
+  const openPlanCanvas = (ideaId: string) => {
+    const idea = ideas.find((i) => i.id === ideaId)
+    const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
+    if (!idea || !format) return openPlan(ideaId)
+    setPlanFrom(view)
+    setPlanIdeaId(ideaId)
+    openCanvas(idea, format.shotList, false)
+  }
+
   // The Plans board's "Make the video": the plan's canvas, with the editor already open.
   const makeVideo = (ideaId: string) => {
     const idea = ideas.find((i) => i.id === ideaId)
@@ -1188,6 +1200,7 @@ export default function App() {
     review: t('shell.back.review'),
     plan: t('shell.back.plan'),
     canvas: t('shell.back.canvas'),
+    canvasPick: t('shell.back.canvas'),
     settings: t('shell.back.settings'),
     preferences: t('shell.back.preferences'),
     channel: t('shell.back.channel'),
@@ -1237,6 +1250,11 @@ export default function App() {
 
   // Sidebar "Find ideas": come back to this client's last results if they're still on screen, not an empty search page.
   const navTo = (v: View) => {
+    if (v === 'canvas') {
+      // One approved plan opens its canvas straight away; otherwise pick one (or see why there is none).
+      const plans = approvedPlans(shownIdeas, client.id)
+      return plans.length === 1 ? openPlanCanvas(plans[0].id) : setView('canvasPick')
+    }
     if (v === 'search' && lastSearch && shownSearch === `${client.id}|${lastSearch}`) return setView('results')
     setView(v)
   }
@@ -1588,6 +1606,17 @@ export default function App() {
           {/* stream C: ideas and lookups so client memory can name each plan */}
           {inClient && view === 'settings' && (
             <SettingsScreen client={client} onChange={updateClient} ideas={ideas} videoById={videoById} formatById={formatById} />
+          )}
+
+          {inClient && view === 'canvasPick' && (
+            <CanvasPick
+              clientName={client.name}
+              plans={approvedPlans(shownIdeas, client.id)}
+              videoById={videoById}
+              formatById={formatById}
+              onPick={openPlanCanvas}
+              onGoPlans={() => setView('shortlist')}
+            />
           )}
 
           {inClient && view === 'canvas' && planIdea && planVideo && planFormat && planClient && (

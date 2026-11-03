@@ -16,6 +16,7 @@ export type View =
   | 'review'
   | 'plan'
   | 'canvas'
+  | 'canvasPick'
   | 'settings'
   | 'preferences'
   | 'channel'
@@ -26,6 +27,7 @@ const paths: Record<string, string> = {
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4.3-4.3',
   saved: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z',
   approvals: 'M20 6 9 17l-5-5',
+  canvas: 'M4 4h16v16H4zM8 9h4v4H8zM15 8h2M15 12h2M8 17h8',
   plans: 'M8 4h11v16H8zM5 4v16M11 8h5M11 12h5M11 16h3',
   research: 'M4 5h16v14H4zM4 10h16M4 14.5h16M10 10v9',
   settings: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4',
@@ -233,6 +235,7 @@ export function Sidebar(p: Props) {
               {item('compare', 'compare', t('shell.side.compare'))}
               {/* Plans = the board of plans + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
+              {item('canvas', 'canvas', t('shell.side.canvas'), undefined, p.view === 'canvas' || p.view === 'canvasPick')}
               <div className="side-sep" />
               {item('channel', 'channel', t('shell.side.channel'))}
               {item('settings', 'brief', t('shell.side.brief'))}
