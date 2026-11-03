@@ -1,59 +1,48 @@
 import { useDraggable } from "@dnd-kit/core";
 import type { Format, SavedIdea, Video } from "../../types";
-import { compact } from "../../lib/metrics";
-import { beatUsual } from "../find/words";
+import { byFollowers, compact, scoreBase } from "../../lib/metrics";
 import { Thumb } from "../Thumb";
 import { useManagerName } from "../../lib/appContext";
 import { lastSentBack } from "../../lib/memory";
-import { t, tp } from "../../lib/i18n";
-import {
-  dueLabel,
-  planName,
-  shotsOf,
-  type Column,
-  type DragData,
-} from "./moves";
+import { t } from "../../lib/i18n";
+import type { Column, DragData } from "./moves";
 
 const truncate = (s: string, max = 80) => (s.length > max ? `${s.slice(0, max).trimEnd()}…` : s);
 
-// What a plan card shows: the video, what it copies, the due date and shots. Shared by the card and its drag copy.
+// What a plan card shows: the same as a Find ideas tile (cover, followers → views, the video's topic, the account),
+// plus the manager's sent-back reason for the plan or the finished video. Shared by the card and its drag copy.
 export function PlanCardBody({
   idea,
   video: v,
-  format: f,
   cutSentBack,
 }: {
   idea: SavedIdea;
   video: Video;
+  // Kept so callers can pass it; the card no longer shows anything from the format.
   format?: Format;
   // The approver sent the finished video back and it has not been re-sent yet.
   cutSentBack?: { reason: string };
 }) {
-  const shots = shotsOf(idea, f).length;
   const manager = useManagerName();
   const last = idea.status !== "rejected" ? lastSentBack(idea) : undefined;
+  const followers = byFollowers(v);
+  const base = followers ? v.followers : scoreBase(v);
+  const fromNum = base > 0 ? compact(base) : "–";
+  const fromCap = followers ? t("find.res.cmpFollowers") : t("find.res.cmpUsual");
   return (
     <>
       <Thumb video={v} />
       <div className="board-card-body">
-        <strong>{planName(v, f)}</strong>
-        <span className="small muted">
-          {t("plan.card.copiesLine", {
-            what: v.live
-              ? t("plan.card.copiesLive", { handle: v.handle })
-              : t("plan.card.copiesVideo", { hook: v.hook, handle: v.handle }),
-            views: compact(v.views),
-            beat: beatUsual(v).replace(/^\w/, (c) => c.toLowerCase()),
-          })}
+        <span className="best-compare tile-cmp">
+          <span className="cmp-num cmp-from">{fromNum}</span>
+          <span className="cmp-arrow" aria-hidden="true">→</span>
+          <span className="cmp-num cmp-to">{compact(v.views)}</span>
+          <span className="cmp-cap">{fromCap}</span>
+          <span />
+          <span className="cmp-cap">{t("find.tile.cmpViews")}</span>
         </span>
-        <span className="small">
-          {t("plan.card.due", { date: dueLabel(idea.dueDate) })} ·{" "}
-          {shots ? (
-            tp("plan.card.shots", shots)
-          ) : (
-            <span className="muted">{t("plan.card.noShots")}</span>
-          )}
-        </span>
+        <strong className="plans-card-hook">{v.hook}</strong>
+        <span className="small muted plans-card-handle">{v.handle}</span>
         {idea.status === "rejected" && (
           <span className="board-reason small">
             {t("plan.card.sentBack", { manager })}{" "}
@@ -109,7 +98,8 @@ export function PlanCard(p: Props) {
       data,
       disabled: p.targets.length === 0,
     });
-  const name = planName(p.video, p.format);
+  // The card's title is the video's topic, so screen readers hear the same name.
+  const name = p.video.hook;
 
   const setRef = (el: HTMLDivElement | null) => {
     setNodeRef(el);
@@ -134,7 +124,7 @@ export function PlanCard(p: Props) {
 
       <div className="board-card-actions" {...keep}>
         <button className="btn btn-ghost btn-sm" onClick={p.onOpenPlan}>
-          {t("plan.card.openPlan")}
+          {p.idea.status === "saved" ? t("plan.card.startPlanning") : t("plan.card.openPlan")}
         </button>
         {p.actions}
         {p.onFromResearch && (

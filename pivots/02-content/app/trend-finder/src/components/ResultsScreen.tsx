@@ -70,8 +70,6 @@ interface Props {
   onGoResearch: () => void
   // Which of the client's videos a saved video was filed under ("Video 3 · Street taste test", or Unsorted).
   savedIn: (id: string) => { short: string; full: string } | null
-  // Opens Research on that video, with the saved row in view.
-  onOpenInResearch: (id: string) => void
   // Formats this client can't film (e.g. needs a kitchen), so they never lead the page.
   blockedFormatIds: Set<string>
   clientName: string
@@ -92,7 +90,6 @@ export function ResultsScreen(p: Props) {
   const [draft, setDraft] = useState(p.interp.text)
   const [helpOpen, setHelpOpen] = useState(false)
   // Only show "Saved. You'll find it in Research." right after the Save button is pressed here, not for ideas saved earlier.
-  const [justSaved, setJustSaved] = useState<string | null>(null)
   // The best card's Save pill pops when clicked, like the tiles'.
   const [bestPop, setBestPop] = useState(false)
   useResultsShortcuts({
@@ -126,7 +123,7 @@ export function ResultsScreen(p: Props) {
   const platformNames = platformsText(platformCounts.map((x) => x.pl))
   // Saved to Research and not planned yet.
   const shortlisted = [...p.inResearch].filter((id) => !p.ideaStatus.has(id)).length
-  const bestSaved = best ? p.inResearch.has(best.id) && !bestStatus : false
+  const bestSaved = best ? p.inResearch.has(best.id) : false
   const i = p.interp
   const queryLabel = i.source ? '' : i.text.trim()
 
@@ -302,25 +299,22 @@ export function ResultsScreen(p: Props) {
           )}
           {best && (
             <div className="best">
-              {/* The same Save pill as the video tiles below: "+ Save", then "✓ Video 2". Gone once it has a plan. */}
+              {/* The same Save pill as the video tiles below: "+ Save", then "✓ Video 2", planned or not. */}
               <div className="best-cover">
                 <BestVideo key={best.id} video={best} onOpen={() => p.onOpen(best.id)} />
-                {!bestStatus && (
-                  <button
+                <button
                     className={`tile-save ${bestSaved ? 'tile-save-on' : ''} ${bestPop ? 'tile-save-pop' : ''}`}
                     aria-pressed={bestSaved}
                     aria-label={bestSaved ? t('find.tile.unsaveAria') : t('find.tile.saveIdea')}
                     title={bestSaved ? t('find.tile.savedTitle') : t('find.tile.saveIdea')}
                     onClick={() => {
                       setBestPop(true)
-                      setJustSaved(bestSaved ? null : best.id)
                       p.onToggleSave(best.id)
                     }}
                     onAnimationEnd={() => setBestPop(false)}
                   >
                     {bestSaved ? `✓ ${p.savedIn(best.id)?.short ?? ''}`.trim() || t('find.tile.savedShort') : t('find.tile.plusSave')}
-                  </button>
-                )}
+                </button>
               </div>
               <div className="best-body">
                 {bestTrend && <p className="best-trend">{spreadSentence(bestTrend)}.</p>}
@@ -351,18 +345,6 @@ export function ResultsScreen(p: Props) {
                     {t('find.seeWhy')}
                   </button>
                 </div>
-                {/* Saved (or planned, which keeps its Research row): say which video it's filed under. */}
-                {(bestSaved || (!!bestStatus && p.savedIn(best.id) !== null)) && (
-                  <p className="saved-where small" role={justSaved === best.id ? 'status' : undefined}>
-                    <span>
-                      {t('find.res.savedTo')}
-                      <strong>{p.savedIn(best.id)?.full ?? t('find.res.savedWhere2')}</strong>
-                    </span>
-                    <button className="link-btn" onClick={() => p.onOpenInResearch(best.id)}>
-                      {t('find.res.openInResearch')}
-                    </button>
-                  </p>
-                )}
               </div>
             </div>
           )}
@@ -394,11 +376,8 @@ export function ResultsScreen(p: Props) {
                 video={v}
                 onOpen={() => p.onOpen(v.id)}
                 onToggleSave={() => p.onToggleSave(v.id)}
-                status={p.ideaStatus.get(v.id)}
                 inResearch={p.inResearch.has(v.id)}
                 where={p.savedIn(v.id)}
-                onOpenInResearch={() => p.onOpenInResearch(v.id)}
-                cohort={p.cohorts.get(v.id)}
                 followersLoading={followersPending(v, filters)}
               />
             ))}
@@ -489,7 +468,6 @@ function BestCompare({ video }: { video: Video }) {
         <span className={`cmp-bar-this score-${tier}`} />
         <span className="cmp-bar-usual" />
       </span>
-      <span className="cmp-say">{beatUsual(video)}</span>
     </div>
   )
 }

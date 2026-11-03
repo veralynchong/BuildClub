@@ -5,7 +5,6 @@ import { sampleFitsClient } from './clientChips'
 import { clientFit, compact, formatTrend, outlierScore, stageOrder } from './metrics'
 import { t, tp } from './i18n'
 import { dateLocale } from './dates'
-import { beatUsual, beatUsualAverage } from '../components/find/words'
 import type { TrendStage } from './metrics'
 import { parseQuery } from './parseQuery'
 
@@ -100,7 +99,7 @@ export function filmNext(x: {
           key: p.label,
           name: p.label,
           video: vids[0],
-          proof: t('home.film.proofLive', { accounts: p.accounts, beat: beatUsualAverage(p.avgScore, false), views: compact(vids[0].views) }),
+          proof: t('home.film.proofLive', { accounts: p.accounts, views: compact(vids[0].views) }),
           trend: p.kind === 'sound' ? t('home.film.trendSound') : t('home.film.trendHashtag'),
           reason: t('home.film.reasonLive', { topic: x.pulse!.topic, name: client.name }),
         }
@@ -129,7 +128,7 @@ export function filmNext(x: {
         key: tr.format.id,
         name: tr.format.name,
         video: vids[0],
-        proof: tp('home.film.proofSample', tr.accounts, { views: compact(vids[0].views), beat: `${beatUsual(vids[0]).charAt(0).toLowerCase()}${beatUsual(vids[0]).slice(1)}` }),
+        proof: tp('home.film.proofSample', tr.accounts, { views: compact(vids[0].views) }),
         trend: trendPhrase(tr.stage),
         reason: [why, fit].filter(Boolean).join(' '),
       }
