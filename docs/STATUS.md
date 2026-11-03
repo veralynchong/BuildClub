@@ -1,8 +1,38 @@
 # STATUS
 
-Current (2026-11-03 AEDT): node canvas P1 (#28), P2 (#29), P3a (#30), P3b (#31) and P4 finish (#32, base feat/canvas-p3b-editor-media) are built and verified with mock models only; none is merged. Before that (2026-11-02 AEDT): fork main is at 6fe1772 with PRs #19-#25 merged (storyboard, publish, grade and subtitles UI, Settings, Chinese UI); `bash bin/verify.sh` GREEN at #25 head 7166ca5; client demo for Mercif is up (details in the private handoff).
+Current (2026-11-03 22:30 AEDT): the node canvas stack is PRs #28 → #38 → #40 → #41 (#39 Omni Flash on #38; P2.5 consistency kit in progress on `feat/canvas-p2-5-kit`), none merged. Real fal models are confirmed (Seedream 4.5, Hailuo 2.3 Fast, Omni Flash 1.1; US$0.632 spent). See the "2026-11-03 (AEDT) evening" section. Before that (2026-11-02 AEDT): fork main is at 6fe1772 with PRs #19-#25 merged (storyboard, publish, grade and subtitles UI, Settings, Chinese UI); `bash bin/verify.sh` GREEN at #25 head 7166ca5; client demo for Mercif is up (details in the private handoff).
 
 Earlier: remake phase 1 (PR #4) and 2a stage board (PR #5) are merged into fork main (2026-10-31). Phase 2b (shot checklist and real-footage takes) is merged (PR #6, 4277192, 2026-10-31). Phase 2c (edit to a publishable MP4, then Annie's approval) is split into 2c-1 and 2c-2. 2c-1 ("Make the video") is merged (PR #7, 359791c, 2026-11-01). 2c-2 (Annie approves the finished video on the no-login review link) is merged (PR #8, 27496cb, 2026-11-01) after an e2e re-run at 1440 and 390 (35/35 each). Phase 2 (2a-2c) is done. `bash bin/verify.sh` GREEN on the merged tree (2026-11-01).
+
+## 2026-11-03 (AEDT) evening: Canvas entry, fix batches, main merge, real models
+- Decisions (user, 2026-11-03):
+  - Video content is English only (Australian market). Chinese is only the UI display language, for faster testing. No Mandarin voice, Chinese fillers or Simplified/Traditional caption work.
+  - Gemini is not used for now; storyboard images use Seedream 4.5 (fal). The Gemini key's project is still on the free tier (429, `free_tier limit: 0` for `gemini-3.1-flash-image`).
+  - fal prepaid US$10 on 2026-11-03; keep paid runs small and quoted.
+- PRs opened (all open, none merged; merge order #28 → … → #38 → #40 → #41, #39 stacks on #38):
+  - #37 `fix/canvas-ux-batch5`: sidebar **Canvas** item after Plans. One approved plan opens its canvas; several show a chooser (soonest due first); none explains and links to Plans. Headless check at 1440 PASS (2-plan path).
+  - #38 `fix/canvas-ux-batch6`: clean-up with no speech / nothing to cut shows the neutral note (auto-dismiss) instead of red; export popover closes on Escape and outside press; a text added at the timeline end keeps 2 s; no "@@handle" on Compare. Headless check at 1440 PASS (no-speech path via a stubbed 422).
+  - #39 `fix/replace-veo-with-omni-flash`: Veo 3.1 Fast → Gemini Omni Flash 1.1 (fal Veo endpoint retires 2026-11-17).
+  - #40 `chore/integrate-main-shotboard`: merges Veralyn's main (45a1cfb planning flow, ShotBoard, new Plans card, `planDueDate`) into the canvas stack.
+  - #41 `fix/e2e-real-clip-findings`: six fixes from an end-to-end run with a real AI clip (a plan whose video left the library still shows and opens its canvas; "waiting for review" line on the card and Home; export button states; Captions step tick; canvas load errors; review-link message points to Plans).
+- Full mock-only UI pass (1440, port 8871, 2026-11-03): 34 items, 1 fail (clean-up no-speech red alert, fixed in #38). #36 B8 items all PASS in the browser. Open, needing a user decision: plans from sample Research rows are hidden from the Plans board in Live mode (`shownIdeas`, App.tsx); filter "Reset" keeps a hidden "Views: 1M+" default (header 15 vs 42). Left to the front-end owner: editor not truly full screen, right panel clipped at 900 px high, export popover covers the tool tabs while open, Post button placement.
+- Real paid models (fal only), 2026-11-03, temporary servers on 8873 with tight caps, all stopped afterwards:
+  - Seedream 4.5 storyboard: done, 2304x4096 (9:16), US$0.04. The "top-down" prompt came out as an angled shot.
+  - Hailuo 2.3 Fast 6 s from that frame: done, 768x1364, 5.9 s, 24 fps, US$0.192. Then the whole flow with that clip (canvas → editor → export 1080x1920 → send → Annie approves) passed 5/5 with caps at 0.
+  - Omni Flash 1.1 4 s from the same frame (#39 backend): done, 720x1280, 4.03 s, 24 fps, H.264 + AAC (always has audio), US$0.40. First frame matches the start image.
+  - Nano Banana 2: 429 every time (free tier), all holds refunded.
+  - Total spent: US$0.632; about US$9.37 of the US$10 fal balance left. Refunds worked on every failure.
+- P2.5 consistency kit (another session, branch `feat/canvas-p2-5-kit`): spec `pivots/02-content/docs/specs/2026-11-03-consistency-kit-design.md` (draft, awaiting the user's approval) and plan; backend Tasks 1-3 committed (kit storage and routes, N references with a kit prompt prefix). Real test planned at about US$1.28, needs the user's OK.
+- Figma: page "Current build — integration (ad0482e)" for the teammate, 12 frames with "Backend already does" / "Front end is free to change" notes: https://www.figma.com/design/3qLG6XMnJ4kxKT6sWQFH0v?node-id=123-2 . Not sent; the user sends it.
+- Known problems: three sessions shared the `canvas-p1` worktree today (it is now on `feat/canvas-p2-5-kit`); use one worktree per session. Test videos were copied to `/Volumes/Huang T7/playwright-mcp/fx/` (a do-not-touch folder); the user decides whether to delete them. `npm run lint` errors only in the untracked `render/experiment/`.
+- Last verification (2026-11-03 22:40): `bash bin/verify.sh` GREEN at the #41 head 039a55e; #38: tsc clean, unit 357/357.
+- Next steps:
+  1. The user fills `ELEVENLABS_VOICE_ID` (English, Australian if possible), then one voiceover test (about US$0.01).
+  2. The user approves the P2.5 spec and its paid test (about US$1.28); the kit session finishes the front end and mock E2E.
+  3. The user shoots 2-3 English takes on an iPhone and runs upload → Clean up → editor → export → send.
+  4. Real-person test of D1/D2 with 2-3 people (script https://claude.ai/artifact/47VyReWUgStxBAkUPddq2x).
+  5. User decisions: Live-mode sample plans, filter Reset default, merge of #28-#41, the untracked `pivots/02-content/{docs/retros,research/reports,research/research_notes}`.
+  6. Optional, free: mark Gemini models "needs billing" in the model menu while the key is on the free tier; consider muting AI clips by default since Omni Flash always has audio.
 
 ## 2026-11-03 (AEDT): node canvas P1 + P2 (real AI models)
 - P1 (canvas skeleton, mock models only) is PR #28 to veralynchong/BuildClub (branch `feat/node-canvas-p1`, head 7db7614). It is open and not merged; it waits for the user to say merge.
@@ -36,11 +66,8 @@ Earlier: remake phase 1 (PR #4) and 2a stage board (PR #5) are merged into fork 
   - Fix batch 3 (user picked the designs): D1 "Make the video" button on the plan page and the approved card, plus a 5-step bar (Clips, Captions, Logo, Export, Send) in the editor; D2 full-screen editor with "Back to canvas" (keeps the canvas viewport) and Export and send in a top-bar popover, replacing the side drawer; B6 nodes added from a shot's "+" go to a free row and are fitted into view; B7 logo size (small/medium/large) and corner, defaults equal the old look. On `fix/canvas-ux-batch3`, base `fix/canvas-ux-batch2`. verify GREEN, browser re-test at 1440 passed (2026-11-03). Every item in the UX report's suggested order is now done.
   - Fix batch 4 (B8) on `fix/canvas-ux-batch4`, base `fix/canvas-ux-batch3`, PR #36, not merged (2026-11-03): a sent-back video cannot be sent again until re-exported (backend 409 `SENT_BACK` + UI line); cache-only `/api/search` and `/api/search/types` misses return empty 200 instead of 404; a plan made from a Research row starts with its client video's due date (user's choice), else today + 14. verify GREEN at 0572a70; no browser re-test yet. `npm run lint` errors only in untracked `render/experiment/`.
   - Real-person test script for D1/D2 (2026-11-03, not run yet): https://claude.ai/artifact/47VyReWUgStxBAkUPddq2x. User chose: no merge of #28-#36 for now.
-- Next steps:
-  1. The user adds `FAL_KEY` and `GEMINI_API_KEY` to .env, then a paid smoke test (about US$0.45, cap US$1).
-  2. Decide on the consistency research proposals (Artifact https://claude.ai/artifact/GcK6aCdw7L3XUn5fsAbMUu): replace Veo 3.1 with Gemini Omni Flash 1.1 (the fal Veo reference endpoint retires 2026-11-17), add Nano Banana 2.1, and P2.5 "consistency kit" node.
-  3. Merge PR #28, then the P2 PR (user's call).
-  4. Parked from review: refund counted on the refund day, not the spend day (M1); stale docs (spec §3, README, .env.example, decision-log gpt-image-1).
+- Next steps (afternoon; items 1-2 superseded by the evening section): keys added and the smoke test run; Veo replaced (#39), P2.5 in progress; merge is the user's call.
+  - Parked from review: refund counted on the refund day, not the spend day (M1); stale docs (spec §3, README, .env.example, decision-log gpt-image-1).
 
 ## 2026-11-02 (AEDT): phase 3 from Mercif feedback
 PRs merged into veralynchong/BuildClub main (#18-#26):
