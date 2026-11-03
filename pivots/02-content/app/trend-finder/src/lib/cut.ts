@@ -28,6 +28,8 @@ export interface CutState {
   options?: CutOptions
   // What the auto-cut removed from the last video; absent for videos made before it was recorded.
   autoCut?: AutoCut
+  // Which maker produced the video: the automatic cut or the canvas editor.
+  source?: 'auto' | 'editor'
 }
 
 // Same limits and copy as backend/renders.py.

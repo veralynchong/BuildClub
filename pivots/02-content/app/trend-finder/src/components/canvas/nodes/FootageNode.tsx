@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { t } from '../../../lib/i18n'
 import { formatSize } from '../../../lib/takes'
+import { ClipActions, ClipGrip } from './ClipActions'
 import { useCanvas } from './ctx'
 import { PortLabels, Ports } from './Ports'
 import type { CvNodeProps } from './types'
@@ -33,6 +34,7 @@ export function FootageNode({ id, data: { node } }: CvNodeProps) {
         <ul className="cv-takes nodrag nowheel" aria-label={t('canvas.footage.takes')}>
           {mine.map((x) => (
             <li key={x.id} className={x.chosen ? 'is-chosen' : undefined}>
+              <ClipGrip src={{ kind: 'take', id: x.id, shotId: node.shotId }} />
               <span className="cv-take-name small" title={x.name}>{x.name}</span>
               <span className="small muted">{formatSize(x.size)}</span>
               {x.chosen ? (
@@ -46,6 +48,7 @@ export function FootageNode({ id, data: { node } }: CvNodeProps) {
           ))}
         </ul>
       )}
+      {chosen && <ClipActions grip={false} src={{ kind: 'take', id: chosen.id, shotId: gone ? undefined : node.shotId }} />}
       <input
         ref={input}
         type="file"
