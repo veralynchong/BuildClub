@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { kitRefs, wireKit, pruneKit, kitStale } from '../src/lib/canvas/kit.ts'
+import { kitRefs, wireKit, pruneKit, kitStale, kitTargets, syncKit } from '../src/lib/canvas/kit.ts'
 import { checkImage } from '../src/lib/canvas/upload.ts'
 import { getKit, createKitItem, updateKitItem, deleteKitItem, addKitImage, deleteKitImage, kitFileUrl } from '../src/lib/canvas/api.ts'
 
@@ -223,4 +223,32 @@ test('checkImage takes a per-call size limit', () => {
   const f = { name: 'a.png', type: 'image/png', size: 11 * 1024 * 1024 }
   assert.equal(checkImage(f), null) // canvas limit is 20 MB
   assert.equal(checkImage(f, 10 * 1024 * 1024), 'canvas.upload.tooBig')
+})
+
+test('kitTargets lists the storyboards a kit node feeds', () => {
+  const doc = { nodes: [node('kit', 'kit'), node('a', 'storyboard'), node('b', 'storyboard')], edges: [edge('kit', 'a', 'in:kit'), edge('kit', 'b', 'in:text')] }
+  assert.deepEqual(kitTargets(doc, 'kit'), ['a'])
+})
+
+test('syncKit prunes, wires and dates a storyboard whose item changed or is gone', () => {
+  const doc = {
+    nodes: [node('kit', 'kit', { kitItems: ['k_mia', 'k_gone'] }), node('sb', 'storyboard', { selected: 'g1' }), node('vid', 'video')],
+    edges: [edge('sb', 'vid', 'in:start')],
+  }
+  const g = gen('g1', 'sb', 'done', 1, { kitStamp: { k_mia: 100, k_gone: 100 }, references: [{ source: 'kit', itemId: 'k_gone', name: 'Old' }] })
+  const gv = gen('g2', 'vid')
+  const out = syncKit(doc, { items: [item('k_mia', 'character', 'Mia', [], 200)] }, [g, gv])
+  assert.deepEqual(out.doc.nodes.find((n) => n.id === 'kit').data.kitItems, ['k_mia'])
+  assert.equal(out.doc.edges.filter((e) => e.targetHandle === 'in:kit').length, 1)
+  assert.equal(out.doc.nodes.find((n) => n.id === 'sb').data.stale, true)
+  assert.equal(out.doc.nodes.find((n) => n.id === 'vid').data.stale, true)
+  assert.deepEqual(out.removed, { sb: ['Old'] })
+})
+
+test('syncKit returns the same doc when nothing changes', () => {
+  const doc = { nodes: [node('kit', 'kit', { kitItems: ['k_mia'] }), node('sb', 'storyboard')], edges: [edge('kit', 'sb', 'in:kit')] }
+  const out = syncKit(doc, { items: [mia] }, [])
+  assert.equal(out.doc, doc)
+  assert.deepEqual(out.removed, {})
+  assert.equal(syncKit(doc, null, []).doc, doc)
 })

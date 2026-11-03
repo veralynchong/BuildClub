@@ -156,6 +156,14 @@ export const en = {
   "canvas.kit.panel.err.load": "Couldn't load the kit.",
   "canvas.kit.panel.err.save": "Couldn't save the kit.",
   "canvas.kit.panel.err.upload": "Couldn't upload the image.",
+  "canvas.kit.dropped": "This model takes at most {max} images, so these weren't sent: {names}",
+  "canvas.kit.unused": "This model takes no reference images, so the kit isn't sent.",
+  "canvas.kit.removed": "{names} was removed from the kit.",
+  "canvas.kit.pick": "Kit for this shot",
+  "canvas.kit.sent": "What the model got",
+  "canvas.kit.node.edit": "Edit kit",
+  "canvas.kit.node.empty": "No kit items picked.",
+  "canvas.kit.node.unavailable": "The kit couldn't be loaded.",
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -314,4 +322,12 @@ export const zhHant: Record<keyof typeof en, string> = {
   "canvas.kit.panel.err.load": "無法載入套組。",
   "canvas.kit.panel.err.save": "無法儲存套組。",
   "canvas.kit.panel.err.upload": "無法上傳圖片。",
+  "canvas.kit.dropped": "這個模型最多 {max} 張，這次沒帶：{names}",
+  "canvas.kit.unused": "這個模型不收參考圖，所以不會帶套組。",
+  "canvas.kit.removed": "{names} 已從套組刪除。",
+  "canvas.kit.pick": "這一鏡用的套組",
+  "canvas.kit.sent": "模型實際收到的內容",
+  "canvas.kit.node.edit": "編輯套組",
+  "canvas.kit.node.empty": "還沒有選套組項目。",
+  "canvas.kit.node.unavailable": "無法載入套組。",
 }

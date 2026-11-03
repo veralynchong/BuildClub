@@ -1,5 +1,5 @@
 import type { Kit, KitItem, KitKind } from '../../types.ts'
-import { selectedGen } from './graph.ts'
+import { selectedGen, staleIds } from './graph.ts'
 import type { CanvasDoc, CanvasEdge, CanvasNode, GenModel, Generation } from './types.ts'
 
 // A reference as the app sends it. A kit ref without `image` is text only: it adds the item's line to the prompt (a
@@ -109,4 +109,25 @@ export function kitStale(doc: CanvasDoc, gens: Generation[], kit: Kit | null): K
     if (stale) out.push({ nodeId: n.id, removed })
   }
   return out
+}
+
+// The storyboards that have a line from this kit node on their in:kit port.
+export function kitTargets(doc: CanvasDoc, kitNodeId: string): string[] {
+  return doc.edges.filter((e) => e.source === kitNodeId && e.targetHandle === 'in:kit').map((e) => e.target)
+}
+
+// What a loaded (or changed) kit does to the canvas: forget deleted items, wire storyboards that lack a kit line, and
+// date every storyboard (and the videos after it) whose shown version used an item that has changed since or is gone.
+// `removed` maps a storyboard to the names of the deleted items it used. Returns the same doc when nothing changed.
+export function syncKit(doc: CanvasDoc, kit: Kit | null, gens: Generation[]): { doc: CanvasDoc; removed: Record<string, string[]> } {
+  let next = wireKit(pruneKit(doc, kit))
+  const removed: Record<string, string[]> = {}
+  const ids = new Set<string>()
+  for (const s of kitStale(next, gens, kit)) {
+    if (s.removed.length) removed[s.nodeId] = s.removed
+    for (const id of staleIds(next, s.nodeId, gens, true)) ids.add(id)
+  }
+  const fresh = next.nodes.filter((n) => ids.has(n.id) && !n.data.stale)
+  if (fresh.length) next = { ...next, nodes: next.nodes.map((n) => (ids.has(n.id) && !n.data.stale ? { ...n, data: { ...n.data, stale: true } } : n)) }
+  return { doc: next, removed }
 }
