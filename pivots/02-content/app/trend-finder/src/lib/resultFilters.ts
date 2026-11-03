@@ -24,9 +24,11 @@ export const FOLLOWERS_OPTIONS: FollowersMax[] = [0, 5_000, 50_000, 1_000_000]
 export const WITHIN_OPTIONS: UploadWithin[] = [7, 30, 90, 365, 0]
 export const LENGTH_OPTIONS: LengthBand[] = ['short', 'mid', 'long', 'any']
 
+// On by default: 1M+ views from accounts under 50K followers (small accounts with big views: the agency's
+// "1-to-10" rule). Both show as removable chips marked "default".
 export const DEFAULT_FILTERS: ResultFilters = {
   viewsMin: 1_000_000,
-  followersMax: 0,
+  followersMax: 50_000,
   smallBig: false,
   brokeOut: false,
   within: 0,
@@ -101,6 +103,13 @@ export function activeFilters(f: ResultFilters): ActiveFilter[] {
   if (f.length !== 'any') out.push('length')
   if (f.types.length > 0) out.push('types')
   return out
+}
+
+// True when this active filter is still at its default value (its chip says "default").
+export function isDefaultFilter(which: ActiveFilter, f: ResultFilters): boolean {
+  if (which === 'views') return f.viewsMin === DEFAULT_FILTERS.viewsMin
+  if (which === 'followers') return f.followersMax === DEFAULT_FILTERS.followersMax
+  return false
 }
 
 export function clearFilter(f: ResultFilters, which: ActiveFilter): ResultFilters {

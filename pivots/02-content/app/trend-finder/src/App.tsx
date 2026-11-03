@@ -59,6 +59,10 @@ import type { Pulse } from './lib/clientChips'
 import { isOnSearchPage } from './lib/searchStatus'
 import { LiveLoading } from './components/LiveLoading'
 import { SearchToast, type SearchNotice } from './components/SearchToast'
+import { SavedToast } from './components/find/SavedStrip'
+import { SEARCH_RUNS_KEY, cleanRuns, recentSearches, recordSearch, runFor, savedByVideo, typeAhead } from './lib/findDesk'
+import type { RecentRow, SearchRun } from './lib/findDesk'
+import { suggest } from './lib/suggest'
 import { withScreenTransition } from './lib/motion'
 import { htmlLang, readLang, setActiveLang, t, writeLang } from './lib/i18n'
 import type { Key, Lang, Vars } from './lib/i18n'
@@ -159,7 +163,8 @@ export default function App() {
   // Save to Research waiting on "Which video is this for?". `onSaved` runs only once it's saved (not on Cancel).
   // Research opens with this row in view (from Find ideas' "Open in Research").
   const [researchFocus, setResearchFocus] = useState<string | null>(null)
-  const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void } | null>(null)
+  // `move`: the video is already saved; picking a video re-files it (the saved toast's Change).
+  const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void; move?: boolean } | null>(null)
   const [planIdeaId, setPlanIdeaId] = useState<string | null>(null)
   const [canvasEditor, setCanvasEditor] = useState(false) // the canvas opens with the editor showing
   // The screen a plan was opened from, so Back returns there.
@@ -177,6 +182,14 @@ export default function App() {
   // Which client and search the results screen currently shows, so "Back to results" knows if it must search again.
   const [shownSearch, setShownSearch] = useState<string | null>(null)
   const [ideas, setIdeas] = useSavedIdeas()
+  // Find ideas' recent searches (this browser only): each search with the videos it found, to say what's new.
+  const [searchRunsRaw, setSearchRuns] = useStored<SearchRun[]>(SEARCH_RUNS_KEY, [])
+  const searchRuns = useMemo(() => cleanRuns(searchRunsRaw), [searchRunsRaw])
+  // A search whose results just went on screen, recorded once the results are worked out (see the effect below).
+  const [toRecord, setToRecord] = useState<{ clientId: string; text: string; platforms: Platform[] } | null>(null)
+  // The last save from Find ideas, for the "Saved to Video 2" toast with Change and Undo.
+  const [savedNote, setSavedNote] = useState<{ videoId: string } | null>(null)
+  const dismissSaved = useCallback(() => setSavedNote(null), [])
   // The Research tab's rows (reference videos), every client's. Find ideas saves here; "Plan it" makes a plan.
   const [research, setResearch] = useResearch()
   const [researchSlots, setResearchSlots] = useResearchSlots()
@@ -602,7 +615,7 @@ export default function App() {
     await runLiveSearch(like.keywords[0], source ? { source, formatId: format.id } : undefined)
   }
 
-  const runLiveSearch = async (text: string, like?: { source: MediaSource; formatId: string }) => {
+  const runLiveSearch = async (text: string, like?: { source: MediaSource; formatId: string }, usePlatforms?: Platform[]) => {
     if (!like && /https?:\/\//.test(text)) {
       void runLinkSearch(text)
       return
@@ -611,7 +624,7 @@ export default function App() {
     // Send the platform the meaningful words; time, platform and length words become filters instead.
     const q = ([...parsed.keywords, ...parsed.topics.map((t) => t.word)].join(' ') || text).trim()
     // Platforms named in the text ("on instagram") win over the toggles.
-    const platforms = parsed.platforms?.length ? parsed.platforms : query.platforms
+    const platforms = parsed.platforms?.length ? parsed.platforms : (usePlatforms ?? query.platforms)
     if (!q) return
     const seq = ++searchSeq.current
     setSearchError(null)
@@ -676,6 +689,8 @@ export default function App() {
         setFormatFilter(null)
         setLastSearches((prev) => ({ ...prev, [client.id]: text }))
         setShownSearch(`${client.id}|${text}`)
+        // Searches started from a link or screenshot can't be run again from words alone, so they aren't listed.
+        if (!like) setToRecord({ clientId: client.id, text, platforms })
         if (res.pending.length) void fillScores(q, res.pending)
         setView('results')
       }
@@ -722,10 +737,12 @@ export default function App() {
     setScoring((s) => (s === q ? null : s))
   }
 
-  const runSearch = (text: string) => {
+  // `usePlatforms`: run on these platforms instead of the toggles (a recent search opened again).
+  const runSearch = (text: string, usePlatforms?: Platform[]) => {
+    if (usePlatforms) setQuery((q) => ({ ...q, platforms: usePlatforms }))
     if (live) {
       // One live search at a time (the search button is disabled meanwhile; this covers Enter, chips and voice).
-      if (!searching) void runLiveSearch(text)
+      if (!searching) void runLiveSearch(text, undefined, usePlatforms)
       return
     }
     // Screenshot attachments are switched off for now; pasted video links still work in sample mode.
@@ -739,16 +756,18 @@ export default function App() {
       setReading(media.source)
       return
     }
+    const platforms = next.platforms ?? usePlatforms ?? query.platforms
     setQuery((q) => ({
       ...q,
       keyword: text,
       days: next.days ?? q.days,
-      platforms: next.platforms ?? q.platforms,
+      platforms,
       maxLength: next.maxLength ?? q.maxLength,
     }))
     setFormatFilter(null)
     setLastSearches((prev) => ({ ...prev, [client.id]: text }))
     setShownSearch(`${client.id}|${text}`)
+    setToRecord({ clientId: client.id, text, platforms })
     setView('results')
   }
 
@@ -858,6 +877,13 @@ export default function App() {
 
   const answer = useMemo(() => (live ? liveAnswer : buildAnswer(interp, results, trends)), [interp, results, trends, live, liveAnswer])
 
+  // Record a search once its results are on screen: the videos it found, to say next time what's new.
+  useEffect(() => {
+    if (!toRecord) return
+    setSearchRuns((prev) => recordSearch(cleanRuns(prev), { ...toRecord, resultIds: results.map((v) => v.id), by: account?.name }))
+    setToRecord(null)
+  }, [toRecord, results, account, setSearchRuns])
+
   // Live mode shows only ideas saved from real videos; sample mode only sample ones. Videos added to Research
   // by link are the team's own, so their plans show in both.
   const shownIdeas = ideas.filter((i) => Boolean(videoById.get(i.videoId)?.live) === live || i.videoId.startsWith('link-'))
@@ -947,7 +973,22 @@ export default function App() {
     breakDown(videoId)
     const row = { ...entryFromVideo(client.id, v, 'search'), ...(slotId ? { slotId } : {}) }
     setResearch((prev) => (prev.some((e) => e.id === row.id) ? prev : [...prev, row]))
+    // On Find ideas, a toast says where it went (Change, Undo) and the strip at the bottom lights that video.
+    const at = here.current.view
+    if (at === 'results' || at === 'search') setSavedNote({ videoId })
   }
+
+  // The toast's Change: file an already saved video under another of the client's videos (or Unsorted).
+  const moveSaved = (videoId: string, slotId: string | null) =>
+    setResearch((prev) =>
+      prev.map((e) => {
+        if (e.clientId !== client.id || e.videoId !== videoId) return e
+        const next = { ...e }
+        if (slotId) next.slotId = slotId
+        else delete next.slotId
+        return next
+      }),
+    )
 
   const myVideos = researchSlots.filter((s) => s.clientId === client.id).sort((a, b) => a.number - b.number)
   // Where a saved video sits in Research: short "Video 3" and full "Video 3 · Street taste test" (or Unsorted).
@@ -981,8 +1022,10 @@ export default function App() {
 
   // The Save button: on, it's a Research row; pressed again (and not planned yet), the row comes off.
   const toggleSave = (videoId: string) => {
-    if (inResearch.has(videoId)) removeResearch(researchId(client.id, videoId))
-    else askSave(videoId)
+    if (inResearch.has(videoId)) {
+      removeResearch(researchId(client.id, videoId))
+      setSavedNote((n) => (n?.videoId === videoId ? null : n))
+    } else askSave(videoId)
   }
 
   // A saved video can lack its breakdown (saved before one existed); fetch it when opened.
@@ -1178,6 +1221,44 @@ export default function App() {
   const planFormat = planVideo && formatById.get(planVideo.formatId)
   const planClient = planIdea && clients.find((c) => c.id === planIdea.clientId)
   const mine = shownIdeas.filter((i) => i.clientId === client.id)
+
+  // Find ideas' desk: recent searches, what's saved by video, and what the results screen marks as new.
+  const recentRows: RecentRow[] = recentSearches(searchRuns, client.id, inResearch)
+  const savedRows = savedByVideo(myVideos, myResearch, ideas)
+  const shownRun = view === 'results' ? runFor(searchRuns, client.id, lastSearch) : undefined
+  const savedRow = savedNote ? myResearch.find((e) => e.videoId === savedNote.videoId) : undefined
+  const savedWhere = savedRow ? savedIn(savedRow.videoId)?.full : undefined
+  const justSaved = savedRow ? (myVideos.some((v) => v.id === savedRow.slotId) ? savedRow.slotId! : 'unsorted') : null
+  const topic = clientTopic(client)
+  const askExample = topic ? t('find.desk.ways.askExample', { topic }) : undefined
+  // The drop-down under the search box: this client's searches, common searches (the server's past searches
+  // live; refinements of the sample data otherwise), searches from the brief, and the same words as a question.
+  const suggestFor = (text: string, past: string[]) => {
+    const offered = live ? [] : suggest(text, formats, videos)
+    const typed = text.trim()
+    // The same words as a question, once the last word looks finished (3+ letters), so "tofu d" isn't asked.
+    const lastWord = typed.split(/\s+/).pop() ?? ''
+    const asQuestion = lastWord.length >= 3 && !/\?$/.test(typed) && !offered.some((x) => x.kind === 'question')
+    return typeAhead(text, {
+      recent: searchRuns.filter((r) => r.clientId === client.id).map((r) => r.text),
+      searches: [
+        ...past.map((q) => ({ label: q, value: q })),
+        ...offered.filter((x) => x.kind === 'refine').map((x) => ({ label: x.value, value: x.value })),
+      ],
+      brief: [
+        ...chipGroups.flatMap((g) => g.chips.map((c) => ({ label: c.label, value: c.value, hint: c.hint }))),
+        ...client.examples.map((e) => ({ label: e, value: e })),
+      ],
+      questions: [
+        ...offered.filter((x) => x.kind === 'question').map((x) => x.value),
+        ...(asQuestion ? [t('find.desk.ways.askExample', { topic: typed })] : []),
+      ],
+    })
+  }
+  const openRecent = (row: RecentRow) => {
+    setQuery((q) => ({ ...q, keyword: row.run.text }))
+    runSearch(row.run.text, row.run.platforms)
+  }
   const blockedFormatIds = new Set(
     [...formatById.values()].filter((f) => f.needs.some((n) => client.cannot.includes(n))).map((f) => f.id),
   )
@@ -1470,6 +1551,13 @@ export default function App() {
               target={client.monthlyTarget}
               lastSearch={lastSearch}
               onBackToResults={backToResults}
+              recent={recentRows}
+              onOpenRecent={openRecent}
+              saved={savedRows}
+              coverOf={(id) => videoById.get(id)?.thumbnail}
+              onOpenResearch={() => setView('research')}
+              suggestFor={suggestFor}
+              askExample={askExample}
             />
           )}
 
@@ -1533,6 +1621,11 @@ export default function App() {
               onGoResearch={() => setView('research')}
               savedIn={savedIn}
               blockedFormatIds={blockedFormatIds}
+              newIds={new Set(shownRun?.newIds ?? [])}
+              newSince={shownRun?.prevAt}
+              saved={savedRows}
+              justSaved={justSaved}
+              suggestFor={suggestFor}
             />
           )}
 
@@ -1686,7 +1779,10 @@ export default function App() {
           slots={myVideos}
           onCancel={() => setPendingSave(null)}
           onPick={(slotId) => {
-            saveToResearch(pendingSave.videoId, slotId ?? undefined)
+            if (pendingSave.move) {
+              moveSaved(pendingSave.videoId, slotId)
+              setSavedNote({ videoId: pendingSave.videoId })
+            } else saveToResearch(pendingSave.videoId, slotId ?? undefined)
             pendingSave.onSaved?.()
             setPendingSave(null)
           }}
@@ -1720,6 +1816,17 @@ export default function App() {
 
       {reading && <ReadingOverlay source={reading} onDone={finishReading} />}
       {notice && <SearchToast notice={notice} onDismiss={() => setNotice(null)} />}
+      {savedNote && inClient && (view === 'results' || view === 'search') && savedWhere && (
+        <SavedToast
+          where={savedWhere}
+          onChange={myVideos.length ? () => setPendingSave({ videoId: savedNote.videoId, move: true }) : undefined}
+          onUndo={() => {
+            removeResearch(researchId(client.id, savedNote.videoId))
+            setSavedNote(null)
+          }}
+          onDismiss={dismissSaved}
+        />
+      )}
     </div>
     </AppContext.Provider>
   )

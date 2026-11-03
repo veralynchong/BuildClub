@@ -15,11 +15,13 @@ interface Props {
   where?: { short: string; full: string } | null
   // A followers filter is on and this video's followers aren't known yet, so it was kept rather than dropped.
   followersLoading?: boolean
+  // Not in this search's previous run: a small "New" pin on the cover.
+  isNew?: boolean
 }
 
 // One video in the results grid. Under the cover, only four things: followers → views (laid out like the
 // Best to copy card), the title, the account, and a link to the video itself.
-export function VideoTile({ video, onOpen, onToggleSave, inResearch, followersLoading, where }: Props) {
+export function VideoTile({ video, onOpen, onToggleSave, inResearch, followersLoading, where, isNew }: Props) {
   // The button pops only when it's clicked, not when a tile shows up already saved.
   const [pop, setPop] = useState(false)
   const saved = Boolean(inResearch)
@@ -31,7 +33,10 @@ export function VideoTile({ video, onOpen, onToggleSave, inResearch, followersLo
   return (
     <article className="tile">
       <button className="tile-main" data-video-id={video.id} onClick={onOpen} aria-label={t('find.tile.openAria', { hook: video.hook, handle: video.handle })}>
-        <Thumb video={video} preview />
+        <span className="fd-cover">
+          <Thumb video={video} preview />
+          {isNew && <span className="fd-newpin">{t('find.tile.new')}</span>}
+        </span>
         <div className="tile-body">
           <span className="best-compare tile-cmp">
             <span className="cmp-num cmp-from">{fromNum}</span>

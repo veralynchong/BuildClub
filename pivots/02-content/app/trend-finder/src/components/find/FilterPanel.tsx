@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { t } from '../../lib/i18n'
 import type { Key } from '../../lib/i18n'
 import type { Sort } from '../../state'
@@ -7,7 +8,7 @@ import { CONTENT_TYPES } from '../../types'
 import { contentTypeLabel } from './words'
 import {
   DEFAULT_FILTERS, FOLLOWERS_OPTIONS, LENGTH_OPTIONS, VIEWS_OPTIONS, WITHIN_OPTIONS,
-  activeFilters, clearFilter, relaxHint, toggleType, typeCounts, RELAXED_VIEWS,
+  activeFilters, clearFilter, isDefaultFilter, relaxHint, toggleType, typeCounts, RELAXED_VIEWS,
   type ActiveFilter, type ResultFilters,
 } from '../../lib/resultFilters'
 
@@ -136,25 +137,33 @@ export function FilterButtonPanel({ filters, setFilters, sort, setSort, videos }
   )
 }
 
-// Removable chips for the filters that are on, plus the one-click hint when too few videos are left.
-export function FilterChips({ filters, setFilters, kept }: { filters: ResultFilters; setFilters: (f: ResultFilters) => void; kept: number }) {
+// Removable chips for the filters that are on (a filter still at its default says "default"), "Clear all" when
+// more than one is on, then `extra` (the Filters button), plus the one-click hint when too few videos are left.
+export function FilterChips({ filters, setFilters, kept, extra }: { filters: ResultFilters; setFilters: (f: ResultFilters) => void; kept: number; extra?: ReactNode }) {
   const active = activeFilters(filters)
   const hint = relaxHint(kept, filters)
-  if (active.length === 0) return null
+  if (active.length === 0 && !extra) return null
   return (
     <div className="fp-chips">
       <div className="fp-chip-row">
         {active.map((which) => {
           const label = chipLabel(which, filters)
           return (
-            <span key={which} className="q-chip">
+            <span key={which} className="q-chip fd-fchip">
               {label}
+              {isDefaultFilter(which, filters) && <em className="fd-dflt">{t('find.filter.default')}</em>}
               <button type="button" className="q-chip-x" aria-label={t('find.filter.removeChip', { label })} onClick={() => setFilters(clearFilter(filters, which))}>
                 ✕
               </button>
             </span>
           )
         })}
+        {extra}
+        {active.length > 1 && (
+          <button type="button" className="link-btn fd-clear" onClick={() => setFilters(DEFAULT_FILTERS_CLEARED)}>
+            {t('find.filter.clearAll')}
+          </button>
+        )}
       </div>
       {hint && (
         <p className="fp-hint" role="status">
@@ -168,4 +177,5 @@ export function FilterChips({ filters, setFilters, kept }: { filters: ResultFilt
   )
 }
 
-const DEFAULT_FILTERS_CLEARED: ResultFilters = { ...DEFAULT_FILTERS, viewsMin: 0 }
+// Every filter off (the defaults only switch on views and followers).
+const DEFAULT_FILTERS_CLEARED: ResultFilters = { ...DEFAULT_FILTERS, viewsMin: 0, followersMax: 0 }
