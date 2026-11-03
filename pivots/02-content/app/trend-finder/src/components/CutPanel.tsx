@@ -72,7 +72,7 @@ export function CutPanel({ ideaId, status, shotCount, takesRevision = 0, onOpenC
   }
 
   const review = cut?.review ?? null
-  const canSend = approved && !cut?.stale && !active && review?.status !== 'waiting' && review?.status !== 'approved'
+  const canSend = approved && !cut?.stale && !active && review?.status !== 'waiting' && review?.status !== 'approved' && review?.status !== 'rejected'
   // A reopened plan is hidden from the approver, so a waiting review must not promise that they will see it.
   const line = !approved && review?.status === 'waiting' ? t('cut.panel.hidden', { name: manager }) : reviewLine(review, manager, formatDay)
 
@@ -137,6 +137,7 @@ export function CutPanel({ ideaId, status, shotCount, takesRevision = 0, onOpenC
           {cut?.source === 'editor' && <p className="small muted">{t('cut.panel.editorMade')}</p>}
           {line && <p className="small cut-review-line">{line}</p>}
           {review?.status === 'rejected' && review.reason && <p className="quote">{review.reason}</p>}
+          {review?.status === 'rejected' && !cut?.stale && <p className="muted small">{t('cut.panel.sentBackExport', { name: manager })}</p>}
         </div>
       )}
     </section>
