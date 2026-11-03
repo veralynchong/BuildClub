@@ -1196,6 +1196,43 @@ def test_mock_image_shows_ref_count(gen):
     assert "3 refs" in gen.get(f"/api/ideas/ia/gen/{gid}/file").text
 
 
+def test_chain_with_kit_refs(real):
+    chain_canvas()
+    mia = kit_item(real)
+    r = chain(real, references=[kref(mia)])
+    assert r.status_code == 201
+    image, video = r.json()["image"]["inputs"], r.json()["video"]["inputs"]
+    ref = image["references"][0]
+    assert ref["source"] == "kit" and ref["name"] == "Mia"
+    assert (server.MEDIA_DIR / "ia" / "gen" / ref["file"]).is_file()
+    assert image["kitStamp"] == {mia["id"]: mia["updatedAt"]}
+    assert image["sentPrompt"].startswith("Reference images:") and image["sentPrompt"].endswith("a tofu bar")
+    assert video["references"] == []
+    assert chain(real, references=[kref(mia)], videoReference="x").status_code == 422
+    assert chain(real, references=[kref(mia)], reference="x").status_code == 422
+
+
+def test_chain_quote_unchanged_by_refs(real):
+    chain_canvas()
+    mia = kit_item(real)
+    plain = chain(real, confirm=False).json()
+    with_refs = chain(real, confirm=False, references=[kref(mia)]).json()
+    assert plain["total"] == with_refs["total"] and plain["items"] == with_refs["items"]
+    assert real.spent == []
+    assert not (server.MEDIA_DIR / "ia" / "gen").exists() or not list((server.MEDIA_DIR / "ia" / "gen").glob("kit-*"))
+
+
+def test_chain_refs_over_max_422(real):
+    chain_canvas()
+    mia = kit_item(real, images=4)
+    real.spent.clear()
+    too_many = [kref(mia, n) for n in range(4)] * 3  # 12 > seedream-4.5's maxRefs of 10
+    for confirm in (False, True):
+        r = chain(real, confirm=confirm, references=too_many)
+        assert r.status_code == 422
+    assert real.spent == []
+
+
 def test_worker_sends_kit_files_and_full_prompt(real):
     mia = kit_item(real)
     a = post(real, model="seedream-4.5").json()["id"]

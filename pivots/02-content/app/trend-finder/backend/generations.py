@@ -569,6 +569,32 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             canvas_row = conn.execute("SELECT doc FROM canvases WHERE idea_id = ?", (idea_id,)).fetchone()
         return json.loads(canvas_row[0]) if canvas_row else {"nodes": [], "edges": []}
 
+    def prepare_refs(found: dict, idea_id: str, prompt: str, refs, copy: bool = True):
+        """What a generation stores for its references: (the inputs `references`, `kitStamp` and `sentPrompt`, None),
+        or (None, the error). Everything that can fail with 422 happens here, before any money is spent. `copy` false
+        (a quote) checks the same things but leaves the kit files where they are."""
+        stored, stamp, used = [], {}, {}
+        for n, ref in enumerate(refs or [], 1):
+            if ref["source"] == "gen":
+                stored.append({"source": "gen", "genId": ref["genId"]})
+                continue
+            item = kit.find_item(load, found.get("clientId"), ref["itemId"])
+            if item is None or ref["image"] not in item.images:  # removed since check ran
+                return None, error(422, "That kit image isn't in this plan's client kit.")
+            stored.append({"source": "kit", "itemId": item.id, "image": ref["image"], "name": item.name,
+                           "kind": item.kind, "file": f"kit-{ref['image']}"})
+            stamp[item.id] = item.updatedAt
+            used.setdefault(item.id, (item, []))[1].append(n)
+        sent = with_prefix(kit, prompt, list(used.values()))
+        if sent is None:
+            return None, error(422, PROMPT_TOO_LONG)
+        if copy:
+            try:
+                copy_kit_images(kit, media_dir(), found["clientId"], idea_id, stored)
+            except OSError:
+                return None, error(422, "An input image is missing.")
+        return {"references": stored, "kitStamp": stamp, "sentPrompt": sent}, None
+
     @router.post("/api/ideas/{idea_id}/gen")
     async def create(idea_id: str, request: Request):
         try:
@@ -593,31 +619,14 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                                      start, refs, duration)
         if bad is not None:
             return bad
-        stored, stamp, used = [], {}, {}
-        for n, ref in enumerate(refs or [], 1):
-            if ref["source"] == "gen":
-                stored.append({"source": "gen", "genId": ref["genId"]})
-                continue
-            item = kit.find_item(load, found.get("clientId"), ref["itemId"])
-            if item is None or ref["image"] not in item.images:  # removed since check ran
-                return error(422, "That kit image isn't in this plan's client kit.")
-            stored.append({"source": "kit", "itemId": item.id, "image": ref["image"], "name": item.name,
-                           "kind": item.kind, "file": f"kit-{ref['image']}"})
-            stamp[item.id] = item.updatedAt
-            used.setdefault(item.id, (item, []))[1].append(n)
-        sent = with_prefix(kit, prompt, list(used.values()))
-        if sent is None:
-            return error(422, PROMPT_TOO_LONG)
-        try:
-            copy_kit_images(kit, media_dir(), found["clientId"], idea_id, stored)
-        except OSError:
-            return error(422, "An input image is missing.")
+        part, bad = prepare_refs(found, idea_id, prompt, refs)
+        if bad is not None:
+            return bad
         est = estimate_usd(model, duration)
         blocked = router.budget(model["kind"], est)  # spends the estimate; a failed job gives it back
         if blocked is not None:
             return blocked
-        inputs = {"prompt": prompt, "startFrame": start, "duration": duration, "references": stored,
-                  "kitStamp": stamp, "sentPrompt": sent}
+        inputs = {"prompt": prompt, "startFrame": start, "duration": duration, **part}
         try:
             with db() as conn:
                 out = enqueue(conn, idea_id, node_id, model["kind"], model["id"], inputs, est)
@@ -647,13 +656,16 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return error(409, "Only an approved plan can generate.")
         if body.get("reference") is not None or body.get("videoReference") is not None:
             return error(422, "Run the whole shot doesn't send reference images yet. Use Generate on each node.")
+        refs = body.get("references")  # for the storyboard image only; the video starts from that image
+        if refs is not None and not isinstance(refs, list):
+            return error(422, BAD_REFS)
         prompt, video_prompt = body.get("prompt", ""), body.get("videoPrompt")
         if not isinstance(video_prompt, str) or not video_prompt.strip():
             video_prompt = prompt
         image_node, video_node = body.get("imageNodeId"), body.get("videoNodeId")
         doc = canvas_doc(idea_id)
         image_model, _, bad = check(idea_id, doc["nodes"], image_node, body.get("imageModel"), prompt,
-                                    None, [], None)
+                                    None, refs, None)
         if bad is not None:
             return bad
         video_model, duration, bad = check(idea_id, doc["nodes"], video_node, body.get("videoModel"), video_prompt,
@@ -668,6 +680,9 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         if not any(e.get("source") == image_node and e.get("target") == video_node
                    and e.get("targetHandle") == "in:start" for e in doc["edges"]):
             return error(422, "Connect the storyboard to the video's start frame first.")
+        part, bad = prepare_refs(found, idea_id, prompt, refs, copy=False)  # copies come after the budget checks
+        if bad is not None:
+            return bad
         image_usd, video_usd = estimate_usd(image_model, None), estimate_usd(video_model, duration)
         remaining = {"image": left("image"), "video": left("video")}
         if body.get("confirm") is not True:
@@ -678,6 +693,10 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return error(429, f"Today's budget has US${remaining['image']:.2f} left for images and "
                               f"US${remaining['video']:.2f} for videos, and this shot needs US${image_usd:.2f} and "
                               f"US${video_usd:.2f}. Nothing was started. The budget resets at midnight.")
+        try:  # the last thing that can fail with 422, so it runs before any money is spent
+            copy_kit_images(kit, media_dir(), found["clientId"], idea_id, part["references"])
+        except OSError:
+            return error(422, "An input image is missing.")
         blocked = router.budget("image", image_usd)
         if blocked is not None:
             return blocked
@@ -687,10 +706,10 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return blocked
         now = int(time.time() * 1000)
         image_id, video_id = secrets.token_urlsafe(9), secrets.token_urlsafe(9)
-        image_inputs = {"prompt": prompt, "startFrame": None, "references": [], "duration": None}
+        image_inputs = {"prompt": prompt, "startFrame": None, "duration": None, **part}
         video_inputs = {"prompt": video_prompt, "startFrame": image_id, "references": [], "duration": duration}
         rows = [(image_id, idea_id, image_node, "image", image_model["id"], json.dumps(image_inputs),
-                 input_hash(image_model["id"], prompt, None, [], None), "queued", image_usd,
+                 input_hash(image_model["id"], part["sentPrompt"], None, part["references"], None), "queued", image_usd,
                  None, None, None, None, now, None, None),
                 (video_id, idea_id, video_node, "video", video_model["id"], json.dumps(video_inputs),
                  input_hash(video_model["id"], video_prompt, image_id, [], duration), "waiting", video_usd,
