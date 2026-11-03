@@ -26,7 +26,6 @@ import {
   exportBlocked,
   flushOutcome,
   applyNewer,
-  isPrimaryPin,
   withPrimary,
   repinIfOld,
   CLIP_MIME,
@@ -308,16 +307,13 @@ test('repinIfOld: the pin follows a replaced version, other pins stay', () => {
   assert.equal(repinIfOld({}, 's1', g1, g2).s1, undefined)
 })
 
-test('isPrimaryPin / withPrimary', () => {
+test('withPrimary', () => {
   const g1 = { kind: 'generation', id: 'g1', nodeId: 'n1', shotId: 's1' }
   const t1 = { kind: 'take', id: 'g1', shotId: 's1' }
   const pins = {}
-  assert.equal(isPrimaryPin(pins, 's1', g1), false)
   const next = withPrimary(pins, 's1', g1)
   assert.deepEqual(pins, {})
-  assert.equal(isPrimaryPin(next, 's1', g1), true)
-  assert.equal(isPrimaryPin(next, 's1', t1), false) // same id, other kind
-  assert.equal(isPrimaryPin(next, 's2', g1), false)
+  assert.deepEqual(next, { s1: g1 })
   assert.deepEqual(withPrimary(next, 's1', t1), { s1: t1 })
 })
 

@@ -5,17 +5,18 @@ import type { CanvasDoc, Generation } from '../canvas/types.ts'
 import type { Take } from '../takes.ts'
 import type { EditHook } from './useEditProject.ts'
 import type { SourcesHook } from './useSources.ts'
-import { applyNewer, clipStatus, fillByShotOrder, insertClip, isPrimaryPin, newClipId, repinIfOld, sourceKey, withPrimary, type ClipStatus } from './timeline.ts'
+import { applyNewer, clipStatus, fillByShotOrder, isOnTimeline, newClipId, placeShotClip, repinIfOld, sourceKey, type ClipStatus } from './timeline.ts'
 import type { Clip, ClipSource, SourceInfo } from './types.ts'
 
 export interface TimelineActions {
-  addClip: (src: ClipSource, index?: number) => Promise<void> // a node button or a drop; index defaults to the end
+  // Makes `src` its shot's one clip (spec 7.1), replacing the shot's old clip. True when `src` is the shot's clip afterwards;
+  // a source that is already on the timeline is left as it is (its trim and volume stay).
+  useForShot: (src: ClipSource) => Promise<boolean>
+  isInTimeline: (src: ClipSource) => boolean
   applyNewer: (clipId: string, src: ClipSource) => Promise<void>
   fill: () => Promise<string[]> // fills an empty timeline in shot order; resolves to the ids of the skipped shots
   statusOf: (clip: Clip) => ClipStatus // an ignored "newer" counts as ok
   ignore: (clip: Clip, src: ClipSource) => void // forgotten when the canvas is left
-  setPrimary: (shotId: string, src: ClipSource) => void
-  isPrimary: (shotId: string, src: ClipSource) => boolean
 }
 
 interface Inputs {
@@ -26,7 +27,7 @@ interface Inputs {
   gens: Generation[]
   takes: Take[]
   readOnly: boolean
-  openDrawer: () => void
+  onPlaced: (shotId: string) => void // a source was put in the timeline
   notify: (key: Key) => void
 }
 
@@ -51,21 +52,34 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
     }
   }, [])
 
-  const addClip = useCallback(
-    async (src: ClipSource, index?: number) => {
-      if (ref.current.readOnly) return
-      ref.current.openDrawer()
+  const useForShot = useCallback(
+    async (src: ClipSource) => {
+      const order = ref.current.shots.flatMap((s) => (s.id ? [s.id] : []))
+      if (ref.current.readOnly || !src.shotId || !order.includes(src.shotId)) return false
+      const before = ref.current.edit.current()
+      if (!before) return false
+      if (isOnTimeline(before, src)) return true
       const info = await infoFor(src)
-      const { edit, notify } = ref.current
-      if (!info) return notify('editor.processing')
-      const p = edit.current()
-      if (!p) return
-      const next = insertClip(p, src, info.duration, index ?? p.clips.length, newClipId(p))
-      if (next === p) return notify('editor.sources.full')
+      const { edit, notify, onPlaced } = ref.current
+      if (!info) {
+        notify('editor.processing')
+        return false
+      }
+      const p = edit.current() // after the await: the newest project
+      if (!p) return false
+      if (isOnTimeline(p, src)) return true
+      const next = placeShotClip(p, src, info.duration, order, newClipId(p))
+      if (next === p) {
+        notify('editor.sources.full')
+        return false
+      }
       edit.update(next)
+      onPlaced(src.shotId)
+      return true
     },
     [infoFor],
   )
+  const isInTimeline = (src: ClipSource): boolean => isOnTimeline(inputs.edit.project, src)
 
   const apply = useCallback(
     async (clipId: string, src: ClipSource) => {
@@ -105,14 +119,5 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
   }
   const ignore = (clip: Clip, src: ClipSource) => setIgnored((prev) => new Set(prev).add(ignoreKey(clip, src)))
 
-  const setPrimary = (shotId: string, src: ClipSource) => {
-    const p = inputs.edit.current()
-    if (p) inputs.edit.update({ ...p, primaries: withPrimary(p.primaries, shotId, src) })
-  }
-  const isPrimary = (shotId: string, src: ClipSource): boolean => {
-    const pins = inputs.edit.project?.primaries
-    return !!pins && isPrimaryPin(pins, shotId, src)
-  }
-
-  return { addClip, applyNewer: apply, fill, statusOf, ignore, setPrimary, isPrimary }
+  return { useForShot, isInTimeline, applyNewer: apply, fill, statusOf, ignore }
 }

@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 import type { Kit, KitItem, Shot } from '../../../types'
 import type { Key } from '../../../lib/i18n'
 import type { Take } from '../../../lib/takes'
-import type { ClipSource } from '../../../lib/editor/types'
+import type { ClipSource, EditProject, ReelInput } from '../../../lib/editor/types'
 import type { KitRefs } from '../../../lib/canvas/kit'
 import type { NodeStatus } from '../../../lib/canvas/status'
 import type { Budget, CanvasDoc, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
@@ -38,10 +38,15 @@ export interface CanvasCtx {
   pickTake: (takeId: string) => void
   cleanTake: (nodeId: string, takeId: string) => Promise<void>
   blocked: boolean // stale or read-only: nothing can be changed
-  // Timeline: put footage at the end, make it a shot's main clip, ask whether it is.
-  addToTimeline: (src: ClipSource) => void
-  setPrimary: (shotId: string, src: ClipSource) => void
-  isPrimary: (shotId: string, src: ClipSource) => boolean
+  // Timeline (one clip per shot): make footage its shot's clip, ask whether it is on the timeline or a shot has a clip.
+  putInTimeline: (src: ClipSource) => void
+  isInTimeline: (src: ClipSource) => boolean
+  shotHasClip: (shotId: string | undefined) => boolean
+  // The Timeline node: the edit project, its footage urls and the brand for the preview; open the editor (on its export panel).
+  editProject: EditProject | null
+  clipUrls: Record<string, string>
+  brand: ReelInput['brand']
+  openEditor: (focus?: 'export' | 'send') => void // the full-screen editor; with focus, on its export panel
   // While a line is being dragged: whether it could end on this input (true when nothing is being dragged).
   acceptsDrop: (nodeId: string, handleId: string) => boolean
   dragging: boolean // a line is being dragged from an output

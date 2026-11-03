@@ -11,19 +11,24 @@ import type { EditHook } from '../../lib/editor/useEditProject'
 import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, reelDurationInFrames, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import { addVoice, clipLength, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
+import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
-import { stepsDone, type EditorStep } from '../../lib/editor/steps'
+import { stepsDone, tabsDone } from '../../lib/editor/steps'
+import type { CanvasDoc, Generation } from '../../lib/canvas/types'
+import { clipNode } from '../../lib/canvas/timelineNode'
+import type { Take } from '../../lib/takes'
 import { ToolTabs, type Tool } from './ToolTabs'
-import { StepBar } from './StepBar'
+import { ShotClips } from './ShotClips'
+import { ClipSettings } from './ClipSettings'
 import { TextTool } from './tools/TextTool'
 import { CaptionTool } from './tools/CaptionTool'
 import { VoiceTool } from './tools/VoiceTool'
 import { MusicTool, type MusicFile } from './tools/MusicTool'
 import { BrandTool } from './tools/BrandTool'
 import { Timeline } from './Timeline'
-import { clipName } from './clipName'
+import { clipLabel } from './clipName'
 import { ErrorText } from '../ErrorText'
 import { ExportBar } from './ExportBar'
 
@@ -34,20 +39,29 @@ interface Props {
   edit: EditHook
   sources: SourcesHook // the plan's footage with lengths, kept above the drawer
   timeline: TimelineActions
+  doc: CanvasDoc // the board, to find a clip's node
+  gens: Generation[]
+  takes: Take[]
   readOnly: boolean
   onBack: () => void // back to the canvas
+  onJumpToNode: (nodeId: string) => void // back to the canvas, with that node selected and centred
+  focus?: 'export' | 'send' | null // open with the export panel showing and that control focused (the Timeline node's Export)
 }
 
-const FONT_URL = '/fonts/NotoSansTC-VF.ttf'
-
-export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, readOnly, onBack }: Props) {
+export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, doc, gens, takes, readOnly, onBack, onJumpToNode, focus = null }: Props) {
   const { project, loadError, save, stale, update, flush, current, reload } = edit
   const { sources, error: sourceError } = footage
   const [skipped, setSkipped] = useState<string[]>([])
   const [frame, setFrame] = useState(0)
   const [tool, setTool] = useState<Tool>('clips')
-  const [cut, setCut] = useState<CutState | null>(null) // the export's state, reported by ExportBar for the step bar
-  const [exportOpen, setExportOpen] = useState(false)
+  const [visited, setVisited] = useState<ReadonlySet<Tool>>(() => new Set<Tool>(['clips'])) // tabs opened this session
+  const openTool = (next: Tool) => {
+    setTool(next)
+    setVisited((v) => (v.has(next) ? v : new Set(v).add(next)))
+  }
+  const [selected, setSelected] = useState<string | null>(null) // the timeline clip the Clips tab shows
+  const [cut, setCut] = useState<CutState | null>(null) // the export's state, reported by ExportBar for the export button
+  const [exportOpen, setExportOpen] = useState(!!focus)
   // The export popover closes on Escape anywhere and on a press outside it (its own toggle button excepted).
   useEffect(() => {
     if (!exportOpen) return
@@ -78,6 +92,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const player = useRef<PlayerRef>(null)
 
   const byKey = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s])), [sources])
+  const shotSources = useMemo(() => (sources ? sourcesWithShots(sources, doc) : null), [sources, doc])
   const urls = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s.url])), [sources])
   // The plan's music track is looked up once; MusicTool keeps it current after an upload or removal.
   useEffect(() => {
@@ -182,26 +197,18 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     })()
   }
   const filled = useMemo(() => fillShotIds(shots), [shots])
-  const lines = useMemo(() => Object.fromEntries(filled.flatMap((s) => (s.id && s.line?.trim() ? [[s.id, s.line]] : []))), [filled])
+  const lines = useMemo(() => shotLines(filled), [filled])
   const words = useMemo(() => Object.fromEntries(Object.values(voices).flatMap((v) => (v.words ? [[v.id, v.words]] : []))), [voices])
   const voiceInput = useMemo(
     () => (project?.voiceover ?? []).flatMap((seg) => (voices[seg.id] ? [{ id: seg.id, url: voices[seg.id].url, words: voices[seg.id].words }] : [])),
     [project?.voiceover, voices],
   )
 
-  const logo = kit?.logo
-  const brand = useMemo(
-    () => ({
-      font: kit?.font ?? 'Noto Sans TC',
-      color: kit?.color ?? null,
-      logoUrl: logo ? `/api/clients/${encodeURIComponent(clientId)}/brand/logo?v=${encodeURIComponent(logo)}` : null,
-    }),
-    [kit?.font, kit?.color, logo, clientId],
-  )
+  const brand = useMemo(() => reelBrand(kit, clientId), [kit, clientId])
   const musicUrl = musicFile ? `/api/ideas/${encodeURIComponent(ideaId)}/cut/music/file?v=${encodeURIComponent(`${musicFile.name}-${musicFile.size}`)}` : null
   const inputProps = useMemo<ReelInput | null>(
-    () => (project ? { project, urls, lines, musicUrl, voice: voiceInput, brand, fontUrl: FONT_URL } : null),
-    [project, urls, lines, musicUrl, voiceInput, brand],
+    () => (project ? reelInput({ project, urls, shots: filled, musicUrl, voice: voiceInput, brand }) : null),
+    [project, urls, filled, musicUrl, voiceInput, brand],
   )
 
   // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
@@ -218,6 +225,19 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     }
   }, [ready])
 
+  // Opened for Export or Send: once the controls exist, focus the one asked for (else the first that can be used).
+  const focused = useRef(false)
+  useEffect(() => {
+    if (!focus || !ready || focused.current) return
+    focused.current = true
+    const raf = requestAnimationFrame(() => {
+      const box = document.getElementById('cv-ed-export')
+      const target = box?.querySelector<HTMLElement>(`[data-step="${focus}"]:not(:disabled)`) ?? box?.querySelector<HTMLElement>('button:not(:disabled)')
+      target?.focus()
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [focus, ready])
+
   if (loadError) return <ErrorText text={loadError} />
   if (!project || !inputProps) return <p className="muted">{t('editor.loading')}</p>
 
@@ -230,27 +250,23 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const locked = readOnly || stale
   const fill = async () => setSkipped(await timeline.fill())
 
-  const done = stepsDone({ project, clientHasLogo: !!kit?.logo, cut })
-  const onStep = (step: EditorStep) => {
-    if (step === 'export' || step === 'send') {
-      setExportOpen(true)
-      // the controls are shown on the next render; focus the one the step is about
-      requestAnimationFrame(() => {
-        const box = document.getElementById('cv-ed-export')
-        const target = box?.querySelector<HTMLElement>(`[data-step="${step}"]:not(:disabled)`) ?? box?.querySelector<HTMLElement>('button:not(:disabled)')
-        target?.focus()
-      })
-      return
-    }
-    setTool(step === 'logo' ? 'brand' : step)
+  const steps = stepsDone({ project, clientHasLogo: !!kit?.logo, cut })
+  const done = tabsDone(
+    { project, clientHasLogo: !!kit?.logo, cut, texts: project.texts.length, voices: project.voiceover.length, music: !!musicFile && project.music !== null },
+    visited,
+  )
+  const nameOf = (c: (typeof project.clips)[number]) => clipLabel(c.source, filled, gens, takes)
+  const nodeOf = (c: (typeof project.clips)[number]) => clipNode(doc, c.source)
+  const selClip = project.clips.find((c) => c.id === selected) ?? null
+  const pick = (clipId: string) => {
+    setSelected(clipId)
+    openTool('clips')
   }
-  const activeStep: EditorStep | null = exportOpen ? 'export' : tool === 'clips' ? 'clips' : tool === 'captions' ? 'captions' : tool === 'brand' ? 'logo' : null
 
   return (
     <div className="cv-ed cv-ed-full nokey">
       <header className="cv-ed-top">
         <button type="button" className="link-btn" onClick={onBack}>{t('editor.back')}</button>
-        <StepBar done={done} active={activeStep} onStep={onStep} />
         <div className="cv-ed-top-end">
           <div className="cv-ed-status" role="status">
             {stale ? (
@@ -267,73 +283,72 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
             ) : null}
             {readOnly && <span className="muted">{t('editor.readOnly')}</span>}
           </div>
-          <button type="button" className="btn btn-primary btn-sm" aria-expanded={exportOpen} aria-controls="cv-ed-export" onClick={() => setExportOpen((o) => !o)}>
+          <button type="button" className="btn btn-primary btn-sm" aria-expanded={exportOpen} aria-controls="cv-ed-export" data-done={steps.export || undefined} onClick={() => setExportOpen((o) => !o)}>
+            {steps.export && <span aria-hidden="true">✓ </span>}
             {t('editor.exportMenu')}
+            {steps.export && <span className="sr-only"> ({t('editor.step.done')})</span>}
           </button>
-        </div>
-        {/* always mounted, so a running export keeps being followed while this is closed */}
-        <div id="cv-ed-export" className="cv-ed-export-pop" hidden={!exportOpen} onKeyDown={(e) => e.key === 'Escape' && setExportOpen(false)}>
-          <ExportBar ideaId={ideaId} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} onCut={setCut} />
         </div>
       </header>
       <div className="cv-ed-main">
-        <div className="cv-ed-player">
-          <Player
-            ref={player}
-            component={Reel}
-            inputProps={inputProps}
-            durationInFrames={reelDurationInFrames(project)}
-            compositionWidth={1080}
-            compositionHeight={1920}
-            fps={30}
-            controls
-            style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '100%' }}
-          />
+        <aside className="cv-ed-left">
+          <ShotClips shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={takes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
+        </aside>
+        <div className="cv-ed-centre">
+          <div className="cv-ed-player">
+            <Player
+              ref={player}
+              component={Reel}
+              inputProps={inputProps}
+              durationInFrames={reelDurationInFrames(project)}
+              compositionWidth={1080}
+              compositionHeight={1920}
+              fps={30}
+              controls
+              style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '100%' }}
+            />
+          </div>
+          {/* over the player, never over the tabs; always mounted, so a running export keeps being followed while closed */}
+          <div id="cv-ed-export" className="cv-ed-export-pop" hidden={!exportOpen} onKeyDown={(e) => e.key === 'Escape' && setExportOpen(false)}>
+            <ExportBar ideaId={ideaId} clientId={clientId} focus={focus} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} onCut={setCut} />
+          </div>
         </div>
         <div className="cv-ed-side">
-          <ToolTabs tool={tool} onTool={setTool} />
+          <ToolTabs tool={tool} onTool={openTool} done={done} />
           <div className="cv-ed-panel" role="tabpanel" id={`cv-ed-panel-${tool}`} aria-labelledby={`cv-ed-tab-${tool}`}>
-        {tool === 'clips' && (
-          <section className="cv-ed-sources" aria-label={t('editor.sources.title')}>
-        <h3>{t('editor.sources.title')}</h3>
-        {sourceError && <ErrorText text={sourceError} />}
-        {sources && sources.length === 0 && <p className="muted">{t('editor.sources.empty')}</p>}
-        {full && <p className="muted">{t('editor.sources.full')}</p>}
-        <ul className="cv-ed-source-list">
-          {(sources ?? []).map((s) => (
-            <li key={s.key}>
-              <span className="cv-ed-source-name">
-                {clipName(s, shots)} · {s.kind === 'take' ? t('editor.sources.take') : t('editor.sources.generation')} · {t('editor.clip.seconds', { sec: Math.round(s.duration * 10) / 10 })}
-              </span>
-              <button type="button" className="btn btn-ghost btn-sm" disabled={locked || full} onClick={() => void timeline.addClip({ kind: s.kind, id: s.id, nodeId: s.nodeId, shotId: s.shotId })}>
-                {t('editor.sources.add')}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-        )}
-        {tool === 'text' && <TextTool project={project} seconds={frame / 30} readOnly={locked} onProject={update} />}
-        {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} />}
-        {tool === 'voice' && (
-          <VoiceTool
-            ideaId={ideaId}
-            project={project}
-            current={current}
-            flush={flush}
-            voices={voices}
-            adopt={adoptVoice}
-            tts={{ busy: ttsBusy, error: ttsError, run: runTts }}
-            pending={pending}
-            onImport={importPending}
-            onVoiceGone={(id) => setVoices((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => k !== id)))}
-            lineTexts={filled.map((s) => s.line ?? '')}
-            readOnly={locked}
-            onProject={update}
-          />
-        )}
-        {tool === 'music' && <MusicTool ideaId={ideaId} project={project} file={musicFile} onFile={(f) => { setMusicFile(f); setMusicKey((n) => n + 1) }} readOnly={locked} onProject={update} />}
-        {tool === 'brand' && <BrandTool client={client} project={project} readOnly={locked} onProject={update} />}
+            {tool === 'clips' && (
+              <ClipSettings
+                project={project}
+                clip={selClip}
+                name={selClip ? nameOf(selClip) : ''}
+                sourceDuration={selClip ? (byKey[sourceKey(selClip.source)]?.duration ?? clipLength(selClip) + selClip.in) : 0}
+                nodeId={selClip ? nodeOf(selClip) : null}
+                readOnly={locked}
+                onProject={update}
+                onJump={onJumpToNode}
+              />
+            )}
+            {tool === 'text' && <TextTool project={project} seconds={frame / 30} readOnly={locked} onProject={update} />}
+            {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} />}
+            {tool === 'voice' && (
+              <VoiceTool
+                ideaId={ideaId}
+                project={project}
+                current={current}
+                flush={flush}
+                voices={voices}
+                adopt={adoptVoice}
+                tts={{ busy: ttsBusy, error: ttsError, run: runTts }}
+                pending={pending}
+                onImport={importPending}
+                onVoiceGone={(id) => setVoices((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => k !== id)))}
+                lineTexts={filled.map((s) => s.line ?? '')}
+                readOnly={locked}
+                onProject={update}
+              />
+            )}
+            {tool === 'music' && <MusicTool ideaId={ideaId} project={project} file={musicFile} onFile={(f) => { setMusicFile(f); setMusicKey((n) => n + 1) }} readOnly={locked} onProject={update} />}
+            {tool === 'brand' && <BrandTool client={client} project={project} readOnly={locked} onProject={update} />}
           </div>
         </div>
       </div>
@@ -356,7 +371,20 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
               ))}
           </ul>
         )}
-        <Timeline project={project} sources={byKey} shots={shots} frame={frame} readOnly={locked} timeline={timeline} onProject={update} onSeek={seek} />
+        <Timeline
+          project={project}
+          sources={byKey}
+          frame={frame}
+          readOnly={locked}
+          timeline={timeline}
+          selected={selected}
+          onSelect={setSelected}
+          nameOf={nameOf}
+          nodeOf={nodeOf}
+          onJump={onJumpToNode}
+          onProject={update}
+          onSeek={seek}
+        />
       </div>
     </div>
   )

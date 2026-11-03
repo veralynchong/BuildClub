@@ -3,6 +3,7 @@ import { t } from '../../../lib/i18n'
 import { selectedGen, versionsOf } from '../../../lib/canvas/graph'
 import { VersionStrip } from '../VersionStrip'
 import { CardHead, CardMedia } from './Card'
+import { ClipActions } from './ClipActions'
 import { useCanvas } from './ctx'
 import { Ports } from './Ports'
 import type { CvNodeProps } from './types'
@@ -24,6 +25,7 @@ export function UploadNode({ id, data: { node } }: CvNodeProps) {
         <span className="small muted">{t('canvas.upload.empty')}</span>
       </CardMedia>
       {isVideo && take && <p className="cv-footage-name small muted">{t('canvas.upload.video')} · {take.name}</p>}
+      {take && <ClipActions src={{ kind: 'take', id: take.id, shotId: take.shotId ?? undefined }} />}
       {!isVideo && <VersionStrip versions={versions} selectedId={shown?.id ?? null} disabled={readOnly} onSelect={(g) => onSelectVersion(id, g)} />}
       <input
         ref={input}

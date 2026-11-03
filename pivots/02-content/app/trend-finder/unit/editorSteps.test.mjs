@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { EDITOR_STEPS, stepsDone } from '../src/lib/editor/steps.ts'
+import { stepsDone, tabsDone } from '../src/lib/editor/steps.ts'
 
 const project = (over = {}) => ({ clips: [{ id: 'c1' }], captions: { enabled: false }, showLogo: false, ...over })
 const cut = (over = {}) => ({ status: 'done', source: 'editor', stale: false, output: { url: '/v.mp4' }, review: null, ...over })
-const done = (facts) => EDITOR_STEPS.filter((s) => stepsDone(facts)[s])
+const done = (facts) => Object.entries(stepsDone(facts)).flatMap(([s, d]) => (d ? [s] : []))
 
 test('nothing is done before the project and the cut have loaded', () => {
   assert.deepEqual(done({ project: null, clientHasLogo: true, cut: null }), [])
@@ -34,4 +34,15 @@ test('send is done while the review waits or after it is approved, not when reje
   assert.equal(stepsDone({ project: p, clientHasLogo: false, cut: cut() }).send, false)
   // a stale video was replaced since it was sent
   assert.equal(stepsDone({ project: p, clientHasLogo: false, cut: cut({ stale: true, review: { status: 'waiting' } }) }).send, false)
+})
+
+test('tabsDone ticks only visited tabs whose step is done', () => {
+  const facts = { project: { clips: [], captions: { enabled: true }, showLogo: true }, clientHasLogo: true, cut: null, texts: 0, voices: 0, music: false }
+  assert.equal(tabsDone(facts, new Set()).captions, false) // on by default, not visited: no tick in advance
+  assert.equal(tabsDone(facts, new Set(['captions'])).captions, true)
+  assert.equal(tabsDone(facts, new Set(['clips'])).clips, false) // visited, no clip
+  assert.equal(tabsDone({ ...facts, project: { ...facts.project, clips: [{}] } }, new Set(['clips'])).clips, true)
+  assert.equal(tabsDone({ ...facts, clientHasLogo: false }, new Set(['brand'])).brand, false)
+  assert.equal(tabsDone({ ...facts, texts: 1, voices: 1, music: true }, new Set(['text', 'voice', 'music'])).voice, true)
+  assert.equal(tabsDone({ ...facts, texts: 1 }, new Set(['voice'])).text, false)
 })

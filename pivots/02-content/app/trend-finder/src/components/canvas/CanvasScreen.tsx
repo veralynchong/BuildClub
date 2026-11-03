@@ -18,6 +18,10 @@ import { getBudget, getCanvas, getKit, getModels, NoShots, pollGen, putCanvas, q
 import { fromFlow, reframe, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { frameBoxes, frameOf, migrateDoc, slotInFrame } from '../../lib/canvas/frames'
 import { edgeLook, focusSet } from '../../lib/canvas/edges'
+import { TIMELINE_NODE_ID, timelineFlow } from '../../lib/canvas/timelineNode'
+import type { Box } from '../../lib/canvas/frames'
+import { useApp } from '../../lib/appContext'
+import { reelBrand } from '../../lib/editor/preview'
 import { addNode, budgetLeft, chainBusy, chainPair, freeSpot, genFinished, genRequest, genStarted, genView, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
 import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeInfo, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
@@ -40,6 +44,7 @@ import { EditorPanel } from '../editor/EditorPanel'
 import { useSources } from '../../lib/editor/useSources'
 import { useTimelineActions } from '../../lib/editor/useTimelineActions'
 import { useEditProject } from '../../lib/editor/useEditProject'
+import { oneClipPerShot, shotOnTimeline } from '../../lib/editor/timeline'
 import { CanvasContext, type CanvasCtx } from './nodes/ctx'
 import { nodeTypes } from './nodes'
 
@@ -195,10 +200,13 @@ function CanvasBoard({
   // A board that first mounted hidden has no size to fit to, so it is fitted once it shows.
   const unfitted = useRef(openEditor)
   const beforeEditor = useRef<Viewport | null>(null) // the view the board had when the editor covered it
+  const jumpAfterEditor = useRef<string | null>(null) // a node to centre once the board shows again
   const [kitOpen, setKitOpen] = useState(false) // the kit drawer; only one drawer is open at a time
-  const showEditor = () => {
+  const [editorFocus, setEditorFocus] = useState<'export' | 'send' | null>(null) // the editor opens on its export panel, focused on Export (the Timeline node's Export) or Send
+  const showEditor = (focus?: 'export' | 'send') => {
     beforeEditor.current = getViewport()
     setKitOpen(false)
+    setEditorFocus(focus ?? null)
     setEditing(true)
   }
   // The hidden board may have been resized to nothing, so put its view back once it is shown and laid out.
@@ -207,7 +215,11 @@ function CanvasBoard({
     let raf2 = 0
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        if (unfitted.current) void fitView({ padding: 0.2 })
+        const jump = jumpAfterEditor.current
+        jumpAfterEditor.current = null
+        // "Show on canvas" from the editor: that node is selected and centred instead of the old view coming back.
+        if (jump) void fitView({ nodes: [{ id: jump }], maxZoom: getZoom(), duration: 300 })
+        else if (unfitted.current) void fitView({ padding: 0.2 })
         else if (beforeEditor.current) void moveTo(beforeEditor.current)
         unfitted.current = false
       })
@@ -216,7 +228,7 @@ function CanvasBoard({
       cancelAnimationFrame(raf1)
       cancelAnimationFrame(raf2)
     }
-  }, [editing, fitView, moveTo])
+  }, [editing, fitView, moveTo, getZoom])
 
   // ---- autosave ----
   const doc = useMemo(() => fromFlow(nodes, edges, viewport), [nodes, edges, viewport])
@@ -281,7 +293,7 @@ function CanvasBoard({
 
   // ---- lines and new nodes ----
   const [dragFrom, setDragFrom] = useState<string | null>(null) // the node a line is being dragged from
-  const [note, setNote] = useState<{ key?: Key; vars?: Vars; text?: string; info?: boolean } | null>(null)
+  const [note, setNote] = useState<{ key?: Key; vars?: Vars; text?: string; info?: boolean; action?: { label: Key; run: () => void } } | null>(null)
   const noteTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(noteTimer.current), [])
   const showNote = useCallback((key: Key, vars?: Vars, info?: boolean) => {
@@ -837,6 +849,10 @@ function CanvasBoard({
     [gens, takes],
   )
   const sources = useSources(ideaId, footageSignature)
+  const editingRef = useRef(editing)
+  useEffect(() => {
+    editingRef.current = editing
+  })
   const timeline = useTimelineActions({
     edit,
     sources,
@@ -845,9 +861,27 @@ function CanvasBoard({
     gens,
     takes,
     readOnly,
-    openDrawer: showEditor,
+    // The canvas shows one toast and stays where it is (spec 7.1); inside the editor the timeline itself shows the change.
+    onPlaced: () => {
+      if (editingRef.current) return
+      setNote({ key: 'canvas.timeline.placed', info: true, action: { label: 'canvas.timeline.open', run: () => showEditor() } })
+      clearTimeout(noteTimer.current)
+      noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
+    },
     notify: showNote,
   })
+
+  // An edit saved before one clip per shot may hold several clips of a shot: keep one each, once, and say so.
+  const trimmed = useRef(false)
+  useEffect(() => {
+    if (trimmed.current || !edit.project || readOnly) return
+    trimmed.current = true
+    const r = oneClipPerShot(edit.project)
+    if (r.removed > 0) {
+      edit.update(r.project)
+      showNote('canvas.timeline.trimmed', undefined, true)
+    }
+  }, [edit, readOnly, showNote])
 
   // The running queue and the node statuses; the clock ticks only while something is running.
   const [now, setNow] = useState(() => Date.now())
@@ -859,11 +893,28 @@ function CanvasBoard({
     return () => clearInterval(id)
   }, [running])
 
+  // The Timeline node: virtual, right of the frames, kept out of the board's nodes (so never saved or autosaved).
+  const { clients } = useApp()
+  const clientKit = clients.find((c) => c.id === clientId)?.brand
+  const brand = useMemo(() => reelBrand(clientKit, clientId), [clientKit, clientId])
+  const clipUrls = useMemo(() => Object.fromEntries((sources.sources ?? []).map((s) => [s.key, s.url])), [sources.sources])
+  const boxes = useMemo(
+    () => new Map<string, Box>(nodes.filter((n) => n.type === 'shot').map((n) => [n.id, { x: n.position.x, y: n.position.y, w: n.style?.width ?? 0, h: n.style?.height ?? 0 }])),
+    [nodes],
+  )
+  const tl = useMemo(() => timelineFlow(doc, edit.project, boxes), [doc, edit.project, boxes])
+  const [tlSize, setTlSize] = useState<{ width: number; height: number } | undefined>(undefined)
+  const shownNodes = useMemo(() => [...nodes, { ...tl.node, measured: tlSize }], [nodes, tl.node, tlSize])
+
   const ctx: CanvasCtx = {
     doc,
-    addToTimeline: (src) => void timeline.addClip(src),
-    setPrimary: timeline.setPrimary,
-    isPrimary: timeline.isPrimary,
+    putInTimeline: (src) => void timeline.useForShot(src),
+    isInTimeline: timeline.isInTimeline,
+    shotHasClip: (shotId) => shotOnTimeline(edit.project, shotId),
+    editProject: edit.project,
+    clipUrls,
+    brand,
+    openEditor: showEditor,
     shots,
     readOnly,
     shotNumbers: useMemo(() => {
@@ -979,6 +1030,12 @@ function CanvasBoard({
     ...(scope.skippedNoKey > 0 ? [t('canvas.run.noKeySkipped', { n: scope.skippedNoKey })] : []),
     ...(leftText ? [leftText] : []),
   ].join('\n')
+  // Leaves the editor on one node: selected, and centred at the zoom the board had.
+  const jumpFromEditor = (id: string) => {
+    setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })))
+    jumpAfterEditor.current = id
+    setEditing(false)
+  }
   const jumpTo = (id: string) => {
     setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })))
     void fitView({ nodes: [{ id }], padding: 0.6, maxZoom: 1, duration: 250 })
@@ -994,19 +1051,51 @@ function CanvasBoard({
     const look = edgeLook({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? '', targetHandle: e.targetHandle ?? '' }, doc, gens, takes, focus, selectedKit)
     return { ...e, className: look.className, animated: look.animated }
   })
+  for (const e of tl.edges) {
+    const look = edgeLook({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? '', targetHandle: e.targetHandle ?? '' }, doc, gens, takes, focus, selectedKit, { targetKind: 'timeline' })
+    shownEdges.push({ ...e, className: look.className, animated: look.animated })
+  }
 
   // A node that moved or got its drawn size: frames fit their nodes again and never overlap.
-  const onNodes: typeof onNodesChange = (changes) => {
+  const onNodes: typeof onNodesChange = (all) => {
+    // The Timeline node is not one of the board's nodes: only its drawn size is kept.
+    for (const c of all) if (c.type === 'dimensions' && c.id === TIMELINE_NODE_ID && c.dimensions) setTlSize(c.dimensions)
+    const changes = all.filter((c) => !('id' in c && c.id === TIMELINE_NODE_ID))
     onNodesChange(changes)
     const frames = new Set(nodes.filter((n) => n.type === 'shot').map((n) => n.id))
     if (changes.some((c) => c.type === 'dimensions' && !frames.has(c.id))) setNodes((ns) => reframe(ns))
   }
 
+  // The note is shown on the board, or over the editor while that covers the board (e.g. "the reel is full").
+  const noteEl = (
+    <div className={note?.info ? 'cv-conn-note is-info' : 'cv-conn-note'} role={note && !note.info ? 'alert' : 'status'}>
+      {note && (note.text ?? (note.key && t(note.key, note.vars)))}
+      {note?.action && (
+        <button
+          type="button"
+          className="cv-conn-note-action"
+          onClick={() => {
+            note.action?.run()
+            setNote(null)
+          }}
+        >
+          {t(note.action.label)}
+        </button>
+      )}
+      {note && !note.info && (
+        <button type="button" className="cv-conn-note-x" aria-label={t('canvas.note.dismiss')} onClick={() => setNote(null)}>
+          ×
+        </button>
+      )}
+    </div>
+  )
+
   return (
     <section className="cv-screen">
       {editing && (
         <section className="cv-editor-full" aria-label={t('canvas.editor.title')}>
-          <EditorPanel ideaId={ideaId} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} onBack={() => setEditing(false)} />
+          <EditorPanel ideaId={ideaId} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} doc={doc} gens={gens} takes={takes} onBack={() => setEditing(false)} onJumpToNode={jumpFromEditor} focus={editorFocus} />
+          {noteEl}
         </section>
       )}
       <div className="cv-board" hidden={editing}>
@@ -1029,6 +1118,11 @@ function CanvasBoard({
             {t('canvas.toolbar.runAll')}
           </button>
         )}
+        {!readOnly && (
+          <button type="button" className="btn btn-ghost btn-sm cv-send-btn" onClick={() => showEditor('send')}>
+            {t('canvas.toolbar.send')}
+          </button>
+        )}
       </CanvasToolbar>
 
       {stale && (
@@ -1049,7 +1143,7 @@ function CanvasBoard({
       <div className="cv-layout">
         <div className="cv-flow" ref={flowBox}>
           <ReactFlow
-            nodes={nodes}
+            nodes={shownNodes}
             edges={shownEdges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodes}
@@ -1137,14 +1231,7 @@ function CanvasBoard({
               </div>
             </div>
           )}
-          <div className={note?.info ? 'cv-conn-note is-info' : 'cv-conn-note'} role={note && !note.info ? 'alert' : 'status'}>
-            {note && (note.text ?? (note.key && t(note.key, note.vars)))}
-            {note && !note.info && (
-              <button type="button" className="cv-conn-note-x" aria-label={t('canvas.note.dismiss')} onClick={() => setNote(null)}>
-                ×
-              </button>
-            )}
-          </div>
+          {!editing && noteEl}
         </div>
         {kitOpen && kit && kitNode && (
           <div className="cv-kit-drawer">

@@ -1,8 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DndContext, PointerSensor, useDraggable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
-import type { Shot } from '../../types'
 import { t } from '../../lib/i18n'
-import { clipName } from './clipName'
 import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import { CLIP_MIME, clipLength, clipStarts, dropIndex, FPS, moveClip, newClipId, removeClip, setClipAudio, sourceKey, splitAt, totalLength, trimClip } from '../../lib/editor/timeline'
 import type { Clip, ClipSource, EditProject, SourceInfo } from '../../lib/editor/types'
@@ -14,19 +12,44 @@ const DEFAULT_PX = 40
 interface Props {
   project: EditProject
   sources: Record<string, SourceInfo>
-  shots: Shot[]
   frame: number // playhead
   readOnly: boolean
   timeline: TimelineActions
+  selected: string | null // the selected clip, shared with the Clips tab
+  onSelect: (clipId: string | null) => void
+  nameOf: (clip: Clip) => string // "Shot 1 · v3"
+  nodeOf: (clip: Clip) => string | null // the clip's node on the canvas, null when it is gone
+  onJump: (nodeId: string) => void // back to the canvas, on that node
   onProject: (p: EditProject) => void
   onSeek: (frame: number) => void
 }
 
 const fmt = (sec: number) => (Math.round(sec * 10) / 10).toString()
 
-export function Timeline({ project, sources, shots, frame, readOnly, timeline, onProject, onSeek }: Props) {
+export function Timeline({ project, sources, frame, readOnly, timeline, selected, onSelect: setSelected, nameOf, nodeOf, onJump, onProject, onSeek }: Props) {
   const [pxPerSec, setPx] = useState(DEFAULT_PX)
-  const [selected, setSelected] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ clipId: string; x: number; y: number } | null>(null) // a clip's right-click menu
+  const box = useRef<HTMLElement>(null)
+  // The menu closes on Escape and on a press outside it.
+  useEffect(() => {
+    if (!menu) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenu(null)
+    const onDown = (e: PointerEvent) => !(e.target as Element | null)?.closest('.cv-ed-menu') && setMenu(null)
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onDown)
+    }
+  }, [menu])
+  const openMenu = (clipId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    setSelected(clipId)
+    const r = box.current?.getBoundingClientRect()
+    setMenu({ clipId, x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) })
+  }
+  const menuClip = menu ? project.clips.find((c) => c.id === menu.clipId) : undefined
+  const menuNode = menuClip ? nodeOf(menuClip) : null
   const track = useRef<HTMLDivElement>(null)
   const [dropAt, setDropAt] = useState<number | null>(null) // where a dragged canvas clip would land
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
@@ -88,7 +111,7 @@ export function Timeline({ project, sources, shots, frame, readOnly, timeline, o
     } catch {
       return
     }
-    if (src && (src.kind === 'generation' || src.kind === 'take') && typeof src.id === 'string') void timeline.addClip(src, indexAt(e))
+    if (src && (src.kind === 'generation' || src.kind === 'take') && typeof src.id === 'string') void timeline.useForShot(src) // one clip per shot: its place follows the shot order
   }
 
   const statuses = project.clips.map((c) => ({ clip: c, status: timeline.statusOf(c) }))
@@ -98,7 +121,7 @@ export function Timeline({ project, sources, shots, frame, readOnly, timeline, o
   const ticks = Array.from({ length: Math.floor(total) + 1 }, (_, i) => i)
 
   return (
-    <section className="cv-ed-timeline" aria-label={t('editor.timeline')}>
+    <section className="cv-ed-timeline" aria-label={t('editor.timeline')} ref={box}>
       <div className="cv-ed-bar">
         <button type="button" className="btn btn-ghost btn-sm" disabled={readOnly || project.clips.length === 0} onClick={split}>
           {t('editor.split')}
@@ -143,7 +166,7 @@ export function Timeline({ project, sources, shots, frame, readOnly, timeline, o
                   clip={c}
                   left={starts[i] * pxPerSec}
                   width={clipLength(c) * pxPerSec}
-                  name={clipName(c.source, shots)}
+                  name={nameOf(c)}
                   selected={c.id === selected}
                   state={stateOf.get(c.id) ?? 'ok'}
                   disabled={readOnly}
@@ -151,6 +174,7 @@ export function Timeline({ project, sources, shots, frame, readOnly, timeline, o
                   sourceDuration={sources[sourceKey(c.source)]?.duration ?? c.out}
                   project={project}
                   onSelect={() => setSelected(c.id)}
+                  onMenu={(e) => openMenu(c.id, e)}
                   onProject={onProject}
                 />
               ))}
@@ -159,11 +183,28 @@ export function Timeline({ project, sources, shots, frame, readOnly, timeline, o
           <div className="cv-ed-playhead" style={{ left: playhead * pxPerSec }} aria-hidden="true" />
         </div>
       </div>
+      {menu && menuClip && (
+        <div className="cv-ed-menu" role="menu" aria-label={t('editor.clip.menu')} style={{ left: menu.x, top: menu.y }}>
+          <button
+            type="button"
+            role="menuitem"
+            autoFocus
+            disabled={!menuNode}
+            title={menuNode ? undefined : t('editor.clipSet.noNode')}
+            onClick={() => {
+              setMenu(null)
+              if (menuNode) onJump(menuNode)
+            }}
+          >
+            {t('editor.clipSet.show')}
+          </button>
+        </div>
+      )}
       {alerts.length > 0 && (
         <ul className="cv-ed-alerts">
           {alerts.map(({ clip, status }) => (
             <li key={clip.id} className="cv-ed-alert" data-state={status.state}>
-              <span className="cv-ed-alert-name">{clipName(clip.source, shots)}</span>
+              <span className="cv-ed-alert-name">{nameOf(clip)}</span>
               {status.state === 'newer' ? (
                 <>
                   <span className="cv-ed-alert-text">{t('editor.newer')}</span>
@@ -192,7 +233,7 @@ export function Timeline({ project, sources, shots, frame, readOnly, timeline, o
           <h3>{t('editor.audio.title')}</h3>
           {project.clips.map((c) => {
             const silent = sources[sourceKey(c.source)]?.hasAudio === false
-            const name = clipName(c.source, shots)
+            const name = nameOf(c)
             return (
               <div key={c.id} className="cv-ed-audio-row" data-selected={c.id === selected ? '' : undefined}>
                 <span className="cv-ed-audio-name">{name}</span>
@@ -237,10 +278,11 @@ interface BlockProps {
   sourceDuration: number
   project: EditProject
   onSelect: () => void
+  onMenu: (e: React.MouseEvent) => void // right-click: "Show on canvas"
   onProject: (p: EditProject) => void
 }
 
-function ClipBlock({ clip, left, width, name, selected, state, disabled, pxPerSec, sourceDuration, project, onSelect, onProject }: BlockProps) {
+function ClipBlock({ clip, left, width, name, selected, state, disabled, pxPerSec, sourceDuration, project, onSelect, onMenu, onProject }: BlockProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: clip.id, disabled })
   // Trimming works from the project as it was when the edge was grabbed, so the drag is one smooth gesture.
   const grab = useRef<{ edge: 'in' | 'out'; x: number; start: EditProject; value: number } | null>(null)
@@ -275,6 +317,7 @@ function ClipBlock({ clip, left, width, name, selected, state, disabled, pxPerSe
       data-dragging={isDragging ? '' : undefined}
       style={{ left, width, transform: transform ? `translate3d(${transform.x}px, 0, 0)` : undefined }}
       onPointerDownCapture={onSelect}
+      onContextMenu={onMenu}
       {...attributes}
       {...listeners}
       role="button"
