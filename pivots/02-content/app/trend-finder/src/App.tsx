@@ -1129,6 +1129,8 @@ export default function App() {
     role,
     setRole,
     addClient: (c) => setClients((prev) => [...prev, c]),
+    clients,
+    setClientBrand: (clientId, brand) => setClients((prev) => prev.map((c) => (c.id === clientId ? { ...c, brand } : c))),
     lang,
     setLang,
     recordEvent,

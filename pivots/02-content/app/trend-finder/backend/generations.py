@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 import cutting
 import gen_providers
+import subtitles
 
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS generations (id TEXT PRIMARY KEY, idea_id TEXT NOT NULL, node_id TEXT NOT NULL, "
@@ -34,7 +35,7 @@ COLUMNS = ("id, idea_id, node_id, kind, model, inputs, input_hash, status, est_u
 NCOLUMNS = COLUMNS.count(",") + 1
 GEN_POLL_S = float(os.environ.get("GEN_POLL_S", 5))
 MOCK_POLL_S = 0.2
-GEN_TIMEOUT_S = {"image": 180, "video": 900}
+GEN_TIMEOUT_S = {"image": 180, "video": 900, "voice": 120}
 LOST = "The provider didn't answer in time. It may have charged."
 FILE_LOST = "The model finished but its file couldn't be saved. It may have charged."
 FAILED = "The generation failed. Try again."
@@ -42,7 +43,11 @@ START_FRAME_LOST = "The start frame wasn't made, so the video didn't run."
 PENDING = "!pending"  # a chained video's startFrame in validation: the image isn't made yet
 MAX_PROMPT = 4000
 CSP = {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"}
-NODE_FOR_KIND = {"image": "storyboard", "video": "video"}  # the canvas node type each model kind fills
+NODE_FOR_KIND = {"image": "storyboard", "video": "video", "voice": None}  # the canvas node type each model kind fills; voice has none
+VOICE_NODE = "editor-voice"  # the node_id of every voiceover row: it belongs to the editor, not the canvas
+MAX_VOICE_CHARS = 1000
+MAX_VOICE_UNITS = 480  # width units (a CJK character is 2): the mock speaks 0.25 s per unit, so 120 s at most
+BAD_VOICE_TEXT = "Type the words to say: 1 to 1000 characters, and short enough for 2 minutes of speech."
 FILE_TYPES = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "webp": "image/webp",
               "mp4": "video/mp4", "mp3": "audio/mpeg"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -59,7 +64,7 @@ def image_header_ok(ext: str, head: bytes) -> bool:
     return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
 
 
-KEY_ENV = {"fal": "FAL_KEY", "gemini": "GEMINI_API_KEY"}
+KEY_ENV = {"fal": "FAL_KEY", "gemini": "GEMINI_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY"}
 
 
 def migrate(conn) -> None:
@@ -76,6 +81,8 @@ def load_models() -> list[dict]:
 
 def is_available(model: dict) -> bool:
     provider = model.get("provider")
+    if provider == "elevenlabs" and not gen_providers.ElevenLabsAdapter.voice_id(model):
+        return False  # the voice comes from the model entry or ELEVENLABS_VOICE_ID
     return provider == "mock" or bool(os.environ.get(KEY_ENV.get(provider, ""), ""))
 
 
@@ -91,17 +98,36 @@ def validate_models(models: list[dict]) -> list[str]:
         if mid in seen:
             errors.append(f"{mid}: duplicate id")
         seen.add(mid)
-        if m.get("provider") not in ("mock", "fal", "gemini"):
+        if m.get("provider") not in ("mock", "fal", "gemini", "elevenlabs"):
             errors.append(f"{mid}: unknown provider {m.get('provider')!r}")
         if m.get("kind") == "video" and "9:16" not in m.get("aspects", []):
             errors.append(f"{mid}: video model without 9:16")
     return errors
 
 
-def estimate_usd(model: dict, duration: Optional[float]) -> float:
+def estimate_usd(model: dict, duration: Optional[float], chars: int = 0) -> float:
     price = model.get("price") or {}
     usd = float(price.get("usd", 0))
+    if price.get("per") == "1k_chars":
+        return round(usd * chars / 1000, 4)
     return round(usd * (duration or 0) if price.get("per") == "second" else usd, 4)
+
+
+def voice_text_ok(text) -> bool:
+    return isinstance(text, str) and 1 <= len(text) <= MAX_VOICE_CHARS and bool(text.strip()) \
+        and subtitles.width_units(text) <= MAX_VOICE_UNITS
+
+
+def enqueue(conn, idea_id: str, node_id: str, kind: str, model: str, inputs: dict, est: float) -> dict:
+    """Insert a queued row and return it. The caller has already spent `est` (and refunds it if this raises),
+    and starts the job afterwards."""
+    now = int(time.time() * 1000)
+    gid = secrets.token_urlsafe(9)
+    row = (gid, idea_id, node_id, kind, model, json.dumps(inputs),
+           input_hash(model, inputs.get("prompt"), inputs.get("startFrame"), inputs.get("reference"),
+                      inputs.get("duration")), "queued", est, None, None, None, None, now, None, None)
+    conn.execute(f"INSERT INTO generations ({COLUMNS}) VALUES ({', '.join('?' * NCOLUMNS)})", row)
+    return to_json(row)
 
 
 def to_json(row) -> dict:
@@ -174,12 +200,12 @@ SUBMITTING = "!submitting"  # provider_request_id while adapter.submit runs: a r
 
 
 class GenJobs:
-    """One worker thread per kind (images, videos) runs jobs in order, so a long video poll never holds up
+    """One worker thread per kind (images, videos, voices) runs jobs in order, so a long video poll never holds up
     images. `refund(kind, usd)` gives a failed job's estimate back."""
 
     def __init__(self, db, media_dir: Callable[[], Path], refund: Callable[[str, float], None] = lambda k, u: None):
         self._db, self._media, self.refund = db, media_dir, refund
-        self._queues = {kind: queue.Queue() for kind in ("image", "video")}
+        self._queues = {kind: queue.Queue() for kind in ("image", "video", "voice")}
         for kind, q in self._queues.items():
             threading.Thread(target=self._work, args=(q,), name=f"gen-worker-{kind}", daemon=True).start()
 
@@ -380,7 +406,8 @@ def error(status: int, message: str) -> JSONResponse:
 
 
 def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd: None, refund=lambda kind, usd: None,
-                remaining=lambda: {"image": {"spent": 0, "cap": 0}, "video": {"spent": 0, "cap": 0}}) -> APIRouter:
+                remaining=lambda: {"image": {"spent": 0, "cap": 0}, "video": {"spent": 0, "cap": 0},
+                                   "voice": {"spent": 0, "cap": 0}}) -> APIRouter:
     router = APIRouter()
     router.budget, router.refund, router.remaining = budget, refund, remaining  # used by the generate routes
     router.jobs = GenJobs(db, media_dir, refund)  # server.py keeps it as gen_jobs
@@ -393,11 +420,14 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return conn.execute(f"SELECT {COLUMNS} FROM generations WHERE id = ? AND idea_id = ?",
                                 (gen_id, idea_id)).fetchone()
 
+    router.check = None  # set below, once defined: the editor's TTS route runs the same rules
+
     @router.get("/api/gen/models")
     def models():
         return {"models": menu_models()}
 
-    def check(idea_id: str, nodes: list, node_id, model_id, prompt, start, ref, duration, pending_start=False):
+    def check(idea_id: str, nodes: list, node_id, model_id, prompt, start, ref, duration, pending_start=False,
+              voice=False):
         """The rules every generation follows. Returns (model, duration, None), or (None, None, the error)."""
         if not isinstance(node_id, str) or not node_id or not isinstance(prompt, str) or len(prompt) > MAX_PROMPT:
             return None, None, error(422, "Send the node, the model and a prompt.")
@@ -406,6 +436,12 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return None, None, error(422, "That model doesn't exist.")
         if not is_available(model):
             return None, None, error(422, "This model isn't set up yet.")
+        if voice != (model["kind"] == "voice"):  # voice rows come from the editor's TTS route only
+            return None, None, error(422, "That model can't make this kind of node.")
+        if voice:  # a voiceover belongs to the editor, not to a canvas node
+            if not voice_text_ok(prompt):
+                return None, None, error(422, BAD_VOICE_TEXT)
+            return model, None, None
         target = next((n for n in nodes if n.get("id") == node_id), None)
         if target is None:
             return None, None, error(422, "That node isn't on this plan's canvas.")
@@ -433,6 +469,8 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             if rule == "none" and given is not None:
                 return None, None, error(422, f"This model doesn't take {what}.")
         return model, duration, None
+
+    router.check = check
 
     def canvas_doc(idea_id: str) -> dict:
         with db() as conn:
@@ -462,20 +500,14 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         blocked = router.budget(model["kind"], est)  # spends the estimate; a failed job gives it back
         if blocked is not None:
             return blocked
-        now = int(time.time() * 1000)
-        gid = secrets.token_urlsafe(9)
         inputs = {"prompt": prompt, "startFrame": start, "reference": ref, "duration": duration}
-        row = (gid, idea_id, node_id, model["kind"], model["id"], json.dumps(inputs),
-               input_hash(model["id"], prompt, start, ref, duration), "queued", est,
-               None, None, None, None, now, None, None)
         try:
             with db() as conn:
-                conn.execute(f"INSERT INTO generations ({COLUMNS}) VALUES ({', '.join('?' * NCOLUMNS)})", row)
+                out = enqueue(conn, idea_id, node_id, model["kind"], model["id"], inputs, est)
         except Exception:
             router.refund(model["kind"], est)
             raise
-        out = to_json(row)
-        router.jobs.submit(gid)
+        router.jobs.submit(out["id"])
         return JSONResponse(out, status_code=201)
 
     def left(kind: str) -> float:

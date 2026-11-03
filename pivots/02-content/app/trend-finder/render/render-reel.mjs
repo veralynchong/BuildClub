@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const APP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.REMOTION_PORT) || 8872
-const TYPES = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg' }
+const TYPES = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' }
 
 // One line for the backend to show: paths are scrubbed (they name folders on this machine) and it is capped.
 function fail(message) {
@@ -140,8 +140,9 @@ async function main() {
   const { server, base } = await serveMedia(mediaDir)
   try {
     const urls = Object.fromEntries(Object.entries(input.urls || {}).map(([k, name]) => [k, `${base}/${encodeURIComponent(name)}`]))
-    // fontUrl stays empty: Reel resolves the bundled font with staticFile.
-    const inputProps = { ...input, urls, fontUrl: '' }
+    const served = (name) => (name ? `${base}/${encodeURIComponent(name)}` : null)
+    // fontUrl stays empty: Reel resolves the bundled font with staticFile. Music, voice and the logo are file names in mediaDir too.
+    const inputProps = { ...input, urls, fontUrl: '', musicUrl: served(input.musicUrl), voice: (input.voice || []).map((v) => ({ ...v, url: served(v.url) })), brand: { ...input.brand, logoUrl: served(input.brand && input.brand.logoUrl) } }
     const composition = await selectComposition({ serveUrl, id: 'Reel', inputProps, port: PORT })
     let last = -1
     await renderMedia({

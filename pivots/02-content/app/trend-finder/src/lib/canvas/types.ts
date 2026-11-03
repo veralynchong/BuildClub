@@ -65,7 +65,7 @@ export interface Generation {
 export interface GenModel {
   id: string
   label: string
-  kind: 'image' | 'video'
+  kind: 'image' | 'video' | 'voice'
   provider: string
   endpoint: string
   tier: string

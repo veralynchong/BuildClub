@@ -130,3 +130,18 @@ def test_zero_cost_allowed_at_zero_cap(client, monkeypatch):
     monkeypatch.setattr(server, "DAILY_GEN_VIDEO_USD", 0)
     assert server.gen_budget("video", 0) is None
     assert server.gen_budget("video", 0.01).status_code == 429
+
+
+def test_voice_wallet_in_budget(client, monkeypatch):
+    assert server.GEN_WALLETS["voice"] == ("gen_voice", "DAILY_GEN_VOICE_USD")
+    assert server.gen_remaining()["voice"] == {"spent": 0, "cap": 0.30}
+    monkeypatch.setattr(server, "DAILY_GEN_VOICE_USD", 0.10)  # gen_cap reads the setting at call time
+    assert server.gen_cap("voice") == 0.10
+    assert server.gen_budget("voice", 0.06) is None
+    r = server.gen_budget("voice", 0.06)
+    assert r.status_code == 429
+    assert "0.04" in json.loads(r.body)["error"] and "DAILY_GEN_VOICE_USD" in json.loads(r.body)["error"]
+    assert server.gen_remaining()["voice"] == {"spent": 0.06, "cap": 0.10}
+    assert server.gen_remaining()["image"]["spent"] == 0  # the wallets are separate
+    server.gen_refund("voice", 0.06)
+    assert server.gen_budget("voice", 0.06) is None

@@ -126,6 +126,13 @@ export interface Line {
   role: 'hook' | 'setup' | 'proof' | 'payoff' | 'cta'
 }
 
+// A client's logo, font and colour for exported videos. logo is a file name served by /api/clients/:id/brand/logo.
+export interface Brand {
+  logo?: string | null
+  font: 'Noto Sans TC'
+  color?: string | null
+}
+
 export interface Client {
   id: string
   name: string
@@ -140,6 +147,7 @@ export interface Client {
   cannot: string[]
   // Every approval and rejection for this client, oldest first. Optional so older saved clients still load.
   memory?: ClientEvent[]
+  brand?: Brand
 }
 
 export type IdeaStatus = 'saved' | 'waiting' | 'approved' | 'rejected'

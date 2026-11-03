@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { Account } from './auth'
 import type { Lang } from './i18n'
-import type { AgencySettings, Client, ClientEvent, Role } from '../types'
+import type { AgencySettings, Brand, Client, ClientEvent, Role } from '../types'
 
 // Shared app state that many screens need, so they can read it without props threaded through App.tsx.
 export interface AppContextValue {
@@ -12,6 +12,9 @@ export interface AppContextValue {
   role: Role
   setRole: (role: Role) => void
   addClient: (client: Client) => void
+  clients: Client[]
+  // Mirrors a brand kit the editor just saved on the server, so a later save of the client list can't undo it.
+  setClientBrand: (clientId: string, brand: Brand | undefined) => void
   // The interface language, kept per browser (Settings → Language).
   lang: Lang
   setLang: (lang: Lang) => void

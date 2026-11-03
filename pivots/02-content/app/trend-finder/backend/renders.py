@@ -376,6 +376,16 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             return error(404, "That plan doesn't exist.")
         return state_of(idea_id, shots)
 
+    @router.get("/api/ideas/{idea_id}/cut/music/file")
+    def get_music_file(idea_id: str):
+        folder = folder_of(idea_id)
+        with db() as conn:
+            music = music_row(conn, idea_id)
+        path = folder / f"music-{music[0]}.{music[1]}" if folder and music else None
+        if path is None or not path.is_file():
+            return error(404, "There is no music for this plan.")
+        return FileResponse(path, media_type={"mp3": "audio/mpeg", "m4a": "audio/mp4", "wav": "audio/wav"}[music[1]])
+
     @router.get("/api/ideas/{idea_id}/cut/file")
     def get_file(idea_id: str, download: int = 0):
         folder = folder_of(idea_id)

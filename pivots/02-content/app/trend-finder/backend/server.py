@@ -33,6 +33,7 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 import assist
+import brand
 import canvas
 import channels
 import covers
@@ -59,7 +60,7 @@ import subtitles
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
 from compare import CompareJobs, compare_id_for
-from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Client,
+from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Brand, Client,
                     CompareJob, CompareRequest, CompareStarted, Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
 
 HERE = Path(__file__).resolve().parent
@@ -109,6 +110,7 @@ DAILY_APIFY_USD = float(os.environ.get("DAILY_APIFY_USD", 2.00))
 DAILY_CLAUDE_USD = float(os.environ.get("DAILY_CLAUDE_USD", 1.00))
 DAILY_GEN_IMAGE_USD = float(os.environ.get("DAILY_GEN_IMAGE_USD", 0.50))  # canvas image generations
 DAILY_GEN_VIDEO_USD = float(os.environ.get("DAILY_GEN_VIDEO_USD", 1.00))  # canvas video generations
+DAILY_GEN_VOICE_USD = float(os.environ.get("DAILY_GEN_VOICE_USD", 0.30))  # editor voiceover (text to speech)
 # Channel summaries: Jev labelling in US$; ScrapeCreators (Instagram only) in credits, 1 per 12 reels.
 DAILY_JEV_USD = float(os.environ.get("DAILY_JEV_USD", 0.50))
 DAILY_SCRAPECREATORS_CREDITS = float(os.environ.get("DAILY_SCRAPECREATORS_CREDITS", 20))
@@ -792,7 +794,12 @@ def get_clients():
 
 @app.put("/api/clients", response_model=list[Client], response_model_exclude_none=True)
 def put_clients(clients: list[Client]):
-    save("clients", clients)
+    # The brand kit belongs to the brand routes: a brand carried by the request is dropped and the stored one kept.
+    with brand.lock:
+        stored = {c["id"]: c.get("brand") for c in load("clients") or []}
+        for c in clients:
+            c.brand = Brand(**stored[c.id]) if stored.get(c.id) else None
+        save("clients", clients)
     return clients
 
 
@@ -917,11 +924,12 @@ def storyboard_refund(wallet: str, usd: float) -> None:
 app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget, storyboard_refund))
 app.include_router(shotlist.make_router(storyboard_budget))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
-GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_video", "DAILY_GEN_VIDEO_USD")}
+GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_video", "DAILY_GEN_VIDEO_USD"),
+               "voice": ("gen_voice", "DAILY_GEN_VOICE_USD")}
 
 
 def gen_cap(kind: str) -> float:
-    return DAILY_GEN_IMAGE_USD if kind == "image" else DAILY_GEN_VIDEO_USD
+    return globals()[GEN_WALLETS[kind][1]]  # looked up at call time, so a test can change the cap
 
 
 def gen_budget(kind: str, usd: float):
@@ -948,7 +956,8 @@ gen_router = generations.make_router(db, load, lambda: MEDIA_DIR, gen_budget, ge
 gen_jobs = gen_router.jobs
 app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
-app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR))
+app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR, gen_router))
+app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(grading.make_router(db, lambda: MEDIA_DIR))
 app.include_router(recheck.make_router(db, lambda u: is_video_link(u)))
