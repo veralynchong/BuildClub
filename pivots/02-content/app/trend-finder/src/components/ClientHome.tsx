@@ -3,6 +3,7 @@ import type { Client, Format, IdeaStatus, SavedIdea, Video } from "../types";
 import type { Pulse } from "../lib/clientChips";
 import { clientTopic } from "../lib/clientChips";
 import { t } from "../lib/i18n";
+import { useProduction } from "../lib/production";
 import {
   filmNext,
   planName,
@@ -71,6 +72,12 @@ export function ClientHome(p: Props) {
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .map(named);
   const sentBack = by("rejected").map(named);
+  // Approved plans whose finished video the approver sent back and nobody has re-sent.
+  const signals = useProduction(client.id);
+  const videosBack = approved.flatMap((plan) => {
+    const back = signals[plan.idea.id]?.cutSentBack;
+    return back ? [{ plan, reason: back.reason }] : [];
+  });
 
   const picks = filmNext({
     client,
@@ -139,6 +146,7 @@ export function ClientHome(p: Props) {
         <NeedsApprovalCard
           waiting={waiting}
           sentBack={sentBack}
+          videosBack={videosBack}
           onApprove={p.onApprove}
           onReview={p.onReview}
           onOpenPlan={p.onOpenPlan}

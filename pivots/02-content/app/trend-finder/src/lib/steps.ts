@@ -35,6 +35,8 @@ export interface Signals {
   cut?: boolean
   published?: boolean
   activityAt?: number | null
+  // The approver sent the finished video back and it has not been re-sent or replaced since.
+  cutSentBack?: { reason: string; at: number | null }
 }
 
 export const STUCK_DAYS = 3

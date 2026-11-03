@@ -32,6 +32,8 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
   const [busy, setBusy] = useState(false) // saving the edit or starting the export
   const [sending, setSending] = useState(false)
   const manager = useManagerName()
+  const doneRef = useRef<HTMLDivElement>(null)
+  const wasActive = useRef(false)
 
   const cutRef = useRef<CutState | null>(null)
   useEffect(() => {
@@ -96,6 +98,16 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
     return () => ac.abort()
   }, [ideaId, edit.save, looksKey, track])
 
+  // When an export finishes, bring the finished video and the send button into view.
+  const finished = isActive(cut) ? 'active' : cut?.status === 'done' && cut.output ? 'done' : 'idle'
+  useEffect(() => {
+    if (finished === 'active') wasActive.current = true
+    else if (finished === 'done' && wasActive.current) {
+      wasActive.current = false
+      doneRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    } else wasActive.current = false
+  }, [finished])
+
   const blockOf = (project: EditProject | null): Key | null =>
     project ? exportBlocked(project, Object.fromEntries(project.clips.map((c) => [c.id, timeline.statusOf(c).state] as [string, ClipStatus['state']]))) : 'editor.export.empty'
   const reason = blockOf(edit.project)
@@ -156,6 +168,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
         <div className="cut-progress" role="status">
           <progress value={cut.progress} max={1} />
           <span className="muted small">{serverText(cut.step)}</span>
+          <span className="muted small">{t('editor.export.expect')}</span>
         </div>
       )}
       {pollDead && (
@@ -172,7 +185,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
         </p>
       )}
       {output && !active && (
-        <div className="cv-ed-export-done">
+        <div className="cv-ed-export-done" ref={doneRef}>
           {cut?.stale && <p className="small">{t('editor.export.stale')}</p>}
           <video className="cv-ed-export-video" src={output.url} controls preload="metadata" />
           <div className="cv-ed-export-row">
@@ -186,6 +199,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
             )}
             <span className="muted small">{formatDuration(output.durationSec)}</span>
           </div>
+          {canSend && <p className="muted small">{t('editor.export.approver', { name: manager })}</p>}
           {line && <p className="small cut-review-line">{line}</p>}
           {review?.status === 'rejected' && review.reason && <p className="quote">{review.reason}</p>}
         </div>

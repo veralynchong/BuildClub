@@ -14,15 +14,20 @@ import {
   type DragData,
 } from "./moves";
 
+const truncate = (s: string, max = 80) => (s.length > max ? `${s.slice(0, max).trimEnd()}…` : s);
+
 // What a plan card shows: the video, what it copies, the due date and shots. Shared by the card and its drag copy.
 export function PlanCardBody({
   idea,
   video: v,
   format: f,
+  cutSentBack,
 }: {
   idea: SavedIdea;
   video: Video;
   format?: Format;
+  // The approver sent the finished video back and it has not been re-sent yet.
+  cutSentBack?: { reason: string };
 }) {
   const shots = shotsOf(idea, f).length;
   const manager = useManagerName();
@@ -56,6 +61,14 @@ export function PlanCardBody({
             {idea.rejectReason || (idea.rejectTags?.length ? "" : t("plan.card.noReason"))}
           </span>
         )}
+        {cutSentBack && idea.status === "approved" && (
+          <span className="board-reason small">
+            {t("plan.card.cutSentBack", {
+              manager,
+              reason: truncate(cutSentBack.reason.trim() || t("plan.card.noReason")),
+            })}
+          </span>
+        )}
         {last && (
           <span className="board-reason small">
             {t("plan.card.lastSentBack", { manager })}{" "}
@@ -81,6 +94,7 @@ interface Props {
   actions?: React.ReactNode;
   // Goes to the Research tab, for a plan whose video has a Research row.
   onFromResearch?: () => void;
+  cutSentBack?: { reason: string };
 }
 
 // Clicks and taps on the card's own controls never start a drag.
@@ -116,7 +130,7 @@ export function PlanCard(p: Props) {
       aria-roledescription={t("plan.card.roleDescription")}
       aria-label={name}
     >
-      <PlanCardBody idea={p.idea} video={p.video} format={p.format} />
+      <PlanCardBody idea={p.idea} video={p.video} format={p.format} cutSentBack={p.cutSentBack} />
 
       <div className="board-card-actions" {...keep}>
         <button className="btn btn-ghost btn-sm" onClick={p.onOpenPlan}>

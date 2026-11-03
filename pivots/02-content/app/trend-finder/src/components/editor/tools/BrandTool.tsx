@@ -24,14 +24,18 @@ export function BrandTool({ client, project, readOnly, onProject }: Props) {
   const [draft, setDraft] = useState<string | null>(null) // a colour being picked; saved when the picker closes
   const brand = client?.brand
   const colorRef = useRef<HTMLInputElement>(null)
+  const logoRef = useRef<HTMLInputElement>(null)
+  const projectRef = useRef(project) // the latest project, read after an upload finishes
+  projectRef.current = project
   const off = readOnly || busy || !client
 
-  const save = async (action: () => Promise<Brand>) => {
+  const save = async (action: () => Promise<Brand>, uploaded = false) => {
     if (!client) return
     setBusy(true)
     setError(null)
     try {
       setClientBrand(client.id, await action())
+      if (uploaded) onProject({ ...projectRef.current, showLogo: true }) // a new logo is meant to show
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -68,9 +72,11 @@ export function BrandTool({ client, project, readOnly, onProject }: Props) {
           <span className="muted small">{t('editor.brand.logo.none')}</span>
         )}
         <div className="cv-ed-tool-row">
-          <label className={`btn btn-ghost btn-sm cv-ed-upload${off ? ' is-disabled' : ''}`} aria-disabled={off}>
+          <button type="button" className="btn btn-ghost btn-sm cv-ed-upload" disabled={off} onClick={() => logoRef.current?.click()}>
             {brand?.logo ? t('editor.brand.logo.replace') : t('editor.brand.logo.upload')}
-            <input
+          </button>
+          <input
+              ref={logoRef}
               type="file"
               accept={LOGO_TYPES.join(',')}
               hidden
@@ -78,10 +84,9 @@ export function BrandTool({ client, project, readOnly, onProject }: Props) {
               onChange={(e) => {
                 const f = e.target.files?.[0]
                 e.target.value = ''
-                if (f) void save(() => putLogo(client!.id, f))
+                if (f) void save(() => putLogo(client!.id, f), true)
               }}
             />
-          </label>
           {brand?.logo && (
             <button type="button" className="btn btn-ghost btn-sm" disabled={off} onClick={() => void save(() => deleteLogo(client!.id))}>
               {t('editor.brand.logo.remove')}
