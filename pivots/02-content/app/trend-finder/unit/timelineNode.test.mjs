@@ -134,6 +134,7 @@ test('timelineFlow places the node right of the frames and draws a line per clip
   assert.equal(node.id, TIMELINE_NODE_ID)
   assert.deepEqual(node.position, { x: 900 + 120, y: 100 })
   assert.equal(node.deletable, false); assert.equal(node.draggable, false)
+  assert.equal(node.selectable, true) // else React Flow turns off its buttons on a read-only board
   assert.deepEqual(edges.map((e) => [e.id, e.source, e.target, e.targetHandle]), [['e_tl_n_vid_s1', 'n_vid_s1', 'n_timeline', 'in:clips'], ['e_tl_n_ft_s2', 'n_ft_s2', 'n_timeline', 'in:clips']])
   assert.deepEqual(timelineFlow(doc, null, boxes).edges, [])
 })
@@ -158,4 +159,11 @@ test('previewInput has every ReelInput field and leaves out music and voice', ()
   assert.equal(r.musicUrl, null); assert.deepEqual(r.voice, [])
   assert.equal(r.fontUrl, FONT_URL)
   assert.deepEqual(reelInput({ project, urls: {}, shots, musicUrl: '/m.mp3', voice: [], brand }).musicUrl, '/m.mp3')
+})
+test('timelineFlow starts a take line at the upload node holding it, and split pieces share one line', () => {
+  const withUpload = { ...doc, nodes: [...doc.nodes, { id: 'n_up_s2', type: 'upload', shotId: 's2', position: { x: 300, y: 664 }, data: { takeId: 't1' } }] }
+  assert.deepEqual(timelineFlow(withUpload, project, boxes).edges.map((e) => e.id), ['e_tl_n_vid_s1', 'e_tl_n_up_s2'])
+  const split = splitAt(project, 1.5, 'c9')
+  assert.equal(split.clips.length, 3)
+  assert.deepEqual(timelineFlow(doc, split, boxes).edges.map((e) => e.id), ['e_tl_n_vid_s1', 'e_tl_n_ft_s2'])
 })

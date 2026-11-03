@@ -18,6 +18,7 @@ export interface FlowNode {
   expandParent?: boolean
   style?: { width: number; height: number }
   draggable?: boolean
+  selectable?: boolean
   dragHandle?: string
   measured?: { width?: number; height?: number }
 }

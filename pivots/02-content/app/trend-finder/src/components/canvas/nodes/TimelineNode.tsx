@@ -6,6 +6,7 @@ import { clipLength, reelDurationInFrames, timelineSummary } from '../../../lib/
 import { previewInput, shotLines } from '../../../lib/editor/preview'
 import type { Clip } from '../../../lib/editor/types'
 import { Reel } from '../../../remotion/Reel'
+import { fillShotIds } from '../../../lib/storyboard'
 import { clipLabel } from '../../editor/clipName'
 import { useCanvas } from './ctx'
 
@@ -16,7 +17,8 @@ type Block = { key: string; flex: number; label: string; line: string; clip: Cli
 // The Timeline node (spec §7.1): a 9:16 preview, one block per clip in shot order (striped where a shot has none yet),
 // the captions row, and the way into the full editor. Virtual: built from the edit project, never saved.
 export function TimelineNode() {
-  const { editProject: project, clipUrls, brand, shots, gens, takes, openEditor } = useCanvas()
+  const { editProject: project, clipUrls, brand, shots: planShots, gens, takes, openEditor } = useCanvas()
+  const shots = useMemo(() => fillShotIds(planShots), [planShots]) // the same shot ids the editor uses
   const order = useMemo(() => shots.flatMap((s) => (s.id ? [s.id] : [])), [shots])
   const sum = timelineSummary(project, order)
   const lines = useMemo(() => shotLines(shots), [shots])

@@ -34,8 +34,10 @@ export function timelineFlow(doc: CanvasDoc, project: EditProject | null, boxes:
     // Not a saved node: fromFlow drops it, and nothing on the board reads this stand-in.
     data: { node: { id: TIMELINE_NODE_ID, type: 'video', position, data: {} } },
     deletable: false,
-    draggable: false, // left selectable: React Flow turns off pointer events (its buttons) on a node that is neither;
-    // the board drops its selection changes, so it never shows as selected
+    draggable: false,
+    // Selectable even on a read-only board: React Flow turns off pointer events (its buttons, the player) on a node that
+    // is neither selectable nor draggable. The board drops its selection changes, so it never shows as selected.
+    selectable: true,
   }
   const sources = new Set<string>()
   for (const c of project?.clips ?? []) {
