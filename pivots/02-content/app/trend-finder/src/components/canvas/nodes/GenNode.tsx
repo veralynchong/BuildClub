@@ -3,11 +3,13 @@ import { t } from '../../../lib/i18n'
 import { serverText } from '../../../lib/serverText'
 import { budgetLeft, failedGen, isRetired, pendingGen, priceOf, selectedGen, versionsOf } from '../../../lib/canvas/graph'
 import { PORTS } from '../../../lib/canvas/ports'
+import { genButton } from '../../../lib/canvas/status'
 import type { GenModel } from '../../../lib/canvas/types'
 import { VersionStrip } from '../VersionStrip'
+import { CardFoot, CardHead, CardMedia } from './Card'
 import { ClipActions } from './ClipActions'
 import { useCanvas } from './ctx'
-import { PortLabels, Ports } from './Ports'
+import { Ports } from './Ports'
 import type { CvNodeProps } from './types'
 
 const price = (m: GenModel, seconds: number | undefined): string => {
@@ -15,10 +17,14 @@ const price = (m: GenModel, seconds: number | undefined): string => {
   return est === 0 ? t('canvas.gen.free') : t('canvas.gen.cost', { usd: est.toFixed(2) })
 }
 
-// A storyboard or video node: model, optional prompt, the chosen version, the version strip and the Generate button.
+// "Nano Banana 2", without a trailing note such as "(free)".
+const shortLabel = (m: GenModel): string => m.label.replace(/\s*\(.*\)\s*$/, '')
+
+// A storyboard or video node card (spec §6.1): type and one status, the result, model and price, the main button.
+// The model, length, prompt and kit controls stay here until the right panel takes them (B6).
 export function GenNode({ id, data: { node } }: CvNodeProps) {
   const focused = useRef('')
-  const { models, gens, readOnly, updateData, onGenerate, onSelectVersion, edited, incomingHandles, missing, budget, chainOf, onChain, chaining, kitView, kitSent, setKitOff } = useCanvas()
+  const { models, gens, readOnly, updateData, onGenerate, onSelectVersion, edited, incomingHandles, missing, budget, chainOf, onChain, chaining, kitView, kitSent, setKitOff, status } = useCanvas()
   const kind = node.type === 'video' ? 'video' : 'image'
   const options = models.filter((m) => m.kind === kind)
   const retired = isRetired(models, kind, node.data.model)
@@ -48,14 +54,20 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
     return null
   }
 
-  const label = pending ? (pending.status === 'waiting' ? t('canvas.gen.waiting') : t('canvas.gen.running')) : failed ? t('canvas.gen.retry') : stale ? t('canvas.gen.again') : t('canvas.gen.go')
+  const main = genButton(node, gens)
+  const usdText = model ? price(model, seconds) : ''
 
   return (
-    <div className={`cv-node cv-gen cv-gen-${node.type}${stale ? ' is-stale' : ''}`}>
-      <div className="cv-node-title">
-        {t(`canvas.node.${node.type}`)}
-        {stale && <span className="cv-badge small">{t('canvas.gen.stale')}</span>}
-      </div>
+    <div className={`cv-node cv-card cv-gen cv-gen-${node.type}${stale ? ' is-stale' : ''}`}>
+      <CardHead title={t(`canvas.node.${node.type}`)} status={status(id)} />
+      <CardMedia kind={kind} url={shown?.url} running={!!pending} label={t(kind === 'video' ? 'canvas.gen.video' : 'canvas.gen.image')} />
+      {model && (
+        <CardFoot
+          model={kind === 'video' && seconds ? `${shortLabel(model)} · ${t('canvas.gen.seconds', { n: seconds })}` : shortLabel(model)}
+          price={usd === 0 ? usdText : t('canvas.card.price', { usd: usd.toFixed(2) })}
+          title={left === null || usd === 0 ? usdText : t('canvas.gen.budget', { usd: usd.toFixed(2), left: left.toFixed(2) })}
+        />
+      )}
       <select
         className="cv-select nodrag"
         aria-label={t('canvas.gen.model')}
@@ -104,21 +116,6 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
         onFocus={() => (focused.current = node.data.prompt ?? '')}
         onBlur={() => (node.data.prompt ?? '') !== focused.current && edited(id)}
       />
-      <div className="cv-preview small muted">
-        {pending ? (
-          <span role="status">
-            <span className="cv-spin" aria-hidden="true" /> {pending.status === 'waiting' ? t('canvas.gen.waiting') : t('canvas.gen.running')}
-          </span>
-        ) : shown?.url ? (
-          kind === 'video' ? (
-            <video className="nodrag" src={shown.url} muted playsInline controls preload="metadata" />
-          ) : (
-            <img src={shown.url} alt={t('canvas.gen.image')} draggable={false} />
-          )
-        ) : (
-          t('canvas.gen.empty')
-        )}
-      </div>
       {failed && !pending && (
         <p className={lost ? 'cv-gen-notice small' : 'cv-gen-error small'} role="alert">
           {lost ? t('canvas.gen.unknown') : t('canvas.gen.failed', { error: serverText(failed.error) })}
@@ -156,13 +153,8 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
       <VersionStrip versions={versions} selectedId={shown?.id ?? null} disabled={readOnly} onSelect={(g) => onSelectVersion(id, g)} />
       <div className="cv-gen-foot">
         <button type="button" className="btn btn-primary btn-sm nodrag" disabled={readOnly || !!pending || !model || !model.available || retired || need !== null} onClick={() => onGenerate(id)}>
-          {label}
+          {t(main.key, main.vars)}
         </button>
-        {model && (
-          <span className="small muted">
-            {left === null || usd === 0 ? price(model, seconds) : t('canvas.gen.budget', { usd: usd.toFixed(2), left: left.toFixed(2) })}
-          </span>
-        )}
       </div>
       {pair && !readOnly && (
         <button type="button" className="btn btn-ghost btn-sm nodrag cv-chain-btn" disabled={!!pendingGen(pair.imageNodeId, gens) || !!pendingGen(pair.videoNodeId, gens) || chaining || retired} onClick={() => onChain(id)}>
@@ -171,7 +163,6 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
       )}
       {model && !model.available && !pending && <p className="cv-gen-need small muted">{t('canvas.gen.needsKey')}</p>}
       {need && !pending && <p className="cv-gen-need small muted">{t(need)}</p>}
-      <PortLabels node={node} />
       <Ports node={node} />
     </div>
   )

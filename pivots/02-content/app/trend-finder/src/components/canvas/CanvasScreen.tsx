@@ -33,6 +33,7 @@ import { DropMenu } from './DropMenu'
 import { QueuePill } from './QueuePill'
 import { ZoomBar } from './ZoomBar'
 import { runningQueue, shellKey, writeFullscreen } from '../../lib/canvas/shell'
+import { nodeStatus } from '../../lib/canvas/status'
 import { EditorPanel } from '../editor/EditorPanel'
 import { useSources } from '../../lib/editor/useSources'
 import { useTimelineActions } from '../../lib/editor/useTimelineActions'
@@ -799,6 +800,16 @@ function CanvasBoard({
     notify: showNote,
   })
 
+  // The running queue and the node statuses; the clock ticks only while something is running.
+  const [now, setNow] = useState(() => Date.now())
+  const running = gens.some((g) => g.status === 'queued' || g.status === 'waiting' || g.status === 'running')
+  useEffect(() => {
+    if (!running) return
+    setNow(Date.now())
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [running])
+
   const ctx: CanvasCtx = {
     addToTimeline: (src) => void timeline.addClip(src),
     setPrimary: timeline.setPrimary,
@@ -838,6 +849,7 @@ function CanvasBoard({
       const model = models.find((m) => m.id === node?.data.model) ?? models.find((m) => m.kind === (node?.type === 'video' ? 'video' : 'image'))
       return model ? missingInput(doc, id, model, shots, gens) : null
     },
+    status: (id) => nodeStatus(doc, id, gens, models, shots, now),
     addAfterShot: (shotNodeId, kind) => {
       const made = addInShot(latest.current.doc, kind, shotNodeId)
       if (!made) return
@@ -892,8 +904,8 @@ function CanvasBoard({
       const el = e.target instanceof HTMLElement ? e.target : null
       const typing = !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
       const { fullscreen: full, dialogOpen: dlg, editorOpen } = keyState.current
-      // an open add-node menu or queue list takes Esc first (this listener runs in the capture phase, before they close)
-      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list, .cv-drop')
+      // an open add-node menu, queue list or larger view takes Esc first (this listener runs in the capture phase, before they close)
+      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list, .cv-drop, .cv-lightbox')
       const act = shellKey({ key: e.key, typing, dialogOpen, editorOpen }, full)
       if (act) setFull(act === 'enter')
     }
@@ -901,15 +913,6 @@ function CanvasBoard({
     return () => window.removeEventListener('keydown', on, true)
   }, [setFull])
 
-  // The running queue; the clock ticks only while something is running.
-  const [now, setNow] = useState(() => Date.now())
-  const running = gens.some((g) => g.status === 'queued' || g.status === 'waiting' || g.status === 'running')
-  useEffect(() => {
-    if (!running) return
-    setNow(Date.now())
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [running])
   const queue = useMemo(() => runningQueue(doc, gens, models, shots, now), [doc, gens, models, shots, now])
   const jumpTo = (id: string) => {
     setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })))

@@ -33,18 +33,3 @@ export function Ports({ node }: { node: CanvasNode }) {
     </>
   )
 }
-
-// Names the inputs beside their ports when a node has more than one.
-export function PortLabels({ node }: { node: CanvasNode }) {
-  const inputs = PORTS[node.type].inputs
-  if (inputs.length < 2) return null
-  return (
-    <>
-      {inputs.map((p, i) => (
-        <span key={p.id} className={`cv-port-label cv-media-${p.media}`} style={{ top: `${((i + 1) / (inputs.length + 1)) * 100}%` }}>
-          {t(PORT_LABEL[p.id])}
-        </span>
-      ))}
-    </>
-  )
-}

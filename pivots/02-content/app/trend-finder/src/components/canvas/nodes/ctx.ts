@@ -4,6 +4,7 @@ import type { Key } from '../../../lib/i18n'
 import type { Take } from '../../../lib/takes'
 import type { ClipSource } from '../../../lib/editor/types'
 import type { KitRefs } from '../../../lib/canvas/kit'
+import type { NodeStatus } from '../../../lib/canvas/status'
 import type { Budget, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
 
 // What the node components need from the board: the shot list, whether editing is allowed, and a few actions.
@@ -25,6 +26,7 @@ export interface CanvasCtx {
   edited: (nodeId: string) => void
   incomingHandles: (nodeId: string) => string[] // the inputs that have a line
   missing: (nodeId: string) => Key | null // what a generation still needs, or null
+  status: (nodeId: string) => NodeStatus // the one status the node card shows
   takes: Take[]
   shotIndex: (shotId: string | undefined) => number // the shot's current place in the shot list from 0, or -1 when gone
   uploading: (nodeId: string) => boolean
