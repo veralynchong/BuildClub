@@ -130,11 +130,6 @@ export const viewsPerFollower = (e: Pick<ResearchEntry, 'views' | 'followers'>):
 export const planOf = (e: ResearchEntry, ideas: SavedIdea[]): SavedIdea | undefined =>
   ideas.find((i) => i.clientId === e.clientId && i.videoId === e.videoId)
 
-// The due date of the client video this row is filed under, so a plan made from it starts with that date.
-// Only the same client's slot counts, like slotSummary.
-export const rowDueDate = (e: ResearchEntry, slots: ResearchSlot[]): string | undefined =>
-  slots.find((s) => s.id === e.slotId && s.clientId === e.clientId)?.dueDate || undefined
-
 export function researchStatus(e: ResearchEntry, ideas: SavedIdea[]): ResearchStatus {
   const plan = planOf(e, ideas)
   if (!plan) return 'none'
@@ -274,4 +269,26 @@ export function newSlot(
   let id = base
   for (let i = 2; taken.has(id); i++) id = `${base}-${i}`
   return { id, clientId, number, topic: topic.trim(), dueDate: dueDate?.trim() || undefined, createdAt: now }
+}
+
+// The due date a plan picked in Research starts with: its video's due date when the slot has a valid one, else
+// `fallback` (two weeks from today, like any new plan). Picking never asks for a date; it can be changed on Plans.
+export function planDueDate(slot: Pick<ResearchSlot, 'dueDate'> | undefined, fallback: string): string {
+  const due = slot?.dueDate?.trim()
+  return due && /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : fallback
+}
+
+// True when someone has worked on a plan: shots written, editor notes changed from what a new plan starts with
+// (`defaultNotes`, the reference's editor notes), a note to the manager, or it was ever sent for approval. Picking
+// another reference in the same video replaces a plan like this only after asking; an untouched one is replaced
+// at once, so a normal pick never stops to ask.
+export function planHasWork(plan: SavedIdea, defaultNotes = ''): boolean {
+  return (
+    plan.shots !== undefined ||
+    plan.notes.trim() !== defaultNotes.trim() ||
+    !!plan.noteToApprover?.trim() ||
+    plan.sentAt !== undefined ||
+    !!plan.history?.length ||
+    plan.status !== 'saved'
+  )
 }

@@ -132,6 +132,11 @@
 :root[data-ui="altitude"] .rs-status-filming,
 :root[data-ui="altitude"] .rs-status-editing { background: var(--accent-soft); color: var(--accent-soft-fg); }
 :root[data-ui="altitude"] .rs-status-posted { background: var(--early-soft); color: var(--early); }
+/* "Sent to Plans": a note on the row just picked, and a message (the shared .toast) with "Open Plans →" */
+:root[data-ui="altitude"] .rs-sent { display: inline-flex; align-items: center; gap: var(--space-2xs); color: var(--accent); font-weight: 600; white-space: nowrap; }
+/* The live region stays out of the page flow (no gap when empty); the message inside is the fixed .toast. */
+:root[data-ui="altitude"] .rs-sent-live { position: fixed; }
+:root[data-ui="altitude"] .rs-sent-toast .btn { white-space: nowrap; }
 
 /* Remove (rows not planned only), with an inline "Remove this row?" */
 :root[data-ui="altitude"] .rs-remove-ask { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }

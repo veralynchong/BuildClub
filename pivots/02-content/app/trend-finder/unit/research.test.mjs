@@ -11,7 +11,8 @@ import {
   slotSummary,
   researchProgress,
   newSlot,
-  rowDueDate,
+  planDueDate,
+  planHasWork,
 } from '../src/lib/research.ts'
 import { sampleResearch, sampleResearchSlots } from '../src/data/sampleResearch.ts'
 import { videos, sampleIdeas } from '../src/data/sample.ts'
@@ -377,15 +378,26 @@ test('groupRows: the picked reference goes to the top of its video; rowRole read
   assert.equal(rowRole(a, g), 'open')
 })
 
-test('rowDueDate: a row filed under a dated client video gives that date; otherwise none', () => {
-  const slots = [
-    { id: 's1', clientId: 'c1', number: 1, topic: 'Tofu', dueDate: '2026-11-10', createdAt: 0 },
-    { id: 's2', clientId: 'c1', number: 2, topic: 'Soup', createdAt: 0 },
-    { id: 's3', clientId: 'c2', number: 1, topic: 'Other client', dueDate: '2026-12-01', createdAt: 0 },
-  ]
-  const row = (o) => ({ id: 'r', clientId: 'c1', videoId: 'v1', ...o })
-  assert.equal(rowDueDate(row({ slotId: 's1' }), slots), '2026-11-10')
-  assert.equal(rowDueDate(row({ slotId: 's2' }), slots), undefined)
-  assert.equal(rowDueDate(row({}), slots), undefined)
-  assert.equal(rowDueDate(row({ slotId: 's3' }), slots), undefined) // another client's slot never counts
+test('planDueDate: the slot due date when valid, else the fallback', () => {
+  assert.equal(planDueDate({ dueDate: '2026-12-01' }, '2026-11-17'), '2026-12-01')
+  assert.equal(planDueDate({ dueDate: ' 2026-12-01 ' }, '2026-11-17'), '2026-12-01')
+  assert.equal(planDueDate({}, '2026-11-17'), '2026-11-17')
+  assert.equal(planDueDate({ dueDate: '' }, '2026-11-17'), '2026-11-17')
+  assert.equal(planDueDate({ dueDate: 'next week' }, '2026-11-17'), '2026-11-17')
+  assert.equal(planDueDate(undefined, '2026-11-17'), '2026-11-17')
+})
+
+test('planHasWork: an untouched new plan has none; any edit or send counts', () => {
+  const fresh = idea({ notes: 'Match the pacing' })
+  assert.equal(planHasWork(fresh, 'Match the pacing'), false)
+  assert.equal(planHasWork(fresh, ' Match the pacing '), false)
+  assert.equal(planHasWork(idea({ notes: '' })), false)
+  assert.equal(planHasWork(fresh, ''), true, 'notes changed from the default')
+  assert.equal(planHasWork({ ...fresh, shots: [] }, 'Match the pacing'), true, 'shots edited, even emptied')
+  assert.equal(planHasWork({ ...fresh, noteToApprover: 'Fun one' }, 'Match the pacing'), true)
+  assert.equal(planHasWork({ ...fresh, noteToApprover: '  ' }, 'Match the pacing'), false)
+  assert.equal(planHasWork({ ...fresh, sentAt: 1 }, 'Match the pacing'), true)
+  assert.equal(planHasWork({ ...fresh, history: [{ kind: 'rejected', at: 1 }] }, 'Match the pacing'), true)
+  assert.equal(planHasWork({ ...fresh, status: 'rejected' }, 'Match the pacing'), true)
+  assert.equal(planHasWork({ ...fresh, status: 'waiting' }, 'Match the pacing'), true)
 })

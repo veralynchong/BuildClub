@@ -86,7 +86,7 @@ import { ClientHome } from './components/ClientHome'
 import { ResearchScreen } from './components/research/ResearchScreen'
 import type { RowPick } from './components/research/ResearchScreen'
 import { SaveToVideo } from './components/research/SaveToVideo'
-import { entryFromVideo, newSlot, planOf, researchId, researchStatus, rowDueDate, slotSummary, videoFromLink, withPlanRows } from './lib/research'
+import { entryFromVideo, newSlot, planDueDate, planHasWork, planOf, researchId, researchStatus, slotSummary, videoFromLink, withPlanRows } from './lib/research'
 import type { LinkInput, ResearchEntry } from './lib/research'
 import { pickLabel } from './lib/compare'
 
@@ -104,6 +104,8 @@ const sorters: Record<Sort, (a: (typeof videos)[number], b: (typeof videos)[numb
 // Stands in for the selected client while there are none (a real-mode account that hasn't added one yet).
 const NO_CLIENT: Client = { id: '', name: '', niche: '', audience: '', monthlyTarget: 0, examples: [], cannot: [] }
 const VIEW_KEY = 'remake.view.v1'
+// The planning board brings in React Flow, so it loads only when opened.
+const ShotBoard = lazy(() => import('./components/board/ShotBoard').then((m) => ({ default: m.ShotBoard })))
 
 // The tab to open on a refresh: the one saved for this browser tab, if it still makes sense.
 // Results, a plan and Review need state that isn't saved, so they fall back to Find ideas or Plans.
@@ -116,7 +118,7 @@ function restoreTab(workspace: Workspace): View {
   }
   if (workspace === 'all') return 'overview'
   if (saved === 'results') return 'search'
-  if (saved === 'plan' || saved === 'canvas' || saved === 'review') return 'shortlist'
+  if (saved === 'plan' || saved === 'canvas' || saved === 'board' || saved === 'review') return 'shortlist'
   if (saved === 'home' || saved === 'search' || saved === 'research' || saved === 'shortlist' || saved === 'settings') return saved
   return 'search'
 }
@@ -916,7 +918,7 @@ export default function App() {
   }
 
   // Makes the plan for a video (Still planning), or returns the one it already has. `format` is for a video
-  // added in the same click (not in formatById yet).
+  // added in the same click (not in formatById yet). `dueDate` defaults to two weeks from today.
   const saveIdea = (videoId: string, format?: Format, dueDate?: string): SavedIdea => {
     breakDown(videoId)
     const existing = ideas.find((i) => i.videoId === videoId && i.clientId === client.id)
@@ -957,10 +959,6 @@ export default function App() {
     if (!slot) return { short: t('research.unsorted'), full: t('research.unsorted') }
     const short = t('research.slot.videoNo', { n: slot.number })
     return { short, full: slot.topic ? `${short} · ${slot.topic}` : short }
-  }
-  const openInResearch = (videoId: string) => {
-    setResearchFocus(researchId(client.id, videoId))
-    setView('research')
   }
 
   // Every Save to Research button: asks which video it's for first (when the client has any), then saves.
@@ -1043,6 +1041,11 @@ export default function App() {
     openCanvas(idea, format.shotList, true)
   }
 
+  // The planning board for the plan that is open; its Back returns to the plan.
+  const openBoard = () => {
+    if (planIdeaId) setView('board')
+  }
+
   // Find ideas' plan button and P key: a video with a plan opens it; any other is saved to Research (plans are
   // made from Research).
   const planFromVideo = (videoId: string) => {
@@ -1066,10 +1069,14 @@ export default function App() {
   }
 
   // Makes a Research row's plan. A row whose video has left this browser's store gets it back from the row's own copy.
+  // The plan's due date is its video's (slot's) due date when set, else two weeks from today: picking never asks.
   const planRow = (rowId: string, open = true) => {
     const row = research.find((e) => e.id === rowId)
     if (!row) return
-    const due = rowDueDate(row, researchSlots) // the client video's due date, when the row is filed under one
+    const due = planDueDate(
+      researchSlots.find((s) => s.id === row.slotId && s.clientId === row.clientId),
+      inTwoWeeks(),
+    )
     if (videoById.has(row.videoId) || hasPlan(row.videoId)) return planNow(row.videoId, undefined, open, due)
     const { video, format } = videoFromLink(rowLink(row))
     const restored = { ...video, id: row.videoId }
@@ -1202,6 +1209,7 @@ export default function App() {
     plan: t('shell.back.plan'),
     canvas: t('shell.back.canvas'),
     canvasPick: t('shell.back.canvas'),
+    board: t('board.backLabel'),
     settings: t('shell.back.settings'),
     preferences: t('shell.back.preferences'),
     channel: t('shell.back.channel'),
@@ -1261,7 +1269,7 @@ export default function App() {
   }
 
   // A plan view without its plan (e.g. after switching sample/live data) would be blank: show Plans instead.
-  const planMissing = (view === 'plan' || view === 'canvas') && !(planIdea && planVideo && planFormat && planClient)
+  const planMissing = (view === 'plan' || view === 'canvas' || view === 'board') && !(planIdea && planVideo && planFormat && planClient)
   useEffect(() => {
     if (planMissing) setViewRaw('shortlist')
   }, [planMissing])
@@ -1524,7 +1532,6 @@ export default function App() {
               onToggleSave={toggleSave}
               onGoResearch={() => setView('research')}
               savedIn={savedIn}
-              onOpenInResearch={openInResearch}
               blockedFormatIds={blockedFormatIds}
             />
           )}
@@ -1537,6 +1544,12 @@ export default function App() {
               onUpdate={(id, patch) => setResearch((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))}
               onRemove={removeResearch}
               onPick={pickRow}
+              planHasWork={(e) => {
+                const plan = planOf(e, ideas)
+                const v = plan && videoById.get(plan.videoId)
+                return !!plan && planHasWork(plan, (v && formatById.get(v.formatId)?.editorNotes) ?? '')
+              }}
+              onOpenPlans={() => setView('shortlist')}
               focusRowId={researchFocus}
               onFocused={() => setResearchFocus(null)}
               onOpenPlan={(id) => {
@@ -1647,7 +1660,22 @@ export default function App() {
               onPlanAnother={planAnother}
               onGoApprovals={() => setView('shortlist')} // stream B: the board replaces Approvals
               onDecide={(d) => decide(planIdea.id, d)}
+              onOpenBoard={openBoard}
             />
+          )}
+
+          {inClient && view === 'board' && planIdea && planVideo && planFormat && planClient && (
+            <Suspense fallback={null}>
+              <ShotBoard
+                key={planIdea.id}
+                idea={planIdea}
+                format={planFormat}
+                client={planClient}
+                live={live}
+                onSave={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
+                onBack={() => setView('plan')}
+              />
+            </Suspense>
           )}
         </main>
       </div>
