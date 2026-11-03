@@ -27,7 +27,7 @@ const playhead = (page) => page.locator('.cv-ed-ruler').getAttribute('aria-value
       const row = { clips: n }
       const t0 = Date.now()
       await L.gotoCanvas(page)
-      await page.getByRole('button', { name: /Open editor/ }).click()
+      await page.getByRole('button', { name: 'Timeline', exact: true }).click()
       await page.waitForSelector('.cv-ed-clip', { timeout: 30000 })
       await page.waitForFunction((n) => document.querySelectorAll('.cv-ed-clip').length === n, n, { timeout: 30000 })
       row.openEditorMs = Date.now() - t0

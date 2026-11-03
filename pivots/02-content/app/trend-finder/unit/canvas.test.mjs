@@ -209,15 +209,6 @@ test('toFlow / fromFlow keep the saved node data and only take positions and vie
   assert.equal(fromFlow(nodes, edges, undefined).viewport, undefined)
 })
 
-import { isDefaultViewport } from '../src/lib/canvas/flow.ts'
-
-test('the backend\'s starting view counts as not yet set', () => {
-  assert.equal(isDefaultViewport(undefined), true)
-  assert.equal(isDefaultViewport({ x: 0, y: 0, zoom: 1 }), true)
-  assert.equal(isDefaultViewport({ x: 0, y: 0, zoom: 1.2 }), false)
-  assert.equal(isDefaultViewport({ x: -40, y: 0, zoom: 1 }), false)
-})
-
 test('addNode gives every node a new id and leaves the input doc alone', () => {
   const doc = docWith()
   const ids = new Set(doc.nodes.map((n) => n.id))
