@@ -55,8 +55,11 @@ def make_router(db) -> APIRouter:
             for idea_id, size, started, finished in conn.execute("SELECT idea_id, out_size, started_at, finished_at FROM renders"):
                 row(idea_id)["cut"] = size is not None
                 seen(idea_id, started, finished)
-            for idea_id, sent, decided in conn.execute("SELECT idea_id, sent_at, decided_at FROM cut_reviews"):
+            for idea_id, sent, decided, status, reason in conn.execute(
+                    "SELECT idea_id, sent_at, decided_at, status, reason FROM cut_reviews"):
                 seen(idea_id, sent, decided)
+                if status == "rejected":  # the row is deleted when a new video replaces it and set to waiting on a resend
+                    row(idea_id)["cutSentBack"] = {"reason": reason or "", "at": ms(decided or sent)}
             for idea_id, created in conn.execute("SELECT idea_id, MAX(created_at) FROM takes GROUP BY idea_id"):
                 seen(idea_id, created)
             for idea_id, status, created, published in conn.execute(

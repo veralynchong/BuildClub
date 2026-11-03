@@ -77,9 +77,14 @@ export function useEditProject(ideaId: string, readOnly: boolean): EditHook {
     getProject(ideaId).then(
       (r) => {
         if (cancelled) return
-        latest.current = r.project
+        // A project that was never saved (version 0) starts with captions on. It is saved with the next edit or
+        // export; saved projects keep what they have.
+        const fresh = r.version === 0 && !readOnlyRef.current
+        const loaded = fresh ? { ...r.project, captions: { enabled: true } } : r.project
+        latest.current = loaded
+        dirty.current = fresh
         version.current = r.version
-        setProject(r.project)
+        setProject(loaded)
         setLoadError(null)
         setStale(false)
         setSave('idle')

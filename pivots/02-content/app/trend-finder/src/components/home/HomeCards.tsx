@@ -10,6 +10,7 @@ import type {
 } from "../../lib/clientHome";
 import { dueText, duration, monthLeft, possessive } from "../../lib/clientHome";
 import { t, tp } from "../../lib/i18n";
+import { useManagerName } from "../../lib/appContext";
 import { Thumb } from "../Thumb";
 
 // Cards for both Homes (one client and All clients). Each card: a small mono label, a serif heading, plain
@@ -203,6 +204,8 @@ function PlanLine(p: {
 export function NeedsApprovalCard(p: {
   waiting: Named[];
   sentBack: Named[];
+  // Approved plans whose finished video was sent back and not re-sent yet.
+  videosBack?: { plan: Named; reason: string }[];
   // Missing for a team member: only the manager approves (in the app or on the review link).
   onApprove?: (ideaId: string) => void;
   onReview: () => void;
@@ -210,6 +213,8 @@ export function NeedsApprovalCard(p: {
 }) {
   const shown = p.waiting.slice(0, 3);
   const more = p.waiting.length - shown.length;
+  const manager = useManagerName();
+  const videosBack = p.videosBack ?? [];
   return (
     <Card
       id="ch-needs"
@@ -224,7 +229,7 @@ export function NeedsApprovalCard(p: {
         ) : undefined
       }
     >
-      {p.waiting.length === 0 && (
+      {p.waiting.length === 0 && videosBack.length === 0 && (
         <Empty>{t("home.cards.needsEmpty")}</Empty>
       )}
       {shown.length > 0 && (
@@ -261,6 +266,22 @@ export function NeedsApprovalCard(p: {
                 <PlanLine
                   plan={plan}
                   detail={t("home.cards.yourReason", { reason: plan.idea.rejectReason?.trim() || t("home.cards.noneGiven") })}
+                  onOpen={p.onOpenPlan}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {videosBack.length > 0 && (
+        <div className="ch-sub ch-split">
+          <span className="field-label">{t("home.cards.videosBackLabel")}</span>
+          <ul className="ch-rows">
+            {videosBack.slice(0, 2).map(({ plan, reason }) => (
+              <li key={plan.idea.id} className="ch-row-stack">
+                <PlanLine
+                  plan={plan}
+                  detail={t("home.cards.videoBackReason", { manager, reason: reason.trim() || t("home.cards.noneGiven") })}
                   onOpen={p.onOpenPlan}
                 />
               </li>
