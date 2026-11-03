@@ -10,6 +10,7 @@ import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import type { EditHook } from '../../lib/editor/useEditProject'
 import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
+import { projectPages } from '../../lib/editor/captions'
 import { fillShotIds } from '../../lib/storyboard'
 import { addVoice, reelDurationInFrames, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
@@ -230,7 +231,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const locked = readOnly || stale
   const fill = async () => setSkipped(await timeline.fill())
 
-  const done = stepsDone({ project, clientHasLogo: !!kit?.logo, cut })
+  const done = stepsDone({ project, clientHasLogo: !!kit?.logo, captionPages: projectPages(project, lines, words).length, cut })
   const onStep = (step: EditorStep) => {
     if (step === 'export' || step === 'send') {
       setExportOpen(true)

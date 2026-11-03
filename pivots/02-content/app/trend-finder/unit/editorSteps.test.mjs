@@ -35,3 +35,9 @@ test('send is done while the review waits or after it is approved, not when reje
   // a stale video was replaced since it was sent
   assert.equal(stepsDone({ project: p, clientHasLogo: false, cut: cut({ stale: true, review: { status: 'waiting' } }) }).send, false)
 })
+
+test('captions switched on with no caption pages are not done', () => {
+  const p = project({ captions: { enabled: true } })
+  assert.deepEqual(done({ project: p, clientHasLogo: false, captionPages: 0, cut: null }), ['clips'])
+  assert.deepEqual(done({ project: p, clientHasLogo: false, captionPages: 2, cut: null }), ['clips', 'captions'])
+})
