@@ -8,7 +8,8 @@ export type GenRef = { source: 'gen'; genId: string } | { source: 'kit'; itemId:
 
 export interface KitRefs {
   references: GenRef[]
-  dropped: string[] // names of kit items (or 'image N' for manual refs) not sent in full
+  dropped: string[] // names of kit items not sent in full
+  droppedManual: number[] // 1-based positions of manual refs that were cut
   unused: boolean // the model takes no references
 }
 
@@ -22,7 +23,7 @@ function fromHandle(doc: CanvasDoc, nodeId: string, handle: string): CanvasEdge[
 // (kind order, every image of an item), over the model's cap trimmed from the end (manual lines last).
 // Text-only kit refs (an item with no images) are not counted and never trimmed.
 export function kitRefs(doc: CanvasDoc, nodeId: string, kit: Kit | null, gens: Generation[], model: GenModel | undefined): KitRefs {
-  if (model && (model.inputs.reference ?? 'none') === 'none') return { references: [], dropped: [], unused: true }
+  if (model && (model.inputs.reference ?? 'none') === 'none') return { references: [], dropped: [], droppedManual: [], unused: true }
   const node = doc.nodes.find((n) => n.id === nodeId)
   const manual: GenRef[] = []
   for (const e of fromHandle(doc, nodeId, 'in:ref')) {
@@ -43,6 +44,7 @@ export function kitRefs(doc: CanvasDoc, nodeId: string, kit: Kit | null, gens: G
   let room = cap - manual.length
   const references: GenRef[] = manual.slice(0, Math.max(0, cap))
   const dropped: string[] = []
+  const droppedManual: number[] = []
   for (const item of items) {
     if (item.images.length === 0) {
       references.push({ source: 'kit', itemId: item.id })
@@ -53,8 +55,8 @@ export function kitRefs(doc: CanvasDoc, nodeId: string, kit: Kit | null, gens: G
     room -= take
     if (take < item.images.length) dropped.push(item.name)
   }
-  for (let n = references.filter((r) => r.source === 'gen').length; n < manual.length; n++) dropped.push(`image ${n + 1}`)
-  return { references, dropped, unused: false }
+  for (let n = references.filter((r) => r.source === 'gen').length; n < manual.length; n++) droppedManual.push(n + 1)
+  return { references, dropped, droppedManual, unused: false }
 }
 
 // Puts a line from the kit node to every storyboard that has none, except those whose line was cut by hand.

@@ -36,7 +36,7 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
   const pair = node.type === 'storyboard' ? chainOf(id) : null
   const lost = failed?.status === 'unknown'
   const kitSeen = node.type === 'storyboard' ? kitView(id) : null
-  const sent = kitSeen ? kitSent(id, model) : null
+  const sent = node.type === 'storyboard' ? kitSent(id, model) : null
   const sentPrompt = shown?.inputs.sentPrompt
 
   // Why a model can't be picked: it has no use for an input that already has a line.
@@ -134,10 +134,14 @@ export function GenNode({ id, data: { node } }: CvNodeProps) {
           ))}
         </fieldset>
       )}
-      {sent?.unused && <p className="cv-gen-need small muted">{t('canvas.kit.unused')}</p>}
-      {sent && sent.dropped.length > 0 && <p className="cv-gen-notice small">{t('canvas.kit.dropped', { max: model?.maxRefs ?? 1, names: sent.dropped.join(', ') })}</p>}
+      {kitSeen && sent?.unused && <p className="cv-gen-need small muted">{t('canvas.kit.unused')}</p>}
+      {sent && sent.dropped.length + sent.droppedManual.length > 0 && (
+        <p className="cv-gen-notice small">
+          {t('canvas.kit.dropped', { max: model?.maxRefs ?? 1, names: [...sent.dropped, ...sent.droppedManual.map((n) => t('canvas.kit.droppedImage', { n }))].join(', ') })}
+        </p>
+      )}
       {kitSeen && kitSeen.removed.length > 0 && <p className="cv-gen-notice small">{t('canvas.kit.removed', { names: kitSeen.removed.join(', ') })}</p>}
-      {sentPrompt && (
+      {sentPrompt && sentPrompt !== shown?.inputs.prompt && (
         <details className="cv-kit-sent small nodrag nowheel">
           <summary>{t('canvas.kit.sent')}</summary>
           <pre>{sentPrompt}</pre>

@@ -10,7 +10,7 @@ from typing import Callable, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ValidationError
 
 import generations
 from brand import lock

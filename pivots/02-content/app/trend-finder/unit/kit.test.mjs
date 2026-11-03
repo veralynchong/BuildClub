@@ -56,7 +56,7 @@ test('kitRefs lists a partly cut item as dropped', () => {
 test('kitRefs trims manual refs last', () => {
   const r = kitRefs(docOf({ manual: 3, kitItems: [] }), 'sb', kit, gens, model(1))
   assert.deepEqual(ids(r), ['g1'])
-  assert.deepEqual(r.dropped, ['image 2', 'image 3'])
+  assert.deepEqual([r.dropped, r.droppedManual], [[], [2, 3]])
 })
 
 test('kitRefs with null kit', () => {
@@ -67,7 +67,7 @@ test('kitRefs with null kit', () => {
 
 test('kitRefs on a model with reference none', () => {
   const r = kitRefs(docOf({ manual: 1 }), 'sb', kit, gens, model(14, 'none'))
-  assert.deepEqual(r, { references: [], dropped: [], unused: true })
+  assert.deepEqual(r, { references: [], dropped: [], droppedManual: [], unused: true })
 })
 
 test('kitRefs without an in:kit edge sends no kit refs', () => {

@@ -1,6 +1,5 @@
 import type { Key } from '../i18n.ts'
-import type { Shot } from '../../types.ts'
-import type { Kit } from '../../types.ts'
+import type { Kit, Shot } from '../../types.ts'
 import { kitRefs, type GenRef } from './kit.ts'
 import { PORTS } from './ports.ts'
 import type { Budget, CanvasDoc, CanvasNode, GenModel, Generation, NodeData, NodeKind } from './types.ts'
@@ -179,7 +178,7 @@ export function roomBelow(doc: CanvasDoc, at: { x: number; y: number }): { x: nu
 
 const ROW_STEP = 360 // matches the backend's column spacing
 const NODE_W = 240 // a node is 200 wide; the rest is a margin
-const ROW_GAP = 280 // a row is 400 apart in the backend; nodes in one row sit well inside this
+const ROW_GAP = 280 // a row is 480 apart in the backend; nodes in one row sit well inside this
 
 function startData(kind: NodeKind): NodeData {
   switch (kind) {

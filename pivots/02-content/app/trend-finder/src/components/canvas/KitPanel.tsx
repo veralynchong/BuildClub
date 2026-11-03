@@ -105,7 +105,7 @@ export function KitPanel({ clientId, kit, selected, onKit, onSelected, onClose }
   const askRow = (item: KitItem, image?: string) => (
     <div className="cv-kit-confirm" role="alert">
       <span>{image ? t('canvas.kit.panel.confirm.image') : t('canvas.kit.panel.confirm.item', { name: item.name })}</span>
-      <button type="button" className="btn btn-sm" onClick={() => void remove(item, image)}>{t('canvas.kit.panel.confirm.yes')}</button>
+      <button type="button" className="btn btn-primary btn-sm" onClick={() => void remove(item, image)}>{t('canvas.kit.panel.confirm.yes')}</button>
       <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirm(null)}>{t('canvas.kit.panel.confirm.no')}</button>
     </div>
   )
@@ -224,7 +224,7 @@ export function KitPanel({ clientId, kit, selected, onKit, onSelected, onClose }
           {KINDS.map(([k, label]) => <option key={k} value={k}>{t(label)}</option>)}
         </select>
         <input type="text" aria-label={t('canvas.kit.panel.name')} placeholder={t('canvas.kit.panel.name')} maxLength={40} value={newName} onChange={(e) => setNewName(e.target.value)} />
-        <button type="submit" className="btn btn-sm" disabled={!newName.trim() || !!busy['']}>{t('canvas.kit.panel.add')}</button>
+        <button type="submit" className="btn btn-primary btn-sm" disabled={!newName.trim() || !!busy['']}>{t('canvas.kit.panel.add')}</button>
       </form>
       {errors[''] && <p className="cv-kit-error small" role="alert"><ErrorText text={errors['']} /></p>}
 

@@ -1263,6 +1263,29 @@ def test_kit_copies_of_one_image_use_separate_temp_files(gen, monkeypatch):
     assert not [p for p in folder.iterdir() if p.name.endswith(".part")]
 
 
+def test_kit_copy_shrinks_big_image_and_keeps_small_one(gen):
+    from PIL import Image
+    import kit
+    folder = kit.kit_folder(server.MEDIA_DIR, "a")
+    folder.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", (3000, 2000), (200, 10, 10, 128)).save(folder / "ka_big.png")
+    Image.new("RGB", (800, 600), (1, 2, 3)).save(folder / "ka_small.png")
+    stored = [{"source": "kit", "image": n, "file": f"kit-{n}"} for n in ("ka_big.png", "ka_small.png")]
+    generations.copy_kit_images(kit, server.MEDIA_DIR, "a", "ia", stored)
+    out = server.MEDIA_DIR / "ia" / "gen"
+    with Image.open(out / "kit-ka_big.png") as big:
+        assert max(big.size) == 1536 and big.mode == "RGBA"
+    assert (out / "kit-ka_small.png").read_bytes() == (folder / "ka_small.png").read_bytes()  # never touched
+    with Image.open(folder / "ka_big.png") as original:
+        assert original.size == (3000, 2000)
+    assert not [p for p in out.iterdir() if p.name.endswith(".part")]
+
+
+def test_models_with_per_ref_price_are_rejected():
+    errors = generations.validate_models([{"id": "m", "provider": "mock", "kind": "image", "price": {"usd": 1, "perRefUsd": 0.1}}])
+    assert any("perRefUsd" in e for e in errors)
+
+
 def test_text_only_style_ref_adds_style_line(real):
     film = kit_item(real, name="Warm film", kind="style", note="", images=0)
     mia = kit_item(real)

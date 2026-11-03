@@ -15,6 +15,7 @@ from typing import Callable, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
+from PIL import Image, UnidentifiedImageError
 
 import cutting
 import gen_providers
@@ -105,6 +106,8 @@ def validate_models(models: list[dict]) -> list[str]:
             errors.append(f"{mid}: unknown provider {m.get('provider')!r}")
         if m.get("kind") == "video" and "9:16" not in m.get("aspects", []):
             errors.append(f"{mid}: video model without 9:16")
+        if (m.get("price") or {}).get("perRefUsd") is not None:
+            errors.append(f"{mid}: perRefUsd is not supported yet")
     return errors
 
 
@@ -216,6 +219,25 @@ def with_prefix(kit, prompt: str, items: list) -> Optional[str]:
     return None
 
 
+KIT_MAX_EDGE = 1536  # long edge of a kit image sent to a provider: phone photos would blow the request size
+
+
+def _write_shrunk(source: Path, part: Path) -> None:
+    """Write `source` to `part`, shrunk to KIT_MAX_EDGE on the long edge (never enlarged, format and alpha kept).
+    A file Pillow can't read, or one that is small enough already, is copied byte for byte."""
+    try:
+        with Image.open(source) as im:
+            fmt = im.format
+            if max(im.size) <= KIT_MAX_EDGE or fmt not in ("JPEG", "PNG", "WEBP"):
+                raise ValueError("copy as is")
+            im.thumbnail((KIT_MAX_EDGE, KIT_MAX_EDGE))
+            if fmt == "JPEG" and im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            im.save(part, format=fmt, **({"quality": 90} if fmt != "PNG" else {}))
+    except (ValueError, UnidentifiedImageError, Image.DecompressionBombError):
+        shutil.copyfile(source, part)
+
+
 def copy_kit_images(kit, media: Path, client_id: str, idea_id: str, stored: list) -> None:
     """Copy the kit images a generation uses into the plan's gen folder, so deleting the kit item later leaves
     this generation (and a re-run of it) its own files. Raises OSError when a file is gone."""
@@ -226,7 +248,7 @@ def copy_kit_images(kit, media: Path, client_id: str, idea_id: str, stored: list
         folder.mkdir(parents=True, exist_ok=True)
         part = folder / f".{ref['file']}.{secrets.token_hex(4)}.part"  # unique: copies may run at once
         try:
-            shutil.copyfile(source / ref["image"], part)
+            _write_shrunk(source / ref["image"], part)
             os.replace(part, folder / ref["file"])
         finally:
             part.unlink(missing_ok=True)
