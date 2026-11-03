@@ -13,7 +13,7 @@ Newest first. Dates are when the decision was made (from the Miro board), except
 
 **Why:** Founder decisions, 3 Nov 2026, after the canvas UI flow comparison (https://claude.ai/artifact/WsHvz7UPQSefTN5aHEHpvE). Design: `pivots/02-content/docs/specs/2026-11-03-canvas-product-polish-design.md`.
 
-**Status:** Current. Design approved; nothing built yet. Overrides §4.2, §4.3 and §5 of `pivots/02-content/docs/specs/2026-11-02-node-canvas-editor-design.md`.
+**Status:** Current. Design approved and built in four stacked PRs (A shell, B frames and nodes, C timeline, D agent); mock-model E2E passed 4 Nov 2026, no real model run yet. The build matches the entry: the agent shows editable prompts, models and prices and runs nothing until the user approves (Approve opens the usual price dialog); "Put in timeline" is the one clip-per-shot button. Overrides §4.2, §4.3 and §5 of `pivots/02-content/docs/specs/2026-11-02-node-canvas-editor-design.md`.
 
 ## 2 Nov 2026
 
