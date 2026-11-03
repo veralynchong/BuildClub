@@ -1,7 +1,7 @@
 import type { Key } from '../i18n.ts'
 import type { Kit, Shot } from '../../types.ts'
 import { kitRefs, type GenRef } from './kit.ts'
-import { PORTS } from './ports.ts'
+import { shotNodeOf, slotInFrame } from './frames.ts'
 import type { Budget, CanvasDoc, CanvasNode, GenModel, Generation, NodeData, NodeKind } from './types.ts'
 
 // Every node reachable by following lines forward; not the node itself.
@@ -102,19 +102,32 @@ function upstream(doc: CanvasDoc, nodeId: string, handle: string): CanvasNode | 
   return (edge && doc.nodes.find((n) => n.id === edge.source)) || null
 }
 
-// The text a node gets from its in:text line: a shot's line (or its description), or a prompt node's text,
-// looking further up when a prompt node is empty.
-function textFrom(doc: CanvasDoc, nodeId: string, shots: Shot[], seen = new Set<string>()): string {
+// The text a Prompt node on the in:text line gives, looking further up when a Prompt node is empty. A line from a
+// shot node is ignored: the shot text comes from the node's shotId (migrateDoc removes such lines).
+function promptLineText(doc: CanvasDoc, nodeId: string, seen = new Set<string>()): string {
   if (seen.has(nodeId)) return ''
   seen.add(nodeId)
   const src = upstream(doc, nodeId, 'in:text')
-  if (!src) return ''
-  if (src.type === 'shot') {
-    const shot = shots.find((s) => s.id === src.shotId)
-    return (shot?.line?.trim() ? shot.line : shot?.shot) ?? ''
+  if (!src || src.type !== 'prompt') return ''
+  return src.data.text?.trim() ? src.data.text : promptLineText(doc, src.id, seen)
+}
+
+// The text a node generates from, and where it comes from (spec §12.5.3): its own prompt, else a Prompt node on its
+// text line, else its shot's line (or description) when it is a storyboard or video of a shot that still has a shot
+// node and shotTextOff is not set, else nothing. shotNumber is the shot's 1-based place in `shots` (from 'shot' only).
+export function shotTextSource(doc: CanvasDoc, nodeId: string, shots: Shot[]): { text: string; from: 'own' | 'prompt' | 'shot' | 'none'; shotNumber?: number } {
+  const node = doc.nodes.find((n) => n.id === nodeId)
+  if (!node) return { text: '', from: 'none' }
+  if (node.data.prompt?.trim()) return { text: node.data.prompt, from: 'own' }
+  const fromPrompt = promptLineText(doc, nodeId)
+  if (fromPrompt) return { text: fromPrompt, from: 'prompt' }
+  if ((node.type === 'storyboard' || node.type === 'video') && node.shotId && shotNodeOf(doc, node.shotId) && !node.data.shotTextOff) {
+    const index = shots.findIndex((s) => s.id === node.shotId)
+    const shot = shots[index]
+    const text = (shot?.line?.trim() ? shot.line : shot?.shot) ?? ''
+    if (text) return { text, from: 'shot', shotNumber: index + 1 }
   }
-  if (src.type === 'prompt') return src.data.text?.trim() ? src.data.text : textFrom(doc, src.id, shots, seen)
-  return ''
+  return { text: '', from: 'none' }
 }
 
 export interface GenRequest {
@@ -127,7 +140,7 @@ export interface GenRequest {
 export function genRequest(doc: CanvasDoc, nodeId: string, shots: Shot[], gens: Generation[], kit: Kit | null = null, model?: GenModel): GenRequest {
   const node = doc.nodes.find((n) => n.id === nodeId)
   if (!node) return { prompt: '', references: [] }
-  const req: GenRequest = { prompt: node.data.prompt?.trim() ? node.data.prompt : textFrom(doc, nodeId, shots), references: kitRefs(doc, nodeId, kit, gens, model).references }
+  const req: GenRequest = { prompt: shotTextSource(doc, nodeId, shots).text, references: kitRefs(doc, nodeId, kit, gens, model).references }
   const frame = (handle: string) => {
     const src = upstream(doc, nodeId, handle)
     return src ? selectedGen(src, gens)?.id : undefined
@@ -176,7 +189,6 @@ export function roomBelow(doc: CanvasDoc, at: { x: number; y: number }): { x: nu
   return p
 }
 
-const ROW_STEP = 360 // matches the backend's column spacing
 const NODE_W = 240 // a node is 200 wide; the rest is a margin
 const ROW_GAP = 280 // a row is 480 apart in the backend; nodes in one row sit well inside this
 
@@ -201,24 +213,19 @@ function newId(doc: CanvasDoc, kind: NodeKind): string {
   }
 }
 
-// A new node. With a shotId it goes on that shot's row, at the first free place at or right of `at.x`, and the shot's
-// text line is connected to it when it has a text input. A footage node needs a shot. Returns a new doc.
+// A new node. With a shotId (a plan Shot id) it goes in that shot's frame, right of its last member; no text line is
+// added, the shot text reaches it through shotId. A footage node needs a shot. Returns a new doc.
 export function addNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: number }, shotId?: string): CanvasDoc {
-  const shot = shotId ? doc.nodes.find((n) => n.type === 'shot' && n.shotId === shotId) : undefined
-  if (kind === 'footage' && !shot) throw new Error('A footage node needs a shot.')
-  let position = { x: Math.round(at.x), y: Math.round(at.y) }
-  if (shot) {
-    position = { x: position.x, y: shot.position.y }
-    while (doc.nodes.some((n) => Math.abs(n.position.y - position.y) < ROW_GAP && Math.abs(n.position.x - position.x) < ROW_STEP * 0.8)) {
-      position.x += ROW_STEP
-    }
-  }
-  const node: CanvasNode = { id: newId(doc, kind), type: kind, ...(shot ? { shotId } : {}), position, data: startData(kind) }
-  const edges = [...doc.edges]
-  if (shot && PORTS[kind].inputs.some((p) => p.id === 'in:text')) {
-    edges.push({ id: `e_${shot.id}_${node.id}`, source: shot.id, sourceHandle: 'out', target: node.id, targetHandle: 'in:text' })
-  }
-  return { ...doc, nodes: [...doc.nodes, node], edges }
+  const shotNode = shotId ? shotNodeOf(doc, shotId) : null
+  if (kind === 'footage' && !shotNode) throw new Error('A footage node needs a shot.')
+  const position = shotNode ? slotInFrame(doc, shotNode) : { x: Math.round(at.x), y: Math.round(at.y) }
+  const node: CanvasNode = { id: newId(doc, kind), type: kind, ...(shotNode ? { shotId } : {}), position, data: startData(kind) }
+  return { ...doc, nodes: [...doc.nodes, node] }
+}
+
+// The settings of an earlier version, to put back on its node.
+export function reuseSettings(g: Generation): Partial<NodeData> {
+  return { model: g.model, prompt: g.inputs.prompt ?? '', ...(typeof g.inputs.duration === 'number' ? { duration: g.inputs.duration } : {}) }
 }
 
 // The storyboard and the video it starts (the storyboard's line into the video's in:start), found from either node.

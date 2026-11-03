@@ -1,5 +1,6 @@
 """Generation jobs with the free mock provider: models, submit, poll, files, restart recovery."""
 
+from collections import Counter
 import json
 import os
 from pathlib import Path
@@ -1317,3 +1318,23 @@ def test_kit_ref_without_image_for_item_with_images_422(gen):
     mia = kit_item(gen)
     r = post(gen, references=[{"source": "kit", "itemId": mia["id"]}])
     assert r.status_code == 422 and r.json()["error"] == "A kit item with images must send an image."
+
+
+def test_generate_adds_a_version_only_to_that_node(gen):
+    # spec §8.3: a Generate on the video node must not add a storyboard version.
+    client = gen
+    assert post(client).status_code == 201  # n_sb_s1 already has a version before the video runs
+    c = client.get("/api/ideas/ia/canvas").json()
+    c["doc"]["nodes"].append({"id": "n_vid_s1", "type": "video", "shotId": "s1", "position": {"x": 720, "y": 0}, "data": {}})
+    c["doc"]["edges"].append({"id": "e_sb_vid", "source": "n_sb_s1", "sourceHandle": "out", "target": "n_vid_s1", "targetHandle": "in:start"})
+    assert client.put("/api/ideas/ia/canvas", json={"version": c["version"], "doc": c["doc"]}).status_code == 200
+
+    def counts():
+        return Counter(g["nodeId"] for g in client.get("/api/ideas/ia/gen").json())
+
+    before = counts()
+    assert post(client, nodeId="n_vid_s1", model="mock-video", prompt="move", duration=4).status_code == 201
+    after = counts()
+    assert after["n_vid_s1"] == before["n_vid_s1"] + 1
+    assert after["n_sb_s1"] == before["n_sb_s1"] >= 1
+    assert {k: v for k, v in after.items() if k != "n_vid_s1"} == {k: v for k, v in before.items() if k != "n_vid_s1"}

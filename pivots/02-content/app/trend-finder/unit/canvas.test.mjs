@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, roomBelow, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy } from '../src/lib/canvas/graph.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, roomBelow, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy, shotTextSource, reuseSettings } from '../src/lib/canvas/graph.ts'
+import { slotInFrame } from '../src/lib/canvas/frames.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen, getBudget, quoteChain, startChain } from '../src/lib/canvas/api.ts'
 
 const models = [
@@ -121,6 +122,7 @@ test('genRequest follows prompt nodes and picks start frame from the selected ve
 test('missingInput says what is needed', () => {
   const doc = docWith()
   doc.edges = []
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.shotTextOff = true
   assert.equal(missingInput(doc, 'n_sb_s1', models[0], shots, []), 'canvas.gen.needText')
   const need = { ...models[1], inputs: { text: 'optional', startFrame: 'required' } }
   assert.equal(missingInput(doc, 'n_vid', need, shots, []), 'canvas.gen.needStart')
@@ -236,26 +238,15 @@ test('addNode starts each kind with its own data', () => {
   assert.equal(pr.data.text, '')
 })
 
-test('addNode for a shot links the shot to the new node, and footage needs a shot', () => {
+test('addNode for a shot adds no text line, and footage needs a shot', () => {
   assert.throws(() => addNode(docWith(), 'footage', { x: 0, y: 0 }), /shot/i)
   assert.throws(() => addNode(docWith(), 'footage', { x: 0, y: 0 }, 'nope'), /shot/i)
   const d = addNode(docWith(), 'footage', { x: 700, y: 0 }, 's1')
   const ft = d.nodes[d.nodes.length - 1]
   assert.equal(ft.shotId, 's1')
-  const line = d.edges[d.edges.length - 1]
-  assert.deepEqual([line.source, line.sourceHandle, line.target, line.targetHandle], ['n_shot_s1', 'out', ft.id, 'in:text'])
-  const u = addNode(docWith(), 'upload', { x: 0, y: 0 }, 's1') // upload has no text port: no line
+  assert.equal(d.edges.length, docWith().edges.length)
+  const u = addNode(docWith(), 'upload', { x: 0, y: 0 }, 's1')
   assert.equal(u.edges.length, docWith().edges.length)
-})
-
-test('addNode with a shot moves right to a free spot on the shot row', () => {
-  const doc = docWith()
-  doc.nodes[0].position = { x: 0, y: 100 }
-  doc.nodes[1].position = { x: 360, y: 100 }
-  const d = addNode(doc, 'video', { x: 360, y: 100 }, 's1')
-  const v = d.nodes[d.nodes.length - 1]
-  assert.equal(v.position.y, 100)
-  assert.ok(v.position.x >= 720)
 })
 
 test('failedGen is the newest version only when it failed', () => {
@@ -494,4 +485,43 @@ test('genRequest returns references', () => {
   const gens = [gen('g9', 'n_up', 'done', 1)]
   assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, gens).references, [{ source: 'gen', genId: 'g9' }])
   assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []).references, [])
+})
+
+const migrated = { ...docWith(), edges: docWith().edges.filter((e) => e.source !== 'n_shot_s1') }
+
+test('genRequest uses the shot text with no text line, and the own prompt over it', () => {
+  assert.equal(genRequest(migrated, 'n_sb_s1', shots, []).prompt, 'Welcome in')
+  const own = structuredClone(migrated); own.nodes[1].data.prompt = 'Mine'
+  assert.equal(genRequest(own, 'n_sb_s1', shots, []).prompt, 'Mine')
+  const off = structuredClone(migrated); off.nodes[1].data.shotTextOff = true
+  assert.equal(genRequest(off, 'n_sb_s1', shots, []).prompt, '')
+  assert.equal(genRequest(migrated, 'n_sb_s1', [{ ...shots[0], line: undefined }], []).prompt, 'Wide shot of the cafe')
+})
+test('a Prompt node line replaces the shot text', () => {
+  const d = { ...migrated, nodes: [...migrated.nodes, node('n_p', 'prompt', { text: 'From prompt' })], edges: [...migrated.edges, edge('n_p', 'n_sb_s1')] }
+  assert.equal(genRequest(d, 'n_sb_s1', shots, []).prompt, 'From prompt')
+})
+test('free nodes (no shotId) get no shot text', () => {
+  assert.equal(genRequest(migrated, 'n_vid', shots, []).prompt, '')
+  assert.equal(shotTextSource(migrated, 'n_vid', shots).from, 'none')
+})
+test('shotTextSource says where the text comes from', () => {
+  assert.deepEqual(shotTextSource(migrated, 'n_sb_s1', shots), { text: 'Welcome in', from: 'shot', shotNumber: 1 })
+  const own = structuredClone(migrated); own.nodes[1].data.prompt = 'Mine'
+  assert.deepEqual(shotTextSource(own, 'n_sb_s1', shots), { text: 'Mine', from: 'own' })
+  const d = { ...migrated, nodes: [...migrated.nodes, node('n_p', 'prompt', { text: 'P' })], edges: [...migrated.edges, edge('n_p', 'n_vid')] }
+  assert.deepEqual(shotTextSource(d, 'n_vid', shots), { text: 'P', from: 'prompt' })
+  assert.deepEqual(shotTextSource(migrated, 'n_vid2', shots), { text: '', from: 'none' })
+})
+test('addNode in a frame adds no text line and lands right of the last member', () => {
+  const d = addNode(migrated, 'video', { x: 9999, y: 9999 }, 's1')
+  const v = d.nodes[d.nodes.length - 1]
+  assert.equal(v.shotId, 's1')
+  assert.equal(d.edges.length, migrated.edges.length)
+  assert.deepEqual(v.position, slotInFrame(migrated, 'n_shot_s1'))
+  assert.throws(() => addNode(migrated, 'footage', { x: 0, y: 0 }, 'nope'), /shot/i)
+})
+test('reuseSettings copies model, prompt and duration', () => {
+  assert.deepEqual(reuseSettings({ model: 'mock-video', inputs: { prompt: 'move', duration: 4 } }), { model: 'mock-video', prompt: 'move', duration: 4 })
+  assert.deepEqual(reuseSettings({ model: 'mock-image', inputs: { duration: null } }), { model: 'mock-image', prompt: '' })
 })
