@@ -1,6 +1,8 @@
 """The per-client consistency kit: item rules, image upload rules, file route, and persistence across client saves."""
 
 import server
+from kit import kit_prefix
+from models import KitItem
 from test_takes import A, setup  # noqa: F401  (setup puts client "a" and the plans in the store)
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
@@ -125,3 +127,22 @@ def test_unknown_client_404(client, setup):
     assert client.post("/api/clients/zz/kit/items", json={"kind": "place", "name": "x"}).status_code == 404
     assert client.get("/api/clients/zz/kit/files/ka_x.png").status_code == 404
     assert client.get(BASE).json() == {"items": []}
+
+
+def test_kit_prefix_format():
+    mia = KitItem(id="k_one111", kind="character", name="Mia", note="early 20s, short black bob", images=["a.png", "b.png"], updatedAt=1)
+    cup = KitItem(id="k_two222", kind="product", name="Matcha cup", note="white cup", images=["c.png"], updatedAt=1)
+    look = KitItem(id="k_three3", kind="style", name="Warm film", note="35mm, warm tones", images=[], updatedAt=1)
+    assert kit_prefix([(mia, [1, 2]), (cup, [3]), (look, [])]) == (
+        'Reference images: image 1\u20132 are the character "Mia" (early 20s, short black bob) \u2014 keep their face, hair and outfit the same.\n'
+        'Image 3 is the product "Matcha cup" (white cup) \u2014 keep its shape, colour and logo the same.\n'
+        'Style: Warm film \u2014 35mm, warm tones.\n')
+
+
+def test_kit_prefix_place_empty_note_and_numbering():
+    shop = KitItem(id="k_one111", kind="place", name="Shop counter", note="", images=["a.png"], updatedAt=1)
+    mia = KitItem(id="k_two222", kind="character", name="Mia", note="bob", images=["b.png"], updatedAt=1)
+    assert kit_prefix([(shop, [3]), (mia, [4])]) == (
+        'Reference images: image 3 is the place "Shop counter" \u2014 keep its layout and look the same.\n'
+        'Image 4 is the character "Mia" (bob) \u2014 keep their face, hair and outfit the same.\n')
+    assert kit_prefix([]) == ""

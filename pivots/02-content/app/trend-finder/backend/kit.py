@@ -61,6 +61,37 @@ def find_item(load, client_id: str, item_id: str) -> Optional[KitItem]:
     return next((i for i in client.kit.items if i.id == item_id), None) if client and client.kit else None
 
 
+KEEP = {"character": "keep their face, hair and outfit the same", "product": "keep its shape, colour and logo the same",
+        "place": "keep its layout and look the same"}
+
+
+def _image_numbers(numbers: list[int]) -> str:
+    """'image 3 is', 'image 1\u20132 are' (a run) or 'images 1, 3 are'."""
+    if len(numbers) == 1:
+        return f"image {numbers[0]} is"
+    if numbers == list(range(numbers[0], numbers[0] + len(numbers))):
+        return f"image {numbers[0]}\u2013{numbers[-1]} are"
+    return f"images {', '.join(str(n) for n in numbers)} are"
+
+
+def kit_prefix(items: list[tuple[KitItem, list[int]]]) -> str:
+    """The English lines put before a prompt so the model knows what each reference image is. `items` are the
+    kit items in use, each with the 1-based positions of its images in the whole reference list. The first image
+    sentence opens with 'Reference images:'; the style lines come last."""
+    lines, styles = [], []
+    for item, numbers in items:
+        note = f" ({item.note})" if item.note else ""
+        if item.kind == "style":
+            styles.append(f"Style: {item.name} \u2014 {item.note}." if item.note else f"Style: {item.name}.")
+        elif numbers:
+            text = f'{_image_numbers(numbers)} the {item.kind} "{item.name}"{note} \u2014 {KEEP[item.kind]}.'
+            lines.append(text)
+    if lines:
+        lines[0] = f"Reference images: {lines[0]}"
+        lines[1:] = [f"{l[0].upper()}{l[1:]}" for l in lines[1:]]
+    return "".join(f"{l}\n" for l in [*lines, *styles])
+
+
 def error(status: int, message: str) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
 
