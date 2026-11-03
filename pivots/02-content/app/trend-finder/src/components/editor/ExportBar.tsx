@@ -3,10 +3,11 @@ import { t } from '../../lib/i18n'
 import { serverText } from '../../lib/serverText'
 import { useManagerName } from '../../lib/appContext'
 import { formatDay } from '../../lib/dates'
-import { formatDuration, getCut, pollCut, reviewLine, sendCutForReview, type CutState } from '../../lib/cut'
+import { formatDuration, getCut, pollCut, reviewLine, NoLinkError, sendWithLink, type CutState } from '../../lib/cut'
 import { exportBlocked, type ClipStatus } from '../../lib/editor/timeline'
 import type { EditProject } from '../../lib/editor/types'
 import type { Key } from '../../lib/i18n'
+import { createShareLink } from '../../lib/share'
 import { startExport } from '../../lib/editor/api'
 import type { EditHook } from '../../lib/editor/useEditProject'
 import type { TimelineActions } from '../../lib/editor/useTimelineActions'
@@ -14,6 +15,8 @@ import { ErrorText } from '../ErrorText'
 
 interface Props {
   ideaId: string
+  clientId: string
+  focus?: 'export' | 'send' | null
   edit: EditHook
   timeline: TimelineActions
   readOnly: boolean
@@ -26,14 +29,17 @@ interface Props {
 const isActive = (c: CutState | null) => c?.status === 'queued' || c?.status === 'running'
 
 // Export the timeline as a video, show the render's progress, then preview it and send it for review.
-export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey, linesKey, onCut }: Props) {
+export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, readOnly, brandKey, musicKey, linesKey, onCut }: Props) {
   const [cut, setCut] = useState<CutState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pollDead, setPollDead] = useState(false) // the polling failed while the export was active
   const [busy, setBusy] = useState(false) // saving the edit or starting the export
   const [sending, setSending] = useState(false)
+  const [noLink, setNoLink] = useState(false) // the review link could not be turned on
   const manager = useManagerName()
   const doneRef = useRef<HTMLDivElement>(null)
+  const sendRef = useRef<HTMLButtonElement>(null)
+  const focusedSend = useRef(false)
   const wasActive = useRef(false)
 
   const cutRef = useRef<CutState | null>(null)
@@ -142,13 +148,25 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
 
   const send = async () => {
     setError(null)
+    setNoLink(false)
     setSending(true)
     try {
-      setCut(await sendCutForReview(ideaId))
+      setCut(await sendWithLink(ideaId, clientId))
     } catch (e) {
-      setError((e as Error).message) // the server's reason, including EDIT_STALE and NO_LINK
+      if (e instanceof NoLinkError) setNoLink(true)
+      setError((e as Error).message) // the server's reason, including EDIT_STALE; NoLinkError when the link could not be turned on
     } finally {
       setSending(false)
+    }
+  }
+
+  const makeLink = async () => {
+    setError(null)
+    try {
+      await createShareLink(clientId)
+      setNoLink(false)
+    } catch {
+      setError(t('cut.err.link'))
     }
   }
 
@@ -158,6 +176,13 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
   const canSend = !readOnly && !!output && !cut?.stale && !active && review?.status !== 'waiting' && review?.status !== 'approved' && review?.status !== 'rejected'
   const line = reviewLine(review, manager, formatDay)
 
+  // Opened from the toolbar's Send for approval: focus Send once it exists (the export state loads after opening).
+  useEffect(() => {
+    if (focus !== 'send' || !canSend || focusedSend.current) return
+    focusedSend.current = true
+    sendRef.current?.focus()
+  }, [focus, canSend])
+
   return (
     <section className="cv-ed-export">
       <div className="cv-ed-export-row">
@@ -165,6 +190,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
           {busy || active ? t('editor.export.working') : cut?.status === 'failed' ? t('cut.common.tryAgain') : t('editor.export.button')}
         </button>
         {reason && !readOnly && <span className="muted small">{t(reason)}</span>}
+        {focus === 'send' && !output && !active && !readOnly && <span className="muted small" role="status">{t('editor.export.needFirst')}</span>}
       </div>
       {active && cut && (
         <div className="cut-progress" role="status">
@@ -195,12 +221,17 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
               {t('cut.panel.download')}
             </a>
             {canSend && (
-              <button type="button" data-step="send" className="btn btn-primary btn-sm" disabled={sending} onClick={() => void send()}>
+              <button type="button" data-step="send" ref={sendRef} className="btn btn-primary btn-sm" disabled={sending} onClick={() => void send()}>
                 {t('cut.panel.send', { name: manager })}
               </button>
             )}
             <span className="muted small">{formatDuration(output.durationSec)}</span>
           </div>
+          {noLink && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void makeLink()}>
+              {t('cut.panel.makeLink')}
+            </button>
+          )}
           {canSend && <p className="muted small">{t('editor.export.approver', { name: manager })}</p>}
           {review?.status === 'rejected' && !cut?.stale && <p className="muted small">{t('cut.panel.sentBackExport', { name: manager })}</p>}
           {line && <p className="small cut-review-line">{line}</p>}

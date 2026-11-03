@@ -309,7 +309,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
           </div>
           {/* over the player, never over the tabs; always mounted, so a running export keeps being followed while closed */}
           <div id="cv-ed-export" className="cv-ed-export-pop" hidden={!exportOpen} onKeyDown={(e) => e.key === 'Escape' && setExportOpen(false)}>
-            <ExportBar ideaId={ideaId} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} onCut={setCut} />
+            <ExportBar ideaId={ideaId} clientId={clientId} focus={focus} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} onCut={setCut} />
           </div>
         </div>
         <div className="cv-ed-side">

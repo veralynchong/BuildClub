@@ -1118,6 +1118,11 @@ function CanvasBoard({
             {t('canvas.toolbar.runAll')}
           </button>
         )}
+        {!readOnly && (
+          <button type="button" className="btn btn-ghost btn-sm cv-send-btn" onClick={() => showEditor('send')}>
+            {t('canvas.toolbar.send')}
+          </button>
+        )}
       </CanvasToolbar>
 
       {stale && (
