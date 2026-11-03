@@ -5,10 +5,11 @@ import type { Take } from '../../../lib/takes'
 import type { ClipSource } from '../../../lib/editor/types'
 import type { KitRefs } from '../../../lib/canvas/kit'
 import type { NodeStatus } from '../../../lib/canvas/status'
-import type { Budget, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
+import type { Budget, CanvasDoc, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
 
 // What the node components need from the board: the shot list, whether editing is allowed, and a few actions.
 export interface CanvasCtx {
+  doc: CanvasDoc // the board as it is now (what a save would send)
   shots: Shot[]
   readOnly: boolean
   shotNumbers: Map<string, number> // shot node id -> its place in the list, from 1

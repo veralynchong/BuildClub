@@ -21,6 +21,7 @@ import { edgeLook, focusSet } from '../../lib/canvas/edges'
 import { addNode, chainBusy, chainPair, isRetired, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
+import { NodePanel } from './NodePanel'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, NothingToCut, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
@@ -811,6 +812,7 @@ function CanvasBoard({
   }, [running])
 
   const ctx: CanvasCtx = {
+    doc,
     addToTimeline: (src) => void timeline.addClip(src),
     setPrimary: timeline.setPrimary,
     isPrimary: timeline.isPrimary,
@@ -905,7 +907,7 @@ function CanvasBoard({
       const typing = !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
       const { fullscreen: full, dialogOpen: dlg, editorOpen } = keyState.current
       // an open add-node menu, queue list or larger view takes Esc first (this listener runs in the capture phase, before they close)
-      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list, .cv-drop, .cv-lightbox')
+      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list, .cv-drop, .cv-lightbox, .cv-model-list')
       const act = shellKey({ key: e.key, typing, dialogOpen, editorOpen }, full)
       if (act) setFull(act === 'enter')
     }
@@ -922,6 +924,9 @@ function CanvasBoard({
   // Lines are thin and grey; selection, a running job and an upstream with no result yet change their look (spec §5.2).
   const selectedKey = nodes.filter((n) => n.selected).map((n) => n.id).join(',')
   const focus = useMemo(() => focusSet(doc, selectedKey ? selectedKey.split(',') : []), [doc, selectedKey])
+  // The right panel shows while exactly one storyboard or video node is selected (spec §6.3).
+  const picked = nodes.filter((n) => n.selected)
+  const panelId = picked.length === 1 && (picked[0].data.node.type === 'storyboard' || picked[0].data.node.type === 'video') ? picked[0].id : null
   const shownEdges = edges.map((e) => {
     const look = edgeLook({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? '', targetHandle: e.targetHandle ?? '' }, doc, gens, takes, focus, selectedKit)
     return { ...e, className: look.className, animated: look.animated }
@@ -968,9 +973,9 @@ function CanvasBoard({
         </div>
       )}
 
+      <CanvasContext.Provider value={ctx}>
       <div className="cv-layout">
         <div className="cv-flow" ref={flowBox}>
-          <CanvasContext.Provider value={ctx}>
           <ReactFlow
             nodes={nodes}
             edges={shownEdges}
@@ -1001,7 +1006,6 @@ function CanvasBoard({
             <MiniMap pannable zoomable />
             <ZoomBar />
           </ReactFlow>
-          </CanvasContext.Provider>
           <ToolRail mode={tool} onMode={setTool} addKinds={clientId ? ADD_KINDS_WITH_KIT : ADD_KINDS} disabledKinds={kitNode ? ['kit'] : undefined} onAdd={addAtCenter} readOnly={readOnly} />
           <QueuePill items={queue} onJump={jumpTo} />
           {drop && <DropMenu at={drop.screen} options={drop.options} onPick={pickDrop} onClose={() => setDrop(null)} />}
@@ -1058,7 +1062,9 @@ function CanvasBoard({
             />
           </div>
         )}
+        {panelId && <NodePanel key={panelId} nodeId={panelId} onClose={() => setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)))} />}
       </div>
+      </CanvasContext.Provider>
       </div>
     </section>
   )
