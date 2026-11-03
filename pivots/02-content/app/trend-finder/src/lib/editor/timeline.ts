@@ -98,20 +98,24 @@ export function placeShotClip(p: EditProject, src: ClipSource, duration: number,
   return { ...p, clips, primaries: { ...p.primaries, [src.shotId as string]: src } }
 }
 
-// Old edits may hold several clips of one shot: keep the one that matches the shot's pin, else its first. Clips without
-// a shot stay. `removed` counts the clips dropped.
+// Old edits may hold several clips of one shot: keep the one that matches the shot's pin, else its first, plus every
+// other piece of that same source (Split makes those). Clips of another source of the shot go; clips without a shot
+// stay. `removed` counts the clips dropped.
 export function oneClipPerShot(p: EditProject): { project: EditProject; removed: number } {
-  const keep = new Map<string, string>()
+  const keep = new Map<string, ClipSource>()
   for (const c of p.clips) {
     const sid = c.source.shotId
     if (!sid) continue
     const pin = p.primaries[sid]
-    const cur = p.clips.find((x) => x.id === keep.get(sid))
+    const cur = keep.get(sid)
     const isPin = !!pin && pin.kind === c.source.kind && pin.id === c.source.id
-    const curIsPin = !!cur && !!pin && pin.kind === cur.source.kind && pin.id === cur.source.id
-    if (!cur || (isPin && !curIsPin)) keep.set(sid, c.id)
+    const curIsPin = !!cur && !!pin && pin.kind === cur.kind && pin.id === cur.id
+    if (!cur || (isPin && !curIsPin)) keep.set(sid, c.source)
   }
-  const clips = p.clips.filter((c) => !c.source.shotId || keep.get(c.source.shotId) === c.id)
+  const clips = p.clips.filter((c) => {
+    const k = c.source.shotId ? keep.get(c.source.shotId) : undefined
+    return !k || (k.kind === c.source.kind && k.id === c.source.id)
+  })
   return clips.length === p.clips.length ? { project: p, removed: 0 } : { project: { ...p, clips }, removed: p.clips.length - clips.length }
 }
 

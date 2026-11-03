@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { placeShotClip, oneClipPerShot, timelineSummary, isOnTimeline, shotOnTimeline } from '../src/lib/editor/timeline.ts'
+import { placeShotClip, oneClipPerShot, timelineSummary, isOnTimeline, shotOnTimeline, splitAt } from '../src/lib/editor/timeline.ts'
 import { clipLabel } from '../src/components/editor/clipName.ts'
 
 const proj = (clips, primaries = {}) => ({
@@ -80,4 +80,23 @@ test('isOnTimeline matches kind and id; shotOnTimeline matches the shot', () => 
   const trimmed = proj([{ ...clip('c1', g1, 3), in: 1, volume: 0.5 }])
   assert.equal(isOnTimeline(trimmed, g1), true)
   assert.notEqual(placeShotClip(trimmed, g1, 5, shotOrder, 'c9').clips[0].in, 1) // why the guard is needed
+})
+
+test('oneClipPerShot keeps split pieces of the kept source', () => {
+  const split = splitAt(proj([clip('c1', g1, 4), clip('c2', g2, 3)]), 2, 'c9')
+  assert.deepEqual(split.clips.map((c) => c.id), ['c1', 'c9', 'c2'])
+  const r = oneClipPerShot(split)
+  assert.equal(r.removed, 0)
+  assert.equal(r.project, split)
+  // two pieces of A and one clip of B in one shot, A pinned: both A pieces stay, B goes
+  const a = src('generation', 'ga', 's1'), b = src('take', 'tb', 's1')
+  const r2 = oneClipPerShot(proj([clip('b1', b, 2), clip('a1', a, 2), clip('a2', a, 2)], { s1: a }))
+  assert.deepEqual(r2.project.clips.map((c) => c.id), ['a1', 'a2'])
+  assert.equal(r2.removed, 1)
+})
+
+test('placeShotClip replaces every piece of the shot, split ones included', () => {
+  const split = splitAt(proj([clip('c1', g1, 4), clip('c2', g2, 3)]), 2, 'c9')
+  const r = placeShotClip(split, src('take', 't1', 's1'), 3, shotOrder, 'c10')
+  assert.deepEqual(r.clips.map((c) => c.id), ['c10', 'c2'])
 })

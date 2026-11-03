@@ -1025,11 +1025,36 @@ function CanvasBoard({
     if (changes.some((c) => c.type === 'dimensions' && !frames.has(c.id))) setNodes((ns) => reframe(ns))
   }
 
+  // The note is shown on the board, or over the editor while that covers the board (e.g. "the reel is full").
+  const noteEl = (
+    <div className={note?.info ? 'cv-conn-note is-info' : 'cv-conn-note'} role={note && !note.info ? 'alert' : 'status'}>
+      {note && (note.text ?? (note.key && t(note.key, note.vars)))}
+      {note?.action && (
+        <button
+          type="button"
+          className="cv-conn-note-action"
+          onClick={() => {
+            note.action?.run()
+            setNote(null)
+          }}
+        >
+          {t(note.action.label)}
+        </button>
+      )}
+      {note && !note.info && (
+        <button type="button" className="cv-conn-note-x" aria-label={t('canvas.note.dismiss')} onClick={() => setNote(null)}>
+          ×
+        </button>
+      )}
+    </div>
+  )
+
   return (
     <section className="cv-screen">
       {editing && (
         <section className="cv-editor-full" aria-label={t('canvas.editor.title')}>
           <EditorPanel ideaId={ideaId} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} onBack={() => setEditing(false)} />
+          {noteEl}
         </section>
       )}
       <div className="cv-board" hidden={editing}>
@@ -1160,26 +1185,7 @@ function CanvasBoard({
               </div>
             </div>
           )}
-          <div className={note?.info ? 'cv-conn-note is-info' : 'cv-conn-note'} role={note && !note.info ? 'alert' : 'status'}>
-            {note && (note.text ?? (note.key && t(note.key, note.vars)))}
-            {note?.action && (
-              <button
-                type="button"
-                className="cv-conn-note-action"
-                onClick={() => {
-                  note.action?.run()
-                  setNote(null)
-                }}
-              >
-                {t(note.action.label)}
-              </button>
-            )}
-            {note && !note.info && (
-              <button type="button" className="cv-conn-note-x" aria-label={t('canvas.note.dismiss')} onClick={() => setNote(null)}>
-                ×
-              </button>
-            )}
-          </div>
+          {!editing && noteEl}
         </div>
         {kitOpen && kit && kitNode && (
           <div className="cv-kit-drawer">
