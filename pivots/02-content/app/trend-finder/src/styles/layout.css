@@ -45,6 +45,8 @@
 .shell.is-compact .side-user .avatar { display: none; }
 .shell.is-compact .side-user { justify-content: center; padding-inline: 0; }
 .shell.is-compact .switcher-btn { justify-content: center; padding: 6px 0; }
+.shell.is-compact .side-brand { padding: 0; justify-content: center; }
+.shell.is-compact .rk-logo-btn { width: 28px; overflow: hidden; display: flex; justify-content: flex-start; } /* the wordmark's first letters stand as a monogram */
 .shell.is-full { grid-template-columns: minmax(0, 1fr); }
 .shell.is-full .sidebar,
 .shell.is-full .mobile-bar { display: none; }
