@@ -111,6 +111,12 @@
 .plan-ref .tier { justify-self: start; }
 .plan-main { display: grid; gap: 36px; min-width: 0; }
 .plan-main > .block > p { margin: 0; }
+/* Plan sections: a clear heading, then one muted line saying what the section is for. */
+.plan-sec { display: grid; gap: 20px; }
+.plan-sec-head { display: grid; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.plan-sec-head h2 { margin: 0; font-family: var(--font-serif); font-weight: 400; font-size: var(--text-3xl); line-height: 1.15; letter-spacing: -0.01em; color: var(--fg); }
+.plan-sec-head p { margin: 0; max-width: 62ch; font-size: var(--text-base); line-height: 1.5; color: var(--muted); }
+@media (max-width: 520px) { .plan-sec-head h2 { font-size: var(--text-2xl); } }
 @media (max-width: 760px) {
   .plan-grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-4xl); }
   .plan-ref { position: static; }
@@ -139,6 +145,10 @@
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm);
 }
 .shot-edit:empty { display: none; }
+/* Plan screen shot rows: "Shot n" then what it is, nothing else. */
+.shot-edit .shot-no { padding: 6px 0 0 4px; font-size: var(--text-sm); font-weight: 600; color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.shot-edit li:has(.shot-no) { grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; }
+.shot-edit li:has(.shot-no) .shot-no { padding-top: 0; }
 .shot-edit li {
   display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: var(--space-sm); align-items: start;
   padding: 8px; border-radius: var(--radius-sm); position: relative;

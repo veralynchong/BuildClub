@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Client, Format, IdeaStatus, SavedIdea, Shot, Video } from '../types'
 import { useApp, useManagerName } from '../lib/appContext'
 import { compact, hasScore, scoreBase, outlierScore, platformName, tierOf, viewsWord } from '../lib/metrics'
@@ -9,17 +9,10 @@ import type { PlayerControl } from './BestVideo'
 import { beatUsual } from './find/words'
 import { TimedComments } from './TimedComments'
 import { tiktokVideoId } from '../lib/tiktokPlayer.ts'
-import { lastSentBack } from '../lib/memory'
-import { StageSelect } from './StageSelect'
-import { ShotChecklist } from './ShotChecklist'
-import { CutPanel } from './CutPanel'
-import { PublishPanel } from './publish/PublishPanel'
-import { StoryboardSection } from './storyboard/StoryboardSection'
-import { CameraTags } from './CameraTags'
-import { CameraSelects } from './CameraSelects'
 import { FromScript } from './FromScript'
+import { PlanHooks } from './PlanHooks'
 import { cameraLabels, looksLikeInterview } from '../lib/shots'
-import { getActiveLang, t } from '../lib/i18n'
+import { t } from '../lib/i18n'
 import { approverNote } from '../lib/approverNote'
 
 interface Props {
@@ -36,6 +29,8 @@ interface Props {
   onPlanAnother: () => void
   // The signed-in user is the only approver, so a waiting plan is approved or sent back right here (App's decide).
   onDecide: (d: Decision) => void
+  // Opens the node-based planning board for this plan. The button shows only when it is given.
+  onOpenBoard?: () => void
 }
 
 const statusLabel = (s: IdeaStatus): string => t(`plan.screen.status.${s}`)
@@ -59,18 +54,6 @@ export function PlanScreen(p: Props) {
   const [addedAt, setAddedAt] = useState<number | null>(null)
   // "Edit" on an approved plan asks first, because it sends the plan back for approval.
   const [confirmEdit, setConfirmEdit] = useState(false)
-  // Shots with a chosen take, reported by the shot checklist for the video panel.
-  const [shotsDone, setShotsDone] = useState(0)
-  // Counts every report from the checklist (a take added, removed or re-chosen), for the video panel's stale check.
-  const [takesRevision, setTakesRevision] = useState(0)
-  useEffect(() => {
-    setShotsDone(0)
-    setTakesRevision(0)
-  }, [idea.id])
-  const onTakesProgress = useCallback((done: number) => {
-    setShotsDone(done)
-    setTakesRevision((r) => r + 1)
-  }, [])
   // Deciding on a waiting plan: approve with changes or send back both need a comment.
   const [deciding, setDeciding] = useState<'changes' | 'back' | null>(null)
   const [decisionText, setDecisionText] = useState('')
@@ -105,8 +88,6 @@ export function PlanScreen(p: Props) {
     )
   const score = outlierScore(video)
   const tier = tierOf(score)
-  const defaultNote = approverNote(client, format, getActiveLang())
-  const note = idea.noteToApprover ?? defaultNote
 
   const send = () => {
     onChange({ status: 'waiting', sentAt: Date.now(), noteToApprover: idea.noteToApprover ?? approverNote(client, format, 'en'), rejectReason: undefined, rejectTags: undefined })
@@ -240,18 +221,33 @@ export function PlanScreen(p: Props) {
         </aside>
 
         <div className="plan-main">
+          {/* Two sections only: suggested hooks, then the shot list (which opens the planning board). */}
+          <PlanHooks
+            key={`hooks-${idea.id}`}
+            ideaId={idea.id}
+            saved={!!idea.shots}
+            video={video}
+            format={format}
+            client={client}
+            shots={shots}
+            editable={editable}
+            onShots={setShots}
+          />
 
-          <section className="block">
-            <h3>{t('plan.screen.shots')}</h3>
-            <p className="small muted">
-              {reopened
-                ? t('plan.screen.shotsHint.reopened')
-                : editable
-                ? t('plan.screen.shotsHint.editable', { client: client.name })
-                : idea.status === 'approved'
-                  ? t('plan.screen.shotsHint.approved')
-                  : t('plan.screen.shotsHint.locked')}
-            </p>
+          <section className="block plan-sec" aria-labelledby="plan-shots-title">
+            <header className="plan-sec-head">
+              <h2 id="plan-shots-title">{t('plan.screen.shots')}</h2>
+              {/* Only a note when the list is locked or needs approving again; an editable list explains itself. */}
+              {(reopened || !editable) && (
+                <p>
+                  {reopened
+                    ? t('plan.screen.shotsHint.reopened')
+                    : idea.status === 'approved'
+                      ? t('plan.screen.shotsHint.approved')
+                      : t('plan.screen.shotsHint.locked')}
+                </p>
+              )}
+            </header>
             {shots.length === 0 && !editable && <p className="muted small">{t('plan.screen.noShots')}</p>}
             {shots.length === 0 && editable && format.shotList.length === 0 && !format.why.first3s.startsWith('Breaking down') && (
               <p className="small muted" role="status">
@@ -260,7 +256,7 @@ export function PlanScreen(p: Props) {
             )}
             {editable && (
               <FromScript
-                key={idea.id}
+                key={`script-${idea.id}`}
                 shots={shots}
                 interviewGuess={looksLikeInterview(format.name, format.why.concept, format.why.format)}
                 onShots={(next) => {
@@ -275,13 +271,8 @@ export function PlanScreen(p: Props) {
                 <li key={i} className={i === addedAt ? 'shot-added' : undefined}>
                   {editable ? (
                     <>
-                      <input
-                        id={`shot-time-${i}`}
-                        className="shot-time-input"
-                        aria-label={t('plan.screen.shotTiming', { n: i + 1 })}
-                        value={s.time}
-                        onChange={(e) => updateShot(i, { time: e.target.value })}
-                      />
+                      {/* Just "Shot n" and what it is. Timing and camera are set on the planning board. */}
+                      <span className="shot-no">{t('plan.screen.shotNo', { n: i + 1 })}</span>
                       <div className="shot-fields">
                         <input
                           id={`shot-desc-${i}`}
@@ -290,14 +281,6 @@ export function PlanScreen(p: Props) {
                           placeholder={t('plan.screen.whatWeFilm')}
                           onChange={(e) => updateShot(i, { shot: e.target.value })}
                         />
-                        <input
-                          id={`shot-text-${i}`}
-                          aria-label={t('plan.screen.shotTextAria', { n: i + 1 })}
-                          value={s.text ?? ''}
-                          placeholder={t('plan.screen.textOptional')}
-                          onChange={(e) => updateShot(i, { text: e.target.value || undefined })}
-                        />
-                        <CameraSelects shot={s} n={i + 1} onChange={(patch) => updateShot(i, patch)} />
                         {shotComment(i)}
                       </div>
                       <button
@@ -315,11 +298,9 @@ export function PlanScreen(p: Props) {
                     </>
                   ) : (
                     <>
-                      <span className="shot-time">{s.time}</span>
+                      <span className="shot-no">{t('plan.screen.shotNo', { n: i + 1 })}</span>
                       <span>
                         {s.shot}
-                        {s.text && <span className="shot-text">{t('plan.screen.textShown', { text: s.text })}</span>}
-                        <CameraTags shot={s} />
                         {shotComment(i)}
                       </span>
                     </>
@@ -353,107 +334,16 @@ export function PlanScreen(p: Props) {
                     {t('plan.screen.undoRemove')}
                   </button>
                 )}
-                {idea.shots && format.shotList.length > 0 && (
-                  <button
-                    type="button"
-                    className="link-btn"
-                    onClick={() => {
-                      onChange({ shots: undefined })
-                      setRemoved(null)
-                    }}
-                  >
-                    {t('plan.screen.resetShots')}
-                  </button>
-                )}
+              </div>
+            )}
+            {p.onOpenBoard && (
+              <div className="plan-board-link">
+                <button type="button" className="btn btn-primary" onClick={p.onOpenBoard}>
+                  {t('plan.hooks.openBoard')}
+                </button>
               </div>
             )}
           </section>
-
-          <StoryboardSection key={idea.id} ideaId={idea.id} shots={shots} editable={editable} onShots={setShots} />
-
-          <ShotChecklist key={idea.id} ideaId={idea.id} status={idea.status} shots={shots} onProgress={onTakesProgress} />
-          <CutPanel key={idea.id} ideaId={idea.id} status={idea.status} shotCount={shots.length} shotsDone={shotsDone} takesRevision={takesRevision} />
-          <PublishPanel key={`pub-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} />
-
-          {format.lines && format.lines.length > 0 && (
-            <section className="block">
-              <h3>{t('plan.screen.lineRoles')}</h3>
-              <ul className="line-roles">
-                {format.lines.map((l, i) => (
-                  <li key={i}>
-                    <span className="shot-time">{l.time}</span> <span className="ai-tag">{t(`shell.role.${l.role}`)}</span> <span>{l.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <section className="block">
-            <label htmlFor="note-to-approver">
-              <h3>{t('plan.screen.whyFits', { client: client.name })}</h3>
-            </label>
-            {editable ? (
-              <textarea
-                id="note-to-approver"
-                rows={3}
-                value={note}
-                placeholder={t('plan.screen.whyPlaceholder', { client: client.name })}
-                onChange={(e) => onChange({ noteToApprover: e.target.value })}
-              />
-            ) : (
-              <p className="quote">{note}</p>
-            )}
-          </section>
-
-          {idea.status === 'approved' && idea.managerNote && (
-            <section className="block manager-note">
-              <h3>{t('plan.screen.changesBeforeFilming')}</h3>
-              <p className="quote">{idea.managerNote}</p>
-            </section>
-          )}
-
-          {idea.status === 'approved' && (
-            <section className={`block editor-brief${copied === 'done' ? ' is-copied' : ''}`}>
-              <h3>{t('plan.screen.forEditor')}</h3>
-              <div className="field">
-                <span className="field-label">{t('plan.screen.stage')}</span>
-                <StageSelect idea={idea} name={format.name} onChange={onChange} />
-              </div>
-              <label className="field">
-                <span className="field-label">{t('plan.screen.due')}</span>
-                <input id="plan-due" type="date" value={idea.dueDate} onChange={(e) => onChange({ dueDate: e.target.value })} />
-              </label>
-              {format.props.length > 0 && (
-                <div className="field">
-                  <span className="field-label">{t('plan.screen.props')}</span>
-                  <ul className="props-list">
-                    {format.props.map((x) => (
-                      <li key={x}>{x}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <label className="field">
-                <span className="field-label">{t('plan.screen.editorNotes')}</span>
-                <textarea id="plan-editor-notes" rows={3} value={idea.notes} onChange={(e) => onChange({ notes: e.target.value })} />
-              </label>
-            </section>
-          )}
-
-          {idea.status === 'rejected' && (
-            <section className="block">
-              <h3>{t('plan.screen.feedbackOf', { approver: APPROVER })}</h3>
-              {idea.rejectTags && idea.rejectTags.length > 0 && <p className="small">{idea.rejectTags.join(' · ')}</p>}
-              <p className="quote">{idea.rejectReason || (idea.rejectTags?.length ? t('plan.screen.noWrittenReason') : t('plan.screen.noReason'))}</p>
-            </section>
-          )}
-          {idea.status !== 'rejected' && lastSentBack(idea) && (
-            <section className="block">
-              <h3>{t('plan.screen.lastSentBack', { approver: APPROVER })}</h3>
-              {(lastSentBack(idea)?.tags?.length ?? 0) > 0 && <p className="small">{lastSentBack(idea)?.tags?.join(' · ')}</p>}
-              <p className="quote">{lastSentBack(idea)?.reason || t('plan.screen.noWrittenReason')}</p>
-            </section>
-          )}
 
         </div>
       </div>

@@ -79,6 +79,24 @@ export interface Shot {
   edited?: boolean
   // Hex colours read from the frame in the browser.
   palette?: string[]
+  // The team's own photo or clip, added on the planning board. Optional: only board uploads have it.
+  footage?: Footage
+}
+
+// A file uploaded on the planning board. Small images are kept as a data URL in `src`; anything bigger is only on
+// the device that uploaded it (deviceOnly), found again by `key` while that browser tab stays open.
+export interface Footage {
+  key: string
+  kind: 'image' | 'video'
+  name: string
+  src?: string
+  deviceOnly?: boolean
+}
+
+// Where a shot sits on the planning board, in the same order as the plan's shots.
+export interface BoardPos {
+  x: number
+  y: number
 }
 
 export type HookType = 'visual' | 'question_or_text' | 'rage_bait' | 'informative' | 'challenge' | 'other'
@@ -205,4 +223,6 @@ export interface SavedIdea {
   shotComments?: Record<number, string>
   // When the plan last changed. The API sets it on save; the board's "Stuck" flag reads it. Old plans have none.
   updatedAt?: number
+  // Planning board: each shot's place on the canvas, in shot order. Missing or out of date means "lay them out".
+  boardLayout?: BoardPos[]
 }

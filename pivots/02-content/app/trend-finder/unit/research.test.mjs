@@ -11,6 +11,8 @@ import {
   slotSummary,
   researchProgress,
   newSlot,
+  planDueDate,
+  planHasWork,
 } from '../src/lib/research.ts'
 import { sampleResearch, sampleResearchSlots } from '../src/data/sampleResearch.ts'
 import { videos, sampleIdeas } from '../src/data/sample.ts'
@@ -374,4 +376,28 @@ test('groupRows: the picked reference goes to the top of its video; rowRole read
   assert.equal(rowRole(c, g), 'picked')
   assert.equal(rowRole(b, g), 'backup')
   assert.equal(rowRole(a, g), 'open')
+})
+
+test('planDueDate: the slot due date when valid, else the fallback', () => {
+  assert.equal(planDueDate({ dueDate: '2026-12-01' }, '2026-11-17'), '2026-12-01')
+  assert.equal(planDueDate({ dueDate: ' 2026-12-01 ' }, '2026-11-17'), '2026-12-01')
+  assert.equal(planDueDate({}, '2026-11-17'), '2026-11-17')
+  assert.equal(planDueDate({ dueDate: '' }, '2026-11-17'), '2026-11-17')
+  assert.equal(planDueDate({ dueDate: 'next week' }, '2026-11-17'), '2026-11-17')
+  assert.equal(planDueDate(undefined, '2026-11-17'), '2026-11-17')
+})
+
+test('planHasWork: an untouched new plan has none; any edit or send counts', () => {
+  const fresh = idea({ notes: 'Match the pacing' })
+  assert.equal(planHasWork(fresh, 'Match the pacing'), false)
+  assert.equal(planHasWork(fresh, ' Match the pacing '), false)
+  assert.equal(planHasWork(idea({ notes: '' })), false)
+  assert.equal(planHasWork(fresh, ''), true, 'notes changed from the default')
+  assert.equal(planHasWork({ ...fresh, shots: [] }, 'Match the pacing'), true, 'shots edited, even emptied')
+  assert.equal(planHasWork({ ...fresh, noteToApprover: 'Fun one' }, 'Match the pacing'), true)
+  assert.equal(planHasWork({ ...fresh, noteToApprover: '  ' }, 'Match the pacing'), false)
+  assert.equal(planHasWork({ ...fresh, sentAt: 1 }, 'Match the pacing'), true)
+  assert.equal(planHasWork({ ...fresh, history: [{ kind: 'rejected', at: 1 }] }, 'Match the pacing'), true)
+  assert.equal(planHasWork({ ...fresh, status: 'rejected' }, 'Match the pacing'), true)
+  assert.equal(planHasWork({ ...fresh, status: 'waiting' }, 'Match the pacing'), true)
 })

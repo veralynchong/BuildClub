@@ -27,3 +27,4 @@
 @import './styles/research.css'; /* Research tab: the reference-video sheet, on the theme-remake tokens */
 @import './styles/storyboard.css'; /* script and storyboard on the plan page: shot cards, script table, frames, swatches */
 @import './styles/shots.css'; /* camera tags and selects on shots, and the From script panel */
+@import './styles/board.css'; /* planning board: shots as cards on a canvas (React Flow), on the theme-remake tokens */

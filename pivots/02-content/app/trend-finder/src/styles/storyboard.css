@@ -89,3 +89,29 @@
   .sb-cell-shot { width: 38%; }
   .sb-row-frame { float: none; width: min(100%, 96px); margin: 0 0 var(--space-sm); }
 }
+
+/* Top of the plan page (PlanHooks.tsx): how the original starts, then ways to start the client's version.
+   Tokens only. Options stack under their text on phones. */
+.hook-quote {
+  margin: 0; padding: 14px 16px; border-radius: var(--radius); background: var(--blue-soft); color: var(--accent-soft-fg);
+  font-size: var(--text-md); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere;
+}
+.hook-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-xs); font-size: var(--text-sm); color: var(--muted); }
+.hook-facts li { overflow-wrap: anywhere; }
+.hook-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-sm); }
+.hook-option {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-base);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px;
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+.hook-option.is-picked { border-color: var(--blue); background: var(--blue-soft); }
+.hook-option-text { overflow-wrap: anywhere; }
+.hook-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm) var(--space-lg); }
+.hook-yours { margin: 0; font-size: var(--text-sm); font-weight: 500; overflow-wrap: anywhere; }
+.plan-board-link { display: flex; justify-content: flex-end; }
+.plan-more > summary { cursor: pointer; font-size: var(--text-lg); font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+@media (max-width: 560px) {
+  .hook-option { grid-template-columns: minmax(0, 1fr); }
+  .hook-option .btn { justify-self: stretch; min-height: 44px; }
+  .plan-board-link .btn { flex: 1 1 auto; min-height: 44px; }
+}

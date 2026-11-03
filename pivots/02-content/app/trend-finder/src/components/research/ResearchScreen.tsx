@@ -28,7 +28,8 @@ import { UNSORTED, groupRows, readOpen, rowRole, writeOpen } from './slots'
 import type { Group, OpenMap, RowRole } from './slots'
 
 // The Research tab: one client's sheet of reference videos (what's out there), replacing the agency's Excel sheet.
-// It is for deciding what to make; "Plan it" turns a row into a plan on the Plans board.
+// It is for deciding what to make; picking a row ("★ Picked") sends it to the Plans board at once, as a plan in
+// Still planning, and the page says so without leaving Research.
 export type RowPick = 'none' | 'backup' | 'picked'
 
 export interface ResearchScreenProps {
@@ -42,6 +43,11 @@ export interface ResearchScreenProps {
   // The Status dropdown. 'picked' makes the row's plan (Still planning) without leaving the page; the video's
   // earlier pick steps down to Backup and its plan is deleted. 'none' / 'backup' on a picked row deletes its plan.
   onPick: (id: string, pick: RowPick) => void
+  // Whether a picked row's plan has work in it (shots, notes, sent before). Picking another row in the same video
+  // asks first only then; an untouched plan is replaced at once. Without it, every switch asks.
+  planHasWork?: (e: ResearchEntry) => boolean
+  // "Open Plans →" in the "Sent to Plans" message: the Plans board.
+  onOpenPlans?: () => void
   // A row to bring into view on arrival (Find ideas' "Open in Research"): its video opens, the page scrolls to
   // it and it's highlighted for a moment. onFocused clears it.
   focusRowId?: string | null
@@ -122,6 +128,8 @@ export function ResearchScreen(p: ResearchScreenProps) {
   const [flash, setFlash] = useState<string | null>(null)
   // The row asking before its Status change deletes a plan.
   const [asking, setAsking] = useState<{ id: string; to: RowPick; text: string } | null>(null)
+  // The row just sent to Plans by picking it: the row says so and a message offers "Open Plans →".
+  const [sent, setSent] = useState<{ id: string; account: string } | null>(null)
   // The slot asking "Remove slot 3?".
   const [removingSlot, setRemovingSlot] = useState<string | null>(null)
   const addBtn = useRef<HTMLButtonElement>(null)
@@ -204,6 +212,26 @@ export function ResearchScreen(p: ResearchScreenProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusRowId, focusGroup])
+
+  // A new client's sheet starts without the last client's "Sent to Plans" message.
+  const [sentClient, setSentClient] = useState(clientId)
+  if (sentClient !== clientId) {
+    setSentClient(clientId)
+    setSent(null)
+  }
+  // The row just sent to Plans moves to the top of its video; highlight it for a moment so the eye can follow.
+  const sentId = sent?.id
+  useEffect(() => {
+    if (!sentId) return
+    setFlash(sentId)
+    const done = window.setTimeout(() => setFlash((f) => (f === sentId ? null : f)), 2600)
+    return () => window.clearTimeout(done)
+  }, [sentId])
+  // Picking: the plan is made at once (Still planning) and the page says so, without leaving Research.
+  const pick = (e: ResearchEntry) => {
+    p.onPick(e.id, 'picked')
+    setSent({ id: e.id, account: e.account })
+  }
 
   const sortBy = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: firstDir(key) }))
@@ -324,9 +352,10 @@ export function ResearchScreen(p: ResearchScreenProps) {
     />
   )
   // Picked: "★ Picked" and the plan's status. Backup: another row in the slot is picked. Open: "Plan it".
-  // Status: a dropdown (Not picked / Backup / ★ Picked). Picking makes the plan (Still planning) and moves the row
-  // to the top of its video. A plan past Still planning is locked here: it changes on Plans, where the manager
-  // approves. Deleting a plan (un-picking, or picking another row in the same video) asks first.
+  // Status: a dropdown (Not picked / Backup / ★ Picked). Picking sends the row to Plans at once (Still planning) and
+  // moves it to the top of its video. A plan past Still planning is locked here: it changes on Plans, where the
+  // manager approves. Un-picking deletes the plan and asks first; picking another row in the same video asks only
+  // when the earlier pick's plan has work in it.
   const statusCell = (e: ResearchEntry, role: RowRole, group: Group) => {
     const s = statusOf(e)
     const value: RowPick = s !== 'none' ? 'picked' : e.backup ? 'backup' : 'none'
@@ -336,8 +365,10 @@ export function ResearchScreen(p: ResearchScreenProps) {
     const choose = (to: RowPick) => {
       if (to === value) return
       if (value === 'picked') return setAsking({ id: e.id, to, text: t('research.pick.askUnpick', { account: e.account }) })
-      if (to === 'picked' && other)
+      if (to === 'picked' && other && (p.planHasWork?.(other) ?? true))
         return setAsking({ id: e.id, to, text: t('research.pick.askSwitch', { account: other.account }) })
+      if (to === 'picked') return pick(e)
+      if (sent?.id === e.id) setSent(null)
       p.onPick(e.id, to)
     }
     const select = (
@@ -366,6 +397,8 @@ export function ResearchScreen(p: ResearchScreenProps) {
             autoFocus
             onClick={() => {
               setAsking(null)
+              if (asking.to === 'picked') return pick(e)
+              if (sent?.id === e.id) setSent(null)
               p.onPick(e.id, asking.to)
             }}
           >
@@ -388,6 +421,11 @@ export function ResearchScreen(p: ResearchScreenProps) {
           >
             {statusText(s)}
           </button>
+        )}
+        {role === 'picked' && sent?.id === e.id && (
+          <span className="rs-sent small">
+            <span aria-hidden="true">✓</span> {t('research.sent.row')}
+          </span>
         )}
         {ask}
       </span>
@@ -618,6 +656,24 @@ export function ResearchScreen(p: ResearchScreenProps) {
       <p className="sr-only" role="status" aria-live="polite">
         {announce}
       </p>
+
+      {/* "Sent to Plans": stays until closed or the next pick, so there's time to open Plans. */}
+      <div className="rs-sent-live" role="status" aria-live="polite">
+        {sent && (
+          <div className="toast rs-sent-toast">
+            <span className="toast-ok" aria-hidden="true">✓</span>
+            <span className="toast-msg">{t('research.sent.toast', { account: sent.account })}</span>
+            {p.onOpenPlans && (
+              <button type="button" className="btn btn-primary btn-sm" onClick={p.onOpenPlans}>
+                {t('research.sent.open')}
+              </button>
+            )}
+            <button type="button" className="toast-x" onClick={() => setSent(null)} aria-label={t('research.sent.dismiss')}>
+              ✕
+            </button>
+          </div>
+        )}
+      </div>
 
       {adding && (
         <div id={`${id}-add`}>
