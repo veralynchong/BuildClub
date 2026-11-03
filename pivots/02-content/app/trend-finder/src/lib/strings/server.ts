@@ -5,6 +5,9 @@
 export const en = {
   "server.canvas.stale": "The canvas changed somewhere else. Reload it.",
   "server.noPlan": "That plan doesn't exist.",
+  "server.agent.noShot": "That shot isn't in this plan.",
+  "server.agent.notApproved": "Approve the plan before building shots.",
+  "server.agent.failed": "Couldn't plan this shot. Try again.",
   "server.canvas.noShots": "Save the shot list first.",
   "server.canvas.sendDoc": "Send the version and the canvas.",
   "server.canvas.notApproved": "Only an approved plan can change the canvas.",
@@ -139,6 +142,9 @@ export const en = {
 export const zhHant: Record<keyof typeof en, string> = {
   "server.canvas.stale": "畫布在別處被改過了，請重新載入。",
   "server.noPlan": "找不到這份企劃。",
+  "server.agent.noShot": "這份企劃裡沒有這個鏡頭。",
+  "server.agent.notApproved": "請先核准企劃，再建鏡頭。",
+  "server.agent.failed": "無法規劃這個鏡頭，請再試一次。",
   "server.canvas.noShots": "請先儲存分鏡表。",
   "server.canvas.sendDoc": "請送出版本和畫布內容。",
   "server.canvas.notApproved": "只有已核准的企劃才能改畫布。",
