@@ -54,3 +54,24 @@ test('askAgent posts the shot id and throws the server sentence', async () => {
   globalThis.fetch = async () => ({ ok: false, status: 502, json: async () => ({ error: "Couldn't plan this shot. Try again." }) })
   await assert.rejects(askAgent('ia', 's1'), { message: "Couldn't plan this shot. Try again." })
 })
+
+const startOf = (doc, vidId) => doc.edges.find((e) => e.target === vidId && e.targetHandle === 'in:start')?.source
+test('applyAgentPlan wires a new video from the primary storyboard even when it is not the newest', () => {
+  const doc = { ...empty, nodes: [...empty.nodes, node('n_sb_a', 'storyboard', 's1', { primary: true }), node('n_sb_b', 'storyboard', 's1')] }
+  const r = applyAgentPlan(doc, 's1', plan, models)
+  assert.equal(r.storyboardId, 'n_sb_a')
+  assert.equal(startOf(r.doc, r.videoId), 'n_sb_a')
+})
+test('applyAgentPlan reuses the newest storyboard when none is primary', () => {
+  const doc = { ...empty, nodes: [...empty.nodes, node('n_sb_a', 'storyboard', 's1'), node('n_sb_b', 'storyboard', 's1')] }
+  const r = applyAgentPlan(doc, 's1', plan, models)
+  assert.equal(r.storyboardId, 'n_sb_b')
+  assert.equal(r.doc.nodes.filter((n) => n.type === 'storyboard').length, 2)
+})
+test('applyAgentPlan reuses the newest video and wires it from the chosen storyboard', () => {
+  const doc = { ...empty, nodes: [...empty.nodes, node('n_sb_a', 'storyboard', 's1', { primary: true }), node('n_sb_b', 'storyboard', 's1'), node('n_v1', 'video', 's1'), node('n_v2', 'video', 's1')] }
+  const r = applyAgentPlan(doc, 's1', plan, models)
+  assert.equal(r.videoId, 'n_v2')
+  assert.equal(startOf(r.doc, 'n_v2'), 'n_sb_a')
+  assert.equal(r.doc.nodes.filter((n) => n.type === 'video').length, 2)
+})

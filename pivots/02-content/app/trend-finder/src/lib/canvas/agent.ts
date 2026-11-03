@@ -1,6 +1,6 @@
 import { serverText } from '../serverText.ts'
 import { shotNodeOf } from './frames.ts'
-import { addNode, priceOf, wireStart } from './graph.ts'
+import { addNode, priceOf } from './graph.ts'
 import { wireKit } from './kit.ts'
 import type { CanvasDoc, CanvasNode, GenModel } from './types.ts'
 
@@ -46,6 +46,7 @@ export function applyAgentPlan(
   shotId: string,
   plan: AgentPlan,
   models: GenModel[],
+  sizes?: Map<string, { w: number; h: number }>,
 ): { doc: CanvasDoc; storyboardId: string; videoId: string; changed: string[] } {
   if (!shotNodeOf(doc, shotId)) throw new Error(`Shot ${shotId} has no node.`)
   const inFrame = (d: CanvasDoc, type: CanvasNode['type']) => d.nodes.filter((n) => n.type === type && n.shotId === shotId)
@@ -56,7 +57,7 @@ export function applyAgentPlan(
   let sb = sbs.find((n) => n.data.primary) ?? sbs[sbs.length - 1]
   const sbNew = !sb
   if (!sb) {
-    next = addNode(next, 'storyboard', origin, shotId)
+    next = addNode(next, 'storyboard', origin, shotId, sizes)
     sb = next.nodes[next.nodes.length - 1]
   }
 
@@ -65,7 +66,7 @@ export function applyAgentPlan(
   let vid = vids.find((n) => n.id === startId) ?? vids[vids.length - 1]
   const vidNew = !vid
   if (!vid) {
-    next = addNode(next, 'video', origin, shotId)
+    next = addNode(next, 'video', origin, shotId, sizes)
     vid = next.nodes[next.nodes.length - 1]
   }
 
@@ -85,6 +86,14 @@ export function applyAgentPlan(
     return n
   })
   if (nodes.some((n, i) => n !== next.nodes[i])) next = { ...next, nodes }
-  next = wireKit(wireStart(next, vidId, models))
+  // wireStart picks the frame's newest storyboard; the line must come from the one chosen here.
+  if (!next.edges.some((e) => e.target === vidId && e.targetHandle === 'in:start')) {
+    const model = models.find((m) => m.id === plan.video.model)
+    if (!model || (model.inputs.startFrame ?? 'none') !== 'none') {
+      const edge = { id: `e_${sbId}_${vidId}_in:start`, source: sbId, sourceHandle: 'out', target: vidId, targetHandle: 'in:start' }
+      next = { ...next, edges: [...next.edges, edge] }
+    }
+  }
+  next = wireKit(next)
   return { doc: next, storyboardId: sbId, videoId: vidId, changed }
 }
