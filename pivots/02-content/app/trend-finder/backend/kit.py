@@ -31,6 +31,9 @@ TOO_MANY_ITEMS = "A kit holds at most 20 items."
 TOO_MANY_IMAGES = "A kit item holds at most 4 images."
 DUPLICATE = "Another item in this kit already has that name."
 BAD_BODY = "The request body is not valid."
+BAD_NAME = "The name must be 1 to 40 characters."
+BAD_KIND = "The type must be character, product, place or style."
+BAD_NOTE = "The note must be at most 200 characters."
 
 
 class ItemIn(BaseModel):
@@ -101,9 +104,9 @@ def _next_stamp(previous: int = 0) -> int:
 
 
 def _validation_message(e: ValidationError) -> str:
-    first = e.errors()[0]
-    field = ".".join(str(p) for p in first["loc"])
-    return f"Invalid {field}: {first['msg']}." if field else BAD_BODY
+    # One fixed sentence per field, so the frontend can translate them.
+    field = ".".join(str(p) for p in e.errors()[0]["loc"])
+    return {"name": BAD_NAME, "kind": BAD_KIND, "note": BAD_NOTE}.get(field, BAD_BODY)
 
 
 def make_router(load, save, media_dir: Callable[[], Path]) -> APIRouter:

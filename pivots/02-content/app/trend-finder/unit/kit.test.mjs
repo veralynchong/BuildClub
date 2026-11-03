@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { kitRefs, wireKit, pruneKit, kitStale } from '../src/lib/canvas/kit.ts'
+import { checkImage } from '../src/lib/canvas/upload.ts'
 import { getKit, createKitItem, updateKitItem, deleteKitItem, addKitImage, deleteKitImage, kitFileUrl } from '../src/lib/canvas/api.ts'
 
 const edge = (source, target, targetHandle) => ({ id: `e_${source}_${target}_${targetHandle}`, source, sourceHandle: 'out', target, targetHandle })
@@ -216,4 +217,10 @@ test('kit api errors carry the backend error text', async () => {
     stub(409, { error: msg })
     await assert.rejects(call(), (e) => e instanceof Error && e.message === msg)
   }
+})
+
+test('checkImage takes a per-call size limit', () => {
+  const f = { name: 'a.png', type: 'image/png', size: 11 * 1024 * 1024 }
+  assert.equal(checkImage(f), null) // canvas limit is 20 MB
+  assert.equal(checkImage(f, 10 * 1024 * 1024), 'canvas.upload.tooBig')
 })

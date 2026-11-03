@@ -45,6 +45,12 @@ def test_name_rules(client, setup):
     assert client.patch(f"{BASE}/items/{mia}", json={"name": "MIA"}).status_code == 200  # itself is fine
 
 
+def test_validation_errors_are_fixed_sentences(client, setup):
+    assert item(client, name="").json()["error"] == "The name must be 1 to 40 characters."
+    assert item(client, kind="vehicle").json()["error"] == "The type must be character, product, place or style."
+    assert item(client, note="x" * 201).json()["error"] == "The note must be at most 200 characters."
+
+
 def test_item_limit_20(client, setup):
     for n in range(20):
         assert item(client, name=f"n{n}").status_code == 201

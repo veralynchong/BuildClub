@@ -7,6 +7,7 @@ import { ErrorText } from '../ErrorText'
 
 const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp'
 const MAX_IMAGES = 4
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024 // backend/kit.py; smaller than the canvas upload limit
 const KINDS: [KitKind, Key][] = [
   ['character', 'canvas.kit.panel.kind.character'],
   ['product', 'canvas.kit.panel.kind.product'],
@@ -96,8 +97,8 @@ export function KitPanel({ clientId, kit, selected, onKit, onSelected, onClose }
   }
 
   const upload = async (item: KitItem, file: File) => {
-    const bad = checkImage(file)
-    if (bad) return setError(item.id, t(bad))
+    const bad = checkImage(file, MAX_IMAGE_BYTES)
+    if (bad) return setError(item.id, t(bad === 'canvas.upload.tooBig' ? 'server.kit.imageTooBig' : bad))
     await run(item.id, 'uploading', async () => replace(await addKitImage(clientId, item.id, file)))
   }
 
