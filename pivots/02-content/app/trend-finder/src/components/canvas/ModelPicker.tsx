@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { t } from '../../lib/i18n'
-import { priceOf } from '../../lib/canvas/graph'
+import { priceLabel } from '../../lib/canvas/graph'
 import { aboutTime } from '../../lib/canvas/shell'
 import type { GenModel } from '../../lib/canvas/types'
 
@@ -18,10 +18,7 @@ const TIERS = ['cheap', 'balanced', 'best'] as const
 const tierOf = (m: GenModel) => TIERS.find((x) => x === m.tier)
 
 // One run of the model at the node's length (or the model's first length when it can't do that one).
-const priceText = (m: GenModel, seconds: number | undefined): string => {
-  const usd = priceOf(m, m.durations?.includes(seconds ?? -1) ? seconds : undefined)
-  return usd === 0 ? t('canvas.gen.free') : t('canvas.gen.cost', { usd: usd.toFixed(2) })
-}
+const priceText = (m: GenModel, seconds: number | undefined): string => priceLabel(m, m.durations?.includes(seconds ?? -1) ? seconds : undefined)
 
 const waitText = (m: GenModel): string | null => {
   if (m.typicalSeconds == null) return null

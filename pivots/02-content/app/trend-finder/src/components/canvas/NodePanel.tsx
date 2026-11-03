@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { t } from '../../lib/i18n'
 import { serverText } from '../../lib/serverText'
-import { budgetLeft, failedGen, isRetired, pendingGen, priceOf, reuseSettings, selectedGen, shotTextSource, versionsOf } from '../../lib/canvas/graph'
+import { failedGen, genView, pendingGen, priceLabel, reuseSettings, selectedGen, shotTextSource, versionsOf } from '../../lib/canvas/graph'
 import { PORTS } from '../../lib/canvas/ports'
 import { aboutTime } from '../../lib/canvas/shell'
 import { genButton } from '../../lib/canvas/status'
@@ -23,19 +23,13 @@ export function NodePanel({ nodeId, onClose }: Props) {
   const { doc, models, gens, shots, readOnly, updateData, onGenerate, onSelectVersion, edited, incomingHandles, missing, budget, chainOf, onChain, chaining, kitView, kitSent, setKitOff, shotIndex } = c
   const node = doc.nodes.find((n) => n.id === nodeId)
   if (!node || (node.type !== 'storyboard' && node.type !== 'video')) return null
-  const kind = node.type === 'video' ? 'video' : 'image'
-  const options = models.filter((m) => m.kind === kind)
-  const retired = isRetired(models, kind, node.data.model)
-  const model = retired ? undefined : (options.find((m) => m.id === node.data.model) ?? options[0])
   const versions = versionsOf(nodeId, gens)
   const pending = pendingGen(nodeId, gens)
   const failed = failedGen(nodeId, gens)
   const shown = selectedGen(node, gens)
   const need = missing(nodeId)
+  const { kind, options, retired, model, seconds, usd, left, canGenerate } = genView(node, models, budget, need)
   const handles = incomingHandles(nodeId)
-  const seconds = model?.durations?.includes(node.data.duration ?? -1) ? node.data.duration : model?.durations?.[0]
-  const left = budgetLeft(budget, kind)
-  const usd = model ? priceOf(model, seconds) : 0
   const pair = node.type === 'storyboard' ? chainOf(nodeId) : null
   const lost = failed?.status === 'unknown'
   const kitSeen = node.type === 'storyboard' ? kitView(nodeId) : null
@@ -66,7 +60,7 @@ export function NodePanel({ nodeId, onClose }: Props) {
     return t('canvas.panel.startFrom', { node: name, n })
   })()
 
-  const priceText = !model ? '' : usd === 0 ? t('canvas.gen.free') : t('canvas.gen.cost', { usd: usd.toFixed(2) })
+  const priceText = !model ? '' : priceLabel(model, seconds)
   const wait = model?.typicalSeconds != null ? aboutTime(model.typicalSeconds) : null
   const costLine = wait ? t('canvas.panel.cost', { price: priceText, eta: t(wait.key, { n: wait.n }) }) : priceText
   const main = genButton(node, gens)
@@ -74,7 +68,7 @@ export function NodePanel({ nodeId, onClose }: Props) {
   const typeName = t(`canvas.node.${node.type}`)
 
   return (
-    <aside className="cv-panel" aria-label={t('canvas.panel.label')}>
+    <aside className="cv-panel nokey" aria-label={t('canvas.panel.label')}>
       <div className="cv-panel-head">
         <h2 className="cv-panel-title">{shotNo > 0 ? t('canvas.panel.title', { node: typeName, n: shotNo }) : typeName}</h2>
         <button type="button" className="cv-panel-x" aria-label={t('canvas.panel.close')} title={t('canvas.panel.close')} onClick={onClose}>
@@ -214,7 +208,7 @@ export function NodePanel({ nodeId, onClose }: Props) {
       )}
 
       <div className="cv-panel-foot">
-        <button type="button" className="btn btn-primary" disabled={locked || !model || !model.available || retired || need !== null} onClick={() => onGenerate(nodeId)}>
+        <button type="button" className="btn btn-primary" disabled={locked || !canGenerate} onClick={() => onGenerate(nodeId)}>
           {t(main.key, main.vars)}
         </button>
         {pair && !readOnly && (

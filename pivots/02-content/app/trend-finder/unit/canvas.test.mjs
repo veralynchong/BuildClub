@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { canConnect, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy, shotTextSource, reuseSettings } from '../src/lib/canvas/graph.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy, genView, priceLabel, shotTextSource, reuseSettings } from '../src/lib/canvas/graph.ts'
+import { t } from '../src/lib/i18n.ts'
 import { slotInFrame } from '../src/lib/canvas/frames.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen, getBudget, quoteChain, startChain } from '../src/lib/canvas/api.ts'
 
@@ -513,4 +514,36 @@ test('addNode in a frame adds no text line and lands right of the last member', 
 test('reuseSettings copies model, prompt and duration', () => {
   assert.deepEqual(reuseSettings({ model: 'mock-video', inputs: { prompt: 'move', duration: 4 } }), { model: 'mock-video', prompt: 'move', duration: 4 })
   assert.deepEqual(reuseSettings({ model: 'mock-image', inputs: { duration: null } }), { model: 'mock-image', prompt: '' })
+})
+
+test('genView: normal model can generate with its price; retired or keyless cannot; a missing input blocks', () => {
+  const list = [
+    { id: 'img', kind: 'image', available: true, price: { per: 'image', usd: 0.04 } },
+    { id: 'nokey', kind: 'image', available: false, price: { per: 'image', usd: 0.04 } },
+    { id: 'vid', kind: 'video', available: true, price: { per: 'second', usd: 0.1 }, durations: [5, 10] },
+  ]
+  const budget = { image: { cap: 1, spent: 0.5 }, video: { cap: 2, spent: 0 } }
+  const node = (type, data) => ({ id: 'n', type, shotId: 's1', position: { x: 0, y: 0 }, data })
+  const ok = genView(node('storyboard', { model: 'img' }), list, budget, null)
+  assert.equal(ok.canGenerate, true)
+  assert.equal(ok.usd, 0.04)
+  assert.equal(ok.left, 0.5)
+  assert.equal(ok.kind, 'image')
+  const retired = genView(node('storyboard', { model: 'gone' }), list, budget, null)
+  assert.equal(retired.retired, true)
+  assert.equal(retired.model, undefined)
+  assert.equal(retired.canGenerate, false)
+  assert.equal(genView(node('storyboard', { model: 'nokey' }), list, budget, null).canGenerate, false)
+  assert.equal(genView(node('storyboard', { model: 'img' }), list, budget, 'canvas.gen.needsKey').canGenerate, false)
+  const v = genView(node('video', { model: 'vid', duration: 10 }), list, null, null)
+  assert.equal(v.seconds, 10)
+  assert.equal(v.usd, 1)
+  assert.equal(v.left, null)
+  assert.equal(genView(node('video', { model: 'vid', duration: 7 }), list, null, null).seconds, 5)
+})
+
+test('priceLabel: free for a zero price, otherwise the cost to two decimals', () => {
+  assert.equal(priceLabel({ price: { per: 'image', usd: 0 } }, undefined), t('canvas.gen.free'))
+  assert.equal(priceLabel({ price: { per: 'image', usd: 0.04 } }, undefined), t('canvas.gen.cost', { usd: '0.04' }))
+  assert.equal(priceLabel({ price: { per: 'second', usd: 0.1 }, durations: [5] }, 5), t('canvas.gen.cost', { usd: '0.50' }))
 })

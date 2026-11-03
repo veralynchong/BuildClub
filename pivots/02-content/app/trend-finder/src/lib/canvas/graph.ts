@@ -1,4 +1,4 @@
-import type { Key } from '../i18n.ts'
+import { t, type Key } from '../i18n.ts'
 import type { Kit, Shot } from '../../types.ts'
 import { kitRefs, type GenRef } from './kit.ts'
 import { shotNodeOf, slotInFrame } from './frames.ts'
@@ -261,4 +261,23 @@ export function wireStart(doc: CanvasDoc, videoNodeId: string, models: GenModel[
   if (!sb) return doc
   const edge = { id: `e_${sb.id}_${videoNodeId}_in:start`, source: sb.id, sourceHandle: 'out', target: videoNodeId, targetHandle: 'in:start' }
   return { ...doc, edges: [...doc.edges, edge] }
+}
+
+// "Free" or "about US$x.xx" for one run of the model at the length (the model's first length when seconds is unset).
+export function priceLabel(m: Pick<GenModel, 'price' | 'durations'>, seconds: number | undefined): string {
+  const usd = priceOf(m, seconds)
+  return usd === 0 ? t('canvas.gen.free') : t('canvas.gen.cost', { usd: usd.toFixed(2) })
+}
+
+// What a storyboard or video node shows about its model, shared by the card and the right panel so they can't drift:
+// the model in use (none when the saved one was retired), the length, one run's price, what is left of today's budget,
+// and whether Generate is allowed (callers add their own busy/read-only check). `need` is what the node still lacks.
+export function genView(node: CanvasNode, models: GenModel[], budget: Budget | null, need: Key | null) {
+  const kind: 'image' | 'video' = node.type === 'video' ? 'video' : 'image'
+  const options = models.filter((m) => m.kind === kind)
+  const retired = isRetired(models, kind, node.data.model)
+  const model = retired ? undefined : (options.find((m) => m.id === node.data.model) ?? options[0])
+  const seconds = model?.durations?.includes(node.data.duration ?? -1) ? node.data.duration : model?.durations?.[0]
+  const usd = model ? priceOf(model, seconds) : 0
+  return { kind, options, retired, model, seconds, usd, left: budgetLeft(budget, kind), canGenerate: !!model && model.available && !retired && need === null }
 }
