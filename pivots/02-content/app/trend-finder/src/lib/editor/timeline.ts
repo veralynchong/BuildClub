@@ -315,21 +315,39 @@ export function repinIfOld(primaries: Record<string, ClipSource>, shotId: string
 export function applyNewer(p: EditProject, clipId: string, source: ClipSource, duration: number, whole = false): EditProject {
   const c = p.clips.find((x) => x.id === clipId)
   if (!c) return p
+  // Every piece of the old source in this shot (Split makes several) takes the new one, so the shot keeps one source.
+  // A clip without a shot changes alone.
+  const old = c.source
+  const isPiece = (x: Clip) => x === c || (!!old.shotId && x.source.kind === old.kind && x.source.id === old.id && x.source.shotId === old.shotId)
   if (whole) {
+    // The whole new take replaces the pieces: their cut points belong to the old footage. It takes the first piece's place.
     const out = floorFrames(duration)
     if (out < MIN_F) return p
-    const next = withClips(p, p.clips.map((x) => (x.id === clipId ? { ...x, source, in: 0, out: secs(out) } : x)))
+    const first = p.clips.find(isPiece) as Clip
+    const next = withClips(p, p.clips.flatMap((x) => (x === first ? [{ ...x, source, in: 0, out: secs(out) }] : isPiece(x) ? [] : [x])))
     return totalFrames(next) > MAX_F ? p : next
   }
   const cap = floorFrames(duration)
-  let nin = frames(c.in)
-  let nout = Math.min(frames(c.out), cap)
-  if (nout - nin < MIN_F) {
-    nin = 0
-    nout = Math.min(frames(c.out) - frames(c.in), cap)
+  const fit = (x: Clip): Clip | null => {
+    let nin = frames(x.in)
+    let nout = Math.min(frames(x.out), cap)
+    if (nout - nin < MIN_F) {
+      nin = 0
+      nout = Math.min(frames(x.out) - frames(x.in), cap)
+    }
+    return nout - nin < MIN_F ? null : { ...x, source, in: secs(nin), out: secs(nout) }
   }
-  if (nout - nin < MIN_F) return p
-  return withClips(p, p.clips.map((x) => (x.id === clipId ? { ...x, source, in: secs(nin), out: secs(nout) } : x)))
+  const clips: Clip[] = []
+  for (const x of p.clips) {
+    if (!isPiece(x)) {
+      clips.push(x)
+      continue
+    }
+    const y = fit(x)
+    if (!y) return p // a piece that can't fit would leave the shot with two sources
+    clips.push(y)
+  }
+  return withClips(p, clips)
 }
 
 // Why the timeline can't be exported yet (the copy key), or null when it can. `statuses` maps clip id -> clipStatus state.

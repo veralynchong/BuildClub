@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { placeShotClip, oneClipPerShot, timelineSummary, isOnTimeline, shotOnTimeline, splitAt } from '../src/lib/editor/timeline.ts'
+import { placeShotClip, oneClipPerShot, timelineSummary, isOnTimeline, shotOnTimeline, splitAt, applyNewer } from '../src/lib/editor/timeline.ts'
 import { clipLabel } from '../src/components/editor/clipName.ts'
 
 const proj = (clips, primaries = {}) => ({
@@ -99,4 +99,19 @@ test('placeShotClip replaces every piece of the shot, split ones included', () =
   const split = splitAt(proj([clip('c1', g1, 4), clip('c2', g2, 3)]), 2, 'c9')
   const r = placeShotClip(split, src('take', 't1', 's1'), 3, shotOrder, 'c10')
   assert.deepEqual(r.clips.map((c) => c.id), ['c10', 'c2'])
+})
+
+test('applyNewer swaps every split piece of the shot, keeping each piece\'s cut', () => {
+  const split = splitAt(proj([clip('c1', g1, 4), clip('c2', g2, 3)]), 2, 'c9')
+  const g1n = src('generation', 'g1n', 's1', 'n_vid_s1')
+  const r = applyNewer(split, 'c1', g1n, 10)
+  assert.deepEqual(r.clips.map((c) => [c.id, c.source.id, c.in, c.out]), [['c1', 'g1n', 0, 2], ['c9', 'g1n', 2, 4], ['c2', 'g2', 0, 3]])
+  assert.equal(oneClipPerShot({ ...r, primaries: { s1: g1n } }).removed, 0)
+  // a newer version too short for one piece leaves the project alone rather than mixing sources
+  assert.equal(applyNewer(split, 'c9', g1n, 0.1), split)
+  // a whole new take replaces the pieces with one clip in the first piece's place
+  const t1 = src('take', 't1', 's1'), t1c = src('take', 't1c', 's1')
+  const st = splitAt(proj([clip('c1', t1, 4), clip('c2', g2, 3)]), 2, 'c9')
+  const w = applyNewer(st, 'c9', t1c, 3.5, true)
+  assert.deepEqual(w.clips.map((c) => [c.id, c.source.id, c.in, c.out]), [['c1', 't1c', 0, 3.5], ['c2', 'g2', 0, 3]])
 })
