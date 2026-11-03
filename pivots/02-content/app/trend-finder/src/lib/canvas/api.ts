@@ -29,11 +29,17 @@ async function send<T>(r: Response, fallback: string): Promise<T> {
 }
 
 export async function getCanvas(ideaId: string): Promise<CanvasState> {
-  const r = await fetch(`${base(ideaId)}/canvas`)
+  // No server at all (the request itself fails) is not the same as a server that answered with an error.
+  const r = await fetch(`${base(ideaId)}/canvas`).catch(() => null)
+  if (!r) throw new Error(t('canvas.err.unreachable'))
   if (r.ok) return r.json()
   const body = await r.json().catch(() => null)
   if (r.status === 409 && body?.code === 'no-shots') throw new NoShots(serverText(body.error))
-  throw new Error(serverText(body?.error) || t('canvas.err.load'))
+  if (body?.error) throw new Error(serverText(body.error))
+  // No message from the app: a 404 is a server without the /canvas route (an old backend); a 5xx that is not JSON is
+  // a proxy or gateway with nothing behind it.
+  if (r.status === 404) throw new Error(t('canvas.err.noRoute'))
+  throw new Error(body === null && r.status >= 500 ? t('canvas.err.unreachable') : t('canvas.err.load'))
 }
 
 export async function putCanvas(ideaId: string, version: number, doc: CanvasDoc): Promise<number> {

@@ -26,6 +26,7 @@ import { createShareLink, revokeClientLinks } from "../lib/share";
 import { postedThisMonth } from "../lib/stage";
 import { needsConfirm, patchFor, stepOf, targetsOf } from "../lib/steps.ts";
 import { useProduction } from "../lib/production.ts";
+import { videoOf } from "../lib/missingVideo.ts";
 import { ProgressRing } from "./ProgressRing";
 import { StageSelect } from "./StageSelect";
 import { PlanCard, PlanCardBody } from "./plans/PlanCard";
@@ -100,12 +101,8 @@ export function ShortlistBoard(p: Props) {
 
   const mine = p.ideas.filter((i) => i.clientId === p.client.id);
   const signalsById = useProduction(p.client.id);
-  const formatOf = (i: SavedIdea) =>
-    p.formatById.get(p.videoById.get(i.videoId)?.formatId ?? "");
-  const nameOf = (i?: SavedIdea) => {
-    const v = i && p.videoById.get(i.videoId);
-    return v ? planName(v, formatOf(i)) : t("plan.board.thePlan");
-  };
+  const formatOf = (i: SavedIdea) => p.formatById.get(videoOf(i, p.videoById).formatId);
+  const nameOf = (i?: SavedIdea) => (i ? planName(videoOf(i, p.videoById), formatOf(i)) : t("plan.board.thePlan"));
   // Everything a card needs, worked out once per render.
   const infoOf = (i: SavedIdea) => {
     const shots = shotsOf(i, formatOf(i));
@@ -305,8 +302,7 @@ export function ShortlistBoard(p: Props) {
   };
 
   const card = (idea: SavedIdea) => {
-    const v = p.videoById.get(idea.videoId);
-    if (!v) return null;
+    const v = videoOf(idea, p.videoById);
     const info = infos.get(idea.id);
     if (!info) return null;
     return (
@@ -320,6 +316,7 @@ export function ShortlistBoard(p: Props) {
           onOpenPlan={() => p.onOpenPlan(idea.id)}
           onRemove={() => remove(idea.id)}
           cutSentBack={signalsById[idea.id]?.cutSentBack}
+          cutWaiting={!!signalsById[idea.id]?.cutWaiting}
           onFromResearch={p.onOpenResearch && p.inResearch?.has(idea.videoId) ? p.onOpenResearch : undefined}
           actions={
             <>
@@ -392,7 +389,7 @@ export function ShortlistBoard(p: Props) {
   };
   const confirmIdea = mine.find((i) => i.id === confirm?.id && i.status === "approved");
   const confirmTo = confirm?.to ?? "waiting";
-  const dragVideo = dragging && p.videoById.get(dragging.videoId);
+  const dragVideo = dragging && videoOf(dragging, p.videoById);
   const motion = !reducedMotion();
 
   return (
@@ -479,6 +476,7 @@ export function ShortlistBoard(p: Props) {
                     video={dragVideo}
                     format={formatOf(dragging)}
                     cutSentBack={signalsById[dragging.id]?.cutSentBack}
+                    cutWaiting={!!signalsById[dragging.id]?.cutWaiting}
                   />
                 </div>
               ) : null}

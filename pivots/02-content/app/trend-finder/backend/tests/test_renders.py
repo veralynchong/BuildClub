@@ -370,7 +370,7 @@ def test_send_needs_review_link_409(client, fake_export):
     finished_cut(client)
     r = send(client)
     assert r.status_code == 409
-    assert r.json()["error"] == "This client's review link is turned off. Make a new one on the Shortlist first."
+    assert r.json()["error"] == "This client's review link is turned off. Make a new one on the Plans page first."
 
 
 def test_send_not_approved_409(client, fake_export):

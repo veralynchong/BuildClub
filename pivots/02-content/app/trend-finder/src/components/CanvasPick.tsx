@@ -1,5 +1,6 @@
 import type { Format, SavedIdea, Video } from '../types'
 import { t } from '../lib/i18n'
+import { videoOf } from '../lib/missingVideo.ts'
 import { Thumb } from './Thumb'
 import { dueLabel, planName } from './plans/moves'
 
@@ -32,8 +33,7 @@ export function CanvasPick(p: Props) {
       ) : (
         <ul className="board-list">
           {p.plans.map((idea) => {
-            const v = p.videoById.get(idea.videoId)
-            if (!v) return null
+            const v = videoOf(idea, p.videoById)
             return (
               <li key={idea.id}>
                 <button type="button" className="board-card" style={{ width: '100%', textAlign: 'left' }} onClick={() => p.onPick(idea.id)}>

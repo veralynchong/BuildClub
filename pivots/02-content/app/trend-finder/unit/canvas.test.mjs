@@ -171,6 +171,17 @@ test('getCanvas throws NoShots on 409 no-shots and other errors with the server 
   await assert.rejects(getCanvas('ia'), { message: "That plan doesn't exist." })
 })
 
+test('getCanvas says when the server cannot be reached or has no canvas', async () => {
+  globalThis.fetch = async () => { throw new TypeError('Failed to fetch') }
+  await assert.rejects(getCanvas('ia'), { message: /reach the server/ })
+  globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({ detail: 'Not Found' }) })
+  await assert.rejects(getCanvas('ia'), { message: /no canvas/ })
+  globalThis.fetch = async () => ({ ok: false, status: 502, json: async () => { throw new SyntaxError('not json') } })
+  await assert.rejects(getCanvas('ia'), { message: /reach the server/ })
+  globalThis.fetch = async () => ({ ok: false, status: 400, json: async () => ({}) })
+  await assert.rejects(getCanvas('ia'), { message: "Couldn't load the canvas." })
+})
+
 test('pollGen resolves on done and null on abort', async () => {
   const states = ['running', 'done']
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: 'g', status: states.shift() }) })

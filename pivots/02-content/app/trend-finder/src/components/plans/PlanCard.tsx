@@ -15,6 +15,7 @@ export function PlanCardBody({
   idea,
   video: v,
   cutSentBack,
+  cutWaiting,
 }: {
   idea: SavedIdea;
   video: Video;
@@ -22,6 +23,8 @@ export function PlanCardBody({
   format?: Format;
   // The approver sent the finished video back and it has not been re-sent yet.
   cutSentBack?: { reason: string };
+  // The finished video was sent to the approver and has not been answered yet.
+  cutWaiting?: boolean;
 }) {
   const manager = useManagerName();
   const last = idea.status !== "rejected" ? lastSentBack(idea) : undefined;
@@ -58,6 +61,9 @@ export function PlanCardBody({
             })}
           </span>
         )}
+        {cutWaiting && idea.status === "approved" && !cutSentBack && (
+          <span className="small muted">{t("plan.card.cutWaiting", { manager })}</span>
+        )}
         {last && (
           <span className="board-reason small">
             {t("plan.card.lastSentBack", { manager })}{" "}
@@ -84,6 +90,7 @@ interface Props {
   // Goes to the Research tab, for a plan whose video has a Research row.
   onFromResearch?: () => void;
   cutSentBack?: { reason: string };
+  cutWaiting?: boolean;
 }
 
 // Clicks and taps on the card's own controls never start a drag.
@@ -120,7 +127,7 @@ export function PlanCard(p: Props) {
       aria-roledescription={t("plan.card.roleDescription")}
       aria-label={name}
     >
-      <PlanCardBody idea={p.idea} video={p.video} format={p.format} cutSentBack={p.cutSentBack} />
+      <PlanCardBody idea={p.idea} video={p.video} format={p.format} cutSentBack={p.cutSentBack} cutWaiting={p.cutWaiting} />
 
       <div className="board-card-actions" {...keep}>
         <button className="btn btn-ghost btn-sm" onClick={p.onOpenPlan}>

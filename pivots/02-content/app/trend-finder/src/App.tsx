@@ -67,6 +67,7 @@ import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
 import { CanvasPick } from './components/CanvasPick'
 import { approvedPlans } from './lib/canvasPick'
+import { formatOf, videoOf } from './lib/missingVideo.ts'
 import { AddClientScreen } from './components/AddClientScreen'
 import { logout, me, type Account } from './lib/auth'
 import { nextView, onUnauthorized } from './lib/authGate'
@@ -860,7 +861,7 @@ export default function App() {
 
   // Live mode shows only ideas saved from real videos; sample mode only sample ones. Videos added to Research
   // by link are the team's own, so their plans show in both.
-  const shownIdeas = ideas.filter((i) => Boolean(videoById.get(i.videoId)?.live) === live || i.videoId.startsWith('link-'))
+  const shownIdeas = ideas.filter((i) => !videoById.has(i.videoId) || Boolean(videoById.get(i.videoId)?.live) === live || i.videoId.startsWith('link-'))
 
   const chipGroups = buildChipGroups({
     client,
@@ -1024,21 +1025,19 @@ export default function App() {
   // The plan's canvas with the editor closed, as the sidebar's Canvas opens it.
   const openPlanCanvas = (ideaId: string) => {
     const idea = ideas.find((i) => i.id === ideaId)
-    const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
-    if (!idea || !format) return openPlan(ideaId)
+    if (!idea) return openPlan(ideaId)
     setPlanFrom(view)
     setPlanIdeaId(ideaId)
-    openCanvas(idea, format.shotList, false)
+    openCanvas(idea, formatOf(idea, videoOf(idea, videoById), formatById).shotList, false)
   }
 
   // The Plans board's "Make the video": the plan's canvas, with the editor already open.
   const makeVideo = (ideaId: string) => {
     const idea = ideas.find((i) => i.id === ideaId)
-    const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
-    if (!idea || !format) return openPlan(ideaId)
+    if (!idea) return openPlan(ideaId)
     setPlanFrom(view)
     setPlanIdeaId(ideaId)
-    openCanvas(idea, format.shotList, true)
+    openCanvas(idea, formatOf(idea, videoOf(idea, videoById), formatById).shotList, true)
   }
 
   // The planning board for the plan that is open; its Back returns to the plan.
@@ -1174,8 +1173,8 @@ export default function App() {
   const openVideo = openVideoId ? videoById.get(openVideoId) : undefined
   const openFormat = openVideo && formatById.get(openVideo.formatId)
   const planIdea = ideas.find((i) => i.id === planIdeaId)
-  const planVideo = planIdea && videoById.get(planIdea.videoId)
-  const planFormat = planVideo && formatById.get(planVideo.formatId)
+  const planVideo = planIdea && videoOf(planIdea, videoById)
+  const planFormat = planIdea && planVideo && formatOf(planIdea, planVideo, formatById)
   const planClient = planIdea && clients.find((c) => c.id === planIdea.clientId)
   const mine = shownIdeas.filter((i) => i.clientId === client.id)
   const blockedFormatIds = new Set(

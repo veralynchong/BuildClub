@@ -4,6 +4,7 @@ import {
   MAX_MUSIC_BYTES,
   checkMusic,
   deleteMusic,
+  exportButtonKey,
   formatDuration,
   getCut,
   musicType,
@@ -218,4 +219,15 @@ test('getCut passes the source of the video through', async () => {
   } finally {
     f.restore()
   }
+})
+
+test('exportButtonKey: sent and approved videos say so; stale, sent-back or unsent ones offer a new export', () => {
+  const out = { url: 'u', size: 1, durationSec: 1 }
+  const cut = (review, extra = {}) => ({ status: 'done', progress: 1, step: '', speed: 1, stale: false, music: null, output: out, review, ...extra })
+  assert.equal(exportButtonKey(null), 'editor.exportMenu')
+  assert.equal(exportButtonKey(cut(null)), 'editor.exportMenu')
+  assert.equal(exportButtonKey(cut({ status: 'waiting', sentAt: 1 })), 'editor.exportMenu.sent')
+  assert.equal(exportButtonKey(cut({ status: 'approved', sentAt: 1 })), 'editor.exportMenu.approved')
+  assert.equal(exportButtonKey(cut({ status: 'rejected', sentAt: 1 })), 'editor.exportMenu')
+  assert.equal(exportButtonKey(cut({ status: 'waiting', sentAt: 1 }, { stale: true })), 'editor.exportMenu')
 })
