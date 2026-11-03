@@ -18,7 +18,8 @@ import { getBudget, getCanvas, getKit, getModels, NoShots, pollGen, putCanvas, q
 import { fromFlow, reframe, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { frameBoxes, frameOf, migrateDoc, slotInFrame } from '../../lib/canvas/frames'
 import { edgeLook, focusSet } from '../../lib/canvas/edges'
-import { addNode, chainBusy, chainPair, isRetired, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
+import { addNode, budgetLeft, chainBusy, chainPair, freeSpot, genFinished, genRequest, genStarted, genView, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
+import { chainBody, paidConfirmNeeded, runBatches, runScope, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
 import { NodePanel } from './NodePanel'
@@ -26,7 +27,7 @@ import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, NothingToCut, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
 import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
-import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
+import type { Budget, CanvasDoc, CanvasState, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
 import { ErrorText } from '../ErrorText'
 import { CanvasToolbar } from './CanvasToolbar'
 import { ToolRail } from './ToolRail'
@@ -49,6 +50,8 @@ const NOTE_MS = 8000 // how long an info note (e.g. clean-up done) stays up; err
 const ADD_KINDS: NodeKind[] = ['prompt', 'storyboard', 'video', 'upload']
 const ADD_KINDS_WITH_KIT: NodeKind[] = [...ADD_KINDS, 'kit']
 const POLL_RETRY_MS = 2000 // wait after a poll request fails before asking again
+// A single Generate with a paid model asks once; after a yes it doesn't ask again until the page reloads (spec §6.4).
+let paidConfirmed = false
 
 interface Props {
   idea: SavedIdea
@@ -444,68 +447,89 @@ function CanvasBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial])
 
-  const onGenerate = async (nodeId: string) => {
+  // The node's model and whether it can generate now (genView is the one Generate rule), or null.
+  const readyToGen = (nodeId: string) => {
     const d = latest.current.doc
     const node = d.nodes.find((n) => n.id === nodeId)
-    const kind = node?.type === 'video' ? 'video' : 'image'
-    const model = models.find((m) => m.id === node?.data.model && m.kind === kind) ?? models.find((m) => m.kind === kind)
-    if (!node || !model || !model.available || isRetired(models, kind, node.data.model) || blocked || pendingGen(nodeId, gensRef.current) || starting.current.has(nodeId)) return
-    if (missingInput(d, nodeId, model, shots, gensRef.current)) return
+    if (!node || blocked || pendingGen(nodeId, gensRef.current) || starting.current.has(nodeId)) return null
+    const model = genView(node, models, null, null).model
+    if (!model) return null
+    const v = genView(node, models, null, missingInput(d, nodeId, model, shots, gensRef.current))
+    return v.canGenerate && v.model ? { model: v.model, usd: v.usd } : null
+  }
+
+  // Starts one node's generation; false when it could not start (the reason is shown when there is one).
+  const startOne = async (nodeId: string): Promise<boolean> => {
+    const ready = readyToGen(nodeId)
+    if (!ready) return false
+    const { model } = ready
+    const d = latest.current.doc
+    const kind = model.kind === 'video' ? 'video' : 'image'
     const req = genRequest(d, nodeId, shots, gensRef.current, kitRef.current, model)
     if (kind === 'video' && req.duration === undefined && model.durations) req.duration = model.durations[0]
     starting.current.add(nodeId)
     try {
       const g = await startGen(ideaId, { nodeId, model: model.id, ...req })
-      if (!mounted.current) return
+      if (!mounted.current) return false
       // the chosen version stays until the new one is done, so a failed try leaves the plan's frame alone
       setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { node: { ...n.data.node, data: genStarted(n.data.node.data, model.id, g.id) } } } : n)))
       upsertGen(g)
       track(g)
       refreshBudget()
+      return true
     } catch (e) {
       if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
+      return false
     } finally {
       starting.current.delete(nodeId)
     }
   }
 
-  // ---- run the whole shot: a storyboard image and the video that starts from it, priced together ----
-  const [chaining, setChaining] = useState(false) // a quote or a confirmed start is on its way
-  const [ask, setAsk] = useState<{ body: ChainBody; quote: Quote } | null>(null)
+  // The first Generate with a paid model in this session asks first.
+  const [paidAsk, setPaidAsk] = useState<{ nodeId: string; model: string; usd: number } | null>(null)
+  const onGenerate = async (nodeId: string) => {
+    const ready = readyToGen(nodeId)
+    if (!ready) return
+    if (paidConfirmNeeded(ready.usd, paidConfirmed)) return setPaidAsk({ nodeId, model: ready.model.label, usd: ready.usd })
+    await startOne(nodeId)
+  }
+  const confirmPaid = () => {
+    if (!paidAsk) return
+    paidConfirmed = true
+    setPaidAsk(null)
+    void startOne(paidAsk.nodeId)
+  }
 
-  const chainStarting = useRef(false) // a ref, so a double click can't start the chain twice before state updates
-  const onChain = async (nodeId: string) => {
-    const d = latest.current.doc
-    const pair = chainPair(d, nodeId)
-    if (!pair || blocked || chaining || chainStarting.current || chainBusy(d, nodeId, gensRef.current)) return
-    if (starting.current.has(pair.imageNodeId) || starting.current.has(pair.videoNodeId)) return
-    const image = d.nodes.find((n) => n.id === pair.imageNodeId)
-    const video = d.nodes.find((n) => n.id === pair.videoNodeId)
-    const imageModel = models.find((m) => m.id === image?.data.model && m.kind === 'image')
-    const videoModel = models.find((m) => m.id === video?.data.model && m.kind === 'video')
-    if (!image || !video || !imageModel || !videoModel || !imageModel.available || !videoModel.available) return showNote('canvas.chain.noKey')
-    if (missingInput(d, pair.imageNodeId, imageModel, shots, gensRef.current)) return showNote('canvas.chain.missing')
-    const imageReq = genRequest(d, pair.imageNodeId, shots, gensRef.current, kitRef.current, imageModel)
-    const videoReq = genRequest(d, pair.videoNodeId, shots, gensRef.current)
-    if (videoReq.references.length) return showNote('canvas.chain.noRef') // the video starts from the storyboard image only
-    const body: ChainBody = {
-      imageNodeId: pair.imageNodeId,
-      videoNodeId: pair.videoNodeId,
-      imageModel: imageModel.id,
-      videoModel: videoModel.id,
-      prompt: imageReq.prompt,
-      videoPrompt: videoReq.prompt,
-      duration: videoReq.duration ?? videoModel.durations?.[0],
-      ...(imageReq.references.length ? { references: imageReq.references } : {}),
-    }
+  // ---- Run all and Run the whole shot: what would run, priced, asked once, then started batch by batch ----
+  const [chaining, setChaining] = useState(false) // a save before the dialog or a confirmed run is on its way
+  const [runAsk, setRunAsk] = useState<{ title: 'canvas.toolbar.runAll' | 'canvas.chain.title'; items: RunItem[]; batches: RunBatch[] } | null>(null)
+
+  const chainStarting = useRef(false) // a ref, so a double click can't start the run twice before state updates
+  const onRunScope = async (opts: { shotId?: string; includeStale: boolean }) => {
+    if (blocked || chaining || chainStarting.current) return
     setChaining(true)
     try {
-      // the server prices the saved canvas, so save what is on screen first
+      // the server checks the saved canvas, so save what is on screen first
       while (inflight.current) await new Promise((r) => setTimeout(r, 50))
       if (latest.current.key !== savedKey.current) await save()
       if (blockedRef.current || latest.current.key !== savedKey.current) return showNote('canvas.save.failed')
-      const quote = await quoteChain(ideaId, body)
-      if (mounted.current) setAsk({ body, quote })
+      const d = latest.current.doc
+      let items = runScope(d, shots, gensRef.current, models, opts)
+      if (!items.length) return showNote('canvas.run.nothing', undefined, true)
+      // A chain the server would refuse is left out with its reason (for one shot: no dialog), before anything is asked.
+      for (const b of runBatches(d, items)) {
+        if (!('chain' in b)) continue
+        const made = chainBody(d, b.chain, models, shots, gensRef.current, kitRef.current)
+        if ('error' in made) {
+          showNote(made.error)
+          if (opts.shotId) return
+          items = items.filter((i) => i.nodeId !== b.chain.imageNodeId && i.nodeId !== b.chain.videoNodeId)
+          continue
+        }
+        await quoteChain(ideaId, made.body) // nothing is spent; a refusal (e.g. the daily cap) stops here with its message
+      }
+      if (!items.length || !mounted.current) return
+      setRunAsk({ title: opts.shotId ? 'canvas.chain.title' : 'canvas.toolbar.runAll', items, batches: runBatches(d, items) })
     } catch (e) {
       if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
     } finally {
@@ -513,28 +537,29 @@ function CanvasBoard({
     }
   }
 
-  // Escape cancels the dialog, unless the start is on its way.
+  // Escape cancels a dialog, unless the start is on its way.
   useEffect(() => {
-    if (!ask || chaining) return
-    const on = (e: KeyboardEvent) => e.key === 'Escape' && setAsk(null)
+    if ((!runAsk && !paidAsk) || chaining) return
+    const on = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setRunAsk(null)
+      setPaidAsk(null)
+    }
     window.addEventListener('keydown', on)
     return () => window.removeEventListener('keydown', on)
-  }, [ask, chaining])
+  }, [runAsk, paidAsk, chaining])
 
-  const confirmChain = async () => {
-    if (!ask || chaining || chainStarting.current) return
-    const { body } = ask
-    // a Generate may have begun since the quote was shown
-    if (chainBusy(latest.current.doc, body.imageNodeId, gensRef.current) || starting.current.has(body.imageNodeId) || starting.current.has(body.videoNodeId)) {
-      setAsk(null)
+  // One storyboard + video chain. A failure shows its message; the run goes on with the next batch.
+  const runChain = async (pair: { imageNodeId: string; videoNodeId: string }) => {
+    // a Generate may have begun since the dialog was shown
+    if (chainBusy(latest.current.doc, pair.imageNodeId, gensRef.current) || starting.current.has(pair.imageNodeId) || starting.current.has(pair.videoNodeId)) {
       return showNote('canvas.chain.busy')
     }
-    chainStarting.current = true
-    setChaining(true)
+    const made = chainBody(latest.current.doc, pair, models, shots, gensRef.current, kitRef.current)
+    if ('error' in made) return showNote(made.error)
     try {
-      const { image, video } = await startChain(ideaId, body)
+      const { image, video } = await startChain(ideaId, made.body)
       if (!mounted.current) return
-      setAsk(null)
       setNodes((ns) =>
         ns.map((n) => {
           const g = n.id === image.nodeId ? image : n.id === video.nodeId ? video : null
@@ -547,13 +572,26 @@ function CanvasBoard({
       track(video)
       refreshBudget()
     } catch (e) {
-      if (mounted.current) {
-        setAsk(null)
-        showText(e instanceof Error ? e.message : t('canvas.err.start'))
+      if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
+    }
+  }
+
+  const confirmRun = async () => {
+    if (!runAsk || chaining || chainStarting.current) return
+    chainStarting.current = true
+    setChaining(true)
+    try {
+      for (const b of runAsk.batches) {
+        if (!mounted.current) return
+        if ('chain' in b) await runChain(b.chain)
+        else await startOne(b.single)
       }
     } finally {
       chainStarting.current = false
-      if (mounted.current) setChaining(false)
+      if (mounted.current) {
+        setRunAsk(null)
+        setChaining(false)
+      }
     }
   }
 
@@ -833,7 +871,7 @@ function CanvasBoard({
     onGenerate: (id) => void onGenerate(id),
     budget,
     chainOf: (id) => chainPair(doc, id),
-    onChain: (id) => void onChain(id),
+    onRunScope: (opts) => void onRunScope(opts),
     chaining,
     onSelectVersion,
     edited: (id) => markFrom(id, latest.current.doc.nodes.find((n) => n.id === id)?.type !== 'prompt'),
@@ -899,7 +937,7 @@ function CanvasBoard({
   )
   // F enters and Esc leaves full screen, unless typing, a dialog or the editor has the key.
   const keyState = useRef({ fullscreen, dialogOpen: false, editorOpen: false })
-  keyState.current = { fullscreen, dialogOpen: !!ask, editorOpen: editing }
+  keyState.current = { fullscreen, dialogOpen: !!runAsk || !!paidAsk, editorOpen: editing }
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -916,6 +954,20 @@ function CanvasBoard({
   }, [setFull])
 
   const queue = useMemo(() => runningQueue(doc, gens, models, shots, now), [doc, gens, models, shots, now])
+
+  // The toolbar total is what Run all would cost now: the same scope as its dialog (spec §6.4, ruling P7).
+  const scope = useMemo(() => runScope(doc, shots, gens, models, { includeStale: true }), [doc, shots, gens, models])
+  const scopeSum = scopeTotal(scope)
+  const liveShots = shots.filter((s) => doc.nodes.some((n) => n.type === 'shot' && n.shotId === s.id && !n.data.removed)).length
+  const shotNo = (shotId: string) => shots.findIndex((s) => s.id === shotId) + 1
+  const leftImage = budgetLeft(budget, 'image')
+  const leftVideo = budgetLeft(budget, 'video')
+  const leftText = leftImage === null || leftVideo === null ? null : t('canvas.chain.left', { image: leftImage.toFixed(2), video: leftVideo.toFixed(2) })
+  const totalTitle = [
+    t('canvas.toolbar.totalHint'),
+    ...scopeSum.perShot.map((p) => t('canvas.run.shot', { n: shotNo(p.shotId), usd: p.usd.toFixed(2) })),
+    ...(leftText ? [leftText] : []),
+  ].join('\n')
   const jumpTo = (id: string) => {
     setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })))
     void fitView({ nodes: [{ id }], padding: 0.6, maxZoom: 1, duration: 250 })
@@ -957,7 +1009,16 @@ function CanvasBoard({
         fullscreen={fullscreen}
         onFullscreen={setFull}
         saveText={saveText}
-      />
+      >
+        <span className="cv-bar-total small" title={totalTitle}>
+          {t('canvas.toolbar.total', { n: liveShots, usd: scopeSum.total.toFixed(2) })}
+        </span>
+        {!readOnly && (
+          <button type="button" className="btn btn-primary btn-sm cv-runall-btn" disabled={blocked || chaining} onClick={() => void onRunScope({ includeStale: true })}>
+            {t('canvas.toolbar.runAll')}
+          </button>
+        )}
+      </CanvasToolbar>
 
       {stale && (
         <div className="cv-note cv-note-error" role="alert">
@@ -1009,30 +1070,56 @@ function CanvasBoard({
           <ToolRail mode={tool} onMode={setTool} addKinds={clientId ? ADD_KINDS_WITH_KIT : ADD_KINDS} disabledKinds={kitNode ? ['kit'] : undefined} onAdd={addAtCenter} readOnly={readOnly} />
           <QueuePill items={queue} onJump={jumpTo} />
           {drop && <DropMenu at={drop.screen} options={drop.options} onPick={pickDrop} onClose={() => setDrop(null)} />}
-          {ask && (
+          {runAsk && (
             <div className="cv-modal-back">
-              <div className="cv-modal" role="dialog" aria-modal="true" aria-label={t('canvas.chain.title')}>
-                <h2>{t('canvas.chain.title')}</h2>
+              <div className="cv-modal cv-run-modal" role="dialog" aria-modal="true" aria-label={t(runAsk.title)}>
+                <h2>{t(runAsk.title)}</h2>
                 <ul>
-                  {ask.quote.items.map((it) => {
-                    const m = models.find((x) => x.id === it.model)
-                    const type = doc.nodes.find((n) => n.id === it.nodeId)?.type
-                    return (
-                      <li key={it.nodeId}>
-                        <span>{t('canvas.chain.item', { node: type === 'storyboard' || type === 'video' ? t(`canvas.node.${type}`) : it.nodeId, model: m?.label ?? it.model })}</span>
-                        <span>{t('canvas.gen.cost', { usd: it.usd.toFixed(2) })}</span>
-                      </li>
-                    )
+                  {scopeTotal(runAsk.items).perShot.flatMap((p) => {
+                    const paid = runAsk.items.filter((it) => it.shotId === p.shotId && it.usd > 0)
+                    if (!paid.length) return []
+                    return [
+                      <li key={p.shotId} className="cv-run-shot">
+                        <strong>{t('canvas.run.shot', { n: shotNo(p.shotId), usd: p.usd.toFixed(2) })}</strong>
+                      </li>,
+                      ...paid.map((it) => {
+                        const m = models.find((x) => x.id === it.model)
+                        const type = doc.nodes.find((n) => n.id === it.nodeId)?.type
+                        return (
+                          <li key={it.nodeId}>
+                            <span>{t('canvas.chain.item', { node: type === 'storyboard' || type === 'video' ? t(`canvas.node.${type}`) : it.nodeId, model: m?.label ?? it.model })}</span>
+                            <span>{t('canvas.gen.cost', { usd: it.usd.toFixed(2) })}</span>
+                          </li>
+                        )
+                      }),
+                    ]
                   })}
                 </ul>
-                <strong>{t('canvas.chain.total', { total: ask.quote.total.toFixed(2) })}</strong>
-                <span className="small muted">{t('canvas.chain.left', { image: ask.quote.remaining.image.toFixed(2), video: ask.quote.remaining.video.toFixed(2) })}</span>
+                <strong>{t('canvas.chain.total', { total: scopeTotal(runAsk.items).total.toFixed(2) })}</strong>
+                {leftText && <span className="small muted">{leftText}</span>}
                 <div className="cv-modal-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" autoFocus disabled={chaining} onClick={() => setAsk(null)}>
+                  <button type="button" className="btn btn-ghost btn-sm" autoFocus disabled={chaining} onClick={() => setRunAsk(null)}>
                     {t('canvas.chain.cancel')}
                   </button>
-                  <button type="button" className="btn btn-primary btn-sm" disabled={chaining} onClick={() => void confirmChain()}>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={chaining} onClick={() => void confirmRun()}>
                     {t('canvas.chain.confirm')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {paidAsk && (
+            <div className="cv-modal-back">
+              <div className="cv-modal cv-paid-modal" role="dialog" aria-modal="true" aria-label={t('canvas.paid.title')}>
+                <h2>{t('canvas.paid.title')}</h2>
+                <p>{t('canvas.paid.body', { model: paidAsk.model, usd: paidAsk.usd.toFixed(2) })}</p>
+                {leftText && <span className="small muted">{leftText}</span>}
+                <div className="cv-modal-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" autoFocus onClick={() => setPaidAsk(null)}>
+                    {t('canvas.chain.cancel')}
+                  </button>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={confirmPaid}>
+                    {t('canvas.paid.confirm')}
                   </button>
                 </div>
               </div>

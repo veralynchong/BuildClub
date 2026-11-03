@@ -20,7 +20,7 @@ interface Props {
 export function NodePanel({ nodeId, onClose }: Props) {
   const focused = useRef('')
   const c = useCanvas()
-  const { doc, models, gens, shots, readOnly, updateData, onGenerate, onSelectVersion, edited, incomingHandles, missing, budget, chainOf, onChain, chaining, kitView, kitSent, setKitOff, shotIndex } = c
+  const { doc, models, gens, shots, readOnly, updateData, onGenerate, onSelectVersion, edited, incomingHandles, missing, budget, chainOf, onRunScope, chaining, kitView, kitSent, setKitOff, shotIndex } = c
   const node = doc.nodes.find((n) => n.id === nodeId)
   if (!node || (node.type !== 'storyboard' && node.type !== 'video')) return null
   const versions = versionsOf(nodeId, gens)
@@ -211,8 +211,8 @@ export function NodePanel({ nodeId, onClose }: Props) {
         <button type="button" className="btn btn-primary" disabled={locked || !canGenerate} onClick={() => onGenerate(nodeId)}>
           {t(main.key, main.vars)}
         </button>
-        {pair && !readOnly && (
-          <button type="button" className="btn btn-ghost btn-sm cv-chain-btn" disabled={!!pendingGen(pair.imageNodeId, gens) || !!pendingGen(pair.videoNodeId, gens) || chaining || retired} onClick={() => onChain(nodeId)}>
+        {pair && node.shotId && !readOnly && (
+          <button type="button" className="btn btn-ghost btn-sm cv-chain-btn" disabled={!!pendingGen(pair.imageNodeId, gens) || !!pendingGen(pair.videoNodeId, gens) || chaining || retired} onClick={() => onRunScope({ shotId: node.shotId, includeStale: true })}>
             {chaining ? t('canvas.chain.quoting') : t('canvas.chain.run')}
           </button>
         )}

@@ -20,8 +20,9 @@ export interface CanvasCtx {
   onGenerate: (nodeId: string) => void
   budget: Budget | null // today's spending; null until loaded
   chainOf: (nodeId: string) => { imageNodeId: string; videoNodeId: string } | null // storyboard -> video pair
-  onChain: (nodeId: string) => void // quote the pair, then ask before starting it
-  chaining: boolean // a quote or a confirmed start is on its way
+  // Run all limited to a shot (Run the whole shot): price what would run, ask, then start it. shotId is the plan Shot id.
+  onRunScope: (opts: { shotId?: string; includeStale: boolean }) => void
+  chaining: boolean // a save before the dialog or a confirmed run is on its way
   onSelectVersion: (nodeId: string, genId: string) => void
   // The node's own prompt or a prompt node's text was edited: the generated nodes it feeds are out of date.
   edited: (nodeId: string) => void
