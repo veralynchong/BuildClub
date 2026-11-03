@@ -202,7 +202,7 @@ function CanvasBoard({
   const beforeEditor = useRef<Viewport | null>(null) // the view the board had when the editor covered it
   const jumpAfterEditor = useRef<string | null>(null) // a node to centre once the board shows again
   const [kitOpen, setKitOpen] = useState(false) // the kit drawer; only one drawer is open at a time
-  const [editorFocus, setEditorFocus] = useState<'export' | 'send' | null>(null) // the editor opens on its export panel (the Timeline node's Export)
+  const [editorFocus, setEditorFocus] = useState<'export' | 'send' | null>(null) // the editor opens on its export panel, focused on Export (the Timeline node's Export) or Send
   const showEditor = (focus?: 'export' | 'send') => {
     beforeEditor.current = getViewport()
     setKitOpen(false)

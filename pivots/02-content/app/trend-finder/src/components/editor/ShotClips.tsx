@@ -3,6 +3,7 @@ import type { Generation } from '../../lib/canvas/types'
 import type { Take } from '../../lib/takes'
 import { t } from '../../lib/i18n'
 import type { TimelineActions } from '../../lib/editor/useTimelineActions'
+import { sourceKey } from '../../lib/editor/timeline'
 import type { EditProject, SourceInfo } from '../../lib/editor/types'
 import { ErrorText } from '../ErrorText'
 import { clipLabel } from './clipName'
@@ -45,14 +46,15 @@ export function ShotClips({ shots, project, sources, error, gens, takes, full, l
               ) : (
                 <ul className="cv-ed-source-list">
                   {mine.map((s) => {
-                    const clip = project.clips.find((c) => c.source.kind === s.kind && c.source.id === s.id)
+                    const on = timeline.isInTimeline(s)
+                    const clip = on ? project.clips.find((c) => sourceKey(c.source) === s.key) : undefined
                     return (
-                      <li key={s.key} data-on={clip ? '' : undefined} data-selected={clip && clip.id === selected ? '' : undefined}>
+                      <li key={s.key} data-on={on ? '' : undefined} data-selected={clip && clip.id === selected ? '' : undefined}>
                         <span className="cv-ed-source-name">
                           {clipLabel(s, shots, gens, takes)} · {t('editor.clip.seconds', { sec: Math.round(s.duration * 10) / 10 })}
                         </span>
-                        {clip ? (
-                          <button type="button" className="cv-badge small cv-ed-on" onClick={() => onSelect(clip.id)}>
+                        {on ? (
+                          <button type="button" className="cv-badge small cv-ed-on" onClick={() => clip && onSelect(clip.id)}>
                             {t('canvas.clip.on')}
                           </button>
                         ) : (

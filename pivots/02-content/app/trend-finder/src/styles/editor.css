@@ -36,7 +36,6 @@
 .cv-ed-audio-name { font-weight: 600; white-space: nowrap; }
 .cv-ed-audio-pct { color: var(--muted); font-size: var(--text-xs); text-align: right; }
 
-.cv-ed-sources { display: flex; flex-direction: column; gap: var(--space-sm); }
 .cv-ed-source-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
 .cv-ed-source-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-base); font-size: var(--text-sm); }
 .cv-ed-source-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -108,7 +107,7 @@
 }
 .cv-ed-export-pop[hidden] { display: none; }
 /* left: each shot's footage · centre: the player (the export panel opens over it) · right: the tabs */
-.cv-ed-main { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(300px, 360px); grid-template-rows: minmax(0, 1fr); gap: var(--space-xl); }
+.cv-ed-main { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(300px, 460px); grid-template-rows: minmax(0, 1fr); gap: var(--space-xl); }
 .cv-ed-left { min-width: 0; min-height: 0; overflow: auto; padding-right: var(--space-sm); border-right: 1px solid var(--line); }
 .cv-ed-centre { position: relative; min-width: 0; min-height: 0; display: flex; justify-content: center; }
 .cv-ed-full .cv-ed-player { align-self: stretch; min-height: 0; overflow: hidden; }
@@ -125,16 +124,15 @@
 .cv-ed-shot p { margin: 0; }
 .cv-ed-shot-head { display: flex; align-items: baseline; gap: var(--space-sm); font-size: var(--text-sm); min-width: 0; }
 .cv-ed-shot-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); }
-.cv-ed-shot .cv-ed-source-list li { padding: var(--space-2xs) var(--space-xs); border-radius: var(--radius-xs); font-size: var(--text-xs); }
-.cv-ed-shot .cv-ed-source-list li { flex-wrap: wrap; gap: var(--space-2xs) var(--space-sm); }
+.cv-ed-shot .cv-ed-source-list li { flex-wrap: wrap; gap: var(--space-2xs) var(--space-sm); padding: var(--space-2xs) var(--space-xs); border-radius: var(--radius-xs); font-size: var(--text-xs); }
 .cv-ed-shot .cv-ed-source-name { white-space: normal; }
 .cv-ed-shot .cv-ed-source-list li[data-selected] { background: var(--accent-soft); }
 .cv-ed-on { flex: 0 0 auto; border: 0; padding: var(--space-3xs) var(--space-sm); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-soft-fg); font: inherit; font-size: var(--text-xs); font-weight: 600; cursor: pointer; }
 .cv-ed-on:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* tab ticks: shown only once a tab was opened and its part is done */
-.cv-ed-tabs { flex-wrap: wrap; }
-.cv-ed-tab { display: inline-flex; align-items: center; gap: var(--space-2xs); padding: var(--space-sm) var(--space-sm); }
+.cv-ed-tabs { flex-wrap: nowrap; gap: 0; overflow-x: auto; scrollbar-width: none; }
+.cv-ed-tab { flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--space-2xs); padding: var(--space-sm) var(--space-xs); white-space: nowrap; }
 .cv-ed-tab-tick { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); font-size: var(--text-3xs); }
 
 /* the selected clip's settings, and a clip's right-click menu */
