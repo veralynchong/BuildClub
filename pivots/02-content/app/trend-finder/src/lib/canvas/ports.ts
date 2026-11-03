@@ -1,4 +1,5 @@
 import { t, type Key, type Vars } from '../i18n.ts'
+import { shotNodeOf } from './frames.ts'
 import { downstream } from './graph.ts'
 import type { CanvasDoc, CanvasEdge, CanvasNode, GenModel, Media, NodeKind } from './types.ts'
 
@@ -73,4 +74,28 @@ export function canConnect(doc: CanvasDoc, c: { source: string; target: string; 
 
 export function edgeLabel(edge: Pick<CanvasEdge, 'targetHandle'>): Key | null {
   return edge.targetHandle === 'in:start' ? 'canvas.edge.start' : edge.targetHandle === 'in:ref' ? 'canvas.edge.ref' : null
+}
+
+// The kinds a new node can be when a line is dragged from sourceId into empty space, with the input the line goes into.
+export function compatibleKinds(doc: CanvasDoc, sourceId: string, _models: GenModel[]): { kind: NodeKind; handle: string }[] {
+  const source = doc.nodes.find((n) => n.id === sourceId)
+  const from = source ? outMedia(source) : null
+  if (!source || from === null) return []
+  switch (from) {
+    case 'image':
+      return [{ kind: 'storyboard', handle: 'in:ref' }, { kind: 'video', handle: 'in:start' }]
+    case 'text': {
+      const list: { kind: NodeKind; handle: string }[] = [
+        { kind: 'prompt', handle: 'in:text' },
+        { kind: 'storyboard', handle: 'in:text' },
+        { kind: 'video', handle: 'in:text' },
+      ]
+      if (source.shotId && shotNodeOf(doc, source.shotId)) list.push({ kind: 'footage', handle: 'in:text' })
+      return list
+    }
+    case 'kit':
+      return [{ kind: 'storyboard', handle: 'in:kit' }]
+    default:
+      return []
+  }
 }

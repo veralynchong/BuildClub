@@ -258,3 +258,18 @@ export function budgetLeft(b: Budget | null, kind: 'image' | 'video'): number | 
 export function isRetired(models: Pick<GenModel, 'id' | 'kind'>[], kind: 'image' | 'video', id: string | undefined): boolean {
   return !!id && models.length > 0 && !models.some((m) => m.id === id && m.kind === kind)
 }
+
+// Connects the newest storyboard of the video's frame to its free `in:start` when the video's model takes a start frame.
+// Returns the same doc when nothing changes.
+export function wireStart(doc: CanvasDoc, videoNodeId: string, models: GenModel[]): CanvasDoc {
+  const video = doc.nodes.find((n) => n.id === videoNodeId)
+  if (!video || video.type !== 'video' || !video.shotId) return doc
+  if (doc.edges.some((e) => e.target === videoNodeId && e.targetHandle === 'in:start')) return doc
+  const model = models.find((m) => m.id === video.data.model)
+  if (model && (model.inputs.startFrame ?? 'none') === 'none') return doc
+  const sbs = doc.nodes.filter((n) => n.type === 'storyboard' && n.shotId === video.shotId)
+  const sb = sbs[sbs.length - 1]
+  if (!sb) return doc
+  const edge = { id: `e_${sb.id}_${videoNodeId}_in:start`, source: sb.id, sourceHandle: 'out', target: videoNodeId, targetHandle: 'in:start' }
+  return { ...doc, edges: [...doc.edges, edge] }
+}
