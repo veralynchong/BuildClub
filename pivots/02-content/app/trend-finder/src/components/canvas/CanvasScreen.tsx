@@ -19,7 +19,7 @@ import { fromFlow, reframe, toFlow, type FlowEdge, type FlowNode } from '../../l
 import { frameBoxes, frameOf, migrateDoc, slotInFrame } from '../../lib/canvas/frames'
 import { edgeLook, focusSet } from '../../lib/canvas/edges'
 import { addNode, budgetLeft, chainBusy, chainPair, freeSpot, genFinished, genRequest, genStarted, genView, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
-import { chainBody, paidConfirmNeeded, runBatches, runScope, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
+import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeInfo, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
 import { NodePanel } from './NodePanel'
@@ -502,11 +502,13 @@ function CanvasBoard({
 
   // ---- Run all and Run the whole shot: what would run, priced, asked once, then started batch by batch ----
   const [chaining, setChaining] = useState(false) // a save before the dialog or a confirmed run is on its way
-  const [runAsk, setRunAsk] = useState<{ title: 'canvas.toolbar.runAll' | 'canvas.chain.title'; items: RunItem[]; batches: RunBatch[] } | null>(null)
+  const [runAsk, setRunAsk] = useState<{ title: 'canvas.toolbar.runAll' | 'canvas.chain.title'; items: RunItem[]; batches: RunBatch[]; skippedNoKey: number } | null>(null)
 
   const chainStarting = useRef(false) // a ref, so a double click can't start the run twice before state updates
+  const preparing = useRef(false) // a ref, so a double click can't prepare the dialog twice before state updates
   const onRunScope = async (opts: { shotId?: string; includeStale: boolean }) => {
-    if (blocked || chaining || chainStarting.current) return
+    if (blocked || preparing.current || chainStarting.current) return
+    preparing.current = true
     setChaining(true)
     try {
       // the server checks the saved canvas, so save what is on screen first
@@ -514,8 +516,10 @@ function CanvasBoard({
       if (latest.current.key !== savedKey.current) await save()
       if (blockedRef.current || latest.current.key !== savedKey.current) return showNote('canvas.save.failed')
       const d = latest.current.doc
-      let items = runScope(d, shots, gensRef.current, models, opts)
-      if (!items.length) return showNote('canvas.run.nothing', undefined, true)
+      const info = runScopeInfo(d, shots, gensRef.current, models, opts)
+      let items = info.items
+      if (!items.length) return info.skippedNoKey > 0 ? showNote('canvas.chain.noKey') : showNote('canvas.run.nothing', undefined, true)
+      if (info.deferred.length) showNote('canvas.run.deferred', { n: info.deferred.length })
       // A chain the server would refuse is left out with its reason (for one shot: no dialog), before anything is asked.
       for (const b of runBatches(d, items)) {
         if (!('chain' in b)) continue
@@ -529,10 +533,11 @@ function CanvasBoard({
         await quoteChain(ideaId, made.body) // nothing is spent; a refusal (e.g. the daily cap) stops here with its message
       }
       if (!items.length || !mounted.current) return
-      setRunAsk({ title: opts.shotId ? 'canvas.chain.title' : 'canvas.toolbar.runAll', items, batches: runBatches(d, items) })
+      setRunAsk({ title: opts.shotId ? 'canvas.chain.title' : 'canvas.toolbar.runAll', items, batches: runBatches(d, items), skippedNoKey: info.skippedNoKey })
     } catch (e) {
       if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
     } finally {
+      preparing.current = false
       if (mounted.current) setChaining(false)
     }
   }
@@ -956,9 +961,9 @@ function CanvasBoard({
   const queue = useMemo(() => runningQueue(doc, gens, models, shots, now), [doc, gens, models, shots, now])
 
   // The toolbar total is what Run all would cost now: the same scope as its dialog (spec §6.4, ruling P7).
-  const scope = useMemo(() => runScope(doc, shots, gens, models, { includeStale: true }), [doc, shots, gens, models])
-  const scopeSum = scopeTotal(scope)
-  const liveShots = shots.filter((s) => doc.nodes.some((n) => n.type === 'shot' && n.shotId === s.id && !n.data.removed)).length
+  const scope = useMemo(() => runScopeInfo(doc, shots, gens, models, { includeStale: true }), [doc, shots, gens, models])
+  const scopeSum = scopeTotal(scope.items)
+  const liveShots = liveShotIds(doc, shots).length
   const shotNo = (shotId: string) => shots.findIndex((s) => s.id === shotId) + 1
   const leftImage = budgetLeft(budget, 'image')
   const leftVideo = budgetLeft(budget, 'video')
@@ -966,6 +971,7 @@ function CanvasBoard({
   const totalTitle = [
     t('canvas.toolbar.totalHint'),
     ...scopeSum.perShot.map((p) => t('canvas.run.shot', { n: shotNo(p.shotId), usd: p.usd.toFixed(2) })),
+    ...(scope.skippedNoKey > 0 ? [t('canvas.run.noKeySkipped', { n: scope.skippedNoKey })] : []),
     ...(leftText ? [leftText] : []),
   ].join('\n')
   const jumpTo = (id: string) => {
@@ -1096,6 +1102,7 @@ function CanvasBoard({
                   })}
                 </ul>
                 <strong>{t('canvas.chain.total', { total: scopeTotal(runAsk.items).total.toFixed(2) })}</strong>
+                {runAsk.skippedNoKey > 0 && <span className="small muted">{t('canvas.run.noKeySkipped', { n: runAsk.skippedNoKey })}</span>}
                 {leftText && <span className="small muted">{leftText}</span>}
                 <div className="cv-modal-actions">
                   <button type="button" className="btn btn-ghost btn-sm" autoFocus disabled={chaining} onClick={() => setRunAsk(null)}>

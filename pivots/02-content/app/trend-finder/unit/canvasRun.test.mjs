@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chainBody, paidConfirmNeeded, runBatches, runScope, scopeTotal } from '../src/lib/canvas/run.ts'
+import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScope, runScopeInfo, scopeTotal } from '../src/lib/canvas/run.ts'
 
 const at = (id, type, shotId, data = {}) => ({ id, type, ...(shotId ? { shotId } : {}), position: { x: 0, y: 0 }, data })
 const start = (id, source, target) => ({ id, source, sourceHandle: 'out', target, targetHandle: 'in:start' })
@@ -89,4 +89,36 @@ test('paidConfirmNeeded only for a paid first run', () => {
   assert.equal(paidConfirmNeeded(0, false), false)
   assert.equal(paidConfirmNeeded(0.04, false), true)
   assert.equal(paidConfirmNeeded(0.04, true), false)
+})
+
+test('a second video on a storyboard remade in this run is deferred, not priced or started', () => {
+  const two = structuredClone(doc)
+  two.nodes.push(vid('n_vid2_s1', 's1'))
+  two.edges.push(start('e_s1b', 'n_sb_s1', 'n_vid2_s1'))
+  const info = runScopeInfo(two, shots, [], models, { shotId: 's1', includeStale: false })
+  assert.deepEqual(ids(info.items), ['n_sb_s1', 'n_vid_s1'])
+  assert.deepEqual(info.deferred, ['n_vid2_s1'])
+  assert.deepEqual(runBatches(two, info.items), [{ chain: { imageNodeId: 'n_sb_s1', videoNodeId: 'n_vid_s1' } }])
+  assert.equal(scopeTotal(info.items).total, 0.36)
+  // a stale storyboard with a result: the second video would start from the old frame, so it waits as well
+  const stale = structuredClone(two)
+  stale.nodes.find((n) => n.id === 'n_sb_s1').data.stale = true
+  const gens = [g('old', 'n_sb_s1', 'done', 1)]
+  const s2 = runScopeInfo(stale, shots, gens, models, { shotId: 's1', includeStale: true })
+  assert.deepEqual(ids(s2.items), ['n_sb_s1', 'n_vid_s1'])
+  assert.deepEqual(s2.deferred, ['n_vid2_s1'])
+  assert.equal(runScopeInfo(stale, shots, gens, models, { shotId: 's1', includeStale: false }).deferred.length, 0) // storyboard not rerun
+})
+
+test('runScopeInfo counts nodes left out for a model that needs a key', () => {
+  const off = models.map((m) => ({ ...m, available: false }))
+  const info = runScopeInfo(doc, shots, [], off, { shotId: 's1', includeStale: true })
+  assert.deepEqual(info.items, [])
+  assert.equal(info.skippedNoKey, 2)
+  assert.equal(runScopeInfo(doc, shots, [], models, { includeStale: true }).skippedNoKey, 0)
+})
+
+test('liveShotIds leaves out removed shots and keeps plan order', () => {
+  assert.deepEqual(liveShotIds(doc, shots), ['s1', 's2'])
+  assert.deepEqual(liveShotIds(doc, shots, 's3'), [])
 })

@@ -19,36 +19,73 @@ export type RunBatch = { chain: { imageNodeId: string; videoNodeId: string } } |
 
 const round4 = (n: number) => Math.round(n * 1e4) / 1e4
 
+// The plan's shots (limited to shotId) that still have a shot node not marked removed, in plan order. The toolbar count
+// and runScope share it.
+export function liveShotIds(doc: CanvasDoc, shots: Shot[], shotId?: string): string[] {
+  return shots.flatMap((s) => {
+    if (!s.id || (shotId !== undefined && s.id !== shotId)) return []
+    const shotNode = shotNodeOf(doc, s.id)
+    return shotNode && !doc.nodes.find((n) => n.id === shotNode)?.data.removed ? [s.id] : []
+  })
+}
+
+export interface RunScopeInfo {
+  items: RunItem[]
+  // videos whose start-frame storyboard is remade in this run by another video's chain: run them after it finishes
+  deferred: string[]
+  skippedNoKey: number // candidates left out because their model needs a key
+}
+
 // The storyboard and video nodes of live shots (limited to opts.shotId) that would generate now: no job running, a
 // model on the menu that can run, no result yet (or a stale one when includeStale), and nothing missing, except a
-// start frame that a storyboard in the same scope will make. In shot order, then doc order.
-export function runScope(doc: CanvasDoc, shots: Shot[], gens: Generation[], models: GenModel[], opts: { shotId?: string; includeStale: boolean }): RunItem[] {
-  const live = shots.flatMap((s) => {
-    if (!s.id || (opts.shotId !== undefined && s.id !== opts.shotId)) return []
-    const shotNode = shotNodeOf(doc, s.id)
-    return shotNode && !doc.nodes.find((n) => n.id === shotNode)?.data.removed ? [{ id: s.id }] : []
-  })
+// start frame that a storyboard in the same scope will make. A storyboard in scope chains one video (the first); the
+// other videos it starts are deferred, never started from the frame this run replaces. In shot order, then doc order.
+export function runScopeInfo(doc: CanvasDoc, shots: Shot[], gens: Generation[], models: GenModel[], opts: { shotId?: string; includeStale: boolean }): RunScopeInfo {
+  const live = liveShotIds(doc, shots, opts.shotId)
   const ready: RunItem[] = []
   const needStart: { item: RunItem; from: string | undefined }[] = []
-  for (const s of live) {
+  let skippedNoKey = 0
+  for (const shotId of live) {
     for (const n of doc.nodes) {
-      if ((n.type !== 'storyboard' && n.type !== 'video') || n.shotId !== s.id) continue
+      if ((n.type !== 'storyboard' && n.type !== 'video') || n.shotId !== shotId) continue
       if (pendingGen(n.id, gens)) continue
       if (hasResult(n, gens) && !(opts.includeStale && n.data.stale)) continue
       const v = genView(n, models, null, null)
+      if (v.model && !v.retired && !v.model.available) skippedNoKey++
       if (!v.model || !v.canGenerate) continue
-      const item: RunItem = { shotId: s.id, nodeId: n.id, kind: v.kind, model: v.model.id, usd: round4(v.usd) }
+      const item: RunItem = { shotId, nodeId: n.id, kind: v.kind, model: v.model.id, usd: round4(v.usd) }
       const need = missingInput(doc, n.id, v.model, shots, gens)
       if (need === null) ready.push(item)
-      else if (need === 'canvas.gen.needStart') needStart.push({ item, from: doc.edges.find((e) => e.target === n.id && e.targetHandle === 'in:start')?.source })
+      else if (need === 'canvas.gen.needStart') needStart.push({ item, from: startOf(doc, n.id) })
     }
   }
   const sbInScope = new Set(ready.filter((i) => i.kind === 'image').map((i) => i.nodeId))
-  const kept = new Set([...ready, ...needStart.filter((x) => x.from !== undefined && sbInScope.has(x.from)).map((x) => x.item)])
+  const kept = [...ready, ...needStart.filter((x) => x.from !== undefined && sbInScope.has(x.from)).map((x) => x.item)]
   // back in shot order, then doc order
   const order = new Map(doc.nodes.map((n, i) => [n.id, i]))
-  const shotOrder = new Map(live.map((s, i) => [s.id, i]))
-  return [...kept].sort((a, b) => shotOrder.get(a.shotId)! - shotOrder.get(b.shotId)! || order.get(a.nodeId)! - order.get(b.nodeId)!)
+  const shotOrder = new Map(live.map((id, i) => [id, i]))
+  kept.sort((a, b) => shotOrder.get(a.shotId)! - shotOrder.get(b.shotId)! || order.get(a.nodeId)! - order.get(b.nodeId)!)
+  const claimed = new Set<string>()
+  const deferred: string[] = []
+  const items = kept.filter((i) => {
+    const from = i.kind === 'video' ? startOf(doc, i.nodeId) : undefined
+    if (from === undefined || !sbInScope.has(from)) return true
+    if (claimed.has(from)) {
+      deferred.push(i.nodeId)
+      return false
+    }
+    claimed.add(from)
+    return true
+  })
+  return { items, deferred, skippedNoKey }
+}
+
+export function runScope(doc: CanvasDoc, shots: Shot[], gens: Generation[], models: GenModel[], opts: { shotId?: string; includeStale: boolean }): RunItem[] {
+  return runScopeInfo(doc, shots, gens, models, opts).items
+}
+
+function startOf(doc: CanvasDoc, nodeId: string): string | undefined {
+  return doc.edges.find((e) => e.target === nodeId && e.targetHandle === 'in:start')?.source
 }
 
 // A storyboard and the video on its in:start, both in scope, run as one chain; the rest run alone. Chains and
