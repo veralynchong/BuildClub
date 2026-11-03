@@ -53,11 +53,11 @@ def test_old_shots_load_without_new_fields():
 
 def test_old_saved_plans_still_load(client, setup):
     got = client.get("/api/ideas").json()
-    assert got[0]["shots"][0] == {"time": "0-3s", "shot": "Close-up of tofu sizzling"}
+    assert got[0]["shots"][0] == {"id": "s1", "time": "0-3s", "shot": "Close-up of tofu sizzling"}
 
 
 def test_new_fields_round_trip_through_put(client, setup):
-    shot = {**SHOTS[0], "line": "Hi", "purpose": "hook", "options": ["a", "b", "c"], "edited": True,
+    shot = {**SHOTS[0], "id": "s1", "line": "Hi", "purpose": "hook", "options": ["a", "b", "c"], "edited": True,
             "frameImage": "/api/ideas/i1/frames/0-abc.svg", "palette": ["#112233", "#AABBCC"]}
     r = client.put("/api/ideas", json=[idea(shots=[shot])])
     assert r.status_code == 200
@@ -107,7 +107,7 @@ def test_regenerate_one_shot_returns_only_that_shot(client, setup):
     body = r.json()
     assert body["index"] == 1 and body["purpose"] == "body" and body["line"] and len(body["options"]) == 3
     assert "shots" not in body
-    assert client.get("/api/ideas").json()[0]["shots"] == SHOTS  # nothing touched
+    assert client.get("/api/ideas").json()[0]["shots"] == [{**sh, "id": f"s{n + 1}"} for n, sh in enumerate(SHOTS)]  # nothing touched, ids filled
 
 
 def test_regenerate_one_matches_the_full_script_for_that_shot(client, setup):

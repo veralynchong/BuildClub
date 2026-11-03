@@ -4,6 +4,19 @@ Newest first. Dates are when the decision was made (from the Miro board), except
 
 ## 2 Nov 2026
 
+### Decision: Remake production moves to a node canvas with a Remotion editor panel; AI generation is optional; users pick from 3-5 curated models
+- **Flow:** Find ideas → Plans board → shot list → **node canvas** → **editor** → export / publish. Find ideas, the Plans board and publishing stay as they are.
+- **Node canvas (main area):** each shot in the shot list becomes a node. A node takes a prompt or an upload and produces an AI storyboard image, an AI video clip, or holds real filmed footage. Nodes connect (for example reference image → AI image → image-to-video). Built on React Flow (`@xyflow/react`).
+- **AI generation is an option, not the default path.** Real filming stays supported: AI storyboard images or reference clips can guide the shoot. Users may also generate the final clip with AI. This replaces the Phase 2 "real footage only" scope (`docs/phase2-scope.md`).
+- **Models:** users choose the model per node from a **curated list of 3-5 models**, each labelled (cheap / balanced / best) with its cost. The backend uses a thin adapter layer with the model list in config, so models can be added or retired without UI changes.
+- **Editor:** CapCut level (cut, text, subtitles, sound and music, brand assets), not a Premiere-style multi-track editor. It is a collapsible right-side panel on the same screen as the canvas. **Engine: Remotion** (option A in the research report), so preview and export share one definition.
+- **Who sees what:** the production team works on the canvas; managers and clients review on a card list (a collapsed node is a card). Approval gets its own panel later, not designed yet.
+- Paused: the Edit workspace and Storyboard grid lines (A and B) of `pivots/02-content/docs/plans/2026-11-02-workspace-redesign.md`. PR #12 (plan step tabs) is held, not merged, until the canvas design is done.
+
+**Why:** Team whiteboard discussion and founder decisions, 2 Nov 2026. Research: `pivots/02-content/research/reports/AI 節點畫布與剪輯器 研究.md` (page: https://claude.ai/artifact/LLMAs6dfMBLoYyCqiArreT). Remake is a non-commercial student demo, so open-source licences were not treated as a blocker; re-check them if it ever becomes commercial.
+
+**Status:** Current. Nothing built yet. New dependencies (`@xyflow/react`, Remotion and others) still need approval before install. Replaces the earlier research advice "card list, no node canvas" (`research/reports/分鏡原型-開源與社群.md`) for the production side only. Known issue: `backend/storyboard.py` still uses `gpt-image-1`, reported retired on 2026-10-23 (not checked with a live call).
+
 ### Decision: Remake landing rules: log-in reopens the last client on Find ideas; picking a client opens Find ideas
 - **Log-in:** the first log-in in a browser (or when the remembered client no longer exists) opens **All clients → Home**. A returning log-in opens the **last client worked on, on Find ideas**.
 - **Picking a client** (switcher, client name on All clients Home, a newly added client) opens **Find ideas**. The client's Home (analytics, no search bar) is one click away. On All clients Home, each row's "Home" button opens that client's Home, and "N waiting" opens that client's Review.

@@ -19,6 +19,7 @@ import { CameraTags } from './CameraTags'
 import { CameraSelects } from './CameraSelects'
 import { FromScript } from './FromScript'
 import { cameraLabels, looksLikeInterview } from '../lib/shots'
+import { newShotId } from '../lib/storyboard'
 import { getActiveLang, t } from '../lib/i18n'
 import { approverNote } from '../lib/approverNote'
 
@@ -36,6 +37,7 @@ interface Props {
   onPlanAnother: () => void
   // The signed-in user is the only approver, so a waiting plan is approved or sent back right here (App's decide).
   onDecide: (d: Decision) => void
+  onOpenCanvas: () => void
 }
 
 const statusLabel = (s: IdeaStatus): string => t(`plan.screen.status.${s}`)
@@ -47,7 +49,7 @@ const ago = (ts?: number) => {
 }
 
 export function PlanScreen(p: Props) {
-  const { idea, video, format, client, onChange, onBack, onFindMore, onGoApprovals, onPlanAnother, onDecide } = p
+  const { idea, video, format, client, onChange, onBack, onFindMore, onGoApprovals, onPlanAnother, onDecide, onOpenCanvas } = p
   // The person who approves plans, from the agency settings. Only a signed-in manager decides here;
   // a team member's plan is decided by the manager (in the app or on the review link).
   const APPROVER = useManagerName()
@@ -197,6 +199,9 @@ export function PlanScreen(p: Props) {
             <strong>{idea.managerNote ? t('plan.screen.banner.approvedWithChanges', { approver: APPROVER }) : t('plan.screen.banner.approved', { approver: APPROVER })}</strong>
             <span>{t('plan.screen.banner.approvedBody', { date: formatDay(idea.dueDate) })}</span>
           </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenCanvas}>
+            {t('canvas.open')}
+          </button>
         </div>
       )}
 
@@ -334,7 +339,7 @@ export function PlanScreen(p: Props) {
                   className="btn btn-ghost btn-sm"
                   onClick={() => {
                     setAddedAt(shots.length)
-                    setShots([...shots, { time: '', shot: '' }])
+                    setShots([...shots, { id: newShotId(), time: '', shot: '' }])
                   }}
                 >
                   {t('plan.screen.addShot')}
