@@ -92,3 +92,11 @@ def test_production_sees_a_published_post(client):
     got = client.get("/api/production").json()["ideas"]
     assert got["ok"]["published"] is True and got["ok"]["activityAt"] == 5_000_000
     assert got["two"] == {"cut": False, "published": False, "activityAt": 20_000}
+
+
+def test_production_marks_a_cut_waiting_for_review(client):
+    approved_cut(client, "ok", status="waiting")
+    with server.db() as conn:
+        conn.execute("INSERT OR REPLACE INTO cut_reviews (idea_id, version, status, sent_at) VALUES ('ok', 1, 'waiting', 6000)")
+    row = client.get("/api/production").json()["ideas"]["ok"]
+    assert row["cutWaiting"] == {"at": 6_000_000} and "cutSentBack" not in row

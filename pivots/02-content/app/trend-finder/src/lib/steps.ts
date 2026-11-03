@@ -37,6 +37,8 @@ export interface Signals {
   activityAt?: number | null
   // The approver sent the finished video back and it has not been re-sent or replaced since.
   cutSentBack?: { reason: string; at: number | null }
+  // The finished video was sent to the approver and has not been answered yet.
+  cutWaiting?: { at: number | null }
 }
 
 export const STUCK_DAYS = 3

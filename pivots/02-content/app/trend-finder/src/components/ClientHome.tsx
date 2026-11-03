@@ -78,6 +78,8 @@ export function ClientHome(p: Props) {
     const back = signals[plan.idea.id]?.cutSentBack;
     return back ? [{ plan, reason: back.reason }] : [];
   });
+  // Approved plans whose finished video is with the approver, not answered yet.
+  const videosWaiting = approved.filter((plan) => signals[plan.idea.id]?.cutWaiting);
 
   const picks = filmNext({
     client,
@@ -147,6 +149,7 @@ export function ClientHome(p: Props) {
           waiting={waiting}
           sentBack={sentBack}
           videosBack={videosBack}
+          videosWaiting={videosWaiting}
           onApprove={p.onApprove}
           onReview={p.onReview}
           onOpenPlan={p.onOpenPlan}

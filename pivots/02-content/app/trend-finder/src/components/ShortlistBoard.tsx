@@ -316,6 +316,7 @@ export function ShortlistBoard(p: Props) {
           onOpenPlan={() => p.onOpenPlan(idea.id)}
           onRemove={() => remove(idea.id)}
           cutSentBack={signalsById[idea.id]?.cutSentBack}
+          cutWaiting={!!signalsById[idea.id]?.cutWaiting}
           onFromResearch={p.onOpenResearch && p.inResearch?.has(idea.videoId) ? p.onOpenResearch : undefined}
           actions={
             <>
@@ -475,6 +476,7 @@ export function ShortlistBoard(p: Props) {
                     video={dragVideo}
                     format={formatOf(dragging)}
                     cutSentBack={signalsById[dragging.id]?.cutSentBack}
+                    cutWaiting={!!signalsById[dragging.id]?.cutWaiting}
                   />
                 </div>
               ) : null}

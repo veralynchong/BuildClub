@@ -206,6 +206,8 @@ export function NeedsApprovalCard(p: {
   sentBack: Named[];
   // Approved plans whose finished video was sent back and not re-sent yet.
   videosBack?: { plan: Named; reason: string }[];
+  // Approved plans whose finished video was sent to the approver and not answered yet.
+  videosWaiting?: Named[];
   // Missing for a team member: only the manager approves (in the app or on the review link).
   onApprove?: (ideaId: string) => void;
   onReview: () => void;
@@ -215,6 +217,7 @@ export function NeedsApprovalCard(p: {
   const more = p.waiting.length - shown.length;
   const manager = useManagerName();
   const videosBack = p.videosBack ?? [];
+  const videosWaiting = p.videosWaiting ?? [];
   return (
     <Card
       id="ch-needs"
@@ -229,7 +232,7 @@ export function NeedsApprovalCard(p: {
         ) : undefined
       }
     >
-      {p.waiting.length === 0 && videosBack.length === 0 && (
+      {p.waiting.length === 0 && videosBack.length === 0 && videosWaiting.length === 0 && (
         <Empty>{t("home.cards.needsEmpty")}</Empty>
       )}
       {shown.length > 0 && (
@@ -268,6 +271,18 @@ export function NeedsApprovalCard(p: {
                   detail={t("home.cards.yourReason", { reason: plan.idea.rejectReason?.trim() || t("home.cards.noneGiven") })}
                   onOpen={p.onOpenPlan}
                 />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {videosWaiting.length > 0 && (
+        <div className="ch-sub ch-split">
+          <span className="field-label">{t("home.cards.videosWaitingLabel")}</span>
+          <ul className="ch-rows">
+            {videosWaiting.slice(0, 2).map((plan) => (
+              <li key={plan.idea.id} className="ch-row-stack">
+                <PlanLine plan={plan} detail={t("home.cards.videoWaitingDetail", { manager })} onOpen={p.onOpenPlan} />
               </li>
             ))}
           </ul>

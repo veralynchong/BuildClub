@@ -60,6 +60,8 @@ def make_router(db) -> APIRouter:
                 seen(idea_id, sent, decided)
                 if status == "rejected":  # the row is deleted when a new video replaces it and set to waiting on a resend
                     row(idea_id)["cutSentBack"] = {"reason": reason or "", "at": ms(decided or sent)}
+                elif status == "waiting":
+                    row(idea_id)["cutWaiting"] = {"at": ms(sent)}
             for idea_id, created in conn.execute("SELECT idea_id, MAX(created_at) FROM takes GROUP BY idea_id"):
                 seen(idea_id, created)
             for idea_id, status, created, published in conn.execute(
