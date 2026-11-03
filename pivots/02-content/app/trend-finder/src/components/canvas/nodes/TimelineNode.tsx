@@ -76,7 +76,7 @@ export function TimelineNode() {
         <button type="button" className="btn btn-ghost btn-sm nodrag" onClick={() => openEditor()}>
           {t('canvas.timeline.expand')}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm nodrag" onClick={() => openEditor(true)}>
+        <button type="button" className="btn btn-ghost btn-sm nodrag" onClick={() => openEditor('export')}>
           {t('canvas.timeline.export')}
         </button>
       </div>

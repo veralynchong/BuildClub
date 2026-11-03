@@ -46,7 +46,7 @@ export interface CanvasCtx {
   editProject: EditProject | null
   clipUrls: Record<string, string>
   brand: ReelInput['brand']
-  openEditor: (exportPanel?: boolean) => void
+  openEditor: (focus?: 'export' | 'send') => void // the full-screen editor; with focus, on its export panel
   // While a line is being dragged: whether it could end on this input (true when nothing is being dragged).
   acceptsDrop: (nodeId: string, handleId: string) => boolean
   dragging: boolean // a line is being dragged from an output

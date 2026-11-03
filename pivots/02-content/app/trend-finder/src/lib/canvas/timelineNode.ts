@@ -14,7 +14,7 @@ export function isVirtual(id: string): boolean {
 
 // The canvas node a clip came from: its own node for a generation; for a take, the upload node holding it, else the
 // shot's footage node. Null when that node is not on the board.
-function clipNode(doc: CanvasDoc, src: EditProject['clips'][number]['source']): string | null {
+export function clipNode(doc: CanvasDoc, src: EditProject['clips'][number]['source']): string | null {
   const has = (id: string | undefined) => !!id && doc.nodes.some((n) => n.id === id)
   if (has(src.nodeId)) return src.nodeId!
   if (src.kind !== 'take') return null

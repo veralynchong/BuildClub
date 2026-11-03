@@ -200,12 +200,13 @@ function CanvasBoard({
   // A board that first mounted hidden has no size to fit to, so it is fitted once it shows.
   const unfitted = useRef(openEditor)
   const beforeEditor = useRef<Viewport | null>(null) // the view the board had when the editor covered it
+  const jumpAfterEditor = useRef<string | null>(null) // a node to centre once the board shows again
   const [kitOpen, setKitOpen] = useState(false) // the kit drawer; only one drawer is open at a time
-  const [editorExport, setEditorExport] = useState(false) // the editor opens on its export panel (the Timeline node's Export)
-  const showEditor = (exportPanel = false) => {
+  const [editorFocus, setEditorFocus] = useState<'export' | 'send' | null>(null) // the editor opens on its export panel (the Timeline node's Export)
+  const showEditor = (focus?: 'export' | 'send') => {
     beforeEditor.current = getViewport()
     setKitOpen(false)
-    setEditorExport(exportPanel)
+    setEditorFocus(focus ?? null)
     setEditing(true)
   }
   // The hidden board may have been resized to nothing, so put its view back once it is shown and laid out.
@@ -214,7 +215,11 @@ function CanvasBoard({
     let raf2 = 0
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        if (unfitted.current) void fitView({ padding: 0.2 })
+        const jump = jumpAfterEditor.current
+        jumpAfterEditor.current = null
+        // "Show on canvas" from the editor: that node is selected and centred instead of the old view coming back.
+        if (jump) void fitView({ nodes: [{ id: jump }], maxZoom: getZoom(), duration: 300 })
+        else if (unfitted.current) void fitView({ padding: 0.2 })
         else if (beforeEditor.current) void moveTo(beforeEditor.current)
         unfitted.current = false
       })
@@ -223,7 +228,7 @@ function CanvasBoard({
       cancelAnimationFrame(raf1)
       cancelAnimationFrame(raf2)
     }
-  }, [editing, fitView, moveTo])
+  }, [editing, fitView, moveTo, getZoom])
 
   // ---- autosave ----
   const doc = useMemo(() => fromFlow(nodes, edges, viewport), [nodes, edges, viewport])
@@ -1025,6 +1030,12 @@ function CanvasBoard({
     ...(scope.skippedNoKey > 0 ? [t('canvas.run.noKeySkipped', { n: scope.skippedNoKey })] : []),
     ...(leftText ? [leftText] : []),
   ].join('\n')
+  // Leaves the editor on one node: selected, and centred at the zoom the board had.
+  const jumpFromEditor = (id: string) => {
+    setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })))
+    jumpAfterEditor.current = id
+    setEditing(false)
+  }
   const jumpTo = (id: string) => {
     setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })))
     void fitView({ nodes: [{ id }], padding: 0.6, maxZoom: 1, duration: 250 })
@@ -1083,7 +1094,7 @@ function CanvasBoard({
     <section className="cv-screen">
       {editing && (
         <section className="cv-editor-full" aria-label={t('canvas.editor.title')}>
-          <EditorPanel ideaId={ideaId} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} onBack={() => setEditing(false)} startExport={editorExport} />
+          <EditorPanel ideaId={ideaId} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} doc={doc} gens={gens} takes={takes} onBack={() => setEditing(false)} onJumpToNode={jumpFromEditor} focus={editorFocus} />
           {noteEl}
         </section>
       )}
