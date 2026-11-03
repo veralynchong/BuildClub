@@ -8,6 +8,7 @@ import {
   checklistProgress,
   cutSeconds,
   formatSize,
+  isNothingToCut,
   takesByShot,
   uploadTake,
   videoType,
@@ -93,4 +94,11 @@ test('canClean: only an original take with no cleaned version yet', () => {
 test('cutSeconds: seconds cut by a clean-up, one decimal, never negative', () => {
   assert.equal(cutSeconds({ originalSec: 4.35, cleanSec: 2.33 }), '2.0')
   assert.equal(cutSeconds({ originalSec: 3, cleanSec: 3.2 }), '0.0')
+})
+
+test('isNothingToCut: only the "no speech" and "no fillers" refusals are results, not errors', () => {
+  assert.equal(isNothingToCut('No speech was found in this take, so nothing was cut.'), true)
+  assert.equal(isNothingToCut('This take has no fillers or long pauses to cut.'), true)
+  assert.equal(isNothingToCut('This take has no sound, so there is nothing to clean.'), false)
+  assert.equal(isNothingToCut(undefined), false)
 })

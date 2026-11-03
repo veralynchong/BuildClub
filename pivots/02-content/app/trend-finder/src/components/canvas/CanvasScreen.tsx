@@ -18,7 +18,7 @@ import { getBudget, getCanvas, getModels, NoShots, pollGen, putCanvas, quoteChai
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { addNode, chainBusy, chainPair, isRetired, freeSpot, roomBelow, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { mergeFrame } from '../../lib/storyboard'
-import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, uploadTake, type Take } from '../../lib/takes'
+import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, NothingToCut, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
 import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
 import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
@@ -260,9 +260,10 @@ function CanvasBoard({
     if (info) noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
   }, [])
 
-  const showText = useCallback((text: string) => {
-    setNote({ text })
+  const showText = useCallback((text: string, info?: boolean) => {
+    setNote({ text, info })
     clearTimeout(noteTimer.current)
+    if (info) noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
   }, [])
 
   // ---- generation ----
@@ -479,7 +480,7 @@ function CanvasBoard({
     try {
       await run()
     } catch (e) {
-      if (mounted.current) showText(e instanceof Error ? e.message : t(fallback))
+      if (mounted.current) showText(e instanceof Error ? e.message : t(fallback), e instanceof NothingToCut)
     } finally {
       if (mounted.current) setBusy((b) => (b.has(nodeId) ? new Set([...b].filter((x) => x !== nodeId)) : b))
     }

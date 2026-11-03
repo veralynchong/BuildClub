@@ -88,6 +88,7 @@ import type { RowPick } from './components/research/ResearchScreen'
 import { SaveToVideo } from './components/research/SaveToVideo'
 import { entryFromVideo, newSlot, planOf, researchId, researchStatus, rowDueDate, slotSummary, videoFromLink, withPlanRows } from './lib/research'
 import type { LinkInput, ResearchEntry } from './lib/research'
+import { pickLabel } from './lib/compare'
 
 // The platforms Find ideas can search, offered by Research's "Add from link".
 const SEARCH_PLATFORMS: Platform[] = ['tiktok', 'instagram', 'youtube', 'reddit', 'x']
@@ -1176,7 +1177,7 @@ export default function App() {
   // Videos the Compare screen offers: the saved plans' videos (this client's, or everyone's from All
   // clients), then the latest live search results. Only real videos with a link can be compared.
   const comparePicks = (() => {
-    const label = (v: Video) => `@${v.handle} · ${v.hook || v.caption || ''}`.slice(0, 120)
+    const label = (v: Video) => pickLabel(v.handle, v.hook || v.caption || '')
     const pick = (v: Video): PickVideo => ({ url: v.url!, label: label(v), thumbnail: v.thumbnail })
     const seen = new Set<string>()
     const fresh = (v: Video | undefined): v is Video => {

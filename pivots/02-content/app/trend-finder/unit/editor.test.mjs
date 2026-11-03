@@ -399,6 +399,14 @@ test('addText: 2 s at the bottom in white, cut to fit the video', () => {
   assert.equal(addText(p, -3, 'x', 't1').texts[0].start, 0)
 })
 
+test('addText: at the end of the timeline the text starts earlier and keeps its 2 s', () => {
+  const p = project([clip('c1', 0, 5)])
+  const end = addText(p, 5, 'x', 't1').texts[0]
+  assert.deepEqual([end.start, end.end], [3, 5])
+  const short = addText(project([clip('c1', 0, 1)]), 1, 'x', 't1').texts[0]
+  assert.deepEqual([short.start, short.end], [0, 1])
+})
+
 test('addText: nothing to add to, empty words, or 30 texts already', () => {
   const empty = project([])
   assert.equal(addText(empty, 0, 'x', 't1'), empty)
