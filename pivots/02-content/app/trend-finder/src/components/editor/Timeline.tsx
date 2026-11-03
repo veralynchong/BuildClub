@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { DndContext, PointerSensor, useDraggable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { t } from '../../lib/i18n'
 import type { TimelineActions } from '../../lib/editor/useTimelineActions'
-import { CLIP_MIME, clipLength, clipStarts, dropIndex, FPS, moveClip, newClipId, removeClip, setClipAudio, sourceKey, splitAt, totalLength, trimClip } from '../../lib/editor/timeline'
-import type { Clip, ClipSource, EditProject, SourceInfo } from '../../lib/editor/types'
+import { clipLength, clipStarts, dropIndex, FPS, moveClip, newClipId, removeClip, setClipAudio, sourceKey, splitAt, totalLength, trimClip } from '../../lib/editor/timeline'
+import type { Clip, EditProject, SourceInfo } from '../../lib/editor/types'
 
 const MIN_PX = 20
 const MAX_PX = 120
@@ -50,8 +50,6 @@ export function Timeline({ project, sources, frame, readOnly, timeline, selected
   }
   const menuClip = menu ? project.clips.find((c) => c.id === menu.clipId) : undefined
   const menuNode = menuClip ? nodeOf(menuClip) : null
-  const track = useRef<HTMLDivElement>(null)
-  const [dropAt, setDropAt] = useState<number | null>(null) // where a dragged canvas clip would land
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const total = totalLength(project)
   const starts = clipStarts(project)
@@ -92,28 +90,6 @@ export function Timeline({ project, sources, frame, readOnly, timeline, selected
     onSeek(Math.round(Math.min(Math.max(x / pxPerSec, 0), total) * FPS))
   }
 
-  // A video or take dragged in from a canvas node (native drag and drop; the clips themselves use dnd-kit).
-  const carries = (e: React.DragEvent) => !readOnly && e.dataTransfer.types.includes(CLIP_MIME)
-  const indexAt = (e: React.DragEvent) => dropIndex(project, e.clientX - (track.current?.getBoundingClientRect().left ?? 0), pxPerSec)
-  const onDragOver = (e: React.DragEvent) => {
-    if (!carries(e)) return
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'copy'
-    setDropAt(indexAt(e))
-  }
-  const onDrop = (e: React.DragEvent) => {
-    if (!carries(e)) return
-    e.preventDefault()
-    setDropAt(null)
-    let src: ClipSource
-    try {
-      src = JSON.parse(e.dataTransfer.getData(CLIP_MIME)) as ClipSource
-    } catch {
-      return
-    }
-    if (src && (src.kind === 'generation' || src.kind === 'take') && typeof src.id === 'string') void timeline.useForShot(src) // one clip per shot: its place follows the shot order
-  }
-
   const statuses = project.clips.map((c) => ({ clip: c, status: timeline.statusOf(c) }))
   const alerts = statuses.filter((x) => x.status.state !== 'ok')
   const stateOf = new Map(statuses.map((x) => [x.clip.id, x.status.state]))
@@ -145,9 +121,6 @@ export function Timeline({ project, sources, frame, readOnly, timeline, selected
         className="cv-ed-scroll"
         tabIndex={0}
         onKeyDown={onKeyDown}
-        onDragOver={onDragOver}
-        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setDropAt(null)}
-        onDrop={onDrop}
       >
         <div className="cv-ed-lane" style={{ width: Math.max(total * pxPerSec, 1) + 24 }}>
           <div className="cv-ed-ruler" role="slider" aria-label={t('editor.ruler')} aria-valuemin={0} aria-valuemax={Math.round(total * 10) / 10} aria-valuenow={Math.round(playhead * 10) / 10} onClick={seekFromRuler}>
@@ -158,8 +131,7 @@ export function Timeline({ project, sources, frame, readOnly, timeline, selected
             ))}
           </div>
           <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-            <div className="cv-ed-track" ref={track}>
-              {dropAt !== null && <div className="cv-ed-dropline" style={{ left: (dropAt < starts.length ? starts[dropAt] : total) * pxPerSec }} aria-hidden="true" />}
+            <div className="cv-ed-track">
               {project.clips.map((c, i) => (
                 <ClipBlock
                   key={c.id}

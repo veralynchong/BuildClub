@@ -20,7 +20,7 @@ export type RunBatch = { chain: { imageNodeId: string; videoNodeId: string } } |
 const round4 = (n: number) => Math.round(n * 1e4) / 1e4
 
 // The plan's shots (limited to shotId) that still have a shot node not marked removed, in plan order. The toolbar count
-// and runScope share it.
+// and runScopeInfo share it.
 export function liveShotIds(doc: CanvasDoc, shots: Shot[], shotId?: string): string[] {
   return shots.flatMap((s) => {
     if (!s.id || (shotId !== undefined && s.id !== shotId)) return []
@@ -78,10 +78,6 @@ export function runScopeInfo(doc: CanvasDoc, shots: Shot[], gens: Generation[], 
     return true
   })
   return { items, deferred, skippedNoKey }
-}
-
-export function runScope(doc: CanvasDoc, shots: Shot[], gens: Generation[], models: GenModel[], opts: { shotId?: string; includeStale: boolean }): RunItem[] {
-  return runScopeInfo(doc, shots, gens, models, opts).items
 }
 
 function startOf(doc: CanvasDoc, nodeId: string): string | undefined {
@@ -143,6 +139,29 @@ export function chainBody(
       ...(imageReq.references.length ? { references: imageReq.references } : {}),
     },
   }
+}
+
+// runScopeInfo minus the chains chainBody refuses (no key, missing input, a reference on the video): their nodes are left
+// out and the reasons listed. Run all builds its dialog from this and its Confirm re-checks with it, so both see one scope.
+export function runScopeChecked(
+  doc: CanvasDoc,
+  shots: Shot[],
+  gens: Generation[],
+  models: GenModel[],
+  kit: Kit | null,
+  opts: { shotId?: string; includeStale: boolean },
+): RunScopeInfo & { refused: Key[] } {
+  const info = runScopeInfo(doc, shots, gens, models, opts)
+  let items = info.items
+  const refused: Key[] = []
+  for (const b of runBatches(doc, info.items)) {
+    if (!('chain' in b)) continue
+    const made = chainBody(doc, b.chain, models, shots, gens, kit)
+    if (!('error' in made)) continue
+    refused.push(made.error)
+    items = items.filter((i) => i.nodeId !== b.chain.imageNodeId && i.nodeId !== b.chain.videoNodeId)
+  }
+  return { ...info, items, refused }
 }
 
 // The total and each shot's subtotal, in item order, only shots with an item.

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScope, runScopeInfo, scopeTotal } from '../src/lib/canvas/run.ts'
+import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeChecked, runScopeInfo, scopeTotal } from '../src/lib/canvas/run.ts'
 
 const at = (id, type, shotId, data = {}) => ({ id, type, ...(shotId ? { shotId } : {}), position: { x: 0, y: 0 }, data })
 const start = (id, source, target) => ({ id, source, sourceHandle: 'out', target, targetHandle: 'in:start' })
@@ -32,6 +32,7 @@ const models = [
 ]
 const g = (id, nodeId, status, createdAt) => ({ id, nodeId, status, createdAt, kind: nodeId.includes('vid') ? 'video' : 'image', model: 'mock-image', inputs: {}, url: status === 'done' ? `/m/${id}.png` : null })
 const doneSb2 = [g('d', 'n_sb_s2', 'done', 1)]
+const runScope = (...args) => runScopeInfo(...args).items
 const ids = (items) => items.map((i) => i.nodeId)
 
 test('runScope skips done, running, removed and retired nodes; includeStale adds stale ones', () => {
@@ -77,6 +78,23 @@ test('chainBody builds the same body onChain sent, or the reason it can not', ()
   assert.deepEqual(chainBody(doc, { imageNodeId: 'n_sb_s1', videoNodeId: 'n_vid_s1' }, off, shots, [], null), { error: 'canvas.chain.noKey' })
   const noText = shots.map((s) => ({ ...s, line: '' }))
   assert.deepEqual(chainBody(doc, { imageNodeId: 'n_sb_s1', videoNodeId: 'n_vid_s1' }, models, noText, [], null), { error: 'canvas.chain.missing' })
+})
+
+test('runScopeChecked leaves out a chain chainBody refuses, and gives the same scope every time', () => {
+  // a reference on the video: the chain would be refused with noRef
+  const withRef = structuredClone(doc)
+  withRef.edges.push({ id: 'e_ref', source: 'n_sb_s2', sourceHandle: 'out', target: 'n_vid_s1', targetHandle: 'in:ref' })
+  const opts = { includeStale: false }
+  const plain = runScopeInfo(withRef, shots, doneSb2, models, opts)
+  assert.deepEqual(ids(plain.items), ['n_sb_s1', 'n_vid_s1', 'n_vid_s2'])
+  const checked = runScopeChecked(withRef, shots, doneSb2, models, null, opts)
+  assert.deepEqual(checked.refused, ['canvas.chain.noRef'])
+  assert.deepEqual(ids(checked.items), ['n_vid_s2'])
+  assert.deepEqual(runScopeChecked(withRef, shots, doneSb2, models, null, opts), checked)
+  // nothing refused: the same items as the plain scope
+  const ok = runScopeChecked(doc, shots, doneSb2, models, null, opts)
+  assert.deepEqual(ok.refused, [])
+  assert.deepEqual(ok.items, runScopeInfo(doc, shots, doneSb2, models, opts).items)
 })
 
 test('scopeTotal sums per shot', () => {

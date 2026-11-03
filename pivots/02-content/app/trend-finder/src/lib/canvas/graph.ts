@@ -204,10 +204,10 @@ function newId(doc: CanvasDoc, kind: NodeKind): string {
 
 // A new node. With a shotId (a plan Shot id) it goes in that shot's frame, right of its last member; no text line is
 // added, the shot text reaches it through shotId. A footage node needs a shot. Returns a new doc.
-export function addNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: number }, shotId?: string): CanvasDoc {
+export function addNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: number }, shotId?: string, sizes?: Map<string, { w: number; h: number }>): CanvasDoc {
   const shotNode = shotId ? shotNodeOf(doc, shotId) : null
   if (kind === 'footage' && !shotNode) throw new Error('A footage node needs a shot.')
-  const position = shotNode ? slotInFrame(doc, shotNode) : { x: Math.round(at.x), y: Math.round(at.y) }
+  const position = shotNode ? slotInFrame(doc, shotNode, sizes) : { x: Math.round(at.x), y: Math.round(at.y) }
   const node: CanvasNode = { id: newId(doc, kind), type: kind, ...(shotNode ? { shotId } : {}), position, data: startData(kind) }
   return { ...doc, nodes: [...doc.nodes, node] }
 }

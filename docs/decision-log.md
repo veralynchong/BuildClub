@@ -13,7 +13,7 @@ Newest first. Dates are when the decision was made (from the Miro board), except
 
 **Why:** Founder decisions, 3 Nov 2026, after the canvas UI flow comparison (https://claude.ai/artifact/WsHvz7UPQSefTN5aHEHpvE). Design: `pivots/02-content/docs/specs/2026-11-03-canvas-product-polish-design.md`.
 
-**Status:** Current. Design approved; nothing built yet. Overrides §4.2, §4.3 and §5 of `pivots/02-content/docs/specs/2026-11-02-node-canvas-editor-design.md`.
+**Status:** Current. Design approved and built in four stacked PRs (A shell, B frames and nodes, C timeline, D agent); mock-model E2E passed 4 Nov 2026, no real model run yet. Approve on nodes that already have results marks them Out of date and does not re-run them; the new settings take effect on the next Regenerate (spec §9.2.5). Nodes without a result run after the price dialog. Overrides §4.2, §4.3 and §5 of `pivots/02-content/docs/specs/2026-11-02-node-canvas-editor-design.md`.
 
 ## 2 Nov 2026
 

@@ -54,6 +54,7 @@ import cut_review
 import recheck
 import generations
 import renders
+import agent
 import shotlist
 import storyboard
 import cleaning
@@ -926,6 +927,7 @@ def storyboard_refund(wallet: str, usd: float) -> None:
 
 app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget, storyboard_refund))
 app.include_router(shotlist.make_router(storyboard_budget))
+app.include_router(agent.make_router(load, storyboard_budget))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
 GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_video", "DAILY_GEN_VIDEO_USD"),
                "voice": ("gen_voice", "DAILY_GEN_VOICE_USD")}

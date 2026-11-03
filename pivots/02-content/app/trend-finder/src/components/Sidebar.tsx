@@ -75,11 +75,12 @@ interface Props {
   compact?: boolean // icons only (the canvas view): each item keeps its label as title and aria-label
 }
 
-function ClientSwitcher({ clients, workspace, setWorkspace, onAddClient }: Pick<Props, 'clients' | 'workspace' | 'setWorkspace' | 'onAddClient'>) {
+function ClientSwitcher({ clients, workspace, setWorkspace, onAddClient, compact }: Pick<Props, 'clients' | 'workspace' | 'setWorkspace' | 'onAddClient' | 'compact'>) {
   const { agency } = useApp()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const current = clients.find((c) => c.id === workspace)
+  const name = current ? current.name : t('shell.side.allClients') // the compact button shows only the avatar
 
   useEffect(() => {
     if (!open) return
@@ -100,11 +101,11 @@ function ClientSwitcher({ clients, workspace, setWorkspace, onAddClient }: Pick<
 
   return (
     <div className="switcher" ref={ref}>
-      <button className="switcher-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button className="switcher-btn" aria-haspopup="menu" aria-expanded={open} title={compact ? name : undefined} aria-label={compact ? name : undefined} onClick={() => setOpen((o) => !o)}>
         <span className={`avatar ${current ? '' : 'avatar-agency'}`}>{current ? initials(current.name) : '▦'}</span>
         <span className="switcher-text">
           <span className="switcher-label">{current ? t('shell.side.client') : agency.agencyName}</span>
-          <strong>{current ? current.name : t('shell.side.allClients')}</strong>
+          <strong>{name}</strong>
         </span>
         <span className="switcher-caret" aria-hidden="true">
           ▾
@@ -192,7 +193,7 @@ export function Sidebar(p: Props) {
   return (
     <>
       {p.open && <div className="side-scrim" onClick={p.onClose} />}
-      <aside className={`sidebar ${p.open ? 'sidebar-open' : ''} ${p.compact ? 'sidebar-compact' : ''}`} aria-label={t('shell.side.main')}>
+      <aside className={`sidebar ${p.open ? 'sidebar-open' : ''}`} aria-label={t('shell.side.main')}>
         <div className="side-brand">
           <button
             type="button"
@@ -210,6 +211,7 @@ export function Sidebar(p: Props) {
         {/* On phones the sidebar is a slide-out menu: close it after a pick so the new screen isn't hidden behind it. */}
         <ClientSwitcher
           clients={p.clients}
+          compact={p.compact}
           workspace={p.workspace}
           setWorkspace={(w) => {
             p.setWorkspace(w)

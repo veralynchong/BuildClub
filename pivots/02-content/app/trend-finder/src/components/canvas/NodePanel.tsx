@@ -20,7 +20,7 @@ interface Props {
 export function NodePanel({ nodeId, onClose }: Props) {
   const focused = useRef('')
   const c = useCanvas()
-  const { doc, models, gens, shots, readOnly, updateData, onGenerate, onSelectVersion, edited, incomingHandles, missing, budget, chainOf, onRunScope, chaining, kitView, kitSent, setKitOff, shotIndex } = c
+  const { doc, models, gens, shots, readOnly, updateData, onGenerate, onSelectVersion, edited, incomingHandles, missing, budget, chainOf, onRunScope, chaining, dialogOpen, kitView, kitSent, setKitOff, shotIndex } = c
   const node = doc.nodes.find((n) => n.id === nodeId)
   if (!node || (node.type !== 'storyboard' && node.type !== 'video')) return null
   const versions = versionsOf(nodeId, gens)
@@ -37,7 +37,7 @@ export function NodePanel({ nodeId, onClose }: Props) {
   const sentPrompt = shown?.inputs.sentPrompt
   const shotNo = shotIndex(node.shotId) + 1 // 0 when the node has no shot, or its shot left the plan
   const source = shotTextSource(doc, nodeId, shots)
-  const locked = readOnly || !!pending
+  const locked = readOnly || !!pending || dialogOpen
 
   // Why a model can't be picked: it has no use for an input that already has a line.
   const refuses = (m: GenModel): string | null => {
@@ -125,7 +125,7 @@ export function NodePanel({ nodeId, onClose }: Props) {
           className="cv-textarea nowheel"
           placeholder={source.from === 'shot' ? source.text : t('canvas.gen.promptPlaceholder')}
           value={node.data.prompt ?? ''}
-          readOnly={readOnly}
+          readOnly={readOnly || dialogOpen}
           rows={4}
           onChange={(e) => updateData(nodeId, { prompt: e.target.value })}
           onFocus={() => (focused.current = node.data.prompt ?? '')}
@@ -139,7 +139,7 @@ export function NodePanel({ nodeId, onClose }: Props) {
               type="checkbox"
               role="switch"
               checked={!node.data.shotTextOff}
-              disabled={readOnly}
+              disabled={readOnly || dialogOpen}
               onChange={(e) => {
                 updateData(nodeId, { shotTextOff: !e.target.checked })
                 edited(nodeId)
@@ -212,7 +212,7 @@ export function NodePanel({ nodeId, onClose }: Props) {
           {t(main.key, main.vars)}
         </button>
         {pair && node.shotId && !readOnly && (
-          <button type="button" className="btn btn-ghost btn-sm cv-chain-btn" disabled={!!pendingGen(pair.imageNodeId, gens) || !!pendingGen(pair.videoNodeId, gens) || chaining || retired} onClick={() => onRunScope({ shotId: node.shotId, includeStale: true })}>
+          <button type="button" className="btn btn-ghost btn-sm cv-chain-btn" disabled={!!pendingGen(pair.imageNodeId, gens) || !!pendingGen(pair.videoNodeId, gens) || chaining || dialogOpen || retired} onClick={() => onRunScope({ shotId: node.shotId, includeStale: true })}>
             {chaining ? t('canvas.chain.quoting') : t('canvas.chain.run')}
           </button>
         )}

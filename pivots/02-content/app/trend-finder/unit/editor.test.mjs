@@ -26,9 +26,7 @@ import {
   exportBlocked,
   flushOutcome,
   applyNewer,
-  withPrimary,
   repinIfOld,
-  CLIP_MIME,
   addText,
   updateText,
   parseSeconds,
@@ -195,10 +193,6 @@ const gen = (id, nodeId, finishedAt, status = 'done') => ({ id, nodeId, kind: 'v
 const take = (id, shotId, chosen = false) => ({ id, shotId, chosen, url: `/t/${id}.mp4` })
 const doc = (nodes) => ({ nodes, edges: [] })
 
-test('CLIP_MIME is the drag type the timeline accepts', () => {
-  assert.equal(CLIP_MIME, 'application/x-remake-clip')
-})
-
 test('primaryClipFor: a pinned primary wins over a chosen take and a video node', () => {
   const d = doc([vnode('n1', 's1', 'g1')])
   const gens = [gen('g1', 'n1', 10)]
@@ -305,16 +299,6 @@ test('repinIfOld: the pin follows a replaced version, other pins stay', () => {
   assert.equal(repinIfOld(p2, 's1', g1, g2), p2)
   assert.equal(repinIfOld(pins, undefined, g1, g2), pins)
   assert.equal(repinIfOld({}, 's1', g1, g2).s1, undefined)
-})
-
-test('withPrimary', () => {
-  const g1 = { kind: 'generation', id: 'g1', nodeId: 'n1', shotId: 's1' }
-  const t1 = { kind: 'take', id: 'g1', shotId: 's1' }
-  const pins = {}
-  const next = withPrimary(pins, 's1', g1)
-  assert.deepEqual(pins, {})
-  assert.deepEqual(next, { s1: g1 })
-  assert.deepEqual(withPrimary(next, 's1', t1), { s1: t1 })
 })
 
 test('timeline selectedGen agrees with canvas graph selectedGen', () => {

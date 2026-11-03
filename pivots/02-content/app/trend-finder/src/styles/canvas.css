@@ -33,6 +33,17 @@
 .cv-rail > button.is-on { background: var(--accent-soft); color: var(--accent); }
 .cv-rail .cv-add { position: relative; }
 .cv-rail .cv-add-list { position: absolute; left: calc(100% + var(--space-sm)); top: 0; }
+.cv-agent-pick { position: relative; }
+.cv-agent-pick > button { border: 0; background: transparent; width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--fg); cursor: pointer; }
+.cv-agent-pick > button:hover { background: var(--surface-2); }
+.cv-agent-list {
+  position: absolute; left: calc(100% + var(--space-sm)); top: 0; z-index: 6; margin: 0; padding: var(--space-2xs); list-style: none; min-width: 200px; max-width: 280px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-md);
+}
+.cv-agent-list li { padding: 0; }
+.cv-agent-list li.muted { padding: var(--space-xs) var(--space-sm); }
+.cv-agent-list button { width: 100%; text-align: left; padding: var(--space-xs) var(--space-sm); border: 0; border-radius: var(--radius-sm); background: none; color: var(--fg); font: inherit; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-agent-list button:hover { background: var(--surface-2); }
 .cv-queue { position: absolute; left: var(--space-base); bottom: var(--space-base); z-index: 5; display: flex; flex-direction: column; gap: var(--space-xs); align-items: flex-start; }
 .cv-queue-pill {
   padding: var(--space-xs) var(--space-base); border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--line);
@@ -178,6 +189,11 @@
 .cv-chip { flex: none; padding: 0 var(--space-sm); border-radius: var(--radius-pill); background: var(--surface-3); color: var(--muted); font-size: var(--text-xs); }
 .cv-frame-line { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .cv-frame-status:empty, .cv-frame-agent:empty { display: none; }
+.cv-frame-agent-btn {
+  flex: none; padding: 0 var(--space-sm); border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--surface); color: var(--accent);
+  font: inherit; font-size: var(--text-xs); cursor: pointer; transition: background-color var(--dur-fast) var(--ease);
+}
+.cv-frame-agent-btn:hover { background: var(--accent-soft); }
 .cv-frame-add { flex: none; margin-left: auto; }
 .cv-frame.is-removed { border-style: dashed; background: var(--surface-2); }
 .cv-frame.is-removed .cv-frame-title { color: var(--muted); }
@@ -350,6 +366,8 @@
 .cv-panel-reuse { align-self: flex-start; }
 .cv-panel-foot { display: flex; flex-direction: column; gap: var(--space-xs); margin-top: auto; padding-top: var(--space-sm); border-top: 1px solid var(--line); }
 .cv-panel-foot .btn { width: 100%; }
+.cv-agent-card { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+.cv-agent-card-title { margin: 0; font-size: var(--text-sm); font-weight: 600; }
 
 /* Model picker: a button and its list box. */
 .cv-picker { position: relative; }

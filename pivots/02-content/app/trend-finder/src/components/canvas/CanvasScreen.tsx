@@ -16,17 +16,20 @@ import type { Kit, SavedIdea, Shot } from '../../types'
 import { t, type Key, type Vars } from '../../lib/i18n'
 import { getBudget, getCanvas, getKit, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
 import { fromFlow, reframe, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import { frameBoxes, frameOf, migrateDoc, slotInFrame } from '../../lib/canvas/frames'
+import { frameBoxes, frameOf, migrateDoc, shotNodeOf, slotInFrame } from '../../lib/canvas/frames'
 import { edgeLook, focusSet } from '../../lib/canvas/edges'
 import { TIMELINE_NODE_ID, timelineFlow } from '../../lib/canvas/timelineNode'
 import type { Box } from '../../lib/canvas/frames'
 import { useApp } from '../../lib/appContext'
 import { reelBrand } from '../../lib/editor/preview'
 import { addNode, budgetLeft, chainBusy, chainPair, freeSpot, genFinished, genRequest, genStarted, genView, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
-import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeInfo, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
+import { quoteChanged, quoteLines, type QuoteLine } from '../../lib/canvas/requote'
+import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeChecked, runScopeInfo, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
 import { NodePanel } from './NodePanel'
+import { AgentPanel } from './AgentPanel'
+import { applyAgentPlan, askAgent, type AgentPlan } from '../../lib/canvas/agent'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, NothingToCut, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
@@ -70,6 +73,9 @@ interface Props {
   fullscreen: boolean // the app frame is hidden
   onFullscreen: (on: boolean) => void
 }
+
+// Open menus and larger views that take Esc before the shell or the agent panel do.
+const OVERLAYS = '.cv-add-list, .cv-agent-list, .cv-queue-list, .cv-drop, .cv-lightbox, .cv-model-list'
 
 // Loads the canvas (waiting a little for a just-edited shot list to reach the server), then shows the board.
 export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel, openEditor = false, title, clientName, fullscreen, onFullscreen }: Props) {
@@ -341,8 +347,8 @@ function CanvasBoard({
 
   // Marks the generated nodes after nodeId (and nodeId itself when its own input changed) as out of date.
   const markFrom = useCallback(
-    (nodeId: string, self: boolean) => {
-      const ids = new Set(staleIds(latest.current.doc, nodeId, gensRef.current, self))
+    (nodeId: string, self: boolean, d: CanvasDoc = latest.current.doc) => {
+      const ids = new Set(staleIds(d, nodeId, gensRef.current, self))
       setNodes((ns) =>
         ns.map((n) => (ids.has(n.id) && !n.data.node.data.stale ? { ...n, data: { node: { ...n.data.node, data: { ...n.data.node.data, stale: true } } } } : n)),
       )
@@ -498,15 +504,23 @@ function CanvasBoard({
   }
 
   // The first Generate with a paid model in this session asks first.
-  const [paidAsk, setPaidAsk] = useState<{ nodeId: string; model: string; usd: number } | null>(null)
+  const [paidAsk, setPaidAsk] = useState<{ nodeId: string; model: string; usd: number; lines: QuoteLine[] } | null>(null)
   const onGenerate = async (nodeId: string) => {
     const ready = readyToGen(nodeId)
     if (!ready) return
-    if (paidConfirmNeeded(ready.usd, paidConfirmed)) return setPaidAsk({ nodeId, model: ready.model.label, usd: ready.usd })
+    if (paidConfirmNeeded(ready.usd, paidConfirmed)) return setPaidAsk({ nodeId, model: ready.model.label, usd: ready.usd, lines: quoteLines(latest.current.doc, [{ nodeId, model: ready.model.id, usd: ready.usd }]) })
     await startOne(nodeId)
   }
   const confirmPaid = () => {
     if (!paidAsk) return
+    // the price is asked again when the node's model or length changed since the dialog opened
+    const ready = readyToGen(paidAsk.nodeId)
+    if (!ready) return setPaidAsk(null)
+    const lines = quoteLines(latest.current.doc, [{ nodeId: paidAsk.nodeId, model: ready.model.id, usd: ready.usd }])
+    if (quoteChanged(paidAsk.lines, lines)) {
+      setPaidAsk({ nodeId: paidAsk.nodeId, model: ready.model.label, usd: ready.usd, lines })
+      return showNote('canvas.paid.changed')
+    }
     paidConfirmed = true
     setPaidAsk(null)
     void startOne(paidAsk.nodeId)
@@ -514,7 +528,7 @@ function CanvasBoard({
 
   // ---- Run all and Run the whole shot: what would run, priced, asked once, then started batch by batch ----
   const [chaining, setChaining] = useState(false) // a save before the dialog or a confirmed run is on its way
-  const [runAsk, setRunAsk] = useState<{ title: 'canvas.toolbar.runAll' | 'canvas.chain.title'; items: RunItem[]; batches: RunBatch[]; skippedNoKey: number } | null>(null)
+  const [runAsk, setRunAsk] = useState<{ title: 'canvas.toolbar.runAll' | 'canvas.chain.title'; items: RunItem[]; batches: RunBatch[]; skippedNoKey: number; opts: { shotId?: string; includeStale: boolean }; lines: QuoteLine[] } | null>(null)
 
   const chainStarting = useRef(false) // a ref, so a double click can't start the run twice before state updates
   const preparing = useRef(false) // a ref, so a double click can't prepare the dialog twice before state updates
@@ -528,24 +542,22 @@ function CanvasBoard({
       if (latest.current.key !== savedKey.current) await save()
       if (blockedRef.current || latest.current.key !== savedKey.current) return showNote('canvas.save.failed')
       const d = latest.current.doc
-      const info = runScopeInfo(d, shots, gensRef.current, models, opts)
-      let items = info.items
-      if (!items.length) return info.skippedNoKey > 0 ? showNote('canvas.chain.noKey') : showNote('canvas.run.nothing', undefined, true)
+      const info = runScopeChecked(d, shots, gensRef.current, models, kitRef.current, opts)
+      const items = info.items
+      if (!info.items.length && !info.refused.length) return info.skippedNoKey > 0 ? showNote('canvas.chain.noKey') : showNote('canvas.run.nothing', undefined, true)
       if (info.deferred.length) showNote('canvas.run.deferred', { n: info.deferred.length })
       // A chain the server would refuse is left out with its reason (for one shot: no dialog), before anything is asked.
+      if (info.refused.length) {
+        showNote(opts.shotId ? info.refused[0] : info.refused[info.refused.length - 1])
+        if (opts.shotId) return
+      }
       for (const b of runBatches(d, items)) {
         if (!('chain' in b)) continue
         const made = chainBody(d, b.chain, models, shots, gensRef.current, kitRef.current)
-        if ('error' in made) {
-          showNote(made.error)
-          if (opts.shotId) return
-          items = items.filter((i) => i.nodeId !== b.chain.imageNodeId && i.nodeId !== b.chain.videoNodeId)
-          continue
-        }
-        await quoteChain(ideaId, made.body) // nothing is spent; a refusal (e.g. the daily cap) stops here with its message
+        if ('body' in made) await quoteChain(ideaId, made.body) // nothing is spent; a refusal (e.g. the daily cap) stops here with its message
       }
       if (!items.length || !mounted.current) return
-      setRunAsk({ title: opts.shotId ? 'canvas.chain.title' : 'canvas.toolbar.runAll', items, batches: runBatches(d, items), skippedNoKey: info.skippedNoKey })
+      setRunAsk({ title: opts.shotId ? 'canvas.chain.title' : 'canvas.toolbar.runAll', items, batches: runBatches(d, items), skippedNoKey: info.skippedNoKey, opts, lines: quoteLines(d, items) })
     } catch (e) {
       if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
     } finally {
@@ -595,6 +607,18 @@ function CanvasBoard({
 
   const confirmRun = async () => {
     if (!runAsk || chaining || chainStarting.current) return
+    // nothing starts if the nodes, models, lengths or total are not what the dialog showed: ask again with the new price
+    const d = latest.current.doc
+    const info = runScopeChecked(d, shots, gensRef.current, models, kitRef.current, runAsk.opts)
+    const lines = quoteLines(d, info.items)
+    if (quoteChanged(runAsk.lines, lines)) {
+      if (!info.items.length) {
+        setRunAsk(null)
+        return showNote('canvas.run.nothing', undefined, true)
+      }
+      setRunAsk({ ...runAsk, items: info.items, batches: runBatches(d, info.items), skippedNoKey: info.skippedNoKey, lines })
+      return showNote('canvas.run.priceChanged')
+    }
     chainStarting.current = true
     setChaining(true)
     try {
@@ -611,6 +635,84 @@ function CanvasBoard({
       }
     }
   }
+
+  // ---- the "Build this shot" agent: ask for a plan, show it in the right panel, apply it on approval ----
+  const [agent, setAgent] = useState<{ shotId: string; plan: AgentPlan | null; loading: boolean; error: string | null } | null>(null)
+  const runAfter = useRef<string | null>(null) // a shot to run once the board shows the applied plan
+  const agentAsk = useRef(0) // which request is current; an answer for a closed or replaced plan is dropped
+  const buildShot = (shotId: string) => {
+    if (blocked) return
+    const ask = ++agentAsk.current
+    setNodes((ns) => (ns.some((n) => n.selected) ? ns.map((n) => (n.selected ? { ...n, selected: false } : n)) : ns))
+    setAgent({ shotId, plan: null, loading: true, error: null })
+    askAgent(ideaId, shotId).then(
+      (plan) => mounted.current && ask === agentAsk.current && setAgent({ shotId, plan, loading: false, error: null }),
+      (e) => mounted.current && ask === agentAsk.current && setAgent({ shotId, plan: null, loading: false, error: e instanceof Error ? e.message : t('canvas.err.start') }),
+    )
+  }
+  const closeAgent = () => {
+    agentAsk.current++
+    setAgent(null)
+  }
+  // Esc closes the plan panel (the shell key handler leaves it alone while the panel is open)
+  useEffect(() => {
+    if (!agent || runAsk || paidAsk) return
+    const on = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector(OVERLAYS)) return
+      // Esc while typing in a prompt must not throw the whole plan away
+      const el = e.target instanceof HTMLElement ? e.target : null
+      if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return
+      closeAgent()
+    }
+    window.addEventListener('keydown', on)
+    return () => window.removeEventListener('keydown', on)
+  }, [agent, runAsk, paidAsk])
+  // Puts the plan on the shot's frame (new nodes in the next free slots, changed settings on existing nodes; those with
+  // results are only dated, never re-run here). With `run`, the usual Run the whole shot dialog then asks about the price.
+  const applyAgent = async (run: boolean) => {
+    const a = agent
+    if (!a?.plan || blocked || chaining) return
+    const cur = latest.current.doc
+    const shotNodeId = shotNodeOf(cur, a.shotId)
+    if (!shotNodeId) return
+    if (cur.nodes.find((n) => n.id === shotNodeId)?.data.removed) {
+      closeAgent()
+      return showNote('canvas.frame.removed', undefined, true)
+    }
+    const sizes = drawnSizes()
+    let made
+    try {
+      made = applyAgentPlan(cur, a.shotId, a.plan, models, sizes)
+    } catch (e) {
+      return showText(e instanceof Error ? e.message : t('canvas.err.start'))
+    }
+    // new nodes come back at the origin: give each the next free slot in the frame
+    const have = new Set(cur.nodes.map((n) => n.id))
+    let next: CanvasDoc = { ...made.doc, nodes: made.doc.nodes.filter((n) => have.has(n.id)) }
+    for (const n of made.doc.nodes) {
+      if (have.has(n.id)) continue
+      next = { ...next, nodes: [...next.nodes, { ...n, position: slotInFrame(next, shotNodeId, sizes) }] }
+    }
+    next = { ...next, edges: made.doc.edges }
+    // this is the applied doc: the board, the stale marks and (after the next render) the price dialog all use it
+    adopt(next)
+    const plan = a.plan
+    // adopt only merges kit fields into nodes already on the board, so the plan's settings go in here
+    updateData(made.storyboardId, { model: plan.storyboard.model, prompt: plan.storyboard.prompt })
+    updateData(made.videoId, { model: plan.video.model, prompt: plan.video.prompt, duration: plan.video.duration })
+    for (const id of made.changed) markFrom(id, true, next)
+    closeAgent()
+    // the run starts in an effect after the board has rendered the applied doc, so it prices and sends that doc
+    if (run) runAfter.current = a.shotId
+  }
+  const agentShots = shots.flatMap((s, i) => (s.id && liveShotIds(doc, shots, s.id).length ? [{ id: s.id, label: [t('canvas.node.shot', { n: i + 1 }), s.line?.trim() || s.shot || ''].filter(Boolean).join(' · ') }] : []))
+
+  useEffect(() => {
+    const shotId = runAfter.current
+    if (shotId === null) return
+    runAfter.current = null
+    void onRunScope({ shotId, includeStale: false })
+  })
 
   // ---- uploads and takes ----
   const [takes, setTakes] = useState<Take[]>(initial.takes)
@@ -934,6 +1036,8 @@ function CanvasBoard({
     chainOf: (id) => chainPair(doc, id),
     onRunScope: (opts) => void onRunScope(opts),
     chaining,
+    dialogOpen: !!runAsk || !!paidAsk,
+    buildShot: (shotId) => buildShot(shotId),
     onSelectVersion,
     edited: (id) => markFrom(id, latest.current.doc.nodes.find((n) => n.id === id)?.type !== 'prompt'),
     takes,
@@ -998,7 +1102,7 @@ function CanvasBoard({
   )
   // F enters and Esc leaves full screen, unless typing, a dialog or the editor has the key.
   const keyState = useRef({ fullscreen, dialogOpen: false, editorOpen: false })
-  keyState.current = { fullscreen, dialogOpen: !!runAsk || !!paidAsk, editorOpen: editing }
+  keyState.current = { fullscreen, dialogOpen: !!runAsk || !!paidAsk || !!agent, editorOpen: editing }
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -1006,7 +1110,7 @@ function CanvasBoard({
       const typing = !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
       const { fullscreen: full, dialogOpen: dlg, editorOpen } = keyState.current
       // an open add-node menu, queue list or larger view takes Esc first (this listener runs in the capture phase, before they close)
-      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list, .cv-drop, .cv-lightbox, .cv-model-list')
+      const dialogOpen = dlg || !!document.querySelector(OVERLAYS)
       const act = shellKey({ key: e.key, typing, dialogOpen, editorOpen }, full)
       if (act) setFull(act === 'enter')
     }
@@ -1172,7 +1276,7 @@ function CanvasBoard({
             <MiniMap pannable zoomable />
             <ZoomBar />
           </ReactFlow>
-          <ToolRail mode={tool} onMode={setTool} addKinds={clientId ? ADD_KINDS_WITH_KIT : ADD_KINDS} disabledKinds={kitNode ? ['kit'] : undefined} onAdd={addAtCenter} readOnly={readOnly} />
+          <ToolRail mode={tool} onMode={setTool} addKinds={clientId ? ADD_KINDS_WITH_KIT : ADD_KINDS} disabledKinds={kitNode ? ['kit'] : undefined} onAdd={addAtCenter} readOnly={readOnly} agentShots={readOnly ? undefined : agentShots} onAgent={readOnly ? undefined : buildShot} />
           <QueuePill items={queue} onJump={jumpTo} />
           {drop && <DropMenu at={drop.screen} options={drop.options} onPick={pickDrop} onClose={() => setDrop(null)} />}
           {runAsk && (
@@ -1248,7 +1352,19 @@ function CanvasBoard({
             />
           </div>
         )}
-        {panelId && <NodePanel key={panelId} nodeId={panelId} onClose={() => setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)))} />}
+        {agent && (
+          <AgentPanel
+            shotId={agent.shotId}
+            plan={agent.plan}
+            loading={agent.loading}
+            error={agent.error}
+            onChange={(plan) => setAgent((cur) => (cur ? { ...cur, plan } : cur))}
+            onApprove={() => void applyAgent(true)}
+            onCreate={() => void applyAgent(false)}
+            onCancel={closeAgent}
+          />
+        )}
+        {!agent && panelId && <NodePanel key={panelId} nodeId={panelId} onClose={() => setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)))} />}
       </div>
       </CanvasContext.Provider>
       </div>

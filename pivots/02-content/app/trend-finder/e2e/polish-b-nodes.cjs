@@ -13,6 +13,8 @@ const json = (b) => ({ method: 'PUT', headers: { 'content-type': 'application/js
 
 ;(async () => {
   const { browser, page, errs } = await L.open()
+  const fiveHundreds = [] // every HTTP 500 the page saw, so the console filter below can't hide a real one
+  page.on('response', (r) => { if (r.status() === 500) fiveHundreds.push(new URL(r.url()).pathname) })
   const node = (id) => page.locator(`.react-flow__node[data-id="${id}"]`)
   const shot = (p) => page.screenshot({ path: `${out}/${p}.png` })
   const ids = () => page.evaluate(() => [...document.querySelectorAll('.react-flow__node')].map((e) => e.getAttribute('data-id')))
@@ -398,6 +400,13 @@ const json = (b) => ({ method: 'PUT', headers: { 'content-type': 'application/js
     const ask = await page.locator('.cv-paid-modal').innerText().catch(() => '')
     L.ok('paid: the first Generate asks with its price', /US\$0\.07/.test(ask) && stubbed.gen === 0, ask.replace(/\n/g, ' '))
     await shot('14-paid-confirm')
+    // I1: the right panel is frozen while a price dialog is open, so the price can't change before Confirm
+    const frozen = await page.evaluate(() => {
+      const p = document.querySelector('.cv-panel')
+      if (!p) return null
+      return [...p.querySelectorAll('select, textarea, .cv-picker-btn, .cv-panel-foot .btn-primary')].map((e) => !!(e.disabled || e.readOnly))
+    })
+    L.ok('paid dialog: the panel model, prompt and Generate are frozen', !!frozen && frozen.length >= 3 && frozen.every(Boolean), JSON.stringify(frozen))
     await page.locator('.cv-paid-modal .btn-ghost').click()
     L.ok('paid: Cancel starts nothing', stubbed.gen === 0 && (await page.locator('.cv-paid-modal').count()) === 0, '')
     await node('n_sb_s3').locator('.cv-gen-foot button').click()
@@ -410,6 +419,15 @@ const json = (b) => ({ method: 'PUT', headers: { 'content-type': 'application/js
     await page.waitForTimeout(800)
     L.ok('paid: the next paid Generate in this session does not ask again', (await page.locator('.cv-paid-modal').count()) === 0 && stubbed.gen === 2, String(stubbed.gen))
     await waitStatus('n_sb_s3', '^Failed$', 8000)
+    await select('n_video_key') // I1: a video's panel stays open under the Run all dialog; its length can't change then
+    await page.locator('.cv-runall-btn').click()
+    await page.locator('.cv-run-modal').waitFor({ timeout: 8000 })
+    const lenLocked = await page.evaluate(() => {
+      const sel = [...document.querySelectorAll('.cv-panel select')]
+      return { n: sel.length, locked: sel.every((e) => e.disabled) }
+    })
+    L.ok('Run all dialog: the open panel\'s length and model inputs are disabled', lenLocked.n >= 1 && lenLocked.locked, JSON.stringify(lenLocked))
+    await page.locator('.cv-run-modal .btn-ghost').click()
     await deselect()
     await page.locator('.cv-runall-btn').click()
     await page.locator('.cv-run-modal').waitFor({ timeout: 8000 })
@@ -422,6 +440,9 @@ const json = (b) => ({ method: 'PUT', headers: { 'content-type': 'application/js
     L.ok('paid: no start or chain request got past the stub', stubbed.leaked.length === 0, JSON.stringify(stubbed))
     await page.unrouteAll({ behavior: 'ignoreErrors' })
 
+    // the only 500 this script expects is the stubbed chain start; any other URL is a real failure
+    const unexpected500 = fiveHundreds.filter((u) => !/\/gen\/chain$/.test(u))
+    L.ok('no HTTP 500 other than the stubbed chain start', unexpected500.length === 0, unexpected500.join(' | '))
     const real = errs.filter((e) => !/401/.test(e) && !/stubbed/.test(e) && !/500 \(Internal Server Error\)/.test(e))
     L.ok('no console errors', real.length === 0, real.slice(0, 3).join(' | '))
   } catch (e) {

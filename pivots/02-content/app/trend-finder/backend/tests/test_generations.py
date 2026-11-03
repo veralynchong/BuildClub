@@ -54,6 +54,8 @@ def test_validate_models_rejects_bad_typical_seconds():
     ok = {"id": "a", "kind": "image", "provider": "mock", "aspects": ["9:16"]}
     assert generations.validate_models([{**ok, "typicalSeconds": 0}]) == ["a: typicalSeconds must be a positive number"]
     assert generations.validate_models([{**ok, "typicalSeconds": "fast"}]) == ["a: typicalSeconds must be a positive number"]
+    assert generations.validate_models([{**ok, "typicalSeconds": True}]) == ["a: typicalSeconds must be a positive number"]
+    assert generations.validate_models([{**ok, "typicalSeconds": -1}]) == ["a: typicalSeconds must be a positive number"]
 
 
 def test_validate_models_catches_errors():
