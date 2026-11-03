@@ -294,14 +294,14 @@ export const MAX_TEXTS = 30
 export const MAX_TEXT_CHARS = 120
 export const TEXT_SECONDS = 2
 
-// A new text at `at` seconds: 2 s long, at the bottom, white. It is cut to fit inside the video, and the
+// A new text at `at` seconds: 2 s long, at the bottom, white. Near the end it starts earlier so it keeps its length, and the
 // timeline is returned unchanged when there is no room (no footage, or 30 texts already).
 export function addText(p: EditProject, at: number, text: string, id: string): EditProject {
   const total = totalFrames(p)
   const body = text.slice(0, MAX_TEXT_CHARS)
   if (total < 1 || p.texts.length >= MAX_TEXTS || !body.trim()) return p
-  const start = clamp(frames(at), 0, total - 1)
-  const end = Math.min(start + TEXT_SECONDS * FPS, total)
+  const end = Math.min(clamp(frames(at), 0, total - 1) + TEXT_SECONDS * FPS, total)
+  const start = Math.max(0, end - TEXT_SECONDS * FPS) // near the end there is no room after the playhead: start earlier
   const item: TextItem = { id, text: body, start: secs(start), end: secs(end), position: 'bottom', color: 'white' }
   return { ...p, texts: [...p.texts, item] }
 }

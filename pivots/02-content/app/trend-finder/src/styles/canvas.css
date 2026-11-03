@@ -122,7 +122,7 @@
 
 /* Why a line was refused */
 .cv-conn-note:empty { display: none; }
-.cv-conn-note.is-info { background: var(--surface-2); color: var(--fg); }
+.cv-conn-note.is-info { background: var(--surface-2); color: var(--fg); pointer-events: none; } /* a passing note never blocks the menu under it */
 .cv-conn-note {
   position: absolute; left: 50%; bottom: var(--space-xl); transform: translateX(-50%); z-index: 5; max-width: 80%;
   padding: var(--space-sm) var(--space-lg); border-radius: var(--radius-sm); background: var(--no-soft); color: var(--no); font-size: var(--text-sm); box-shadow: var(--shadow-md);

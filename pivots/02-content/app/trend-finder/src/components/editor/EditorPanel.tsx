@@ -48,6 +48,21 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const [tool, setTool] = useState<Tool>('clips')
   const [cut, setCut] = useState<CutState | null>(null) // the export's state, reported by ExportBar for the step bar
   const [exportOpen, setExportOpen] = useState(false)
+  // The export popover closes on Escape anywhere and on a press outside it (its own toggle button excepted).
+  useEffect(() => {
+    if (!exportOpen) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setExportOpen(false)
+    const onDown = (e: PointerEvent) => {
+      const el = e.target as Element | null
+      if (!el?.closest('#cv-ed-export, [aria-controls="cv-ed-export"]')) setExportOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onDown)
+    }
+  }, [exportOpen])
   const [musicFile, setMusicFile] = useState<MusicFile | undefined>(undefined)
   const [pending, setPending] = useState<PendingVoice[]>([])
   const [musicKey, setMusicKey] = useState(0) // counts music uploads and replacements, so a finished video is looked at again

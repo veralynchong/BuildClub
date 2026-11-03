@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseLinks, mergeLinks, checkLinks, isVideoLink, lastCompare, rememberCompare, hookLabelKey, MAX_VIDEOS } from '../src/lib/compare.ts'
+import { parseLinks, mergeLinks, checkLinks, isVideoLink, lastCompare, rememberCompare, hookLabelKey, pickLabel, MAX_VIDEOS } from '../src/lib/compare.ts'
 
 const tt = (n) => `https://www.tiktok.com/@a/video/${n}`
 
@@ -51,4 +51,10 @@ test('every hook type has a label, and "other" avoids the plural suffix', async 
     assert.ok(hookLabelKey(h) in areas.compare.en, h)
   }
   assert.equal(hookLabelKey('other'), 'compare.hookType.misc')
+})
+
+test('pickLabel adds one "@" to a bare handle, and none to a handle that has it or a subreddit', () => {
+  assert.equal(pickLabel('mia', 'Hook'), '@mia · Hook')
+  assert.equal(pickLabel('@mia', 'Hook'), '@mia · Hook')
+  assert.equal(pickLabel('r/cooking', 'Hook'), 'r/cooking · Hook')
 })

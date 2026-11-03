@@ -1,5 +1,5 @@
 import type { IdeaStatus } from '../types'
-import { t } from './i18n.ts'
+import { areas, t } from './i18n.ts'
 import { serverText } from './serverText.ts'
 
 // One uploaded video for a shot of an approved plan. One take per shot is chosen. A take belongs to a shot by its
@@ -110,6 +110,16 @@ export function canClean(take: Take, all: Take[]): boolean {
 // The seconds a clean-up cut, as the note shows them.
 export const cutSeconds = (r: Pick<CleanResult, 'originalSec' | 'cleanSec'>): string => Math.max(0, r.originalSec - r.cleanSec).toFixed(1)
 
+// Clean-ups the server refuses only because there is nothing to cut. That is a result, not a failure.
+export class NothingToCut extends Error {}
+const NOTHING_TO_CUT = new Set([areas.server.en['server.cleaning.noSpeech'], areas.server.en['server.cleaning.nothing']])
+export const isNothingToCut = (error: unknown): boolean => typeof error === 'string' && NOTHING_TO_CUT.has(error)
+
 export async function cleanTake(ideaId: string, takeId: string): Promise<CleanResult> {
-  return send(await fetch(`${base(ideaId)}/takes/${encodeURIComponent(takeId)}/clean`, { method: 'POST' }), t('canvas.footage.cleanFailed'))
+  const r = await fetch(`${base(ideaId)}/takes/${encodeURIComponent(takeId)}/clean`, { method: 'POST' })
+  if (r.status === 422) {
+    const body = await r.clone().json().catch(() => null)
+    if (isNothingToCut(body?.error)) throw new NothingToCut(serverText(body.error))
+  }
+  return send(r, t('canvas.footage.cleanFailed'))
 }
