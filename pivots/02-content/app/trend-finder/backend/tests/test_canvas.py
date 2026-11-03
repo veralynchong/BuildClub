@@ -206,3 +206,15 @@ def test_canvas_footage_follows_shot_id(client):
     r = client.get("/api/ideas/ia/canvas").json()
     assert [n["shotId"] for n in r["doc"]["nodes"] if n["type"] == "footage"] == ["s2"]
     assert r["takes"][0]["shotId"] == "s2" and r["takes"][0]["shot"] == 2
+
+
+def test_one_kit_node_only(cv):
+    doc = cv.get("/api/ideas/ia/canvas").json()["doc"]
+    kit = {"id": "n_kit_1", "type": "kit", "position": {"x": 0, "y": 0}, "data": {}}
+    one = copy.deepcopy(doc)
+    one["nodes"].append(kit)
+    assert put(cv, 1, one).status_code == 200
+    two = copy.deepcopy(one)
+    two["nodes"].append({**kit, "id": "n_kit_2"})
+    r = put(cv, 2, two)
+    assert r.status_code == 422 and r.json()["error"] == "A canvas can have one kit node."

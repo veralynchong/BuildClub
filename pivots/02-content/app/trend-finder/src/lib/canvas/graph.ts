@@ -1,5 +1,7 @@
 import type { Key } from '../i18n.ts'
 import type { Shot } from '../../types.ts'
+import type { Kit } from '../../types.ts'
+import { kitRefs, type GenRef } from './kit.ts'
 import { PORTS } from './ports.ts'
 import type { Budget, CanvasDoc, CanvasNode, GenModel, Generation, NodeData, NodeKind } from './types.ts'
 
@@ -119,22 +121,20 @@ function textFrom(doc: CanvasDoc, nodeId: string, shots: Shot[], seen = new Set<
 export interface GenRequest {
   prompt: string
   startFrame?: string
-  reference?: string
+  references: GenRef[]
   duration?: number
 }
 
-export function genRequest(doc: CanvasDoc, nodeId: string, shots: Shot[], gens: Generation[]): GenRequest {
+export function genRequest(doc: CanvasDoc, nodeId: string, shots: Shot[], gens: Generation[], kit: Kit | null = null, model?: GenModel): GenRequest {
   const node = doc.nodes.find((n) => n.id === nodeId)
-  if (!node) return { prompt: '' }
-  const req: GenRequest = { prompt: node.data.prompt?.trim() ? node.data.prompt : textFrom(doc, nodeId, shots) }
+  if (!node) return { prompt: '', references: [] }
+  const req: GenRequest = { prompt: node.data.prompt?.trim() ? node.data.prompt : textFrom(doc, nodeId, shots), references: kitRefs(doc, nodeId, kit, gens, model).references }
   const frame = (handle: string) => {
     const src = upstream(doc, nodeId, handle)
     return src ? selectedGen(src, gens)?.id : undefined
   }
   const start = frame('in:start')
-  const ref = frame('in:ref')
   if (start) req.startFrame = start
-  if (ref) req.reference = ref
   if (typeof node.data.duration === 'number') req.duration = node.data.duration
   return req
 }

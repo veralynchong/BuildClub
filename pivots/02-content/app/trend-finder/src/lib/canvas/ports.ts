@@ -2,7 +2,7 @@ import { t, type Key, type Vars } from '../i18n.ts'
 import { downstream } from './graph.ts'
 import type { CanvasDoc, CanvasEdge, CanvasNode, GenModel, Media, NodeKind } from './types.ts'
 
-type PortId = 'in:text' | 'in:start' | 'in:ref'
+type PortId = 'in:text' | 'in:start' | 'in:ref' | 'in:kit'
 interface Port {
   id: PortId
   media: Media
@@ -12,15 +12,17 @@ interface Port {
 const TEXT: Port = { id: 'in:text', media: 'text', modelInput: 'text' }
 const START: Port = { id: 'in:start', media: 'image', modelInput: 'startFrame' }
 const REF: Port = { id: 'in:ref', media: 'image', modelInput: 'reference' }
+const KIT: Port = { id: 'in:kit', media: 'kit' }
 
 // Every node has one output, `out`.
 export const PORTS: Record<NodeKind, { inputs: Port[] }> = {
   shot: { inputs: [] },
   prompt: { inputs: [{ id: 'in:text', media: 'text' }] },
-  storyboard: { inputs: [TEXT, REF] },
+  storyboard: { inputs: [TEXT, REF, KIT] },
   video: { inputs: [TEXT, START, REF] },
   upload: { inputs: [] },
   footage: { inputs: [{ id: 'in:text', media: 'text' }, { id: 'in:ref', media: 'image' }] },
+  kit: { inputs: [] },
 }
 
 export function outMedia(node: CanvasNode): Media | null {
@@ -33,6 +35,8 @@ export function outMedia(node: CanvasNode): Media | null {
     case 'video':
     case 'footage':
       return 'video'
+    case 'kit':
+      return 'kit'
     case 'upload':
       return node.data.media ?? null
   }
@@ -52,7 +56,12 @@ export function canConnect(doc: CanvasDoc, c: { source: string; target: string; 
   if (!port || port.media !== from) {
     return { ok: false, reason: 'canvas.conn.media', vars: { from: t(`canvas.media.${from}`), to: port ? t(`canvas.media.${port.media}`) : '' } }
   }
-  if (doc.edges.some((e) => e.target === c.target && e.targetHandle === c.targetHandle)) return { ok: false, reason: 'canvas.conn.taken' }
+  const onPort = doc.edges.filter((e) => e.target === c.target && e.targetHandle === c.targetHandle).length
+  if (port.id === 'in:ref') {
+    // a reference port takes as many lines as the model takes images (a model that doesn't say takes one)
+    const max = models.find((m) => m.id === target.data.model)?.maxRefs ?? 1
+    if (onPort >= max) return { ok: false, reason: 'canvas.conn.full', vars: { max } }
+  } else if (onPort > 0) return { ok: false, reason: 'canvas.conn.taken' }
   if (downstream(doc, c.target).includes(c.source)) return { ok: false, reason: 'canvas.conn.cycle' }
   const modelId = target.data.model
   if (port.modelInput && modelId) {

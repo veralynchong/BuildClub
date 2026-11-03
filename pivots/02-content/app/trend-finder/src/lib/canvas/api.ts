@@ -1,3 +1,4 @@
+import type { GenRef } from './kit.ts'
 import { t } from '../i18n.ts'
 import { serverText } from '../serverText.ts'
 import { imageError, imageType } from './upload.ts'
@@ -66,7 +67,7 @@ export interface StartGenBody {
   model: string
   prompt: string
   startFrame?: string
-  reference?: string
+  references?: GenRef[]
   duration?: number
 }
 

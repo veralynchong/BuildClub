@@ -1261,3 +1261,25 @@ def test_kit_copies_of_one_image_use_separate_temp_files(gen, monkeypatch):
     folder = server.MEDIA_DIR / "ia" / "gen"
     assert (folder / stored[0]["file"]).read_bytes() == PNG_BYTES
     assert not [p for p in folder.iterdir() if p.name.endswith(".part")]
+
+
+def test_text_only_style_ref_adds_style_line(real):
+    film = kit_item(real, name="Warm film", kind="style", note="", images=0)
+    mia = kit_item(real)
+    text_only = {"source": "kit", "itemId": film["id"]}
+    r = post(real, model="seedream-4.5", references=[kref(mia), text_only])
+    assert r.status_code == 201
+    inputs = row_of(real, r.json()["id"])["inputs"]
+    assert "Style: Warm film" in inputs["sentPrompt"] and inputs["sentPrompt"].startswith("Reference images: image 1 is")
+    assert inputs["kitStamp"][film["id"]] == film["updatedAt"]
+    assert inputs["references"][1] == {"source": "kit", "itemId": film["id"], "name": "Warm film", "kind": "style"}
+    assert len(real.adapter.jobs[-1].references) == 1  # the style ref is not a file
+    # not counted against maxRefs: seedream-4.5 takes 10 images, plus the text-only one
+    ten = [kref(mia)] * 10
+    assert post(real, model="seedream-4.5", references=ten + [text_only]).status_code == 201
+
+
+def test_kit_ref_without_image_for_item_with_images_422(gen):
+    mia = kit_item(gen)
+    r = post(gen, references=[{"source": "kit", "itemId": mia["id"]}])
+    assert r.status_code == 422 and r.json()["error"] == "A kit item with images must send an image."

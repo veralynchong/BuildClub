@@ -23,7 +23,7 @@ SCHEMA = (
 
 ROW_H = 400
 LAYOUT = {"ROW_H": ROW_H, "x": {"shot": 0, "storyboard": 360, "footage": 720}}
-NODE_TYPES = {"shot", "prompt", "storyboard", "video", "upload", "footage"}
+NODE_TYPES = {"shot", "prompt", "storyboard", "video", "upload", "footage", "kit"}
 ID_RE = re.compile(r"^[A-Za-z0-9_:-]{1,200}$")
 MAX_NODES, MAX_EDGES, MAX_BYTES = 500, 1000, 512 * 1024
 STALE = "The canvas changed somewhere else. Reload it."
@@ -110,6 +110,8 @@ def check_doc(doc, shot_ids: list[str]) -> Optional[str]:
         if not isinstance(n.get("data"), dict) or not (n.get("shotId") is None or isinstance(n["shotId"], str)):
             return "Every node needs a data object."
         node_ids.add(n["id"])
+    if sum(1 for n in doc["nodes"] if n["type"] == "kit") > 1:
+        return "A canvas can have one kit node."
     edge_ids = set()
     for e in doc["edges"]:
         if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not ID_RE.match(e["id"]) \

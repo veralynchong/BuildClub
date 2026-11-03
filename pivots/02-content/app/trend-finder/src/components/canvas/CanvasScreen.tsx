@@ -36,7 +36,7 @@ const RETRY_MS = 2000
 const MAX_RETRIES = 5
 const NOTE_MS = 8000 // how long an info note (e.g. clean-up done) stays up; errors stay until dismissed
 const ADD_KINDS: NodeKind[] = ['prompt', 'storyboard', 'video', 'upload']
-const MEDIA_COLOR = { text: 'var(--violet)', image: 'var(--blue)', video: 'var(--mustard)' } as const
+const MEDIA_COLOR = { text: 'var(--violet)', image: 'var(--blue)', video: 'var(--mustard)', kit: 'var(--muted)' } as const
 const POLL_RETRY_MS = 2000 // wait after a poll request fails before asking again
 
 interface Props {
@@ -401,7 +401,7 @@ function CanvasBoard({
     if (missingInput(d, pair.imageNodeId, imageModel, shots, gensRef.current)) return showNote('canvas.chain.missing')
     const imageReq = genRequest(d, pair.imageNodeId, shots, gensRef.current)
     const videoReq = genRequest(d, pair.videoNodeId, shots, gensRef.current)
-    if (imageReq.reference || videoReq.reference) return showNote('canvas.chain.noRef')
+    if (imageReq.references.length || videoReq.references.length) return showNote('canvas.chain.noRef')
     const body: ChainBody = {
       imageNodeId: pair.imageNodeId,
       videoNodeId: pair.videoNodeId,

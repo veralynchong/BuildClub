@@ -221,7 +221,7 @@ def copy_kit_images(kit, media: Path, client_id: str, idea_id: str, stored: list
     this generation (and a re-run of it) its own files. Raises OSError when a file is gone."""
     source, folder = kit.kit_folder(media, client_id), gen_folder(media, idea_id)
     for ref in stored:
-        if ref["source"] != "kit":
+        if ref["source"] != "kit" or "file" not in ref:  # a text-only kit ref has no file
             continue
         folder.mkdir(parents=True, exist_ok=True)
         part = folder / f".{ref['file']}.{secrets.token_hex(4)}.part"  # unique: copies may run at once
@@ -320,6 +320,8 @@ class GenJobs:
         """The files of a row's reference images, in order. A kit image was copied into the gen folder."""
         paths = []
         for ref in read_inputs(dict(inputs)).get("references") or []:
+            if ref.get("source") == "kit" and "image" not in ref:
+                continue  # text-only: it only adds a line to the prompt
             if ref.get("source") == "kit":
                 name = ref.get("file") or ""
                 path = folder / name if name and Path(name).name == name else None
@@ -503,6 +505,8 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         client_id = (find_idea(idea_id) or {}).get("clientId")
         item_id, image = ref.get("itemId"), ref.get("image")
         item = kit.find_item(load, client_id, item_id) if client_id and isinstance(item_id, str) else None
+        if item is not None and "image" not in ref:  # text-only: for an item with no images
+            return error(422, "A kit item with images must send an image.") if item.images else None
         if item is None or not isinstance(image, str) or image not in item.images:
             return error(422, "That kit image isn't in this plan's client kit.")
         folder = kit.kit_folder(media_dir(), client_id)
@@ -515,6 +519,7 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         """The rules every generation follows. `refs` is a list of references (plan generations or kit images), or
         None. Returns (model, duration, None), or (None, None, the error)."""
         refs = refs or []
+        files = [r for r in refs if not (isinstance(r, dict) and r.get("source") == "kit" and "image" not in r)]
         if not isinstance(node_id, str) or not node_id or not isinstance(prompt, str) or len(prompt) > MAX_PROMPT:
             return None, None, error(422, "Send the node, the model and a prompt.")
         model = next((m for m in load_models() if m["id"] == model_id), None)
@@ -551,14 +556,14 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         if (model.get("inputs") or {}).get("text") == "required" and not prompt.strip():
             return None, None, error(422, "This model needs a prompt.")
         for field, given, what in (("startFrame", start is not None, "a start frame"),
-                                   ("reference", bool(refs), "a reference image")):
+                                   ("reference", bool(files), "a reference image")):
             rule = (model.get("inputs") or {}).get(field, "none")
             if rule == "required" and not given:
                 return None, None, error(422, f"This model needs {what}.")
             if rule == "none" and given:
                 return None, None, error(422, f"This model doesn't take {what}.")
         cap = model.get("maxRefs", 1)  # a model that doesn't say takes one
-        if len(refs) > cap:
+        if len(files) > cap:  # text-only kit refs are not images
             return None, None, error(422, f"The reference images are over this model's limit of {cap}.")
         return model, duration, None
 
@@ -573,14 +578,21 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         """What a generation stores for its references: (the inputs `references`, `kitStamp` and `sentPrompt`, None),
         or (None, the error). Everything that can fail with 422 happens here, before any money is spent. `copy` false
         (a quote) checks the same things but leaves the kit files where they are."""
-        stored, stamp, used = [], {}, {}
-        for n, ref in enumerate(refs or [], 1):
+        stored, stamp, used, n = [], {}, {}, 0
+        for ref in refs or []:
             if ref["source"] == "gen":
+                n += 1
                 stored.append({"source": "gen", "genId": ref["genId"]})
                 continue
             item = kit.find_item(load, found.get("clientId"), ref["itemId"])
-            if item is None or ref["image"] not in item.images:  # removed since check ran
+            if item is not None and "image" not in ref and not item.images:
+                stored.append({"source": "kit", "itemId": item.id, "name": item.name, "kind": item.kind})
+                stamp[item.id] = item.updatedAt
+                used.setdefault(item.id, (item, []))
+                continue
+            if item is None or ref.get("image") not in item.images:  # removed since check ran
                 return None, error(422, "That kit image isn't in this plan's client kit.")
+            n += 1
             stored.append({"source": "kit", "itemId": item.id, "image": ref["image"], "name": item.name,
                            "kind": item.kind, "file": f"kit-{ref['image']}"})
             stamp[item.id] = item.updatedAt
