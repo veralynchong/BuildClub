@@ -18,6 +18,10 @@ import { getBudget, getCanvas, getKit, getModels, NoShots, pollGen, putCanvas, q
 import { fromFlow, reframe, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { frameBoxes, frameOf, migrateDoc, slotInFrame } from '../../lib/canvas/frames'
 import { edgeLook, focusSet } from '../../lib/canvas/edges'
+import { TIMELINE_NODE_ID, timelineFlow } from '../../lib/canvas/timelineNode'
+import type { Box } from '../../lib/canvas/frames'
+import { useApp } from '../../lib/appContext'
+import { reelBrand } from '../../lib/editor/preview'
 import { addNode, budgetLeft, chainBusy, chainPair, freeSpot, genFinished, genRequest, genStarted, genView, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
 import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeInfo, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
@@ -197,9 +201,11 @@ function CanvasBoard({
   const unfitted = useRef(openEditor)
   const beforeEditor = useRef<Viewport | null>(null) // the view the board had when the editor covered it
   const [kitOpen, setKitOpen] = useState(false) // the kit drawer; only one drawer is open at a time
-  const showEditor = () => {
+  const [editorExport, setEditorExport] = useState(false) // the editor opens on its export panel (the Timeline node's Export)
+  const showEditor = (exportPanel = false) => {
     beforeEditor.current = getViewport()
     setKitOpen(false)
+    setEditorExport(exportPanel)
     setEditing(true)
   }
   // The hidden board may have been resized to nothing, so put its view back once it is shown and laid out.
@@ -853,7 +859,7 @@ function CanvasBoard({
     // The canvas shows one toast and stays where it is (spec 7.1); inside the editor the timeline itself shows the change.
     onPlaced: () => {
       if (editingRef.current) return
-      setNote({ key: 'canvas.timeline.placed', info: true, action: { label: 'canvas.timeline.open', run: showEditor } })
+      setNote({ key: 'canvas.timeline.placed', info: true, action: { label: 'canvas.timeline.open', run: () => showEditor() } })
       clearTimeout(noteTimer.current)
       noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
     },
@@ -882,11 +888,28 @@ function CanvasBoard({
     return () => clearInterval(id)
   }, [running])
 
+  // The Timeline node: virtual, right of the frames, kept out of the board's nodes (so never saved or autosaved).
+  const { clients } = useApp()
+  const clientKit = clients.find((c) => c.id === clientId)?.brand
+  const brand = useMemo(() => reelBrand(clientKit, clientId), [clientKit, clientId])
+  const clipUrls = useMemo(() => Object.fromEntries((sources.sources ?? []).map((s) => [s.key, s.url])), [sources.sources])
+  const boxes = useMemo(
+    () => new Map<string, Box>(nodes.filter((n) => n.type === 'shot').map((n) => [n.id, { x: n.position.x, y: n.position.y, w: n.style?.width ?? 0, h: n.style?.height ?? 0 }])),
+    [nodes],
+  )
+  const tl = useMemo(() => timelineFlow(doc, edit.project, boxes), [doc, edit.project, boxes])
+  const [tlSize, setTlSize] = useState<{ width: number; height: number } | undefined>(undefined)
+  const shownNodes = useMemo(() => [...nodes, { ...tl.node, measured: tlSize }], [nodes, tl.node, tlSize])
+
   const ctx: CanvasCtx = {
     doc,
     putInTimeline: (src) => void timeline.useForShot(src),
     isInTimeline: timeline.isInTimeline,
     shotHasClip: (shotId) => shotOnTimeline(edit.project, shotId),
+    editProject: edit.project,
+    clipUrls,
+    brand,
+    openEditor: showEditor,
     shots,
     readOnly,
     shotNumbers: useMemo(() => {
@@ -1017,9 +1040,16 @@ function CanvasBoard({
     const look = edgeLook({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? '', targetHandle: e.targetHandle ?? '' }, doc, gens, takes, focus, selectedKit)
     return { ...e, className: look.className, animated: look.animated }
   })
+  for (const e of tl.edges) {
+    const look = edgeLook({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? '', targetHandle: e.targetHandle ?? '' }, doc, gens, takes, focus, selectedKit, { targetKind: 'timeline' })
+    shownEdges.push({ ...e, className: look.className, animated: look.animated })
+  }
 
   // A node that moved or got its drawn size: frames fit their nodes again and never overlap.
-  const onNodes: typeof onNodesChange = (changes) => {
+  const onNodes: typeof onNodesChange = (all) => {
+    // The Timeline node is not one of the board's nodes: only its drawn size is kept.
+    for (const c of all) if (c.type === 'dimensions' && c.id === TIMELINE_NODE_ID && c.dimensions) setTlSize(c.dimensions)
+    const changes = all.filter((c) => !('id' in c && c.id === TIMELINE_NODE_ID))
     onNodesChange(changes)
     const frames = new Set(nodes.filter((n) => n.type === 'shot').map((n) => n.id))
     if (changes.some((c) => c.type === 'dimensions' && !frames.has(c.id))) setNodes((ns) => reframe(ns))
@@ -1053,7 +1083,7 @@ function CanvasBoard({
     <section className="cv-screen">
       {editing && (
         <section className="cv-editor-full" aria-label={t('canvas.editor.title')}>
-          <EditorPanel ideaId={ideaId} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} onBack={() => setEditing(false)} />
+          <EditorPanel ideaId={ideaId} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} onBack={() => setEditing(false)} startExport={editorExport} />
           {noteEl}
         </section>
       )}
@@ -1097,7 +1127,7 @@ function CanvasBoard({
       <div className="cv-layout">
         <div className="cv-flow" ref={flowBox}>
           <ReactFlow
-            nodes={nodes}
+            nodes={shownNodes}
             edges={shownEdges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodes}

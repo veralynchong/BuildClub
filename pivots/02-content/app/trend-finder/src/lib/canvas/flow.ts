@@ -1,5 +1,6 @@
 import type { CanvasDoc, CanvasEdge, CanvasNode, NodeKind } from './types.ts'
 import { boxAround, frameBoxes, frameOf, kitSpot, NODE_SIZE, spreadFrames, type Box } from './frames.ts'
+import { isVirtual } from './timelineNode.ts'
 
 // Conversion between the saved canvas document and what React Flow shows. Pure, so it can be tested.
 // The saved node/edge rides along in `data`, so everything React Flow doesn't know about survives a save.
@@ -7,7 +8,7 @@ import { boxAround, frameBoxes, frameOf, kitSpot, NODE_SIZE, spreadFrames, type 
 // relative to the frame on screen and absolute in the saved document.
 export interface FlowNode {
   id: string
-  type: NodeKind
+  type: NodeKind | 'timeline' // the Timeline node is virtual (timelineNode.ts)
   position: { x: number; y: number }
   data: { node: CanvasNode }
   deletable: boolean
@@ -27,6 +28,7 @@ export interface FlowEdge {
   target: string
   sourceHandle?: string | null
   targetHandle?: string | null
+  deletable?: boolean
   data?: { edge: CanvasEdge }
 }
 
@@ -129,8 +131,11 @@ export function reframe(nodes: FlowNode[]): FlowNode[] {
   return [...frames, ...rest]
 }
 
-// Members go back to absolute positions; a shot node is saved at its frame's top-left.
-export function fromFlow(nodes: FlowNode[], edges: FlowEdge[], viewport: Viewport | undefined): CanvasDoc {
+// Members go back to absolute positions; a shot node is saved at its frame's top-left. The virtual Timeline node and
+// its lines are never saved.
+export function fromFlow(allNodes: FlowNode[], allEdges: FlowEdge[], viewport: Viewport | undefined): CanvasDoc {
+  const nodes = allNodes.filter((n) => !isVirtual(n.id))
+  const edges = allEdges.filter((e) => !isVirtual(e.id))
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const doc: CanvasDoc = {
     nodes: nodes.map((n) => {

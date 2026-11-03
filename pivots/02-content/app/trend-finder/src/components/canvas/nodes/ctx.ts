@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 import type { Kit, KitItem, Shot } from '../../../types'
 import type { Key } from '../../../lib/i18n'
 import type { Take } from '../../../lib/takes'
-import type { ClipSource } from '../../../lib/editor/types'
+import type { ClipSource, EditProject, ReelInput } from '../../../lib/editor/types'
 import type { KitRefs } from '../../../lib/canvas/kit'
 import type { NodeStatus } from '../../../lib/canvas/status'
 import type { Budget, CanvasDoc, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
@@ -42,6 +42,11 @@ export interface CanvasCtx {
   putInTimeline: (src: ClipSource) => void
   isInTimeline: (src: ClipSource) => boolean
   shotHasClip: (shotId: string | undefined) => boolean
+  // The Timeline node: the edit project, its footage urls and the brand for the preview; open the editor (on its export panel).
+  editProject: EditProject | null
+  clipUrls: Record<string, string>
+  brand: ReelInput['brand']
+  openEditor: (exportPanel?: boolean) => void
   // While a line is being dragged: whether it could end on this input (true when nothing is being dragged).
   acceptsDrop: (nodeId: string, handleId: string) => boolean
   dragging: boolean // a line is being dragged from an output

@@ -145,6 +145,17 @@
 .cv-card-foot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); font-size: var(--text-xs); }
 .cv-card-model { min-width: 0; overflow-wrap: anywhere; } /* wraps instead of being cut */
 .cv-card-price { flex: none; white-space: nowrap; }
+/* The Timeline node (spec §7.1): 9:16 preview, a strip of clip blocks (striped where a shot has none), a captions row. */
+.cv-timeline-node { width: 280px; }
+.cv-tl-preview { align-self: center; width: 144px; overflow: hidden; border-radius: var(--radius-xs); background: var(--surface-2); }
+.cv-tl-empty { aspect-ratio: 9 / 16; display: flex; align-items: center; justify-content: center; margin: 0; padding: var(--space-sm); text-align: center; }
+.cv-tl-strip, .cv-tl-captions { display: flex; gap: var(--space-3xs); margin: 0; padding: 0; list-style: none; }
+.cv-tl-strip li, .cv-tl-captions li { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--text-3xs); }
+.cv-tl-clip { padding: var(--space-2xs); border-radius: var(--radius-xs); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--fg); }
+.cv-tl-clip.is-empty { background: repeating-linear-gradient(45deg, var(--surface-2) 0 7px, var(--surface-3) 7px 14px); color: var(--muted); }
+.cv-tl-captions li { padding: 0 var(--space-2xs); color: var(--muted); }
+.cv-tl-captions.is-off li { opacity: 0.5; }
+.cv-tl-foot { display: flex; justify-content: space-between; gap: var(--space-sm); }
 .cv-lightbox {
   position: fixed; inset: 0; z-index: var(--z-scrim); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md);
   padding: var(--space-xl); background: var(--scrim); cursor: zoom-out;

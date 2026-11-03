@@ -2,6 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { placeShotClip, oneClipPerShot, timelineSummary, isOnTimeline, shotOnTimeline, splitAt, applyNewer } from '../src/lib/editor/timeline.ts'
 import { clipLabel } from '../src/components/editor/clipName.ts'
+import { timelineFlow, isVirtual, TIMELINE_NODE_ID } from '../src/lib/canvas/timelineNode.ts'
+import { toFlow, fromFlow } from '../src/lib/canvas/flow.ts'
+import { previewInput, reelInput, FONT_URL } from '../src/lib/editor/preview.ts'
 
 const proj = (clips, primaries = {}) => ({
   fps: 30, width: 1080, height: 1920, clips, texts: [], captions: { enabled: false },
@@ -114,4 +117,45 @@ test('applyNewer swaps every split piece of the shot, keeping each piece\'s cut'
   const st = splitAt(proj([clip('c1', t1, 4), clip('c2', g2, 3)]), 2, 'c9')
   const w = applyNewer(st, 'c9', t1c, 3.5, true)
   assert.deepEqual(w.clips.map((c) => [c.id, c.source.id, c.in, c.out]), [['c1', 't1c', 0, 3.5], ['c2', 'g2', 0, 3]])
+})
+
+// ---- C3: the Timeline node on the canvas ----
+// fixture: frames for s1 (n_vid_s1) and s2 (n_ft_s2 footage); c1 is a generation of n_vid_s1, c2 a take of shot s2
+const node = (id, type, shotId, x, y) => ({ id, type, ...(shotId ? { shotId } : {}), position: { x, y }, data: {} })
+const doc = {
+  nodes: [node('n_shot_s1', 'shot', 's1', 0, 100), node('n_shot_s2', 'shot', 's2', 0, 600), node('n_sb_s1', 'storyboard', 's1', 16, 164), node('n_vid_s1', 'video', 's1', 256, 164), node('n_ft_s2', 'footage', 's2', 16, 664)],
+  edges: [{ id: 'e_s1', source: 'n_sb_s1', sourceHandle: 'out', target: 'n_vid_s1', targetHandle: 'in:start' }],
+}
+const boxes = new Map([['n_shot_s1', { x: 0, y: 100, w: 600, h: 400 }], ['n_shot_s2', { x: 0, y: 600, w: 900, h: 400 }]])
+const project = proj([clip('c1', src('generation', 'g1', 's1', 'n_vid_s1'), 3), clip('c2', src('take', 't1', 's2'), 4)])
+
+test('timelineFlow places the node right of the frames and draws a line per clip', () => {
+  const { node, edges } = timelineFlow(doc, project, boxes)
+  assert.equal(node.id, TIMELINE_NODE_ID)
+  assert.deepEqual(node.position, { x: 900 + 120, y: 100 })
+  assert.equal(node.deletable, false); assert.equal(node.draggable, false)
+  assert.deepEqual(edges.map((e) => [e.id, e.source, e.target, e.targetHandle]), [['e_tl_n_vid_s1', 'n_vid_s1', 'n_timeline', 'in:clips'], ['e_tl_n_ft_s2', 'n_ft_s2', 'n_timeline', 'in:clips']])
+  assert.deepEqual(timelineFlow(doc, null, boxes).edges, [])
+})
+test('isVirtual marks the Timeline node and its lines only', () => {
+  assert.equal(isVirtual('n_timeline'), true); assert.equal(isVirtual('e_tl_n_vid_s1'), true)
+  assert.equal(isVirtual('n_vid_s1'), false); assert.equal(isVirtual('e_s1'), false)
+})
+test('fromFlow never saves the Timeline node or its lines', () => {
+  const flow = toFlow(doc)
+  const tl = timelineFlow(doc, project, boxes)
+  const back = fromFlow([...flow.nodes, tl.node], [...flow.edges, ...tl.edges], undefined)
+  assert.ok(!back.nodes.some((n) => n.id === 'n_timeline'))
+  assert.ok(!back.edges.some((e) => e.id.startsWith('e_tl_')))
+  assert.deepEqual(back.nodes.map((n) => n.id), doc.nodes.map((n) => n.id))
+})
+test('previewInput has every ReelInput field and leaves out music and voice', () => {
+  const brand = { font: 'Inter', color: '#123456', logoUrl: null }
+  const shots = [{ id: 's1', time: '0-3s', shot: 'x', line: 'Hello' }, { id: 's2', time: '3-6s', shot: 'y', line: '  ' }]
+  const r = previewInput(project, { g1: '/u/g1' }, shots, brand)
+  assert.deepEqual(Object.keys(r).sort(), ['brand', 'fontUrl', 'lines', 'musicUrl', 'project', 'urls', 'voice'])
+  assert.deepEqual(r.lines, { s1: 'Hello' })
+  assert.equal(r.musicUrl, null); assert.deepEqual(r.voice, [])
+  assert.equal(r.fontUrl, FONT_URL)
+  assert.deepEqual(reelInput({ project, urls: {}, shots, musicUrl: '/m.mp3', voice: [], brand }).musicUrl, '/m.mp3')
 })

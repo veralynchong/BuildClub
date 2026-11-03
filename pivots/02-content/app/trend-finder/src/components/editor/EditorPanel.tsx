@@ -13,6 +13,7 @@ import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, ty
 import { fillShotIds } from '../../lib/storyboard'
 import { addVoice, reelDurationInFrames, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
+import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
 import { stepsDone, type EditorStep } from '../../lib/editor/steps'
 import { ToolTabs, type Tool } from './ToolTabs'
@@ -36,18 +37,17 @@ interface Props {
   timeline: TimelineActions
   readOnly: boolean
   onBack: () => void // back to the canvas
+  startExport?: boolean // open with the export panel showing (the Timeline node's Export)
 }
 
-const FONT_URL = '/fonts/NotoSansTC-VF.ttf'
-
-export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, readOnly, onBack }: Props) {
+export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, readOnly, onBack, startExport = false }: Props) {
   const { project, loadError, save, stale, update, flush, current, reload } = edit
   const { sources, error: sourceError } = footage
   const [skipped, setSkipped] = useState<string[]>([])
   const [frame, setFrame] = useState(0)
   const [tool, setTool] = useState<Tool>('clips')
   const [cut, setCut] = useState<CutState | null>(null) // the export's state, reported by ExportBar for the step bar
-  const [exportOpen, setExportOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(startExport)
   // The export popover closes on Escape anywhere and on a press outside it (its own toggle button excepted).
   useEffect(() => {
     if (!exportOpen) return
@@ -182,26 +182,18 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     })()
   }
   const filled = useMemo(() => fillShotIds(shots), [shots])
-  const lines = useMemo(() => Object.fromEntries(filled.flatMap((s) => (s.id && s.line?.trim() ? [[s.id, s.line]] : []))), [filled])
+  const lines = useMemo(() => shotLines(filled), [filled])
   const words = useMemo(() => Object.fromEntries(Object.values(voices).flatMap((v) => (v.words ? [[v.id, v.words]] : []))), [voices])
   const voiceInput = useMemo(
     () => (project?.voiceover ?? []).flatMap((seg) => (voices[seg.id] ? [{ id: seg.id, url: voices[seg.id].url, words: voices[seg.id].words }] : [])),
     [project?.voiceover, voices],
   )
 
-  const logo = kit?.logo
-  const brand = useMemo(
-    () => ({
-      font: kit?.font ?? 'Noto Sans TC',
-      color: kit?.color ?? null,
-      logoUrl: logo ? `/api/clients/${encodeURIComponent(clientId)}/brand/logo?v=${encodeURIComponent(logo)}` : null,
-    }),
-    [kit?.font, kit?.color, logo, clientId],
-  )
+  const brand = useMemo(() => reelBrand(kit, clientId), [kit, clientId])
   const musicUrl = musicFile ? `/api/ideas/${encodeURIComponent(ideaId)}/cut/music/file?v=${encodeURIComponent(`${musicFile.name}-${musicFile.size}`)}` : null
   const inputProps = useMemo<ReelInput | null>(
-    () => (project ? { project, urls, lines, musicUrl, voice: voiceInput, brand, fontUrl: FONT_URL } : null),
-    [project, urls, lines, musicUrl, voiceInput, brand],
+    () => (project ? reelInput({ project, urls, shots: filled, musicUrl, voice: voiceInput, brand }) : null),
+    [project, urls, filled, musicUrl, voiceInput, brand],
   )
 
   // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
