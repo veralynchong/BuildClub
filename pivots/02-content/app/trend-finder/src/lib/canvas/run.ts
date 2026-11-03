@@ -141,6 +141,29 @@ export function chainBody(
   }
 }
 
+// runScopeInfo minus the chains chainBody refuses (no key, missing input, a reference on the video): their nodes are left
+// out and the reasons listed. Run all builds its dialog from this and its Confirm re-checks with it, so both see one scope.
+export function runScopeChecked(
+  doc: CanvasDoc,
+  shots: Shot[],
+  gens: Generation[],
+  models: GenModel[],
+  kit: Kit | null,
+  opts: { shotId?: string; includeStale: boolean },
+): RunScopeInfo & { refused: Key[] } {
+  const info = runScopeInfo(doc, shots, gens, models, opts)
+  let items = info.items
+  const refused: Key[] = []
+  for (const b of runBatches(doc, info.items)) {
+    if (!('chain' in b)) continue
+    const made = chainBody(doc, b.chain, models, shots, gens, kit)
+    if (!('error' in made)) continue
+    refused.push(made.error)
+    items = items.filter((i) => i.nodeId !== b.chain.imageNodeId && i.nodeId !== b.chain.videoNodeId)
+  }
+  return { ...info, items, refused }
+}
+
 // The total and each shot's subtotal, in item order, only shots with an item.
 export function scopeTotal(items: Pick<RunItem, 'shotId' | 'usd'>[]): { total: number; perShot: { shotId: string; usd: number }[] } {
   const per = new Map<string, number>()

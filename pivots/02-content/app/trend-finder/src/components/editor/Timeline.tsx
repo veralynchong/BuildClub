@@ -50,7 +50,6 @@ export function Timeline({ project, sources, frame, readOnly, timeline, selected
   }
   const menuClip = menu ? project.clips.find((c) => c.id === menu.clipId) : undefined
   const menuNode = menuClip ? nodeOf(menuClip) : null
-  const track = useRef<HTMLDivElement>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const total = totalLength(project)
   const starts = clipStarts(project)
@@ -132,7 +131,7 @@ export function Timeline({ project, sources, frame, readOnly, timeline, selected
             ))}
           </div>
           <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-            <div className="cv-ed-track" ref={track}>
+            <div className="cv-ed-track">
               {project.clips.map((c, i) => (
                 <ClipBlock
                   key={c.id}

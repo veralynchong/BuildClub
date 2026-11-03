@@ -24,7 +24,7 @@ import { useApp } from '../../lib/appContext'
 import { reelBrand } from '../../lib/editor/preview'
 import { addNode, budgetLeft, chainBusy, chainPair, freeSpot, genFinished, genRequest, genStarted, genView, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
 import { quoteChanged, quoteLines, type QuoteLine } from '../../lib/canvas/requote'
-import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeInfo, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
+import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeChecked, runScopeInfo, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
 import { NodePanel } from './NodePanel'
@@ -542,21 +542,19 @@ function CanvasBoard({
       if (latest.current.key !== savedKey.current) await save()
       if (blockedRef.current || latest.current.key !== savedKey.current) return showNote('canvas.save.failed')
       const d = latest.current.doc
-      const info = runScopeInfo(d, shots, gensRef.current, models, opts)
-      let items = info.items
-      if (!items.length) return info.skippedNoKey > 0 ? showNote('canvas.chain.noKey') : showNote('canvas.run.nothing', undefined, true)
+      const info = runScopeChecked(d, shots, gensRef.current, models, kitRef.current, opts)
+      const items = info.items
+      if (!info.items.length && !info.refused.length) return info.skippedNoKey > 0 ? showNote('canvas.chain.noKey') : showNote('canvas.run.nothing', undefined, true)
       if (info.deferred.length) showNote('canvas.run.deferred', { n: info.deferred.length })
       // A chain the server would refuse is left out with its reason (for one shot: no dialog), before anything is asked.
+      if (info.refused.length) {
+        showNote(opts.shotId ? info.refused[0] : info.refused[info.refused.length - 1])
+        if (opts.shotId) return
+      }
       for (const b of runBatches(d, items)) {
         if (!('chain' in b)) continue
         const made = chainBody(d, b.chain, models, shots, gensRef.current, kitRef.current)
-        if ('error' in made) {
-          showNote(made.error)
-          if (opts.shotId) return
-          items = items.filter((i) => i.nodeId !== b.chain.imageNodeId && i.nodeId !== b.chain.videoNodeId)
-          continue
-        }
-        await quoteChain(ideaId, made.body) // nothing is spent; a refusal (e.g. the daily cap) stops here with its message
+        if ('body' in made) await quoteChain(ideaId, made.body) // nothing is spent; a refusal (e.g. the daily cap) stops here with its message
       }
       if (!items.length || !mounted.current) return
       setRunAsk({ title: opts.shotId ? 'canvas.chain.title' : 'canvas.toolbar.runAll', items, batches: runBatches(d, items), skippedNoKey: info.skippedNoKey, opts, lines: quoteLines(d, items) })
@@ -611,7 +609,7 @@ function CanvasBoard({
     if (!runAsk || chaining || chainStarting.current) return
     // nothing starts if the nodes, models, lengths or total are not what the dialog showed: ask again with the new price
     const d = latest.current.doc
-    const info = runScopeInfo(d, shots, gensRef.current, models, runAsk.opts)
+    const info = runScopeChecked(d, shots, gensRef.current, models, kitRef.current, runAsk.opts)
     const lines = quoteLines(d, info.items)
     if (quoteChanged(runAsk.lines, lines)) {
       if (!info.items.length) {
