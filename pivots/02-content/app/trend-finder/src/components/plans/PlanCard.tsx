@@ -62,7 +62,7 @@ export function PlanCardBody({
           </span>
         )}
         {cutWaiting && idea.status === "approved" && !cutSentBack && (
-          <span className="board-reason small">{t("plan.card.cutWaiting", { manager })}</span>
+          <span className="small muted">{t("plan.card.cutWaiting", { manager })}</span>
         )}
         {last && (
           <span className="board-reason small">
