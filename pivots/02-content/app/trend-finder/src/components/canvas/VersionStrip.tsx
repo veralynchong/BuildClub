@@ -1,4 +1,5 @@
 import { t } from '../../lib/i18n'
+import { serverText } from '../../lib/serverText'
 import type { Generation } from '../../lib/canvas/types'
 
 interface Props {
@@ -25,11 +26,11 @@ export function VersionStrip({ versions, selectedId, disabled, onSelect }: Props
             className={`cv-version${failed ? ' is-failed' : ''}`}
             aria-pressed={g.id === selectedId}
             disabled={disabled || open || failed}
-            title={failed ? t('canvas.gen.versionFailed', { n, error: g.status === 'unknown' ? t('canvas.gen.unknown') : (g.error ?? '') }) : open ? t('canvas.gen.versionRunning', { n }) : g.model === 'imported' ? `${t('canvas.gen.version', { n })} · ${t('canvas.gen.imported')}` : t('canvas.gen.version', { n })}
+            title={failed ? t('canvas.gen.versionFailed', { n, error: g.status === 'unknown' ? t('canvas.gen.unknown') : serverText(g.error) }) : open ? t('canvas.gen.versionRunning', { n }) : g.model === 'imported' ? `${t('canvas.gen.version', { n })} · ${t('canvas.gen.imported')}` : t('canvas.gen.version', { n })}
             onClick={() => onSelect(g.id)}
           >
             {open && <span className="cv-spin" aria-hidden="true" />}
-            {failed && <span aria-hidden="true">⚠ </span>}v{n}
+            {failed && <span aria-hidden="true">⚠ </span>}{`v${n}`}
           </button>
         )
       })}

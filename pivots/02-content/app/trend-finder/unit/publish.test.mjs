@@ -82,7 +82,7 @@ test('approvalLine names the approver, the time and the version', () => {
 test('missingApproval explains what is missing', () => {
   const out = { url: 'x', size: 1, durationSec: 1 }
   assert.match(missingApproval('saved', null, 'Annie'), /approve the plan/)
-  assert.match(missingApproval('approved', { output: undefined, stale: false, review: null }, 'Annie'), /Make the video first/)
+  assert.match(missingApproval('approved', { output: undefined, stale: false, review: null }, 'Annie'), /Make the video in the editor first/)
   assert.match(missingApproval('approved', { output: out, stale: false, review: { status: 'waiting', sentAt: 1 } }, 'Annie'), /approve the finished video first/)
   assert.match(missingApproval('approved', { output: out, stale: false, review: null }, 'Annie'), /not sent yet/)
   assert.equal(missingApproval('approved', { output: out, stale: false, review: { status: 'approved', sentAt: 1 } }, 'Annie'), null)

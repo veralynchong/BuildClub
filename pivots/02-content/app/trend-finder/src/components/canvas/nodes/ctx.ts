@@ -31,6 +31,8 @@ export interface CanvasCtx {
   uploadToNode: (nodeId: string, file: File) => void
   addTake: (nodeId: string, file: File) => void
   pickTake: (takeId: string) => void
+  cleanTake: (nodeId: string, takeId: string) => Promise<void>
+  blocked: boolean // stale or read-only: nothing can be changed
   // Timeline: put footage at the end, make it a shot's main clip, ask whether it is.
   addToTimeline: (src: ClipSource) => void
   setPrimary: (shotId: string, src: ClipSource) => void

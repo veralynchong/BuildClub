@@ -4,6 +4,7 @@ import type { Shot } from '../../types'
 import { useApp } from '../../lib/appContext'
 import { getCut } from '../../lib/cut'
 import { t } from '../../lib/i18n'
+import { serverText } from '../../lib/serverText'
 import type { SourcesHook } from '../../lib/editor/useSources'
 import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import type { EditHook } from '../../lib/editor/useEditProject'
@@ -124,7 +125,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
         const end = await pollGen(ideaId, genId, () => {}, { signal: ac.signal })
         if (!end) return
         finished = true
-        if (end.status !== 'done') throw new Error(end.error || t('editor.tts.failed'))
+        if (end.status !== 'done') throw new Error(serverText(end.error) || t('editor.tts.failed'))
         setPending((cur) => cur.map((g) => (g.id === genId ? { ...g, status: 'done' } : g)))
         adoptVoice(await importTts(ideaId, genId), 'tts')
         setPending((cur) => cur.filter((g) => g.id !== genId))

@@ -1,7 +1,7 @@
-"""The cut: turns the chosen takes of an approved plan into one 9:16 MP4 (see cutting.py for the video work).
-A job row per plan lives in the renders table, so progress and the finished video survive a restart. One
-worker thread runs the jobs in order. Only signed-in staff reach these routes (they sit under /api/ideas/),
-so the approver's review link never sees them."""
+"""The finished video of a plan: the work rows of the editor's export, and the routes that show, download, send for
+review and publish it. out_source 'auto' marks a row left by the pre-P4 auto-cut pipeline; such a video can still be
+watched, sent for review and checked for staleness, but nothing makes a new one. Only signed-in staff reach these
+routes (they sit under /api/ideas/), so the approver's review link never sees them."""
 
 import hashlib
 import json
@@ -18,11 +18,7 @@ from urllib.parse import unquote
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field
 
-import cutting
-import grading
-import subtitles
 import takes
 from cutting import CutError
 
@@ -54,8 +50,6 @@ def migrate(conn) -> None:
 MAX_MUSIC_BYTES = 30 * 1024 * 1024
 MUSIC_TYPES = {"audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/wav": "wav", "audio/x-wav": "wav"}
 MAX_NAME = 200
-MAX_SHOTS = 50
-SPEEDS = (1.0, 1.1, 1.25)
 DEFAULT_SPEED = 1.1
 DISK_FACTOR = 4
 
@@ -65,9 +59,8 @@ NO_LICENSE = "Confirm you own this music or have the license to use it."
 NOT_APPROVED = "Only an approved plan can be cut."
 BUSY = "A cut is already being made for this plan."
 NO_DISK = "There isn't enough free disk space to make the cut."
-BAD_SPEED = "Choose a speed of 1x, 1.1x or 1.25x."
 RESTARTED = "The server restarted while this was being made. Make it again."
-NO_CUT = "Make the video first."
+NO_CUT = "Make the video in the editor first."
 STALE_CUT = "The takes or music changed after this was made. Make it again before sending it."
 CUTTING = "Wait for the cut to finish before sending it."
 NO_LINK = "This client's review link is turned off. Make a new one on the Shortlist first."
@@ -79,10 +72,6 @@ GENERIC = "Something went wrong while making the cut."
 EDIT_STALE = "The edit changed after this was exported. Export it again before sending it."
 
 ACTIVE = ("queued", "running")
-
-# The pipeline is looked up by name when a job runs, so tests can swap it.
-run_pipeline = cutting.render_cut
-
 
 def run_editor(*args, **kwargs):
     """The editor export (editing.render_project), looked up when a job runs so tests can swap it.
@@ -131,14 +120,6 @@ def has_review_link(conn, client_id: str) -> bool:
     """Whether the client has an active review link (same lookup as share.keys_of)."""
     rows = conn.execute("SELECT value FROM store WHERE key LIKE 'share:%'").fetchall()
     return any(json.loads(v).get("clientId") == client_id for (v,) in rows)
-
-
-class CutRequest(BaseModel):
-    shotCount: int = Field(strict=True, ge=1, le=MAX_SHOTS)
-    speed: float
-    grade: str = "none"
-    burnSubtitles: bool = False
-    subtitleStyle: subtitles.BurnStyle = subtitles.BurnStyle()
 
 
 def chosen_ids(conn, idea_id: str, shots: int) -> list[tuple[str, str]]:
@@ -237,69 +218,19 @@ class RenderJobs:
                 (int(time.time() * 1000), result["size"], result["durationSec"], result["clips"],
                  result["signature"], idea_id))
             conn.execute("DELETE FROM cut_reviews WHERE idea_id = ?", (idea_id,))
-        # The auto-cut's trims and subtitle cues describe another video.
-        (folder / "trims.json").unlink(missing_ok=True)
-        cues_file = subtitles.cues_path(self._media(), idea_id)
-        if cues_file is not None:
-            cues_file.unlink(missing_ok=True)
 
     def _run(self, idea_id: str) -> None:
         folder = self._media().resolve() / idea_id / "cut"
         work = folder / "work"
         try:
             with self._db() as conn:
-                row = conn.execute("SELECT speed, shots, source FROM renders WHERE idea_id = ?", (idea_id,)).fetchone()
-                if row is None:
-                    return
-                speed, shots, source = row
-                picked = chosen_ids(conn, idea_id, shots)
-                music = music_row(conn, idea_id)
-            self._set(idea_id, status="running", progress=0.0, step="Starting")
-            if source == "editor":
-                self._run_editor(idea_id, folder, work)
+                row = conn.execute("SELECT source FROM renders WHERE idea_id = ?", (idea_id,)).fetchone()
+            if row is None:
                 return
-            if len(picked) < shots:  # the plan may have changed since the click
-                raise CutError("A shot no longer has a chosen take. Choose one and try again.")
-            takes = [{"id": tid, "path": folder.parent / f"{tid}.{ext}"} for tid, ext in picked]
-            music_path = folder / f"music-{music[0]}.{music[1]}" if music else None
-            shutil.rmtree(work, ignore_errors=True)
-            work.mkdir(parents=True)
-            nxt = work / "next.mp4"
-
-            def step(progress: float, text: str) -> None:
-                self._set(idea_id, progress=progress, step=text)
-
-            # Extras are passed only when asked for, so a plain cut calls the pipeline exactly as before.
-            with self._db() as conn:
-                opts = grading.load_options(conn, idea_id)
-            extra = {}
-            if opts.get("grade", "none") != "none":
-                extra["grade"] = opts["grade"]
-            if opts.get("burnSubtitles"):
-                extra["burn"] = subtitles.BurnStyle(**opts.get("subtitleStyle", {}))
-            cues_file = subtitles.cues_path(self._media(), idea_id)
-            cut_sig = signature([t["id"] for t in takes], speed, None)  # what the cue timings depend on
-            kept = subtitles.reusable_cues(cues_file, cut_sig)
-            if kept is not None:
-                extra["cues"] = kept
-            result = run_pipeline(takes, music_path, speed, work, nxt, step, **extra)
-            os.replace(nxt, folder / "final.mp4")  # only now does the old video go
-            # A new video is not the one that was sent, so the review goes in the same transaction.
-            with self._db() as conn:
-                conn.execute(
-                    "UPDATE renders SET status = 'done', progress = 1.0, step = 'Done', error = NULL, "
-                    "finished_at = ?, out_size = ?, out_duration = ?, out_speed = ?, out_shots = ?, "
-                    "out_signature = ?, out_source = 'auto' WHERE idea_id = ?",
-                    (int(time.time() * 1000), result["size"], result["durationSec"], speed, shots,
-                     signature([t["id"] for t in takes], speed, music[0] if music else None), idea_id))
-                conn.execute("DELETE FROM cut_reviews WHERE idea_id = ?", (idea_id,))
-            if "trims" in result:  # what the auto-cut removed, shown on the plan page
-                (folder / "trims.json").write_text(json.dumps({"originalSec": result.get("originalSec"),
-                                                               "trims": result["trims"]}))
-            if result.get("cues") and cues_file is not None:
-                subtitles.save_cues(cues_file, result["cues"], cut_sig, kept is not None)
-            elif cues_file is not None:
-                cues_file.unlink(missing_ok=True)
+            self._set(idea_id, status="running", progress=0.0, step="Starting")
+            if row[0] != "editor":  # only the editor export makes videos now
+                raise RuntimeError(f"unsupported render source {row[0]!r}")
+            self._run_editor(idea_id, folder, work)
         except CutError as e:
             print(f"[render] {idea_id} failed: {e}", flush=True)
             self._set(idea_id, status="failed", error=str(e), finished_at=int(time.time() * 1000))
@@ -328,9 +259,6 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             music = music_row(conn, idea_id)
             out = {"status": "none", "progress": 0, "step": "", "speed": DEFAULT_SPEED, "stale": False,
                    "music": {"name": music[2], "size": music[3]} if music else None, "review": None}
-            options = grading.load_options(conn, idea_id)
-            if options:
-                out["options"] = options
             if row is None:
                 return out
             status, progress, step, err, speed, size, duration, out_sig, out_speed, out_shots, out_source = row
@@ -344,10 +272,6 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
                 out["output"] = {"url": f"/api/ideas/{idea_id}/cut/file?v={version}", "size": size,
                                  "durationSec": duration}
                 out["stale"] = is_stale(conn, idea_id, shots)
-                try:
-                    out["autoCut"] = json.loads((folder / "trims.json").read_text())
-                except (OSError, ValueError):
-                    pass  # a video made before this was recorded
                 sent = review_row(conn, idea_id)
                 if sent is not None and sent[0] == version:  # a record of another video is not shown
                     out["review"] = {"status": sent[1], "sentAt": sent[2]}
@@ -525,70 +449,6 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         if old and folder:
             (folder / f"music-{old[0]}.{old[1]}").unlink(missing_ok=True)
         return state_of(idea_id)
-
-    @router.post("/api/ideas/{idea_id}/cut", status_code=202)
-    def start_cut(idea_id: str, body: CutRequest):
-        if body.speed not in SPEEDS:
-            return error(422, BAD_SPEED)
-        if body.grade not in grading.PRESETS:
-            return error(422, grading.BAD_GRADE)
-        refused = editable(idea_id)
-        if refused:
-            return refused
-        missing = cutting.missing_tools()
-        if missing:
-            return error(503, missing)
-        folder = folder_of(idea_id)
-        if folder is None:
-            return error(404, "That plan doesn't exist.")
-        with db() as conn:
-            picked = chosen_ids(conn, idea_id, body.shotCount)
-            music = music_row(conn, idea_id)
-            shots_with_pick = {i for _, i in takes.chosen_takes(conn, idea_id, body.shotCount)}
-        for shot in range(body.shotCount):
-            if shot not in shots_with_pick:
-                return error(409, f"Choose a take for shot {shot + 1} first.")
-        paths = [folder.parent / f"{tid}.{ext}" for tid, ext in picked]
-        total_bytes = sum(p.stat().st_size for p in paths if p.is_file())
-        if shutil.disk_usage(media_dir()).free < DISK_FACTOR * total_bytes:
-            return error(409, NO_DISK)
-        try:
-            seconds = sum(cutting.probe(p)["duration"] for p in paths)
-        except CutError as e:
-            return error(409, str(e))
-        if seconds > cutting.MAX_INPUT_SEC:
-            return error(409, f"The chosen takes are too long (over {cutting.MAX_INPUT_SEC // 60} minutes in total).")
-
-        sig = signature([tid for tid, _ in picked], body.speed, music[0] if music else None)
-        now = int(time.time() * 1000)
-        with render_lock:
-            conn = db()
-            try:
-                conn.execute("BEGIN IMMEDIATE")  # the check and the write are one step, even across processes
-                if is_busy(conn, idea_id):
-                    conn.rollback()
-                    return error(409, BUSY)
-                current = find_idea(idea_id)
-                if current is None or current["status"] != "approved":
-                    conn.rollback()
-                    return error(409, NOT_APPROVED)
-                conn.execute(
-                    "INSERT INTO renders (idea_id, status, progress, step, speed, shots, signature, started_at, source) "
-                    "VALUES (?, 'queued', 0, 'Waiting to start', ?, ?, ?, ?, 'auto') ON CONFLICT(idea_id) DO UPDATE SET "
-                    "source = 'auto', status = 'queued', progress = 0, step = 'Waiting to start', error = NULL, speed = excluded.speed, "
-                    "shots = excluded.shots, signature = excluded.signature, started_at = excluded.started_at, "
-                    "finished_at = NULL", (idea_id, body.speed, body.shotCount, sig, now))
-                conn.commit()
-            except sqlite3.Error:
-                conn.rollback()
-                raise
-            finally:
-                conn.close()
-        with db() as conn:
-            grading.save_options(conn, idea_id, {"grade": body.grade, "burnSubtitles": body.burnSubtitles,
-                                                 "subtitleStyle": body.subtitleStyle.model_dump()})
-        jobs.submit(idea_id)
-        return JSONResponse(state_of(idea_id), status_code=202)
 
     @router.post("/api/ideas/{idea_id}/edit/export", status_code=202)
     def export_edit(idea_id: str):

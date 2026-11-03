@@ -245,7 +245,7 @@
 .take-add { justify-self: start; cursor: pointer; }
 .take-add.is-busy { opacity: 0.6; cursor: progress; }
 
-/* Make the video: the cut of an approved plan */
+/* The video: the finished cut of an approved plan */
 .cut-panel { min-width: 0; }
 .cut-options { display: grid; gap: var(--space-sm); justify-items: start; margin-top: var(--space-sm); }
 .cut-speed { display: grid; gap: 4px; }
@@ -258,5 +258,5 @@
 .cut-progress progress { width: 100%; max-width: 360px; }
 .cut-failed { display: grid; gap: var(--space-xs); justify-items: start; margin-top: var(--space-sm); }
 .cut-output { display: grid; gap: var(--space-xs); justify-items: start; margin-top: var(--space-sm); }
-.cut-output video { max-width: 100%; width: 270px; aspect-ratio: 9 / 16; background: var(--surface-2); border-radius: var(--radius-sm); }
+.cut-output video { display: block; object-fit: cover; max-width: 100%; width: 270px; aspect-ratio: 9 / 16; background: var(--surface-2); border-radius: var(--radius-sm); }
 .cut-output-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }

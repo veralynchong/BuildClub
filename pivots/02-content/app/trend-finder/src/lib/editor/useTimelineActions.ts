@@ -74,7 +74,7 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
       if (!info) return notify('editor.processing')
       const p = edit.current()
       if (!p) return
-      const next = applyNewer(p, clipId, src, info.duration)
+      const next = applyNewer(p, clipId, src, info.duration, src.kind === 'take')
       if (next === p) return
       const old = p.clips.find((c) => c.id === clipId)?.source
       edit.update(old ? { ...next, primaries: repinIfOld(next.primaries, src.shotId, old, src) } : next)

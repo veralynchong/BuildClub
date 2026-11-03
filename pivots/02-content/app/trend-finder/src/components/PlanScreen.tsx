@@ -61,16 +61,12 @@ export function PlanScreen(p: Props) {
   const [addedAt, setAddedAt] = useState<number | null>(null)
   // "Edit" on an approved plan asks first, because it sends the plan back for approval.
   const [confirmEdit, setConfirmEdit] = useState(false)
-  // Shots with a chosen take, reported by the shot checklist for the video panel.
-  const [shotsDone, setShotsDone] = useState(0)
   // Counts every report from the checklist (a take added, removed or re-chosen), for the video panel's stale check.
   const [takesRevision, setTakesRevision] = useState(0)
   useEffect(() => {
-    setShotsDone(0)
     setTakesRevision(0)
   }, [idea.id])
-  const onTakesProgress = useCallback((done: number) => {
-    setShotsDone(done)
+  const onTakesProgress = useCallback(() => {
     setTakesRevision((r) => r + 1)
   }, [])
   // Deciding on a waiting plan: approve with changes or send back both need a comment.
@@ -377,7 +373,7 @@ export function PlanScreen(p: Props) {
           <StoryboardSection key={idea.id} ideaId={idea.id} shots={shots} editable={editable} onShots={setShots} />
 
           <ShotChecklist key={idea.id} ideaId={idea.id} status={idea.status} shots={shots} onProgress={onTakesProgress} />
-          <CutPanel key={idea.id} ideaId={idea.id} status={idea.status} shotCount={shots.length} shotsDone={shotsDone} takesRevision={takesRevision} />
+          <CutPanel key={idea.id} ideaId={idea.id} status={idea.status} shotCount={shots.length} takesRevision={takesRevision} onOpenCanvas={onOpenCanvas} />
           <PublishPanel key={`pub-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} />
 
           {format.lines && format.lines.length > 0 && (
