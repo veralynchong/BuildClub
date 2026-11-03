@@ -15,7 +15,6 @@ from typing import Callable, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
-from PIL import Image, UnidentifiedImageError
 
 import cutting
 import gen_providers
@@ -224,12 +223,19 @@ KIT_MAX_EDGE = 1536  # long edge of a kit image sent to a provider: phone photos
 
 def _write_shrunk(source: Path, part: Path) -> None:
     """Write `source` to `part`, shrunk to KIT_MAX_EDGE on the long edge (never enlarged, format and alpha kept).
-    A file Pillow can't read, or one that is small enough already, is copied byte for byte."""
+    A file Pillow can't read, or one that is small enough already, is copied byte for byte. Pillow is imported
+    here, not at module load, so a venv without it still starts and just copies as is."""
+    try:
+        from PIL import Image, ImageOps, UnidentifiedImageError
+    except ImportError:
+        shutil.copyfile(source, part)
+        return
     try:
         with Image.open(source) as im:
             fmt = im.format
             if max(im.size) <= KIT_MAX_EDGE or fmt not in ("JPEG", "PNG", "WEBP"):
                 raise ValueError("copy as is")
+            im = ImageOps.exif_transpose(im)  # the shrunk copy drops EXIF, so bake the orientation in first
             im.thumbnail((KIT_MAX_EDGE, KIT_MAX_EDGE))
             if fmt == "JPEG" and im.mode not in ("RGB", "L"):
                 im = im.convert("RGB")
