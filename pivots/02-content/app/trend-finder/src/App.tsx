@@ -761,9 +761,10 @@ export default function App() {
       try {
         // The automatic check only reads the cache; only the refresh button may start a paid search.
         const res = await searchLive(topic, fresh, 'tiktok', !fresh)
+        if (!fresh && !res.videos.length) return // nothing saved yet: show no pulse, no banner
         setPulses((prev) => ({ ...prev, [c.id]: pulseFrom(topic, res.videos, findPatterns(res.videos, topic)) }))
       } catch (e) {
-        // No saved result for an automatic check is normal (404): show no pulse, no banner.
+        // A failed automatic check stays quiet; only the refresh button shows a banner.
         if (fresh) setPulseError(e instanceof Error ? e.message : t('shell.search.trendFailed'))
       } finally {
         setPulseLoading(null)

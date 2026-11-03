@@ -666,7 +666,8 @@ def search(q: str = "", fresh: str = "", platform: str = "tiktok", cachedOnly: s
         if cached:
             return {**cached, "cached": True}
     if cachedOnly == "1":  # the front end's poll for scores must never start a paid search
-        return error(404, "No saved search for that. Search it first.")
+        # Not an error: a 404 would put a red line in the browser console on every Home load.
+        return {"query": query, "platform": platform, "fetchedAt": 0, "videos": [], "cached": False}
     if platform == "youtube":
         return search_youtube(query)
     if not spend("apify", SEARCH_USD[platform], DAILY_APIFY_USD):
@@ -719,13 +720,13 @@ def read_types(query: str, platform: str, fetched_at: int):
 @app.get("/api/search/types", response_model=ContentTypes)
 def search_types(q: str = "", platform: str = "tiktok"):
     """Content type of each video in a saved search. One cheap Claude call the first time, then free.
-    Never starts a search: without a saved search it is a 404. The front end shows the results without types if this fails."""
+    Never starts a search: without a saved search the types are empty. The front end shows the results without types if this fails."""
     query = q.strip()[:120]
     if not query or platform not in ("tiktok", "instagram", "youtube", "reddit", "x"):
         return error(400, "Give a saved search and a platform.")
     saved = read_cache(query, platform)
     if not saved:
-        return error(404, "No saved search for that. Search it first.")
+        return {"types": {}}  # not a 404: that would put a red line in the browser console
     known = read_types(query, platform, saved["fetchedAt"])
     if known is not None:
         return {"types": known}
