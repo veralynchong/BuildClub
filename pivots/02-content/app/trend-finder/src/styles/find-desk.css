@@ -1,0 +1,286 @@
+/* Find ideas desk (SearchScreen, ResultsScreen, components/find/*): the Plans-page blueprint blocks (a mono tab on a
+   hairline box with corner marks, a serif title cell, thin numbered rows), the typing drop-down in the navy hero,
+   the saved strip and toast. Design: docs/design-review/find-ideas-concept-a-options (Option 2 hero, Option 1
+   blocks and results). Remake tokens only (theme-remake.css, tokens.css), so light and dark both follow.
+   Hover lives in interactive.css. */
+
+/* ---------- Blueprint block ---------- */
+:root[data-ui="altitude"] .fd-block { display: grid; min-width: 0; }
+:root[data-ui="altitude"] .fd-tab {
+  justify-self: start; position: relative; z-index: 1; margin: 0 0 -1px; padding: 7px 14px 6px;
+  background: var(--surface); border: 1px solid var(--line); border-bottom-color: var(--surface);
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0; color: var(--label);
+  font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 16px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+:root[data-ui="altitude"] .fd-tab-quiet { color: var(--muted); }
+:root[data-ui="altitude"] .fd-box {
+  position: relative; min-width: 0; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) var(--radius-xs);
+}
+/* Corner marks, as on the Plans page */
+:root[data-ui="altitude"] .fd-box::before,
+:root[data-ui="altitude"] .fd-box::after { content: ''; position: absolute; width: 4px; height: 4px; background: var(--label); pointer-events: none; }
+:root[data-ui="altitude"] .fd-box::before { top: -3px; right: -3px; }
+:root[data-ui="altitude"] .fd-box::after { bottom: -3px; left: -3px; }
+
+/* Title cell on the left, ruled rows on the right */
+:root[data-ui="altitude"] .fd-ledger { display: grid; grid-template-columns: 236px minmax(0, 1fr); }
+:root[data-ui="altitude"] .fd-cell { display: grid; gap: var(--space-md); align-content: start; padding: 20px 22px; min-width: 0; }
+:root[data-ui="altitude"] .fd-cell h3 { margin: 0; font-size: var(--text-3xl); line-height: 1.1; }
+:root[data-ui="altitude"] .fd-cell p { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--muted); }
+:root[data-ui="altitude"] .fd-cell-link { justify-self: start; font-size: var(--text-sm); }
+:root[data-ui="altitude"] .fd-count {
+  font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+:root[data-ui="altitude"] .fd-rows { display: grid; align-content: start; min-width: 0; border-left: 1px solid var(--line); }
+
+/* Column heads and rows */
+:root[data-ui="altitude"] :is(.fd-lhead, .fd-lrow) {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) 176px 72px 112px; column-gap: var(--space-base); align-items: center; padding: 0 20px;
+}
+:root[data-ui="altitude"] :is(.fd-shead, .fd-srow) {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) 140px 176px 92px; column-gap: var(--space-base); align-items: center; padding: 0 20px;
+}
+:root[data-ui="altitude"] :is(.fd-lhead, .fd-shead) {
+  min-height: 34px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--canvas-alt) 60%, var(--surface));
+  font-family: var(--font-mono); font-size: var(--text-3xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+:root[data-ui="altitude"] .fd-lrow { min-height: 58px; border-top: 1px solid var(--line); font-size: var(--text-ms); }
+:root[data-ui="altitude"] .fd-srow { min-height: 62px; border-top: 1px solid var(--line); font-size: var(--text-ms); }
+:root[data-ui="altitude"] :is(.fd-lhead + .fd-lrow, .fd-shead + .fd-srow) { border-top: 0; }
+:root[data-ui="altitude"] :is(.fd-lrow, .fd-srow) > :last-child { justify-self: end; }
+:root[data-ui="altitude"] .fd-lrow.is-hot { box-shadow: inset 2px 0 0 var(--accent); }
+:root[data-ui="altitude"] .fd-lrow.is-hot .fd-n { color: var(--label); }
+:root[data-ui="altitude"] .fd-n { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.06em; color: var(--muted); font-variant-numeric: tabular-nums; }
+:root[data-ui="altitude"] .fd-q { min-width: 0; padding: 8px 0; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
+:root[data-ui="altitude"] .fd-q small { display: block; margin-top: 1px; font-size: var(--text-xs); font-weight: 400; color: var(--muted); }
+:root[data-ui="altitude"] .fd-sv { font-size: var(--text-sm); color: var(--fg); }
+:root[data-ui="altitude"] .fd-dash { color: var(--muted); }
+
+/* "6 new since Thu" (a word always comes with the colour) */
+:root[data-ui="altitude"] .fd-newtag {
+  display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: var(--radius-pill);
+  background: var(--early-soft); color: var(--early); font-size: var(--text-xs); font-weight: 600; white-space: nowrap;
+}
+:root[data-ui="altitude"] .fd-newtag::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+:root[data-ui="altitude"] .fd-quiet { font-size: var(--text-xs); color: var(--muted); }
+:root[data-ui="altitude"] .fd-old { font-size: var(--text-xs); color: var(--fg); }
+:root[data-ui="altitude"] .fd-old small { display: block; font-size: var(--text-2xs); color: var(--muted); }
+
+/* Open → and the outlined Run again */
+:root[data-ui="altitude"] .fd-go {
+  display: inline-flex; align-items: center; gap: var(--space-2xs); min-height: 40px; padding: 0 var(--space-2xs);
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--fg); font: inherit; font-size: var(--text-sm); font-weight: 500;
+  white-space: nowrap; cursor: pointer;
+}
+:root[data-ui="altitude"] .fd-go > span, :root[data-ui="altitude"] .fd-go .fd-arrow { color: var(--label); }
+:root[data-ui="altitude"] .btn.fd-btn-line { background: transparent; border: 1px solid var(--line-strong); color: var(--fg); white-space: nowrap; }
+
+/* Saved to Research rows */
+:root[data-ui="altitude"] .fd-covers { display: flex; align-items: center; gap: var(--space-2xs); min-width: 0; }
+:root[data-ui="altitude"] .fd-mc {
+  position: relative; display: inline-block; flex: none; width: 22px; aspect-ratio: 9 / 16; overflow: hidden; border-radius: 3px;
+  background-color: var(--navy); background-image: radial-gradient(circle at 1px 1px, var(--navy-dot) 1px, transparent 1.5px); background-size: 6px 6px;
+}
+:root[data-ui="altitude"] .fd-mc img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+:root[data-ui="altitude"] .fd-mc-ghost { background: var(--canvas-alt); border: 1px dashed var(--line-strong); }
+:root[data-ui="altitude"] .fd-cnt { margin-left: var(--space-xs); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--fg); font-variant-numeric: tabular-nums; }
+:root[data-ui="altitude"] .fd-needs {
+  padding: 1px 8px; border-radius: var(--radius-pill); background: var(--rising-soft); color: var(--rising);
+  font-size: var(--text-xs); font-weight: 600; white-space: nowrap;
+}
+:root[data-ui="altitude"] .fd-lead { display: grid; gap: 2px; min-width: 0; padding: 8px 0; }
+:root[data-ui="altitude"] .fd-acct { color: var(--label); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root[data-ui="altitude"] .fd-try { justify-self: start; font-size: var(--text-xs); text-align: left; }
+:root[data-ui="altitude"] .fd-star {
+  display: inline-flex; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--mustard); color: var(--on-mustard);
+  font-size: var(--text-2xs); font-weight: 600; white-space: nowrap;
+}
+:root[data-ui="altitude"] .fd-more { padding: var(--space-md) 20px; border-top: 1px solid var(--line); }
+:root[data-ui="altitude"] .fd-more .link-btn { font-size: var(--text-sm); }
+
+/* Followers → views: numbers in ink, "followers / views" and the account in brand blue (tiles, best, saved rows) */
+:root[data-ui="altitude"] :is(.fd-results, .fd-block) .tile-cmp :is(.cmp-from, .cmp-to),
+:root[data-ui="altitude"] .fd-results .best-compare :is(.cmp-from, .cmp-to) { color: var(--fg); }
+:root[data-ui="altitude"] :is(.fd-results, .fd-block) .tile-cmp .cmp-cap,
+:root[data-ui="altitude"] .fd-results .best-compare .cmp-cap,
+:root[data-ui="altitude"] .fd-results .tile-meta { color: var(--label); }
+:root[data-ui="altitude"] .fd-cmp { column-gap: 6px; row-gap: 0; margin: 0; }
+:root[data-ui="altitude"] .fd-cmp .cmp-from { font-size: var(--text-ms); }
+:root[data-ui="altitude"] .fd-cmp .cmp-to { font-size: var(--text-lg); }
+:root[data-ui="altitude"] .fd-cmp .cmp-arrow { font-size: var(--text-sm); color: var(--muted); }
+:root[data-ui="altitude"] .fd-cmp .cmp-cap { font-size: var(--text-3xs); }
+
+/* Empty blocks: a ghost row and one sentence */
+:root[data-ui="altitude"] .fd-empty { display: grid; gap: var(--space-md); padding: 16px 20px; }
+:root[data-ui="altitude"] .fd-empty p { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--muted); }
+:root[data-ui="altitude"] .fd-empty strong { color: var(--fg); font-weight: 600; }
+:root[data-ui="altitude"] .fd-ghost-row { display: flex; align-items: center; gap: var(--space-base); padding-bottom: var(--space-md); border-bottom: 1px dashed var(--line); }
+:root[data-ui="altitude"] .fd-ghost-row .fd-n { color: var(--line-strong); }
+:root[data-ui="altitude"] .fd-ghost-row .fd-mc { width: 18px; }
+:root[data-ui="altitude"] .fd-gl { display: inline-block; height: 10px; border-radius: 5px; background: var(--canvas-alt); }
+:root[data-ui="altitude"] .fd-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+:root[data-ui="altitude"] .fd-stack { display: grid; gap: 32px; }
+
+/* ---------- Where to start: one numbered ledger, grouped ---------- */
+:root[data-ui="altitude"] .fd-start-list { list-style: none; margin: 0; padding: 0; }
+:root[data-ui="altitude"] .fd-start-row + .fd-start-row { border-top: 1px solid var(--line); }
+:root[data-ui="altitude"] .fd-start-row.is-group { border-top-color: var(--line-strong); }
+:root[data-ui="altitude"] .fd-start-item {
+  display: grid; grid-template-columns: 40px 120px minmax(0, 1fr) auto; column-gap: var(--space-base); align-items: center;
+  width: 100%; min-height: 52px; padding: 4px 20px; border: 0; background: none; color: var(--fg); font: inherit; text-align: left; cursor: pointer;
+}
+:root[data-ui="altitude"] .fd-grp {
+  font-family: var(--font-mono); font-size: var(--text-3xs); line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--label);
+}
+:root[data-ui="altitude"] .fd-start-label { font-weight: 600; }
+:root[data-ui="altitude"] .fd-start-item .fd-go { min-height: 0; }
+:root[data-ui="altitude"] .fd-start-wait { padding: 20px; }
+:root[data-ui="altitude"] .fd-start-wait .fd-gl { display: block; width: 60%; height: 12px; }
+:root[data-ui="altitude"] .find-start .find-start-pulse { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+
+/* ---------- Hero: the drop-down while typing ---------- */
+/* The hero clips its own corners; the drop-down needs to hang below it, so the vignette keeps the corners instead. */
+:root[data-ui="altitude"] .fd-page .alt-hero { overflow: visible; z-index: 2; }
+:root[data-ui="altitude"] .fd-page .alt-hero::before { border-radius: inherit; }
+:root[data-ui="altitude"] .fd-results .search-box { position: relative; z-index: 3; }
+:root[data-ui="altitude"] .fd-typeahead {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30; max-height: 360px; overflow-y: auto;
+  list-style: none; margin: 0; padding: 6px 0; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-float);
+}
+:root[data-ui="altitude"] .fd-ta-item {
+  display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; column-gap: var(--space-base); align-items: center;
+  min-height: 44px; padding: 6px 14px; color: var(--fg); cursor: pointer;
+}
+:root[data-ui="altitude"] .fd-ta-item.is-first:not(:first-child) { border-top: 1px solid var(--line); }
+:root[data-ui="altitude"] .fd-ta-item.is-active { background: var(--blue-soft); }
+:root[data-ui="altitude"] .fd-ta-group { font-family: var(--font-mono); font-size: var(--text-3xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+:root[data-ui="altitude"] .fd-ta-text { display: grid; min-width: 0; }
+:root[data-ui="altitude"] .fd-ta-label { font-size: var(--text-ms); font-weight: 500; overflow-wrap: anywhere; }
+:root[data-ui="altitude"] .fd-ta-text small { font-size: var(--text-xs); color: var(--muted); }
+:root[data-ui="altitude"] .fd-ta-enter { font-family: var(--font-mono); font-size: var(--text-3xs); color: var(--muted); white-space: nowrap; }
+
+/* ---------- Results ---------- */
+:root[data-ui="altitude"] .fd-results { padding-bottom: 8px; }
+:root[data-ui="altitude"] .fd-showing { margin-left: var(--space-sm); color: var(--muted); }
+:root[data-ui="altitude"] .summary .fd-newtag { margin-left: var(--space-sm); vertical-align: 1px; }
+/* Filter chips: "default" says which ones were on from the start */
+:root[data-ui="altitude"] .fd-results .q-chip.fd-fchip { background: var(--blue-soft); border-color: transparent; color: var(--label); font-weight: 500; }
+:root[data-ui="altitude"] .fd-dflt {
+  font-style: normal; font-family: var(--font-mono); font-size: 9px; line-height: 14px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--label); padding: 0 4px; border: 1px solid color-mix(in srgb, var(--label) 30%, transparent); border-radius: 3px;
+}
+:root[data-ui="altitude"] .fd-results .fp-chip-row { align-items: center; }
+:root[data-ui="altitude"] .fd-clear { font-size: var(--text-sm); }
+/* Best to copy and the grid sit inside their blocks: the block is the card */
+:root[data-ui="altitude"] .fd-best .fd-box { display: grid; gap: var(--space-xl); padding: 18px 20px 20px; }
+:root[data-ui="altitude"] .fd-best .best-head { margin: 0; }
+:root[data-ui="altitude"] .fd-best .best {
+  grid-template-columns: minmax(140px, 190px) minmax(0, 1fr); gap: 28px; align-items: start;
+  border: 0; border-radius: 0; padding: 0; background: none; box-shadow: none;
+}
+:root[data-ui="altitude"] .fd-best .best-title { font-size: var(--text-3xl); line-height: 1.1; }
+:root[data-ui="altitude"] .fd-best .best-body { gap: var(--space-base); }
+:root[data-ui="altitude"] .fd-all .fd-box { display: grid; gap: var(--space-xl); padding: 18px 20px 20px; }
+:root[data-ui="altitude"] .fd-grid-title { margin: 0; font-size: var(--text-2xl); line-height: 1.15; }
+/* "New" pin on a cover */
+:root[data-ui="altitude"] .fd-cover { position: relative; display: block; }
+:root[data-ui="altitude"] .fd-newpin {
+  position: absolute; left: 8px; top: 32px; z-index: 2; padding: 1px 7px; border-radius: var(--radius-pill);
+  background: var(--mustard); color: var(--on-mustard); font-size: var(--text-3xs); font-weight: 600; pointer-events: none;
+}
+
+/* Strip at the bottom: what is saved under each Research video */
+:root[data-ui="altitude"] .fd-strip { position: sticky; bottom: 0; z-index: 5; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin-top: var(--space-base); }
+:root[data-ui="altitude"] .fd-strip-tab { margin-bottom: -1px; background: var(--surface); }
+:root[data-ui="altitude"] .fd-strip-in {
+  display: flex; align-items: center; gap: var(--space-sm) var(--space-base); flex-wrap: wrap; min-width: 0; padding: 10px 16px;
+  background: var(--frost); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--line); border-bottom: 0; border-radius: 0 var(--radius-xs) 0 0; box-shadow: var(--shadow-card);
+}
+:root[data-ui="altitude"] .fd-strip-list { display: flex; flex-wrap: wrap; gap: var(--space-xs); list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-width: 0; }
+:root[data-ui="altitude"] .fd-tchip {
+  display: inline-flex; align-items: center; gap: var(--space-sm); max-width: 100%; height: 30px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface); font-size: var(--text-sm); color: var(--fg);
+}
+:root[data-ui="altitude"] .fd-tchip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root[data-ui="altitude"] .fd-tchip b { font-family: var(--font-mono); font-weight: 500; font-size: var(--text-2xs); color: var(--muted); }
+:root[data-ui="altitude"] .fd-tchip.is-on { border-color: var(--accent); background: var(--blue-soft); color: var(--label); font-weight: 500; }
+:root[data-ui="altitude"] .fd-tchip.is-on b { color: var(--label); }
+:root[data-ui="altitude"] .fd-tchip.is-empty b { color: var(--rising); }
+:root[data-ui="altitude"] .fd-strip-open { margin-left: auto; font-size: var(--text-sm); white-space: nowrap; }
+
+/* Saved toast: navy pill above the strip, with Change and Undo */
+:root[data-ui="altitude"] .toast.fd-toast {
+  left: 50%; right: auto; bottom: 88px; translate: -50% 0; max-width: min(560px, calc(100vw - 32px));
+  gap: var(--space-lg); padding: 10px 12px 10px 16px; border: 0; border-radius: var(--radius-pill);
+  background: var(--navy); color: var(--on-navy); box-shadow: var(--shadow-float);
+}
+:root[data-ui="altitude"] .fd-toast .toast-msg { min-width: 12ch; }
+:root[data-ui="altitude"] .fd-toast-ok {
+  display: grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--blue); color: var(--accent-fg); font-size: 11px;
+}
+:root[data-ui="altitude"] .fd-toast .link-btn.fd-toast-link { color: var(--sky); font-weight: 500; white-space: nowrap; }
+:root[data-ui="altitude"] .fd-toast .toast-x { color: var(--on-navy-muted); --hover-text: var(--on-navy); }
+
+/* ---------- Narrower screens: blocks stack, rows wrap, nothing scrolls sideways, 44px targets ---------- */
+@media (max-width: 900px) {
+  :root[data-ui="altitude"] .fd-ledger { grid-template-columns: minmax(0, 1fr); }
+  :root[data-ui="altitude"] .fd-rows { border-left: 0; border-top: 1px solid var(--line); }
+  :root[data-ui="altitude"] .fd-cell { padding: 16px 16px 14px; }
+  :root[data-ui="altitude"] .fd-cell h3 { font-size: var(--text-2xl); }
+  :root[data-ui="altitude"] .fd-pair { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  :root[data-ui="altitude"] .fd-best .best { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  :root[data-ui="altitude"] .fd-best .best-cover { justify-self: center; width: 100%; max-width: 220px; }
+}
+@media (max-width: 640px) {
+  :root[data-ui="altitude"] :is(.fd-lhead, .fd-shead) { display: none; }
+  /* Recent: number and search on top, then the new count and saved, then the button */
+  :root[data-ui="altitude"] .fd-lrow {
+    grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-areas: 'n q q' '. since sv' '. act act';
+    row-gap: var(--space-xs); padding: 10px 16px 12px; border-top: 1px solid var(--line);
+  }
+  :root[data-ui="altitude"] .fd-lrow .fd-n { grid-area: n; align-self: start; padding-top: 10px; }
+  :root[data-ui="altitude"] .fd-lrow .fd-q { grid-area: q; }
+  :root[data-ui="altitude"] .fd-lrow .fd-since { grid-area: since; }
+  :root[data-ui="altitude"] .fd-lrow .fd-sv { grid-area: sv; }
+  :root[data-ui="altitude"] .fd-lrow .fd-act { grid-area: act; justify-self: start; }
+  /* Saved: video on top, then covers and the top reference, then Picked */
+  :root[data-ui="altitude"] .fd-srow {
+    grid-template-columns: 32px auto minmax(0, 1fr); grid-template-areas: 'n q q' '. covers lead' '. st st';
+    row-gap: var(--space-xs); column-gap: var(--space-lg); padding: 10px 16px 12px;
+  }
+  :root[data-ui="altitude"] .fd-srow .fd-n { grid-area: n; align-self: start; padding-top: 10px; }
+  :root[data-ui="altitude"] .fd-srow .fd-q { grid-area: q; }
+  :root[data-ui="altitude"] .fd-srow .fd-covers { grid-area: covers; }
+  :root[data-ui="altitude"] .fd-srow .fd-lead { grid-area: lead; padding: 0; }
+  :root[data-ui="altitude"] .fd-srow .fd-st { grid-area: st; justify-self: start; }
+  :root[data-ui="altitude"] .fd-srow .fd-st:empty { display: none; }
+  :root[data-ui="altitude"] .fd-start-item { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: 'n grp grp' 'n q go'; row-gap: 2px; padding: 8px 16px; min-height: 56px; }
+  :root[data-ui="altitude"] .fd-start-item .fd-n { grid-area: n; align-self: start; padding-top: 2px; }
+  :root[data-ui="altitude"] .fd-start-item .fd-grp { grid-area: grp; }
+  :root[data-ui="altitude"] .fd-start-item .fd-grp:empty { display: none; }
+  :root[data-ui="altitude"] .fd-start-item .fd-q { grid-area: q; padding: 2px 0; }
+  :root[data-ui="altitude"] .fd-start-item .fd-go { grid-area: go; }
+  :root[data-ui="altitude"] :is(.fd-go, .btn.fd-btn-line, .fd-more .link-btn, .fd-cell-link, .fd-try, .fd-strip-open, .fd-clear) { min-height: 44px; }
+  :root[data-ui="altitude"] .fd-ta-item { grid-template-columns: minmax(0, 1fr) auto; }
+  :root[data-ui="altitude"] .fd-ta-group:empty { display: none; }
+  :root[data-ui="altitude"] .fd-ta-group { grid-column: 1 / -1; padding-top: 4px; }
+  :root[data-ui="altitude"] .fd-best .fd-box, :root[data-ui="altitude"] .fd-all .fd-box { padding: 14px; }
+  :root[data-ui="altitude"] .fd-strip-in { padding: 10px 12px; }
+  :root[data-ui="altitude"] .fd-strip-open { margin-left: 0; }
+  :root[data-ui="altitude"] .toast.fd-toast { left: 16px; right: 16px; bottom: 16px; translate: none; max-width: none; border-radius: var(--radius-lg); flex-wrap: wrap; }
+  :root[data-ui="altitude"] .fd-toast .toast-msg { flex: 1 1 60%; }
+  /* The strip stays one line on phones: its chips scroll inside it, the page itself never scrolls sideways */
+  :root[data-ui="altitude"] .fd-strip-in { flex-wrap: nowrap; }
+  :root[data-ui="altitude"] .fd-strip-list { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  :root[data-ui="altitude"] .fd-tchip { flex: none; max-width: 70vw; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-ui="altitude"] .toast.fd-toast { animation: none; }
+}
+:root[data-ui="altitude"] .fd-go > span { display: inline-block; }

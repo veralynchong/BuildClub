@@ -27,13 +27,13 @@
 /* ---------- Timing: the same transition on everything clickable ---------- */
 :where(button, a[href], summary, select, input, textarea, label, [role="button"], [role="tab"],
   .board-card, .board-node, .hook-option, .shot-frame, .search-input, .rs-sort-icon, .platform svg, .best-play,
-  .find-start-label, .rk-plus) {
+  .find-start-label, .fd-start-label, .rk-plus) {
   transition: var(--hover-transition);
 }
 /* Controls that lift, press or nudge also animate transform. Never add anything positioned with an inline
    transform here (the planning board's "+" between shots, timeline clips): it would lag behind the pointer. */
 :where(.btn, .rk-btn, .icon-btn, .cchip, .platform, .tile-save, .switcher-btn, .mic-btn,
-  .trend-card, button.board-card, .rk-pick, .tile-main .thumb, .rk-arrow, .find-start-arrow) {
+  .trend-card, button.board-card, .rk-pick, .tile-main .thumb, .rk-arrow, .find-start-arrow, .fd-arrow, .fd-go > span) {
   transition: var(--hover-transition-move);
 }
 
@@ -42,7 +42,7 @@
 .cv-conn-note-x { --hover-text: currentColor; }                   /* the ✕ in a coloured note keeps the note's colour */
 
 /* Disclosures and bold links show their underline on hover, so they get a hidden one at rest */
-:is(.link-strong, .find-start-label, .rk-links a, .rk-footer nav a, .plan-more > summary, .board-tools summary, .portal-shots > summary) {
+:is(.link-strong, .find-start-label, .fd-start-label, .rk-links a, .rk-footer nav a, .plan-more > summary, .board-tools summary, .portal-shots > summary) {
   text-decoration-line: underline; text-decoration-color: transparent; text-underline-offset: 3px;
 }
 
@@ -61,7 +61,7 @@
   /* 3. Quiet controls */
   :root :is(.icon-btn, .toast-x, .q-chip-x, .mic-btn, .side-link, .switcher-item, .cv-add-list button, button.ch-steps-row,
     .sb-toggle-btn, .theme-seg button, .cv-ed-tab, .cv-conn-note-x, .cv-clip-grip, .tc-at-link, .rs-ext, .rs-x,
-    .rs-group-toggle, .rk-btn-ghost, .rk-btn-outline, .rk-btn-on-navy, .react-flow__controls-button):hover:not(
+    .rs-group-toggle, .rk-btn-ghost, .rk-btn-outline, .rk-btn-on-navy, .react-flow__controls-button, .fd-go, .fd-start-item, .btn.fd-btn-line):hover:not(
     :disabled, [aria-disabled="true"], .is-disabled, .mic-off, .mic-on, [aria-pressed="true"], [aria-selected="true"], .on, .side-on) {
     background-color: var(--hover-tint); color: var(--hover-text);
   }
@@ -74,6 +74,7 @@
   }
   :root .find-start-item:hover .find-start-label { color: var(--hover-text); text-decoration-color: currentColor; }
   :root .find-start-item:hover .find-start-arrow { color: var(--hover-text); }
+  :root .fd-start-item:hover .fd-start-label { color: var(--hover-text); text-decoration-color: currentColor; }
   :root .rs-sort:hover .rs-sort-icon:not(.is-on) { opacity: 0.5; }
 
   /* 5. Chips, options and toggles */
@@ -119,7 +120,9 @@
   :root :is(.trend-card, button.board-card, .rk-pick):hover:not(:disabled, .trend-active),
   :root .tile-main:hover .thumb { transform: translateY(var(--hover-lift)); }
   :root .rk-btn-primary:hover .rk-arrow,
-  :root .find-start-item:hover .find-start-arrow { transform: translateX(var(--hover-nudge)); }
+  :root .find-start-item:hover .find-start-arrow,
+  :root .fd-start-item:hover .fd-arrow,
+  :root .fd-go:hover > span { transform: translateX(var(--hover-nudge)); }
 }
 @media (prefers-reduced-motion: no-preference) {
   :root :is(.btn, .rk-btn, .icon-btn, .cchip, .platform, .tile-save, .switcher-btn, .mic-btn):active:not(:disabled, [aria-disabled="true"]) {
