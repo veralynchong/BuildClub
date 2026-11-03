@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { kitRefs, wireKit, pruneKit, kitStale } from '../src/lib/canvas/kit.ts'
+import { getKit, createKitItem, updateKitItem, deleteKitItem, addKitImage, deleteKitImage, kitFileUrl } from '../src/lib/canvas/api.ts'
 
 const edge = (source, target, targetHandle) => ({ id: `e_${source}_${target}_${targetHandle}`, source, sourceHandle: 'out', target, targetHandle })
 const node = (id, type, data = {}) => ({ id, type, position: { x: 0, y: 0 }, data })
@@ -138,4 +139,81 @@ test('kitStale ignores storyboards with no done version', () => {
   const doc = docOf()
   const g = [gen('q', 'sb', 'running', 1, { kitStamp: { k_mia: 1 } }), gen('f', 'sb', 'failed', 2, { kitStamp: { k_mia: 1 } })]
   assert.deepEqual(kitStale(doc, g, kit), [])
+})
+
+// ---- api client ----
+function stub(status, body) {
+  const seen = {}
+  globalThis.fetch = async (url, init = {}) => {
+    seen.url = url
+    seen.init = init
+    return { ok: status < 400, status, json: async () => body }
+  }
+  return seen
+}
+
+test('getKit GETs the client kit', async () => {
+  const seen = stub(200, { items: [mia] })
+  assert.deepEqual(await getKit('c/1'), { items: [mia] })
+  assert.equal(seen.url, '/api/clients/c%2F1/kit')
+  assert.equal(seen.init.method ?? 'GET', 'GET')
+})
+
+test('createKitItem POSTs the body', async () => {
+  const seen = stub(201, mia)
+  assert.deepEqual(await createKitItem('c1', { kind: 'character', name: 'Mia' }), mia)
+  assert.equal(seen.url, '/api/clients/c1/kit/items')
+  assert.equal(seen.init.method, 'POST')
+  assert.deepEqual(JSON.parse(seen.init.body), { kind: 'character', name: 'Mia' })
+})
+
+test('updateKitItem PATCHes a partial body', async () => {
+  const seen = stub(200, mia)
+  await updateKitItem('c1', 'k_mia', { note: 'blue coat' })
+  assert.equal(seen.url, '/api/clients/c1/kit/items/k_mia')
+  assert.equal(seen.init.method, 'PATCH')
+  assert.deepEqual(JSON.parse(seen.init.body), { note: 'blue coat' })
+})
+
+test('deleteKitItem DELETEs and returns the kit', async () => {
+  const seen = stub(200, { items: [] })
+  assert.deepEqual(await deleteKitItem('c1', 'k_mia'), { items: [] })
+  assert.equal(seen.url, '/api/clients/c1/kit/items/k_mia')
+  assert.equal(seen.init.method, 'DELETE')
+})
+
+test('addKitImage PUTs the raw file with its content type', async () => {
+  const seen = stub(200, mia)
+  const file = { name: 'a.png', type: 'image/png', size: 3 }
+  await addKitImage('c1', 'k_mia', file)
+  assert.equal(seen.url, '/api/clients/c1/kit/items/k_mia/images')
+  assert.equal(seen.init.method, 'PUT')
+  assert.equal(seen.init.headers['content-type'], 'image/png')
+  assert.equal(seen.init.body, file)
+})
+
+test('deleteKitImage DELETEs one image by name', async () => {
+  const seen = stub(200, mia)
+  await deleteKitImage('c1', 'k_mia', 'ka_1.png')
+  assert.equal(seen.url, '/api/clients/c1/kit/items/k_mia/images/ka_1.png')
+  assert.equal(seen.init.method, 'DELETE')
+})
+
+test('kitFileUrl points at the file route', () => {
+  assert.equal(kitFileUrl('c/1', 'ka_1.png'), '/api/clients/c%2F1/kit/files/ka_1.png')
+})
+
+test('kit api errors carry the backend error text', async () => {
+  const msg = 'A kit item with that name already exists.'
+  for (const call of [
+    () => getKit('c1'),
+    () => createKitItem('c1', { kind: 'style', name: 'x' }),
+    () => updateKitItem('c1', 'k', { name: 'x' }),
+    () => deleteKitItem('c1', 'k'),
+    () => addKitImage('c1', 'k', { name: 'a.png', type: 'image/png', size: 1 }),
+    () => deleteKitImage('c1', 'k', 'a.png'),
+  ]) {
+    stub(409, { error: msg })
+    await assert.rejects(call(), (e) => e instanceof Error && e.message === msg)
+  }
 })

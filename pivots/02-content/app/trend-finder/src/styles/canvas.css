@@ -179,3 +179,16 @@
 .cv-clip-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
 .cv-clip-grip { flex: none; padding: 0 var(--space-xs); color: var(--muted); cursor: grab; user-select: none; letter-spacing: -2px; border-radius: var(--radius-xs); }
 .cv-clip-grip:hover { background: var(--surface-3); color: var(--fg); }
+
+/* kit panel: the client's consistency kit and which items this plan uses */
+.cv-kit { display: flex; flex-direction: column; gap: var(--space-base); min-width: 0; }
+.cv-kit-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+.cv-kit-head h2 { margin: 0; font-size: var(--text-md); }
+.cv-kit-item { padding: var(--space-base); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
+.cv-kit-name { flex: 1; min-width: 0; }
+.cv-kit-images { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.cv-kit-image { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2xs); }
+.cv-kit-image img { width: 72px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); }
+.cv-kit-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); font-size: var(--text-sm); }
+.cv-kit-error { margin: 0; color: var(--danger, var(--fg)); }
+.cv-kit-use { flex-direction: column; align-items: flex-start; }

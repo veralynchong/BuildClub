@@ -2,6 +2,7 @@ import type { GenRef } from './kit.ts'
 import { t } from '../i18n.ts'
 import { serverText } from '../serverText.ts'
 import { imageError, imageType } from './upload.ts'
+import type { Kit, KitItem, KitKind } from '../../types.ts'
 import type { Budget, CanvasDoc, CanvasState, ChainBody, GenModel, Generation, Quote } from './types.ts'
 
 // A plan with no saved shots has no canvas yet.
@@ -150,3 +151,37 @@ export async function uploadImage(ideaId: string, nodeId: string, file: File): P
   })
   return send(r, t('canvas.err.upload'))
 }
+
+// ---- consistency kit (backend/kit.py): the client's characters, products, places and looks ----
+const kitBase = (clientId: string) => `/api/clients/${encodeURIComponent(clientId)}/kit`
+const itemBase = (clientId: string, itemId: string) => `${kitBase(clientId)}/items/${encodeURIComponent(itemId)}`
+const json = { 'content-type': 'application/json' }
+
+export async function getKit(clientId: string): Promise<Kit> {
+  return send(await fetch(kitBase(clientId)), t('canvas.kit.panel.err.load'))
+}
+
+export async function createKitItem(clientId: string, body: { kind: KitKind; name: string; note?: string }): Promise<KitItem> {
+  const r = await fetch(`${kitBase(clientId)}/items`, { method: 'POST', headers: json, body: JSON.stringify(body) })
+  return send(r, t('canvas.kit.panel.err.save'))
+}
+
+export async function updateKitItem(clientId: string, itemId: string, body: Partial<{ kind: KitKind; name: string; note: string }>): Promise<KitItem> {
+  const r = await fetch(itemBase(clientId, itemId), { method: 'PATCH', headers: json, body: JSON.stringify(body) })
+  return send(r, t('canvas.kit.panel.err.save'))
+}
+
+export async function deleteKitItem(clientId: string, itemId: string): Promise<Kit> {
+  return send(await fetch(itemBase(clientId, itemId), { method: 'DELETE' }), t('canvas.kit.panel.err.save'))
+}
+
+export async function addKitImage(clientId: string, itemId: string, file: File): Promise<KitItem> {
+  const r = await fetch(`${itemBase(clientId, itemId)}/images`, { method: 'PUT', headers: { 'content-type': imageType(file) ?? file.type }, body: file })
+  return send(r, t('canvas.kit.panel.err.upload'))
+}
+
+export async function deleteKitImage(clientId: string, itemId: string, name: string): Promise<KitItem> {
+  return send(await fetch(`${itemBase(clientId, itemId)}/images/${encodeURIComponent(name)}`, { method: 'DELETE' }), t('canvas.kit.panel.err.save'))
+}
+
+export const kitFileUrl = (clientId: string, name: string): string => `${kitBase(clientId)}/files/${encodeURIComponent(name)}`
