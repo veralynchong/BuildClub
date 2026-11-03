@@ -115,6 +115,15 @@ export function oneClipPerShot(p: EditProject): { project: EditProject; removed:
   return clips.length === p.clips.length ? { project: p, removed: 0 } : { project: { ...p, clips }, removed: p.clips.length - clips.length }
 }
 
+// Whether `src` (same kind and id) is one of the clips, and whether a shot has a clip.
+export function isOnTimeline(p: EditProject | null, src: Pick<ClipSource, 'kind' | 'id'>): boolean {
+  return !!p && p.clips.some((c) => c.source.kind === src.kind && c.source.id === src.id)
+}
+
+export function shotOnTimeline(p: EditProject | null, shotId: string | undefined): boolean {
+  return !!p && !!shotId && p.clips.some((c) => c.source.shotId === shotId)
+}
+
 // What the Timeline node shows: seconds in total and how many of the shots have a clip.
 export function timelineSummary(p: EditProject | null, shotOrder: string[]): { seconds: number; ready: number; total: number } {
   if (!p) return { seconds: 0, ready: 0, total: shotOrder.length }
@@ -285,10 +294,6 @@ export function clipStatus(clip: Clip, doc: CanvasDoc, gens: Generation[], takes
 }
 
 const sameSource = (a: ClipSource | undefined, b: ClipSource): boolean => !!a && a.kind === b.kind && a.id === b.id
-
-export function isPrimaryPin(primaries: Record<string, ClipSource>, shotId: string, src: ClipSource): boolean {
-  return sameSource(primaries[shotId], src)
-}
 
 export function withPrimary(primaries: Record<string, ClipSource>, shotId: string, src: ClipSource): Record<string, ClipSource> {
   return { ...primaries, [shotId]: src }

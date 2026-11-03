@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { placeShotClip, oneClipPerShot, timelineSummary } from '../src/lib/editor/timeline.ts'
+import { placeShotClip, oneClipPerShot, timelineSummary, isOnTimeline, shotOnTimeline } from '../src/lib/editor/timeline.ts'
 import { clipLabel } from '../src/components/editor/clipName.ts'
 
 const proj = (clips, primaries = {}) => ({
@@ -64,4 +64,20 @@ test('clipLabel names shot and version or take', () => {
   assert.equal(clipLabel(g1, shots, gens, takes), 'Shot 1 · v2')
   assert.equal(clipLabel(src('take', 't2', 's2'), shots, gens, takes), 'Shot 2 · Take 2')
   assert.equal(clipLabel(src('generation', 'gx'), shots, gens, takes), 'Clip')
+})
+
+test('isOnTimeline matches kind and id; shotOnTimeline matches the shot', () => {
+  const p = proj([clip('c1', g1, 3), clip('c3', g3, 3)])
+  assert.equal(isOnTimeline(p, g1), true)
+  assert.equal(isOnTimeline(p, src('take', 'g1', 's1')), false) // same id, other kind
+  assert.equal(isOnTimeline(p, g2), false)
+  assert.equal(isOnTimeline(null, g1), false)
+  assert.equal(shotOnTimeline(p, 's1'), true)
+  assert.equal(shotOnTimeline(p, 's2'), false)
+  assert.equal(shotOnTimeline(p, undefined), false)
+  assert.equal(shotOnTimeline(null, 's1'), false)
+  // the button's guard: a source already on the timeline is not placed again, so its trim stays
+  const trimmed = proj([{ ...clip('c1', g1, 3), in: 1, volume: 0.5 }])
+  assert.equal(isOnTimeline(trimmed, g1), true)
+  assert.notEqual(placeShotClip(trimmed, g1, 5, shotOrder, 'c9').clips[0].in, 1) // why the guard is needed
 })

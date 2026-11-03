@@ -38,10 +38,10 @@ export interface CanvasCtx {
   pickTake: (takeId: string) => void
   cleanTake: (nodeId: string, takeId: string) => Promise<void>
   blocked: boolean // stale or read-only: nothing can be changed
-  // Timeline: put footage at the end, make it a shot's main clip, ask whether it is.
-  addToTimeline: (src: ClipSource) => void
-  setPrimary: (shotId: string, src: ClipSource) => void
-  isPrimary: (shotId: string, src: ClipSource) => boolean
+  // Timeline (one clip per shot): make footage its shot's clip, ask whether it is on the timeline or a shot has a clip.
+  putInTimeline: (src: ClipSource) => void
+  isInTimeline: (src: ClipSource) => boolean
+  shotHasClip: (shotId: string | undefined) => boolean
   // While a line is being dragged: whether it could end on this input (true when nothing is being dragged).
   acceptsDrop: (nodeId: string, handleId: string) => boolean
   dragging: boolean // a line is being dragged from an output

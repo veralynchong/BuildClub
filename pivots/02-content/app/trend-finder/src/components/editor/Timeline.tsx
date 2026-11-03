@@ -88,7 +88,7 @@ export function Timeline({ project, sources, shots, frame, readOnly, timeline, o
     } catch {
       return
     }
-    if (src && (src.kind === 'generation' || src.kind === 'take') && typeof src.id === 'string') void timeline.addClip(src, indexAt(e))
+    if (src && (src.kind === 'generation' || src.kind === 'take') && typeof src.id === 'string') void timeline.useForShot(src) // one clip per shot: its place follows the shot order
   }
 
   const statuses = project.clips.map((c) => ({ clip: c, status: timeline.statusOf(c) }))

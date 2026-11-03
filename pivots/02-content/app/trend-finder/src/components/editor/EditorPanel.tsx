@@ -305,9 +305,11 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
               <span className="cv-ed-source-name">
                 {clipName(s, shots)} · {s.kind === 'take' ? t('editor.sources.take') : t('editor.sources.generation')} · {t('editor.clip.seconds', { sec: Math.round(s.duration * 10) / 10 })}
               </span>
-              <button type="button" className="btn btn-ghost btn-sm" disabled={locked || full} onClick={() => void timeline.addClip({ kind: s.kind, id: s.id, nodeId: s.nodeId, shotId: s.shotId })}>
-                {t('editor.sources.add')}
-              </button>
+              {s.shotId && shots.some((x) => x.id === s.shotId) && (
+                <button type="button" className="btn btn-ghost btn-sm" disabled={locked} onClick={() => void timeline.useForShot({ kind: s.kind, id: s.id, nodeId: s.nodeId, shotId: s.shotId })}>
+                  {t('editor.sources.add')}
+                </button>
+              )}
             </li>
           ))}
         </ul>

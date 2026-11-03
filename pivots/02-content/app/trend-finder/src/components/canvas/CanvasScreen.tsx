@@ -40,6 +40,7 @@ import { EditorPanel } from '../editor/EditorPanel'
 import { useSources } from '../../lib/editor/useSources'
 import { useTimelineActions } from '../../lib/editor/useTimelineActions'
 import { useEditProject } from '../../lib/editor/useEditProject'
+import { oneClipPerShot, shotOnTimeline } from '../../lib/editor/timeline'
 import { CanvasContext, type CanvasCtx } from './nodes/ctx'
 import { nodeTypes } from './nodes'
 
@@ -281,7 +282,7 @@ function CanvasBoard({
 
   // ---- lines and new nodes ----
   const [dragFrom, setDragFrom] = useState<string | null>(null) // the node a line is being dragged from
-  const [note, setNote] = useState<{ key?: Key; vars?: Vars; text?: string; info?: boolean } | null>(null)
+  const [note, setNote] = useState<{ key?: Key; vars?: Vars; text?: string; info?: boolean; action?: { label: Key; run: () => void } } | null>(null)
   const noteTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(noteTimer.current), [])
   const showNote = useCallback((key: Key, vars?: Vars, info?: boolean) => {
@@ -837,6 +838,10 @@ function CanvasBoard({
     [gens, takes],
   )
   const sources = useSources(ideaId, footageSignature)
+  const editingRef = useRef(editing)
+  useEffect(() => {
+    editingRef.current = editing
+  })
   const timeline = useTimelineActions({
     edit,
     sources,
@@ -845,9 +850,27 @@ function CanvasBoard({
     gens,
     takes,
     readOnly,
-    openDrawer: showEditor,
+    // The canvas shows one toast and stays where it is (spec 7.1); inside the editor the timeline itself shows the change.
+    onPlaced: () => {
+      if (editingRef.current) return
+      setNote({ key: 'canvas.timeline.placed', info: true, action: { label: 'canvas.timeline.open', run: showEditor } })
+      clearTimeout(noteTimer.current)
+      noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
+    },
     notify: showNote,
   })
+
+  // An edit saved before one clip per shot may hold several clips of a shot: keep one each, once, and say so.
+  const trimmed = useRef(false)
+  useEffect(() => {
+    if (trimmed.current || !edit.project || readOnly) return
+    trimmed.current = true
+    const r = oneClipPerShot(edit.project)
+    if (r.removed > 0) {
+      edit.update(r.project)
+      showNote('canvas.timeline.trimmed', undefined, true)
+    }
+  }, [edit, readOnly, showNote])
 
   // The running queue and the node statuses; the clock ticks only while something is running.
   const [now, setNow] = useState(() => Date.now())
@@ -861,9 +884,9 @@ function CanvasBoard({
 
   const ctx: CanvasCtx = {
     doc,
-    addToTimeline: (src) => void timeline.addClip(src),
-    setPrimary: timeline.setPrimary,
-    isPrimary: timeline.isPrimary,
+    putInTimeline: (src) => void timeline.useForShot(src),
+    isInTimeline: timeline.isInTimeline,
+    shotHasClip: (shotId) => shotOnTimeline(edit.project, shotId),
     shots,
     readOnly,
     shotNumbers: useMemo(() => {
@@ -1139,6 +1162,18 @@ function CanvasBoard({
           )}
           <div className={note?.info ? 'cv-conn-note is-info' : 'cv-conn-note'} role={note && !note.info ? 'alert' : 'status'}>
             {note && (note.text ?? (note.key && t(note.key, note.vars)))}
+            {note?.action && (
+              <button
+                type="button"
+                className="cv-conn-note-action"
+                onClick={() => {
+                  note.action?.run()
+                  setNote(null)
+                }}
+              >
+                {t(note.action.label)}
+              </button>
+            )}
             {note && !note.info && (
               <button type="button" className="cv-conn-note-x" aria-label={t('canvas.note.dismiss')} onClick={() => setNote(null)}>
                 ×

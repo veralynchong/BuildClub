@@ -243,6 +243,7 @@
 }
 
 .cv-conn-note-x { margin-left: var(--space-sm); padding: 0 var(--space-xs); border: 0; background: none; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.cv-conn-note-action { margin-left: var(--space-sm); padding: 0 var(--space-xs); border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; pointer-events: auto; text-decoration: underline; }
 
 /* ---- generated nodes ---- */
 .cv-select { width: 100%; padding: var(--space-2xs) var(--space-xs); font: inherit; color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
@@ -292,8 +293,6 @@
 
 /* Dragging footage to the timeline */
 .cv-clip-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
-.cv-clip-grip { flex: none; padding: 0 var(--space-xs); color: var(--muted); cursor: grab; user-select: none; letter-spacing: -2px; border-radius: var(--radius-xs); }
-.cv-clip-grip:hover { background: var(--surface-3); color: var(--fg); }
 
 /* kit panel: the client's consistency kit and which items this plan uses */
 .cv-kit { display: flex; flex-direction: column; gap: var(--space-base); min-width: 0; }
