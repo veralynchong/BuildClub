@@ -37,7 +37,7 @@ interface Props {
   onPlanAnother: () => void
   // The signed-in user is the only approver, so a waiting plan is approved or sent back right here (App's decide).
   onDecide: (d: Decision) => void
-  onOpenCanvas: () => void
+  onOpenCanvas: (editor?: boolean) => void // `editor`: open it with the editor already showing
 }
 
 const statusLabel = (s: IdeaStatus): string => t(`plan.screen.status.${s}`)
@@ -195,7 +195,10 @@ export function PlanScreen(p: Props) {
             <strong>{idea.managerNote ? t('plan.screen.banner.approvedWithChanges', { approver: APPROVER }) : t('plan.screen.banner.approved', { approver: APPROVER })}</strong>
             <span>{t('plan.screen.banner.approvedBody', { date: formatDay(idea.dueDate) })}</span>
           </div>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenCanvas}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpenCanvas(true)}>
+            {t('canvas.makeVideo')}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onOpenCanvas()}>
             {t('canvas.open')}
           </button>
         </div>

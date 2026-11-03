@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { t } from '../../../lib/i18n'
+import { t, type Key } from '../../../lib/i18n'
 import { useApp } from '../../../lib/appContext'
 import { deleteLogo, putBrand, putLogo } from '../../../lib/editor/api'
-import type { EditProject } from '../../../lib/editor/types'
+import type { EditProject, LogoCorner, LogoSize } from '../../../lib/editor/types'
 import type { Brand, Client } from '../../../types'
 import { ErrorText } from '../../ErrorText'
 
 const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const FALLBACK_COLOR = '#1d1d1f'
+const SIZES: [LogoSize, Key][] = [['small', 'editor.brand.size.small'], ['medium', 'editor.brand.size.medium'], ['large', 'editor.brand.size.large']]
+const CORNERS: [LogoCorner, Key][] = [
+  ['top-left', 'editor.brand.corner.topLeft'],
+  ['top-right', 'editor.brand.corner.topRight'],
+  ['bottom-left', 'editor.brand.corner.bottomLeft'],
+  ['bottom-right', 'editor.brand.corner.bottomRight'],
+]
 
 interface Props {
   client: Client | undefined
@@ -105,6 +112,19 @@ export function BrandTool({ client, project, readOnly, onProject }: Props) {
         <span>{t('editor.brand.show')}</span>
         {!brand?.logo && <span className="muted small">{t('editor.brand.show.needLogo')}</span>}
       </label>
+      {[
+        { legend: 'editor.brand.size', field: 'logoSize', items: SIZES },
+        { legend: 'editor.brand.corner', field: 'logoCorner', items: CORNERS },
+      ].map(({ legend, field, items }) => (
+        <fieldset key={field} className="cv-ed-choice" disabled={readOnly || !brand?.logo}>
+          <legend>{t(legend as Key)}</legend>
+          {items.map(([v, label]) => (
+            <button key={v} type="button" className="btn btn-ghost btn-sm" aria-pressed={project[field as 'logoSize' | 'logoCorner'] === v} onClick={() => onProject({ ...project, [field]: v })}>
+              {t(label)}
+            </button>
+          ))}
+        </fieldset>
+      ))}
       <div className="cv-ed-field">
         <span>{t('editor.brand.color')}</span>
         <div className="cv-ed-tool-row">

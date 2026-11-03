@@ -40,6 +40,9 @@ export type VoiceSeg = {
   edits: Record<string, string> // page index (within this voiceover) to the text shown instead
 }
 
+export type LogoSize = 'small' | 'medium' | 'large'
+export type LogoCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+
 export type EditProject = {
   fps: 30
   width: 1080
@@ -51,6 +54,8 @@ export type EditProject = {
   voiceover: VoiceSeg[]
   primaries: Record<string, ClipSource>
   showLogo: boolean
+  logoSize: LogoSize // the backend fills these in for a project saved without them
+  logoCorner: LogoCorner
 }
 
 // One footage item from list_sources, without the backend-only `path`.

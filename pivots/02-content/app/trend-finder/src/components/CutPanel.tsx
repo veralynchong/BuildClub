@@ -16,7 +16,7 @@ interface Props {
   // Bumped whenever the takes change, so a finished cut can be checked for staleness without a reload.
   takesRevision?: number
   // Opens the canvas, where the editor makes the video.
-  onOpenCanvas: () => void
+  onOpenCanvas: (editor?: boolean) => void
 }
 
 const isActive = (c: CutState | null) => c?.status === 'queued' || c?.status === 'running'
@@ -83,8 +83,8 @@ export function CutPanel({ ideaId, status, shotCount, takesRevision = 0, onOpenC
       {approved && !output && !active && (
         <div className="cut-options">
           <p className="muted small">{t('cut.panel.useEditor')}</p>
-          <button type="button" className="btn btn-primary btn-sm" onClick={onOpenCanvas}>
-            {t('canvas.open')}
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpenCanvas(true)}>
+            {t('canvas.makeVideo')}
           </button>
         </div>
       )}

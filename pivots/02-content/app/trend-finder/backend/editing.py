@@ -68,9 +68,15 @@ VOICE_ALREADY_ADDED = "That voiceover was already added to the plan."
 VOICE_TOO_LONG = f"The audio is longer than {MAX_VOICE_S} seconds."
 
 
+LOGO_SIZES = ("small", "medium", "large")
+LOGO_CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
+# What a project without the logo fields looks like: the logo as it was drawn before they existed.
+LOGO_DEFAULTS = {"logoSize": "medium", "logoCorner": "top-right"}
+
+
 def empty_project() -> dict:
     return {"fps": 30, "width": 1080, "height": 1920, "clips": [], "texts": [], "captions": {"enabled": False},
-            "music": None, "voiceover": [], "primaries": {}, "showLogo": False}
+            "music": None, "voiceover": [], "primaries": {}, "showLogo": False, **LOGO_DEFAULTS}
 
 
 def source_key(src: dict) -> str:
@@ -190,6 +196,10 @@ def check_project(doc, voice_ids: Optional[set] = None) -> Optional[str]:
         return "Primaries must map a shot id to a source."
     if not isinstance(doc.get("showLogo"), bool):
         return "showLogo must be true or false."
+    if doc.get("logoSize", "medium") not in LOGO_SIZES:
+        return "The logo size must be small, medium or large."
+    if doc.get("logoCorner", "top-right") not in LOGO_CORNERS:
+        return "The logo corner must be top-left, top-right, bottom-left or bottom-right."
     for v in voice:
         problem = _check_voice(v, voice_ids)
         if problem:
@@ -394,6 +404,8 @@ def signature(conn, media: Path, idea: dict, project: dict) -> str:
         except OSError:
             stamps["music"] = f"{row[0]}:0"
     relevant = {k: project.get(k) for k in RENDER_FIELDS}
+    # Only a changed logo size or corner counts, so an export made before these fields existed stays current.
+    relevant.update({k: project[k] for k, v in LOGO_DEFAULTS.items() if project.get(k, v) != v})
     text = json.dumps([relevant, sorted(stamps.items()), client_brand(conn, idea["id"]),
                        shot_lines(conn, idea["id"]) if (project.get("captions") or {}).get("enabled") else {}],
                       sort_keys=True)
@@ -609,7 +621,7 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
 
     def read(conn, idea_id: str):
         row = conn.execute("SELECT version, doc FROM edit_projects WHERE idea_id = ?", (idea_id,)).fetchone()
-        return (row[0], json.loads(row[1])) if row else (0, empty_project())
+        return (row[0], {**LOGO_DEFAULTS, **json.loads(row[1])}) if row else (0, empty_project())
 
     @router.get("/api/ideas/{idea_id}/edit")
     def get_edit(idea_id: str):

@@ -1,4 +1,4 @@
-/* Canvas screen: React Flow board with the editor drawer beside it. The board is styled through React Flow's own
+/* Canvas screen: React Flow board with the full-screen editor over it. The board is styled through React Flow's own
    --xy-* variables, set to tokens. */
 .main:has(> .cv-screen) { max-width: none; }
 .cv-screen { display: flex; flex-direction: column; gap: var(--space-md); align-items: flex-start; min-width: 0; }
@@ -42,22 +42,22 @@
   font-family: var(--font-sans);
 }
 
-.cv-drawer {
-  flex: 0 0 auto; width: var(--cv-w); position: relative; display: flex; min-width: 0;
+/* The editor takes the whole content area; the board stays mounted (hidden) so it keeps its nodes and view. */
+.cv-board { display: contents; }
+.cv-board[hidden] { display: none; }
+.cv-editor-full {
+  width: 100%; min-width: 0; height: calc(100dvh - 140px); min-height: 560px; display: flex; flex-direction: column;
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden;
 }
-.cv-drawer-grip { flex: 0 0 8px; cursor: col-resize; touch-action: none; background: var(--surface-2); }
-.cv-drawer-grip:hover, .cv-drawer-grip:focus-visible { background: var(--surface-3); outline: none; }
-.cv-drawer-body { flex: 1 1 auto; min-width: 0; padding: var(--space-xl); display: flex; flex-direction: column; gap: var(--space-md); overflow: auto; }
+.cv-editor-full > .cv-ed { flex: 1 1 auto; min-height: 0; padding: var(--space-base) var(--space-xl) var(--space-xl); }
 
-/* Narrow screens: the drawer goes under the canvas at full width. */
+/* Narrow screens: the board's height is its own. */
 @media (max-width: 860px) {
-  .cv-layout { flex-direction: column; height: auto; min-height: 0; }
+  .cv-layout { height: auto; min-height: 0; }
   .cv-flow { flex: none; height: 60vh; }
-  .cv-drawer { width: 100%; flex-direction: column; }
-  .cv-drawer-grip { display: none; }
 }
 .sent-banner > .btn { margin-left: auto; flex: 0 0 auto; }
+.sent-banner > .btn + .btn { margin-left: 0; }
 /* Something global pads every element with a "connectable"-like class; give the ports their React Flow size back. */
 .cv-flow .react-flow__handle { width: 8px; height: 8px; min-width: 0; min-height: 0; padding: 0; }
 

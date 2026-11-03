@@ -1,4 +1,4 @@
-/* Canvas editor in the drawer: Remotion player, single-track timeline, per-clip sound. Tokens only. */
+/* Canvas editor, full screen: Remotion player, single-track timeline, per-clip sound. Tokens only. */
 .cv-ed { display: flex; flex-direction: column; gap: var(--space-xl); min-width: 0; }
 .cv-ed h3 { margin: 0; font-size: var(--text-ms); }
 .cv-ed-status { min-height: 28px; display: flex; align-items: center; gap: var(--space-base); font-size: var(--text-sm); }
@@ -96,3 +96,28 @@
 .cv-ed-voice-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-base); }
 .cv-ed-voice { display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .cv-ed-error { color: var(--no); }
+
+/* ---- full-screen layout: top bar, then player beside the tools, then the timeline across the bottom ---- */
+.cv-ed-full { display: flex; flex-direction: column; gap: var(--space-base); }
+.cv-ed-top { position: relative; display: flex; align-items: center; gap: var(--space-xl); flex: 0 0 auto; }
+.cv-ed-top-end { margin-left: auto; display: flex; align-items: center; gap: var(--space-base); }
+.cv-ed-top .cv-ed-status { min-height: 0; }
+.cv-ed-export-pop {
+  position: absolute; top: 100%; right: 0; z-index: 20; width: 380px; max-width: 100%; max-height: min(360px, calc(100dvh - 320px)); overflow: auto; margin-top: var(--space-sm);
+  padding: var(--space-base); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow-md);
+}
+.cv-ed-export-pop[hidden] { display: none; }
+.cv-ed-steps { display: flex; align-items: center; gap: var(--space-xs); list-style: none; margin: 0; padding: 0; }
+.cv-ed-step { display: inline-flex; align-items: center; gap: var(--space-xs); padding: var(--space-xs) var(--space-base); font: inherit; font-size: var(--text-sm); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+.cv-ed-step[aria-current="step"] { color: var(--fg); border-color: var(--accent); font-weight: 600; }
+.cv-ed-step[data-done] { color: var(--fg); }
+.cv-ed-step:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.cv-ed-step-mark { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); font-size: var(--text-xs); }
+.cv-ed-step[data-done] .cv-ed-step-mark { background: var(--accent); color: var(--accent-fg); }
+.cv-ed-main { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(220px, 30%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: var(--space-xl); }
+.cv-ed-full .cv-ed-player { align-self: stretch; min-height: 0; overflow: hidden; }
+.cv-ed-full .cv-ed-player > div { max-height: 100%; }
+.cv-ed-side > * { flex-shrink: 0; }
+.cv-ed-side { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--space-base); overflow: auto; }
+.cv-ed-bottom { flex: 0 0 auto; display: flex; flex-direction: column; gap: var(--space-sm); max-height: 260px; overflow: auto; }
+.cv-ed-export-pop .cv-ed-export-video { max-width: 110px; }

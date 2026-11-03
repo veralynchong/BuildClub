@@ -1,8 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy } from '../src/lib/canvas/graph.ts'
-import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer, DRAWER_KEY } from '../src/lib/canvas/drawer.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, roomBelow, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy } from '../src/lib/canvas/graph.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen, getBudget, quoteChain, startChain } from '../src/lib/canvas/api.ts'
 
 const models = [
@@ -135,34 +134,6 @@ test('primaryFrames lists only changed shots', () => {
   })
   const gens = [gen('g1', 'n_sb_s1', 'done', 1, '/new.svg'), gen('g2', 'n_sb_s2', 'done', 1, '/same.svg')]
   assert.deepEqual(primaryFrames(doc, two, gens), [{ index: 0, frameImage: '/new.svg' }])
-})
-
-test('drawer width clamps and goes full width on phones', () => {
-  assert.equal(clampDrawerWidth(100, 1440), 280)
-  assert.equal(clampDrawerWidth(1300, 1440), 1008)
-  assert.equal(defaultDrawerWidth(1440), 576)
-  assert.equal(clampDrawerWidth(300, 390), 390)
-  assert.equal(clampDrawerWidth(5000, 390), 390)
-  assert.equal(clampDrawerWidth(300, 860), 860)
-  // never wider than the viewport (no horizontal scroll) and never the whole viewport on desktop (canvas stays)
-  for (const vw of [320, 390, 861, 1024, 1440, 2560]) {
-    for (const px of [0, 100, 500, 3000]) {
-      const w = clampDrawerWidth(px, vw)
-      assert.ok(w <= vw, `${vw}/${px}`)
-      if (vw > 860) assert.ok(vw - w >= vw * 0.3 - 1, `${vw}/${px} leaves canvas room`)
-    }
-  }
-})
-
-test('drawer state survives blocked or junk storage', () => {
-  const boom = { getItem() { throw new Error('x') }, setItem() { throw new Error('x') } }
-  assert.deepEqual(readDrawer(boom), { open: false, width: null })
-  assert.doesNotThrow(() => writeDrawer({ open: true, width: 400 }, boom))
-  assert.deepEqual(readDrawer({ getItem: () => 'junk' }), { open: false, width: null })
-  const seen = {}
-  writeDrawer({ open: true, width: 400 }, { setItem: (k, v) => { seen[k] = v } })
-  assert.deepEqual(Object.keys(seen), [DRAWER_KEY])
-  assert.deepEqual(readDrawer({ getItem: () => seen[DRAWER_KEY] }), { open: true, width: 400 })
 })
 
 test('putCanvas sends version and doc, returns the new version', async () => {
@@ -299,6 +270,14 @@ test('failedGen is the newest version only when it failed', () => {
   assert.equal(failedGen('n_sb_s1', [...g, gen('c', 'n_sb_s1', 'done', 3)]), null)
   assert.equal(failedGen('n_sb_s1', [...g, gen('d', 'n_sb_s1', 'running', 3)]), null)
   assert.equal(failedGen('n_other', g), null)
+})
+
+test('roomBelow keeps the spot when it is empty and steps down past nodes in the way', () => {
+  const at = (x, y) => ({ ...node(`n_${x}_${y}`, 'video'), position: { x, y } })
+  assert.deepEqual(roomBelow(docWith({ nodes: [at(900, 0)] }), { x: 360, y: 0 }), { x: 360, y: 0 })
+  assert.deepEqual(roomBelow(docWith({ nodes: [at(360, 0)] }), { x: 360, y: 0 }), { x: 360, y: 280 })
+  const stacked = docWith({ nodes: [at(360, 0), at(380, 280), at(360, 560)] })
+  assert.deepEqual(roomBelow(stacked, { x: 360, y: 0 }), { x: 360, y: 840 })
 })
 
 test('freeSpot moves a new node off the ones already there', () => {

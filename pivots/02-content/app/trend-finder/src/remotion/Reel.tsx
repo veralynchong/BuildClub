@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from 'react'
 import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, staticFile } from 'remotion'
 import { pageEnd, projectPages } from '../lib/editor/captions.ts'
 import { clipFrames, reelDurationInFrames, sourceKey, toFrames } from '../lib/editor/timeline.ts'
-import type { ReelInput, TextItem } from '../lib/editor/types.ts'
+import type { LogoCorner, LogoSize, ReelInput, TextItem } from '../lib/editor/types.ts'
 import { useReelFont } from './font.ts'
 
 // The server render passes an empty fontUrl; the bundle then serves the font from its own public folder.
@@ -19,6 +19,13 @@ const POSITION: Record<TextItem['position'], CSSProperties> = {
 
 // Captions: 56 px, white with a black outline, centred in the same column, the bottom edge at y = 1460.
 const CAPTION_BOX: CSSProperties = { position: 'absolute', left: 70, width: 940, bottom: 1920 - 1460, textAlign: 'center', overflowWrap: 'anywhere' }
+
+// The logo: medium in the top-right corner (48 px in) is how it looked before size and corner could be chosen.
+const LOGO_WIDTH: Record<LogoSize, number> = { small: 120, medium: 180, large: 260 }
+function cornerStyle(corner: LogoCorner | undefined): CSSProperties {
+  const [v, h] = (corner ?? 'top-right').split('-')
+  return { [v === 'bottom' ? 'bottom' : 'top']: 48, [h === 'left' ? 'left' : 'right']: 48 }
+}
 
 // White and brand-colour text get a black outline; black text gets a white one (F25).
 function textLook(color: TextItem['color'], brand: string | null): { fill: string; stroke: string } {
@@ -95,7 +102,7 @@ export function Reel(props: ReelInput) {
         )
       })}
       {project.showLogo && brand.logoUrl ? (
-        <Img src={brand.logoUrl} style={{ position: 'absolute', top: 48, right: 48, width: 180, height: 'auto' }} />
+        <Img src={brand.logoUrl} style={{ position: 'absolute', ...cornerStyle(project.logoCorner), width: LOGO_WIDTH[project.logoSize] ?? LOGO_WIDTH.medium, height: 'auto' }} />
       ) : null}
       {project.voiceover.map((seg) => {
         const file = voice.find((v) => v.id === seg.id)

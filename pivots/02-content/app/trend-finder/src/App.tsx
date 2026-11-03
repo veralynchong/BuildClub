@@ -156,6 +156,7 @@ export default function App() {
   const [researchFocus, setResearchFocus] = useState<string | null>(null)
   const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void } | null>(null)
   const [planIdeaId, setPlanIdeaId] = useState<string | null>(null)
+  const [canvasEditor, setCanvasEditor] = useState(false) // the canvas opens with the editor showing
   // The screen a plan was opened from, so Back returns there.
   const [planFrom, setPlanFrom] = useState<View>('results')
   // The stage a Home pipeline chip asked Plans to scroll to.
@@ -1012,9 +1013,20 @@ export default function App() {
   }
 
   // The canvas needs the plan's shots saved with ids on the server; a plan that never edited its shots has none yet.
-  const openCanvas = (idea: SavedIdea, formatShots: Shot[]) => {
+  const openCanvas = (idea: SavedIdea, formatShots: Shot[], editor = false) => {
     if (!idea.shots) setIdeas((prev) => prev.map((i) => (i.id === idea.id ? { ...i, shots: fillShotIds(formatShots) } : i)))
+    setCanvasEditor(editor)
     setView('canvas')
+  }
+
+  // The Plans board's "Make the video": the plan's canvas, with the editor already open.
+  const makeVideo = (ideaId: string) => {
+    const idea = ideas.find((i) => i.id === ideaId)
+    const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
+    if (!idea || !format) return openPlan(ideaId)
+    setPlanFrom(view)
+    setPlanIdeaId(ideaId)
+    openCanvas(idea, format.shotList, true)
   }
 
   // Find ideas' plan button and P key: a video with a plan opens it; any other is saved to Research (plans are
@@ -1545,6 +1557,7 @@ export default function App() {
               onChangeIdeas={setIdeas}
               onDecide={decide}
               onOpenPlan={openPlan}
+              onMakeVideo={makeVideo}
               onFindMore={() => setView('search')}
               onReview={() => openReview('shortlist')}
               inResearch={inResearch}
@@ -1583,6 +1596,7 @@ export default function App() {
                 onChange={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
                 onBack={() => setView('plan')}
                 backLabel={t('shell.back.plan')}
+                openEditor={canvasEditor}
               />
             </Suspense>
           )}
@@ -1596,7 +1610,7 @@ export default function App() {
               onChange={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
               onBack={() => setView(planFrom)}
               backLabel={backLabel[planFrom]}
-              onOpenCanvas={() => openCanvas(planIdea, planFormat.shotList)}
+              onOpenCanvas={(editor) => openCanvas(planIdea, planFormat.shotList, editor)}
               onFindMore={planAnother}
               onPlanAnother={planAnother}
               onGoApprovals={() => setView('shortlist')} // stream B: the board replaces Approvals

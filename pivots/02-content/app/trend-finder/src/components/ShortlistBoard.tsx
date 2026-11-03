@@ -59,6 +59,8 @@ interface Props {
   // The manager's decision (approve / send back), saved to client memory like Review does.
   onDecide: (ideaId: string, d: Decision) => void;
   onOpenPlan: (ideaId: string) => void;
+  // Opens an approved plan's canvas with the editor showing.
+  onMakeVideo: (ideaId: string) => void;
   onFindMore: () => void;
   onReview: () => void;
   // Videos in this client's Research sheet: their cards get a "From research" link to the Research tab.
@@ -321,6 +323,11 @@ export function ShortlistBoard(p: Props) {
           onFromResearch={p.onOpenResearch && p.inResearch?.has(idea.videoId) ? p.onOpenResearch : undefined}
           actions={
             <>
+              {idea.status === "approved" && (
+                <button className="btn btn-primary btn-sm" onClick={() => p.onMakeVideo(idea.id)}>
+                  {t("canvas.makeVideo")}
+                </button>
+              )}
               {idea.status === "approved" && (
                 <StageSelect
                   idea={idea}

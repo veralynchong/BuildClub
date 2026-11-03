@@ -1,5 +1,7 @@
 """The edit project store: empty default, versioned writes, the limits, and the list of sources."""
 
+import json
+
 import pytest
 
 import cutting
@@ -85,6 +87,39 @@ def test_check_project_texts_and_music_accepted_and_limited():
     assert editing.check_project({**project(clip()), "texts": [text(), text()]})  # shared id
     for music in ({}, {"volume": 2}, {"volume": -0.1}, {"volume": "loud"}, "mp3"):
         assert editing.check_project({**project(clip()), "music": music}), music
+
+
+@pytest.mark.parametrize("field,value", [("logoSize", "huge"), ("logoSize", 3), ("logoCorner", "middle"), ("logoCorner", None)])
+def test_check_project_rejects_bad_logo_fields(field, value):
+    assert editing.check_project({**project(clip()), field: value})
+
+
+def test_logo_fields_default_when_missing_and_are_accepted():
+    old = project(clip())
+    del old["logoSize"], old["logoCorner"]  # a project saved before the fields existed
+    assert editing.check_project(old) is None
+    assert editing.check_project({**project(clip()), "logoSize": "large", "logoCorner": "bottom-left"}) is None
+    assert editing.empty_project()["logoSize"] == "medium" and editing.empty_project()["logoCorner"] == "top-right"
+
+
+def test_old_project_loads_with_logo_defaults_and_keeps_its_signature(client, setup, monkeypatch):
+    fake_probe(monkeypatch)
+    t = up(client).json()
+    old = project(clip())
+    old["clips"][0]["source"]["id"] = t["id"]
+    del old["logoSize"], old["logoCorner"]
+    with server.db() as conn:
+        conn.execute("INSERT INTO edit_projects (idea_id, version, doc, updated_at) VALUES ('ia', 1, ?, 0)", (json.dumps(old),))
+    got = client.get("/api/ideas/ia/edit").json()["project"]
+    assert got["logoSize"] == "medium" and got["logoCorner"] == "top-right"
+
+    def sig(p):
+        with server.db() as conn:
+            return editing.signature(conn, server.MEDIA_DIR, {"id": "ia"}, p)
+
+    assert sig(old) == sig(got)  # the default look is the old look, so an earlier export is not out of date
+    assert sig({**got, "logoSize": "large"}) != sig(got)
+    assert sig({**got, "logoCorner": "top-left"}) != sig(got)
 
 
 def test_put_invalid_422(client, setup):

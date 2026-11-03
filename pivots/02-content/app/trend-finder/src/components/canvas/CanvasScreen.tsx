@@ -15,9 +15,8 @@ import '@xyflow/react/dist/style.css'
 import type { SavedIdea, Shot } from '../../types'
 import { t, type Key, type Vars } from '../../lib/i18n'
 import { getBudget, getCanvas, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
-import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '../../lib/canvas/drawer'
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import { addNode, chainBusy, chainPair, isRetired, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
+import { addNode, chainBusy, chainPair, isRetired, freeSpot, roomBelow, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
@@ -25,7 +24,7 @@ import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
 import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
 import { ErrorText } from '../ErrorText'
 import { AddNodeMenu } from './AddNodeMenu'
-import { EditorDrawer } from './EditorDrawer'
+import { EditorPanel } from '../editor/EditorPanel'
 import { useSources } from '../../lib/editor/useSources'
 import { useTimelineActions } from '../../lib/editor/useTimelineActions'
 import { useEditProject } from '../../lib/editor/useEditProject'
@@ -46,20 +45,11 @@ interface Props {
   onChange: (patch: Partial<SavedIdea>) => void
   onBack: () => void
   backLabel: string
-}
-
-function useViewportWidth(): number {
-  const [w, setW] = useState(() => window.innerWidth)
-  useEffect(() => {
-    const on = () => setW(window.innerWidth)
-    window.addEventListener('resize', on)
-    return () => window.removeEventListener('resize', on)
-  }, [])
-  return w
+  openEditor?: boolean // arrive with the editor already open
 }
 
 // Loads the canvas (waiting a little for a just-edited shot list to reach the server), then shows the board.
-export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel }: Props) {
+export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel, openEditor = false }: Props) {
   const [state, setState] = useState<CanvasState | null>(null)
   const [loadKey, setLoadKey] = useState(0) // bumps on Reload so the board starts over from the server's copy
   const [waiting, setWaiting] = useState(false)
@@ -133,7 +123,7 @@ export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel 
 
   return (
     <ReactFlowProvider>
-      <CanvasBoard key={loadKey} ideaId={idea.id} clientId={idea.clientId} shots={shots} onChange={onChange} readOnly={idea.status !== 'approved'} initial={state} back={back} onReload={reload} />
+      <CanvasBoard key={loadKey} ideaId={idea.id} clientId={idea.clientId} shots={shots} onChange={onChange} readOnly={idea.status !== 'approved'} initial={state} back={back} onReload={reload} openEditor={openEditor} />
     </ReactFlowProvider>
   )
 }
@@ -149,6 +139,7 @@ function CanvasBoard({
   initial,
   back,
   onReload,
+  openEditor,
 }: {
   ideaId: string
   clientId: string
@@ -158,27 +149,44 @@ function CanvasBoard({
   initial: CanvasState
   back: React.ReactNode
   onReload: () => void
+  openEditor: boolean
 }) {
   const first = useMemo(() => toFlow(initial.doc), [initial])
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(first.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(first.edges)
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, getZoom, getViewport, setViewport: moveTo, fitView } = useReactFlow()
   const flowBox = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState<Viewport | undefined>(initial.doc.viewport)
-  const vw = useViewportWidth()
   const fit = isDefaultViewport(initial.doc.viewport)
 
   // ---- edit project (the drawer's timeline; lives here so it outlasts the drawer) ----
   const edit = useEditProject(ideaId, readOnly)
 
-  // ---- drawer ----
-  const [drawer, setDrawer] = useState(() => readDrawer())
-  const drawerWidth = clampDrawerWidth(drawer.width ?? defaultDrawerWidth(vw), vw)
-  // `save` false while the edge is being dragged; the width is stored once it is let go.
-  const setDrawerState = (open: boolean, width: number, save = true) => {
-    setDrawer({ open, width })
-    if (save) writeDrawer({ open, width })
+  // ---- editor (full screen; the board stays mounted underneath, so its nodes and view are as they were) ----
+  const [editing, setEditing] = useState(openEditor)
+  // A board that first mounted hidden has no size to fit to, so it is fitted once it shows.
+  const unfitted = useRef(fit && openEditor)
+  const beforeEditor = useRef<Viewport | null>(null) // the view the board had when the editor covered it
+  const showEditor = () => {
+    beforeEditor.current = getViewport()
+    setEditing(true)
   }
+  // The hidden board may have been resized to nothing, so put its view back once it is shown and laid out.
+  useEffect(() => {
+    if (editing) return
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (unfitted.current) void fitView({ padding: 0.2 })
+        else if (beforeEditor.current) void moveTo(beforeEditor.current)
+        unfitted.current = false
+      })
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
+  }, [editing, fitView, moveTo])
 
   // ---- autosave ----
   const doc = useMemo(() => fromFlow(nodes, edges, viewport), [nodes, edges, viewport])
@@ -625,7 +633,7 @@ function CanvasBoard({
     gens,
     takes,
     readOnly,
-    openDrawer: () => setDrawerState(true, drawerWidth),
+    openDrawer: showEditor,
     notify: showNote,
   })
 
@@ -670,7 +678,13 @@ function CanvasBoard({
     },
     addAfterShot: (shotNodeId, kind) => {
       const shot = latest.current.doc.nodes.find((n) => n.id === shotNodeId)
-      if (shot) place(addNode(latest.current.doc, kind, { x: shot.position.x + 360, y: shot.position.y }, shot.shotId))
+      if (!shot) return
+      const at = roomBelow(latest.current.doc, { x: shot.position.x + 360, y: shot.position.y })
+      const next = addNode(latest.current.doc, kind, at, shot.shotId)
+      place(next)
+      // Once the new node is on screen and measured, bring it and its shot into view without zooming in.
+      const ids = [{ id: shot.id }, { id: next.nodes[next.nodes.length - 1].id }]
+      requestAnimationFrame(() => requestAnimationFrame(() => void fitView({ nodes: ids, padding: 0.3, maxZoom: getZoom(), duration: 300 })))
     },
     acceptsDrop: (nodeId, handleId) => dragFrom === null || check({ source: dragFrom, target: nodeId, targetHandle: handleId }).ok,
   }
@@ -686,6 +700,12 @@ function CanvasBoard({
 
   return (
     <section className="cv-screen">
+      {editing && (
+        <section className="cv-editor-full" aria-label={t('canvas.editor.title')}>
+          <EditorPanel ideaId={ideaId} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} readOnly={readOnly} onBack={() => setEditing(false)} />
+        </section>
+      )}
+      <div className="cv-board" hidden={editing}>
       {back}
       <header className="cv-head">
         <h1>{t('canvas.title')}</h1>
@@ -702,8 +722,8 @@ function CanvasBoard({
         </span>
         <div className="cv-head-actions">
           <AddNodeMenu kinds={ADD_KINDS} label={t('canvas.add')} disabled={readOnly} onPick={addAtCenter} />
-          <button type="button" className="btn btn-ghost btn-sm" aria-expanded={drawer.open} onClick={() => setDrawerState(!drawer.open, drawerWidth)}>
-            {drawer.open ? t('canvas.editor.close') : t('canvas.editor.open')}
+          <button type="button" className="btn btn-primary btn-sm" onClick={showEditor}>
+            {t('canvas.editor.open')}
           </button>
         </div>
       </header>
@@ -791,18 +811,7 @@ function CanvasBoard({
             )}
           </div>
         </div>
-        <EditorDrawer
-          ideaId={ideaId}
-          clientId={clientId}
-          shots={shots}
-          edit={edit}
-          sources={sources}
-          timeline={timeline}
-          readOnly={readOnly}
-          open={drawer.open}
-          width={drawerWidth}
-          onWidth={(px, save) => setDrawerState(true, clampDrawerWidth(px, vw), save)}
-        />
+      </div>
       </div>
     </section>
   )
