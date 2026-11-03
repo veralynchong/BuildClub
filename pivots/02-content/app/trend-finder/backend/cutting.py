@@ -53,6 +53,8 @@ def parse_words(data: dict) -> list[Word]:
             continue
         if text[0] == "*" or text[-1] == "*":  # a sound note such as "*phone rings*", split per word
             continue
+        if not any(c.isalnum() for c in text):  # "." or a music note: whisper's guess at noise, not speech
+            continue
         if toks and CJK_RE.search(text):
             words.extend(_token_words(toks, begin))  # no spaces in Chinese: the whole sentence is one segment
             continue

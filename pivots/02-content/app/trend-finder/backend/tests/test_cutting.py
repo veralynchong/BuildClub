@@ -244,3 +244,11 @@ def test_parse_words_times_every_chinese_character():
     fitted = cutting.fit_to_silences(words, [(6.809, 8.243)])
     assert all(e <= 6.82 or s >= 8.24 for s, e, _ in fitted)
     assert next(w for w in fitted if w[2].startswith("第二"))[0] == pytest.approx(8.243)
+
+
+def test_parse_words_drops_punctuation_and_symbol_only_text():
+    # whisper writes "." for weak room noise (seen on 8 s of -40 dBFS pink noise) and a note symbol for music:
+    # neither is speech, so a take of it must come out with no words
+    seg = lambda a, b, text: {"offsets": {"from": a, "to": b}, "text": text}
+    data = {"transcription": [seg(0, 2180, " ."), seg(2180, 3000, " ♪"), seg(3000, 3500, " ..."), seg(3500, 4000, " hi.")]}
+    assert cutting.parse_words(data) == [(3.5, 4.0, "hi.")]
