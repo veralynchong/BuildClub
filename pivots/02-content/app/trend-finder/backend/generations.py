@@ -224,7 +224,7 @@ def copy_kit_images(kit, media: Path, client_id: str, idea_id: str, stored: list
         if ref["source"] != "kit":
             continue
         folder.mkdir(parents=True, exist_ok=True)
-        part = folder / f".{ref['file']}.part"
+        part = folder / f".{ref['file']}.{secrets.token_hex(4)}.part"  # unique: copies may run at once
         try:
             shutil.copyfile(source / ref["image"], part)
             os.replace(part, folder / ref["file"])

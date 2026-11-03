@@ -1,6 +1,8 @@
 """Generation jobs with the free mock provider: models, submit, poll, files, restart recovery."""
 
 import json
+import os
+from pathlib import Path
 import shutil
 import subprocess
 
@@ -1202,3 +1204,23 @@ def test_worker_sends_kit_files_and_full_prompt(real):
     copy = server.MEDIA_DIR / "ia" / "gen" / row_of(real, gid)["inputs"]["references"][1]["file"]
     assert job.references == [server.MEDIA_DIR / "ia" / "gen" / f"{a}.png", copy]
     assert job.prompt.startswith("Reference images: image 2 is the character") and job.prompt.endswith("a tofu bar")
+
+
+def test_kit_copies_of_one_image_use_separate_temp_files(gen, monkeypatch):
+    mia = kit_item(gen)
+    stored = [{"source": "kit", "image": mia["images"][0], "file": f"kit-{mia['images'][0]}"}]
+    import kit
+    seen = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        seen.append(Path(src).name)
+        real_replace(src, dst)
+
+    monkeypatch.setattr(generations.os, "replace", spy)
+    for _ in range(2):
+        generations.copy_kit_images(kit, server.MEDIA_DIR, "a", "ia", stored)
+    assert len(seen) == 2 and seen[0] != seen[1]
+    folder = server.MEDIA_DIR / "ia" / "gen"
+    assert (folder / stored[0]["file"]).read_bytes() == PNG_BYTES
+    assert not [p for p in folder.iterdir() if p.name.endswith(".part")]
