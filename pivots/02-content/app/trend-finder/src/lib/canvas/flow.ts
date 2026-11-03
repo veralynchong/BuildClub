@@ -58,6 +58,3 @@ export function fromFlow(nodes: FlowNode[], edges: FlowEdge[], viewport: Viewpor
   if (viewport) doc.viewport = { x: Math.round(viewport.x), y: Math.round(viewport.y), zoom: Math.round(viewport.zoom * 1000) / 1000 }
   return doc
 }
-
-// A new canvas starts with the backend's neutral view (0, 0, zoom 1); that means "nobody has looked yet", so fit it.
-export const isDefaultViewport = (vp: Viewport | undefined): boolean => !vp || (vp.x === 0 && vp.y === 0 && vp.zoom === 1)

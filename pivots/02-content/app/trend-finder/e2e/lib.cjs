@@ -82,7 +82,7 @@ async function gotoCanvas(p) {
 }
 
 async function openEditor(p) {
-  if (!(await p.locator('.cv-ed').count())) await p.getByRole('button', { name: /Open editor/ }).click()
+  if (!(await p.locator('.cv-ed').count())) await p.getByRole('button', { name: 'Timeline', exact: true }).click()
   await p.waitForSelector('.cv-ed-timeline', { timeout: 10000 })
   await p.waitForTimeout(800)
 }

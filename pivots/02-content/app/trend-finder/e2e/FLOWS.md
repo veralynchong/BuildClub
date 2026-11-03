@@ -68,7 +68,7 @@
 ### F3 Edit the video
 - Goal: As a manager, assemble the shots into a video with text, captions, music, a voiceover and the client's logo.
 - Steps:
-  1. Start from `seed` with takes, open the canvas → "Open editor".
+  1. Start from `seed` with takes, open the canvas → the "Timeline" switch.
   2. Clips tab: "Fill in shot order", "Split at playhead", "Move earlier/later", "Delete clip", mute and volume. Trimming is a drag on the clip edges.
   3. Text tab: "Add text at the playhead", then change the words, times, position and colour.
   4. Captions tab: turn on "Show captions in the video".
@@ -84,7 +84,7 @@
 ### F4 Export, send for approval, approver approves
 - Goal: The team member exports the video and sends it to the agency's approver (Annie, the agency owner). Annie approves it, or sends it back, from the review link without logging in. The team then sees the decision.
 - Steps:
-  1. Start from `seed` with takes and a review link. "Open editor" → "Fill in shot order" → "Export the video". This takes about 20 s.
+  1. Start from `seed` with takes and a review link. the "Timeline" switch → "Fill in shot order" → "Export the video". This takes about 20 s.
   2. "Send to … for approval". The panel should show "Waiting for …'s approval".
   3. In a new browser context with no cookies, open the review link. Play the video → "Approve".
   4. Run 2: "Send back" with a reason instead of approving.

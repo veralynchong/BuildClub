@@ -3,10 +3,55 @@
 .main:has(> .cv-screen) { max-width: none; }
 .cv-screen { display: flex; flex-direction: column; gap: var(--space-md); align-items: flex-start; min-width: 0; }
 .cv-screen > .link-btn { align-self: flex-start; }
-.cv-head { display: flex; align-items: center; gap: var(--space-md); width: 100%; min-width: 0; }
-.cv-head h1 { font-size: var(--text-md); letter-spacing: var(--tracking-tight); }
+.cv-bar { display: flex; align-items: center; gap: var(--space-md); width: 100%; min-width: 0; }
+.cv-bar-title { display: flex; align-items: baseline; gap: var(--space-sm); min-width: 0; }
+.cv-bar-title h1 { font-size: var(--text-md); letter-spacing: var(--tracking-tight); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cv-save { flex: 1 1 auto; min-width: 0; }
-.cv-head-actions { margin-left: auto; flex: 0 0 auto; display: flex; gap: var(--space-sm); align-items: center; }
+.cv-bar-actions { margin-left: auto; flex: 0 0 auto; display: flex; gap: var(--space-sm); align-items: center; }
+.cv-bar-back, .cv-bar-icon {
+  width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--fg); transition: background-color var(--dur-fast) var(--ease);
+}
+.cv-bar-back:hover, .cv-bar-icon:hover { background: var(--surface-2); }
+.cv-bar-icon[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); }
+.cv-seg { display: flex; padding: var(--space-3xs); border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface-2); }
+.cv-seg button { border: 0; background: transparent; padding: var(--space-2xs) var(--space-base); border-radius: var(--radius-pill); font-size: var(--text-sm); color: var(--muted); }
+.cv-seg button.is-on { background: var(--surface); color: var(--fg); box-shadow: var(--shadow-sm); }
+
+/* Floating tool rail, queue pill, zoom and minimap sit over the board. */
+.cv-flow { --cv-minimap-h: 120px; }
+.cv-rail {
+  position: absolute; left: var(--space-base); top: 50%; transform: translateY(-50%); z-index: 5;
+  display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-2xs);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-md);
+}
+.cv-rail > button, .cv-rail .cv-add-plus {
+  border: 0; background: transparent; width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--fg);
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.cv-rail > button:hover, .cv-rail .cv-add-plus:hover { background: var(--surface-2); }
+.cv-rail > button.is-on { background: var(--accent-soft); color: var(--accent); }
+.cv-rail .cv-add { position: relative; }
+.cv-rail .cv-add-list { position: absolute; left: calc(100% + var(--space-sm)); top: 0; }
+.cv-queue { position: absolute; left: var(--space-base); bottom: var(--space-base); z-index: 5; display: flex; flex-direction: column; gap: var(--space-xs); align-items: flex-start; }
+.cv-queue-pill {
+  padding: var(--space-xs) var(--space-base); border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--line);
+  box-shadow: var(--shadow-md); font-size: var(--text-sm); color: var(--fg);
+}
+.cv-queue-list { list-style: none; margin: 0; padding: var(--space-2xs); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-md); min-width: 220px; }
+.cv-queue-list button { border: 0; background: transparent; width: 100%; display: flex; justify-content: space-between; gap: var(--space-base); padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-xs); font-size: var(--text-sm); text-align: left; }
+.cv-queue-list button:hover { background: var(--surface-2); }
+.cv-zoom {
+  position: absolute; right: var(--space-base); bottom: calc(var(--space-base) * 2 + var(--cv-minimap-h) + var(--space-xs)); z-index: 5; display: flex; align-items: center; gap: var(--space-3xs);
+  padding: var(--space-2xs); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-pill); box-shadow: var(--shadow-md);
+}
+.cv-zoom button { border: 0; background: transparent; width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--radius-pill); color: var(--fg); }
+.cv-zoom button:hover { background: var(--surface-2); }
+.cv-zoom-pct { min-width: 44px; text-align: center; font-size: var(--text-sm); color: var(--muted); }
+.cv-flow .react-flow__minimap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-md); overflow: hidden; margin: var(--space-base); width: 180px; height: var(--cv-minimap-h); }
+
+.cv-flow .react-flow__minimap-mask { fill: var(--accent-soft); }
+.cv-flow .react-flow__minimap-node { fill: var(--line-strong); stroke: none; }
 
 .cv-note {
   display: flex; align-items: center; gap: var(--space-md); justify-content: space-between; width: 100%;
@@ -15,6 +60,10 @@
 .cv-note-error { background: var(--no-soft); color: var(--no); }
 
 .cv-layout { display: flex; width: 100%; min-width: 0; gap: var(--space-md); height: calc(100dvh - 200px); min-height: 420px; }
+/* On the canvas view the page is one screen tall and the board takes whatever the toolbar leaves. */
+.shell.is-compact .main:has(> .cv-screen) { height: 100vh; padding: var(--space-md); display: flex; flex-direction: column; }
+.shell.is-compact .main > .cv-screen { flex: 1 1 auto; min-height: 0; width: 100%; }
+.shell.is-compact .cv-screen .cv-layout { flex: 1 1 auto; height: auto; min-height: 0; }
 .cv-flow {
   flex: 1 1 auto; min-width: 0; position: relative; overflow: hidden;
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);

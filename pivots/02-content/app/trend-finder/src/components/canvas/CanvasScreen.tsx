@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
-  Controls,
+  MiniMap,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -15,7 +15,7 @@ import '@xyflow/react/dist/style.css'
 import type { Kit, SavedIdea, Shot } from '../../types'
 import { t, type Key, type Vars } from '../../lib/i18n'
 import { getBudget, getCanvas, getKit, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
-import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
+import { fromFlow, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { addNode, chainBusy, chainPair, isRetired, freeSpot, roomBelow, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
@@ -25,7 +25,11 @@ import { uploadKind } from '../../lib/canvas/upload'
 import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
 import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
 import { ErrorText } from '../ErrorText'
-import { AddNodeMenu } from './AddNodeMenu'
+import { CanvasToolbar } from './CanvasToolbar'
+import { ToolRail } from './ToolRail'
+import { QueuePill } from './QueuePill'
+import { ZoomBar } from './ZoomBar'
+import { runningQueue, shellKey, writeFullscreen } from '../../lib/canvas/shell'
 import { EditorPanel } from '../editor/EditorPanel'
 import { useSources } from '../../lib/editor/useSources'
 import { useTimelineActions } from '../../lib/editor/useTimelineActions'
@@ -49,10 +53,14 @@ interface Props {
   onBack: () => void
   backLabel: string
   openEditor?: boolean // arrive with the editor already open
+  title: string // the plan's name, shown in the canvas toolbar
+  clientName: string
+  fullscreen: boolean // the app frame is hidden
+  onFullscreen: (on: boolean) => void
 }
 
 // Loads the canvas (waiting a little for a just-edited shot list to reach the server), then shows the board.
-export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel, openEditor = false }: Props) {
+export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel, openEditor = false, title, clientName, fullscreen, onFullscreen }: Props) {
   const [state, setState] = useState<CanvasState | null>(null)
   const [loadKey, setLoadKey] = useState(0) // bumps on Reload so the board starts over from the server's copy
   const [waiting, setWaiting] = useState(false)
@@ -126,7 +134,7 @@ export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel,
 
   return (
     <ReactFlowProvider>
-      <CanvasBoard key={loadKey} ideaId={idea.id} clientId={idea.clientId} shots={shots} onChange={onChange} readOnly={idea.status !== 'approved'} initial={state} back={back} onReload={reload} openEditor={openEditor} />
+      <CanvasBoard key={loadKey} ideaId={idea.id} clientId={idea.clientId} shots={shots} onChange={onChange} readOnly={idea.status !== 'approved'} initial={state} onReload={reload} openEditor={openEditor} onBack={onBack} backLabel={backLabel} title={title} clientName={clientName} fullscreen={fullscreen} onFullscreen={onFullscreen} />
     </ReactFlowProvider>
   )
 }
@@ -140,9 +148,14 @@ function CanvasBoard({
   onChange,
   readOnly,
   initial,
-  back,
   onReload,
   openEditor,
+  onBack,
+  backLabel,
+  title,
+  clientName,
+  fullscreen,
+  onFullscreen,
 }: {
   ideaId: string
   clientId: string
@@ -150,9 +163,14 @@ function CanvasBoard({
   onChange: (patch: Partial<SavedIdea>) => void
   readOnly: boolean
   initial: CanvasState
-  back: React.ReactNode
   onReload: () => void
   openEditor: boolean
+  onBack: () => void
+  backLabel: string
+  title: string
+  clientName: string
+  fullscreen: boolean
+  onFullscreen: (on: boolean) => void
 }) {
   const first = useMemo(() => toFlow(initial.doc), [initial])
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(first.nodes)
@@ -160,7 +178,6 @@ function CanvasBoard({
   const { screenToFlowPosition, getZoom, getViewport, setViewport: moveTo, fitView } = useReactFlow()
   const flowBox = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState<Viewport | undefined>(initial.doc.viewport)
-  const fit = isDefaultViewport(initial.doc.viewport)
 
   // ---- edit project (the drawer's timeline; lives here so it outlasts the drawer) ----
   const edit = useEditProject(ideaId, readOnly)
@@ -168,7 +185,7 @@ function CanvasBoard({
   // ---- editor (full screen; the board stays mounted underneath, so its nodes and view are as they were) ----
   const [editing, setEditing] = useState(openEditor)
   // A board that first mounted hidden has no size to fit to, so it is fitted once it shows.
-  const unfitted = useRef(fit && openEditor)
+  const unfitted = useRef(openEditor)
   const beforeEditor = useRef<Viewport | null>(null) // the view the board had when the editor covered it
   const [kitOpen, setKitOpen] = useState(false) // the kit drawer; only one drawer is open at a time
   const showEditor = () => {
@@ -796,6 +813,49 @@ function CanvasBoard({
   }, [kitNode])
   const selectedKit = nodes.some((n) => n.selected && n.data.node.type === 'kit')
 
+  const [tool, setTool] = useState<'select' | 'pan'>('select')
+  const saveText = readOnly || stale ? '' : saveState === 'saving' ? t('canvas.save.saving') : saveState === 'saved' ? t('canvas.save.saved') : saveState === 'failed' ? t('canvas.save.failed') : ''
+
+  const setFull = useCallback(
+    (on: boolean) => {
+      writeFullscreen(on)
+      onFullscreen(on)
+    },
+    [onFullscreen],
+  )
+  // F enters and Esc leaves full screen, unless typing, a dialog or the editor has the key.
+  const keyState = useRef({ fullscreen, dialogOpen: false, editorOpen: false })
+  keyState.current = { fullscreen, dialogOpen: !!ask, editorOpen: editing }
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = e.target instanceof HTMLElement ? e.target : null
+      const typing = !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
+      const { fullscreen: full, dialogOpen: dlg, editorOpen } = keyState.current
+      // an open add-node menu or queue list takes Esc first (this listener runs in the capture phase, before they close)
+      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list')
+      const act = shellKey({ key: e.key, typing, dialogOpen, editorOpen }, full)
+      if (act) setFull(act === 'enter')
+    }
+    window.addEventListener('keydown', on, true)
+    return () => window.removeEventListener('keydown', on, true)
+  }, [setFull])
+
+  // The running queue; the clock ticks only while something is running.
+  const [now, setNow] = useState(() => Date.now())
+  const running = gens.some((g) => g.status === 'queued' || g.status === 'waiting' || g.status === 'running')
+  useEffect(() => {
+    if (!running) return
+    setNow(Date.now())
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [running])
+  const queue = useMemo(() => runningQueue(doc, gens, models, shots, now), [doc, gens, models, shots, now])
+  const jumpTo = (id: string) => {
+    setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })))
+    void fitView({ nodes: [{ id }], padding: 0.6, maxZoom: 1, duration: 250 })
+  }
+
   const dragSource = dragFrom ? doc.nodes.find((n) => n.id === dragFrom) : undefined
   const dragMedia = dragSource ? outMedia(dragSource) : null
   const shownEdges = edges.map((e) => {
@@ -813,27 +873,17 @@ function CanvasBoard({
         </section>
       )}
       <div className="cv-board" hidden={editing}>
-      {back}
-      <header className="cv-head">
-        <h1>{t('canvas.title')}</h1>
-        <span className="cv-save small muted" role="status">
-          {readOnly || stale
-            ? ''
-            : saveState === 'saving'
-              ? t('canvas.save.saving')
-              : saveState === 'saved'
-                ? t('canvas.save.saved')
-                : saveState === 'failed'
-                  ? t('canvas.save.failed')
-                  : ''}
-        </span>
-        <div className="cv-head-actions">
-          <AddNodeMenu kinds={clientId ? ADD_KINDS_WITH_KIT : ADD_KINDS} disabledKinds={kitNode ? ['kit'] : undefined} label={t('canvas.add')} disabled={readOnly} onPick={addAtCenter} />
-          <button type="button" className="btn btn-primary btn-sm" onClick={showEditor}>
-            {t('canvas.editor.open')}
-          </button>
-        </div>
-      </header>
+      <CanvasToolbar
+        title={title}
+        clientName={clientName}
+        onBack={onBack}
+        backLabel={backLabel}
+        mode="canvas"
+        onMode={(m) => m === 'timeline' && showEditor()}
+        fullscreen={fullscreen}
+        onFullscreen={setFull}
+        saveText={saveText}
+      />
 
       {stale && (
         <div className="cv-note cv-note-error" role="alert">
@@ -866,8 +916,9 @@ function CanvasBoard({
             onMoveEnd={(event, vp) => {
               if (event) setViewport(vp) // only the user's own pan or zoom, not the first fit
             }}
-            defaultViewport={fit ? undefined : initial.doc.viewport}
-            fitView={fit}
+            fitView
+            panOnDrag={tool === 'pan' ? true : [1, 2]}
+            selectionOnDrag={tool === 'select'}
             fitViewOptions={{ padding: 0.2 }}
             minZoom={0.1}
             nodesDraggable={!readOnly}
@@ -877,9 +928,12 @@ function CanvasBoard({
             aria-label={t('canvas.flow.label')}
           >
             <Background />
-            <Controls showInteractive={false} />
+            <MiniMap pannable zoomable />
+            <ZoomBar />
           </ReactFlow>
           </CanvasContext.Provider>
+          <ToolRail mode={tool} onMode={setTool} addKinds={clientId ? ADD_KINDS_WITH_KIT : ADD_KINDS} disabledKinds={kitNode ? ['kit'] : undefined} onAdd={addAtCenter} readOnly={readOnly} />
+          <QueuePill items={queue} onJump={jumpTo} />
           {ask && (
             <div className="cv-modal-back">
               <div className="cv-modal" role="dialog" aria-modal="true" aria-label={t('canvas.chain.title')}>

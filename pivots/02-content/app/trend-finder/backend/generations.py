@@ -105,6 +105,9 @@ def validate_models(models: list[dict]) -> list[str]:
             errors.append(f"{mid}: unknown provider {m.get('provider')!r}")
         if m.get("kind") == "video" and "9:16" not in m.get("aspects", []):
             errors.append(f"{mid}: video model without 9:16")
+        ts = m.get("typicalSeconds")
+        if ts is not None and (isinstance(ts, bool) or not isinstance(ts, (int, float)) or ts <= 0):
+            errors.append(f"{mid}: typicalSeconds must be a positive number")
         if (m.get("price") or {}).get("perRefUsd") is not None:
             errors.append(f"{mid}: perRefUsd is not supported yet")
     return errors

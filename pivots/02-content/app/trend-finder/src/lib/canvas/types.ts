@@ -90,6 +90,7 @@ export interface GenModel {
   durations?: number[]
   maxRefs?: number // reference images the model takes; missing counts as 1
   aspects: string[]
+  typicalSeconds?: number // seconds a job usually takes; the UI always says "about"
 }
 
 export interface CanvasState {

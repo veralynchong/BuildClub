@@ -44,6 +44,17 @@ def test_models_file_valid():
     assert generations.validate_models(generations.load_models()) == []
 
 
+def test_models_have_typical_seconds():
+    for m in generations.load_models():
+        assert isinstance(m.get("typicalSeconds"), (int, float)) and m["typicalSeconds"] > 0, m["id"]
+
+
+def test_validate_models_rejects_bad_typical_seconds():
+    ok = {"id": "a", "kind": "image", "provider": "mock", "aspects": ["9:16"]}
+    assert generations.validate_models([{**ok, "typicalSeconds": 0}]) == ["a: typicalSeconds must be a positive number"]
+    assert generations.validate_models([{**ok, "typicalSeconds": "fast"}]) == ["a: typicalSeconds must be a positive number"]
+
+
 def test_validate_models_catches_errors():
     ok = {"id": "a", "kind": "image", "provider": "mock", "aspects": ["9:16"]}
     assert generations.validate_models([ok]) == []

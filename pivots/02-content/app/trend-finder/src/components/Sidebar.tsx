@@ -72,6 +72,7 @@ interface Props {
   open: boolean
   onClose: () => void
   live: boolean
+  compact?: boolean // icons only (the canvas view): each item keeps its label as title and aria-label
 }
 
 function ClientSwitcher({ clients, workspace, setWorkspace, onAddClient }: Pick<Props, 'clients' | 'workspace' | 'setWorkspace' | 'onAddClient'>) {
@@ -173,6 +174,8 @@ export function Sidebar(p: Props) {
   const item = (v: View, icon: keyof typeof paths, label: string, count?: number, active = p.view === v, extra?: ReactNode) => (
     <button
       className={`side-link ${active ? 'side-on' : ''}`}
+      title={p.compact ? label : undefined}
+      aria-label={p.compact ? label : undefined}
       aria-current={active ? 'page' : undefined}
       onClick={() => {
         p.setView(v)
@@ -189,7 +192,7 @@ export function Sidebar(p: Props) {
   return (
     <>
       {p.open && <div className="side-scrim" onClick={p.onClose} />}
-      <aside className={`sidebar ${p.open ? 'sidebar-open' : ''}`} aria-label={t('shell.side.main')}>
+      <aside className={`sidebar ${p.open ? 'sidebar-open' : ''} ${p.compact ? 'sidebar-compact' : ''}`} aria-label={t('shell.side.main')}>
         <div className="side-brand">
           <button
             type="button"
