@@ -44,16 +44,39 @@ def parse_words(data: dict) -> list[Word]:
         text = seg.get("text", "").strip()
         start, end = seg["offsets"]["from"] / 1000, seg["offsets"]["to"] / 1000
         toks = [t for t in seg.get("tokens", []) if t.get("t_dtw", -1) >= 0 and not t["text"].startswith("[_")]
+        begin = prev if prev is not None else start
         if toks:
             end = toks[-1]["t_dtw"] / 100
-            start = min(prev if prev is not None else start, end)
+            start = min(begin, end)
             prev = end
         if not text or (text[0], text[-1]) in {("[", "]"), ("(", ")")}:
             continue
         if text[0] == "*" or text[-1] == "*":  # a sound note such as "*phone rings*", split per word
             continue
+        if toks and CJK_RE.search(text):
+            words.extend(_token_words(toks, begin))  # no spaces in Chinese: the whole sentence is one segment
+            continue
         words.append((start, end, text))
     return sorted(words, key=lambda w: w[0])
+
+
+CJK_RE = re.compile("[\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff]")
+
+
+def _token_words(toks: list[dict], begin: float) -> list[Word]:
+    """One word per token of a segment that has no spaces to split on. A token runs from the previous
+    one's t_dtw to its own; punctuation joins the word before it and adds no time of its own."""
+    out: list[Word] = []
+    for tok in toks:
+        text = tok["text"].strip()
+        end = max(begin, tok["t_dtw"] / 100)
+        if not any(c.isalnum() for c in text):
+            if out and text:
+                out[-1] = (out[-1][0], out[-1][1], out[-1][2] + text)
+            continue
+        out.append((begin, end, text))
+        begin = end
+    return out
 
 
 def is_filler(text: str) -> bool:

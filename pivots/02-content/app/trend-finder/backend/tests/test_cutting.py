@@ -228,3 +228,19 @@ def test_describe_trims_splits_per_take_and_names_fillers():
 
 def test_describe_trims_is_empty_when_nothing_was_cut():
     assert cutting.describe_trims([(0.0, 4.0)], [], [4.0], 4.0) == []
+
+
+def test_parse_words_times_every_chinese_character():
+    # Real whisper-cli output (say -v Tingting, a 1.4 s pause after "整理好,"): Chinese has no spaces, so the
+    # whole sentence is ONE -sow segment; its tokens still carry their own t_dtw times.
+    data = json.loads((FIXTURES / "whisper_words_zh.json").read_text())
+    words = cutting.parse_words(data)
+    assert len(words) > 30 and "".join(w[2] for w in words).startswith("大家好,今天我们来聊三个剪辑小技巧,第一,")
+    by_text = {w[2]: w for w in words}
+    assert by_text["今天"][:2] == pytest.approx((0.56, 1.32), abs=0.01)  # from the previous character's end, like English words
+    assert by_text["剪"][0] < by_text["掉"][0] < by_text["多"][0]  # times grow through the sentence, no one-word span
+    assert words[-1][2] == "了。" and words[-1][1] == pytest.approx(14.30)
+    # the pause is 6.81-8.24 s: after fit_to_silences nothing is spoken inside it
+    fitted = cutting.fit_to_silences(words, [(6.809, 8.243)])
+    assert all(e <= 6.82 or s >= 8.24 for s, e, _ in fitted)
+    assert next(w for w in fitted if w[2].startswith("第二"))[0] == pytest.approx(8.243)
