@@ -3,9 +3,11 @@ import assert from 'node:assert/strict'
 import {
   editLine,
   extractPalette,
+  fillShotIds,
   mergeFrame,
   mergeScript,
   mergeShotScript,
+  newShotId,
   purposeFor,
   setPalette,
   toHex,
@@ -120,4 +122,28 @@ test('extractPalette is deterministic on ties', () => {
   const data = pixels([[[255, 0, 0, 255], 10], [[0, 0, 255, 255], 10]])
   assert.deepEqual(extractPalette(data), extractPalette(data))
   assert.equal(extractPalette(data).length, 2)
+})
+
+test('fillShotIds gives old shots index ids', () => {
+  const out = fillShotIds([{ time: '0-3', shot: 'a' }, { time: '3-6', shot: 'b' }])
+  assert.deepEqual(out.map((s) => s.id), ['s1', 's2'])
+})
+
+test('fillShotIds keeps existing ids and renames duplicates', () => {
+  const out = fillShotIds([{ time: '', shot: 'a', id: 's2' }, { time: '', shot: 'b' }, { time: '', shot: 'c', id: 's2' }])
+  assert.deepEqual(out.map((s) => s.id), ['s2', 's2-2', 's3'])
+})
+
+test('fillShotIds is deterministic and does not touch its input', () => {
+  const input = [{ time: '', shot: 'a' }, { time: '', shot: 'b', id: 'sh_x' }]
+  const a = fillShotIds(input).map((s) => s.id)
+  assert.deepEqual(a, fillShotIds(input).map((s) => s.id))
+  assert.deepEqual(a, ['s1', 'sh_x'])
+  assert.equal(input[0].id, undefined)
+})
+
+test('newShotId looks like sh_ plus 8 chars and differs each call', () => {
+  const a = newShotId()
+  assert.match(a, /^sh_[a-z0-9]{8}$/)
+  assert.notEqual(a, newShotId())
 })

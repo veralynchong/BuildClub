@@ -2,21 +2,23 @@
 Rows live in the takes table, files in <media>/<ideaId>/<takeId>.<ext>. Only signed-in staff reach
 these routes (they sit under /api/ideas/), so the approver's review link never sees them."""
 
+import json
 import os
 import secrets
 import threading
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
+from models import Shot, fill_shot_ids
 
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS takes (id TEXT PRIMARY KEY, idea_id TEXT NOT NULL, shot INTEGER NOT NULL, "
     "ext TEXT NOT NULL, size INTEGER NOT NULL, name TEXT NOT NULL, chosen INTEGER NOT NULL DEFAULT 0, "
-    "created_at INTEGER NOT NULL)",
+    "created_at INTEGER NOT NULL, shot_id TEXT, cleaned_from TEXT)",
     "CREATE INDEX IF NOT EXISTS takes_by_shot ON takes (idea_id, shot)",
 )
 
@@ -32,13 +34,64 @@ NOT_VIDEO = "Upload an .mp4 or .mov video file."
 # Counting a shot's takes and adding one, or moving the pick, take turns.
 takes_lock = threading.Lock()
 
-COLUMNS = "id, idea_id, shot, ext, size, name, chosen, created_at"
+COLUMNS = "id, idea_id, shot, ext, size, name, chosen, created_at, shot_id, cleaned_from"
 
 
-def to_json(row) -> dict:
-    tid, idea_id, shot, _ext, size, name, chosen, created = row
-    return {"id": tid, "ideaId": idea_id, "shot": shot, "name": name, "size": size, "chosen": bool(chosen),
-            "createdAt": created, "url": f"/api/ideas/{idea_id}/takes/{tid}/file"}
+def migrate(conn) -> None:
+    have = {r[1] for r in conn.execute("PRAGMA table_info(takes)")}
+    if "shot_id" not in have:
+        conn.execute("ALTER TABLE takes ADD COLUMN shot_id TEXT")
+    if "cleaned_from" not in have:
+        conn.execute("ALTER TABLE takes ADD COLUMN cleaned_from TEXT")
+
+
+# A take belongs to a shot by the shot's stable id. The `shot` column is the index the shot had at upload; it
+# is what a plan without a shot list (or an old row that could not be matched) falls back to.
+def shot_ids_of(conn, idea_id: str) -> list[str]:
+    """The ids of the plan's current shot list, in order; empty when the plan lists no shots."""
+    row = conn.execute("SELECT value FROM store WHERE key = 'ideas'").fetchone()
+    idea = next((i for i in json.loads(row[0]) if i.get("id") == idea_id), None) if row else None
+    return [s.id for s in fill_shot_ids([Shot.model_validate(x) for x in idea.get("shots") or []])] if idea else []
+
+
+def same_shot(shot_id: Optional[str], index: int) -> tuple[str, tuple]:
+    """SQL condition + params for "the takes of this shot"."""
+    return ("shot_id = ?", (shot_id,)) if shot_id else ("shot_id IS NULL AND shot = ?", (index,))
+
+
+def backfill(conn, idea_id: str, ids: list[str]) -> None:
+    """Rows saved before shot ids existed get the id their index points at in the current list, and keep it."""
+    for index, shot_id in enumerate(ids):
+        conn.execute("UPDATE takes SET shot_id = ? WHERE idea_id = ? AND shot_id IS NULL AND shot = ?",
+                     (shot_id, idea_id, index))
+
+
+def current_index(row, ids: list[str]) -> Optional[int]:
+    """Where the take's shot sits in the current list; None when the shot was taken out of it."""
+    shot_id = row[8]
+    if not ids:  # no shot list to follow: the index from upload time
+        return row[2]
+    return ids.index(shot_id) if shot_id in ids else None
+
+
+def rows_of(conn, idea_id: str) -> list[tuple]:
+    """(row, current index) of every take of the plan, by shot position then age; shots no longer listed last."""
+    ids = shot_ids_of(conn, idea_id)
+    backfill(conn, idea_id, ids)
+    rows = conn.execute(f"SELECT {COLUMNS} FROM takes WHERE idea_id = ? ORDER BY created_at, rowid", (idea_id,)).fetchall()
+    out = [(r, current_index(r, ids)) for r in rows]
+    return sorted(out, key=lambda p: (p[1] is None, p[1] or 0))  # stable: age order is kept inside a shot
+
+
+def chosen_takes(conn, idea_id: str, limit: int) -> list[tuple]:
+    """(row, index) of the chosen take of each current shot below `limit`, in shot order."""
+    return [(r, i) for r, i in rows_of(conn, idea_id) if r[6] and i is not None and i < limit]
+
+
+def to_json(row, index: Optional[int]) -> dict:
+    tid, idea_id, _stored, _ext, size, name, chosen, created, shot_id, cleaned_from = row
+    return {"id": tid, "ideaId": idea_id, "shot": index, "shotId": shot_id, "name": name, "size": size,
+            "chosen": bool(chosen), "createdAt": created, "cleanedFrom": cleaned_from, "url": f"/api/ideas/{idea_id}/takes/{tid}/file"}
 
 
 def error(status: int, message: str) -> JSONResponse:
@@ -53,9 +106,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
 
     def listed(idea_id: str) -> list:
         with db() as conn:
-            rows = conn.execute(f"SELECT {COLUMNS} FROM takes WHERE idea_id = ? ORDER BY shot, created_at, rowid",
-                                (idea_id,)).fetchall()
-        return [to_json(r) for r in rows]
+            return [to_json(r, i) for r, i in rows_of(conn, idea_id)]
 
     async def receive(request: Request, part: Path) -> int:
         """Stream the body to `part`; the size, or -1 once it passes the cap. `part` is removed on any failure."""
@@ -114,15 +165,23 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
                 part.unlink(missing_ok=True)
                 return error(409, "Only an approved plan can take footage.")
             with db() as conn:
-                count = conn.execute("SELECT COUNT(*) FROM takes WHERE idea_id = ? AND shot = ?",
-                                     (idea_id, shot)).fetchone()[0]
+                ids = shot_ids_of(conn, idea_id)
+                backfill(conn, idea_id, ids)
+                if ids and shot >= len(ids):  # no shot to attach it to: it could never be listed or chosen
+                    part.unlink(missing_ok=True)
+                    return error(422, "That shot isn't on this plan.")
+                shot_id = ids[shot] if shot < len(ids) else None
+                where, args = same_shot(shot_id, shot)
+                count = conn.execute(f"SELECT COUNT(*) FROM takes WHERE idea_id = ? AND {where}",
+                                     (idea_id, *args)).fetchone()[0]
                 if count >= MAX_TAKES_PER_SHOT:
                     part.unlink(missing_ok=True)
                     return error(409, f"This shot has the most takes it can hold ({MAX_TAKES_PER_SHOT}).")
                 os.replace(part, folder / f"{take_id}.{ext}")
-                row = (take_id, idea_id, shot, ext, size, name, int(count == 0), int(time.time() * 1000))
-                conn.execute(f"INSERT INTO takes ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", row)
-        return to_json(row)
+                row = (take_id, idea_id, shot, ext, size, name, int(count == 0), int(time.time() * 1000), shot_id, None)
+                conn.execute(f"INSERT INTO takes ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
+                index = current_index(row, ids)
+        return to_json(row, index)
 
     @router.get("/api/ideas/{idea_id}/takes")
     def listing(idea_id: str):
@@ -140,13 +199,13 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         return FileResponse(path, media_type=MEDIA_TYPES[row[0]])
 
     def editable_take(conn, idea_id: str, take_id: str):
-        """The take's (shot, ext), or the error to return: the plan must exist and be approved, the take be its own."""
+        """The take's (shot, ext, shot_id), or the error to return: the plan must exist and be approved, the take be its own."""
         found = find_idea(idea_id)
         if found is None:
             return error(404, "That plan doesn't exist.")
         if found["status"] != "approved":
             return error(409, "Only an approved plan can take footage.")
-        row = conn.execute("SELECT shot, ext FROM takes WHERE id = ? AND idea_id = ?", (take_id, idea_id)).fetchone()
+        row = conn.execute("SELECT shot, ext, shot_id FROM takes WHERE id = ? AND idea_id = ?", (take_id, idea_id)).fetchone()
         return row or error(404, "That take doesn't exist.")
 
     @router.post("/api/ideas/{idea_id}/takes/{take_id}/choose")
@@ -155,7 +214,8 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             got = editable_take(conn, idea_id, take_id)
             if isinstance(got, JSONResponse):
                 return got
-            conn.execute("UPDATE takes SET chosen = (id = ?) WHERE idea_id = ? AND shot = ?", (take_id, idea_id, got[0]))
+            where, args = same_shot(got[2], got[0])
+            conn.execute(f"UPDATE takes SET chosen = (id = ?) WHERE idea_id = ? AND {where}", (take_id, idea_id, *args))
         return listed(idea_id)
 
     @router.delete("/api/ideas/{idea_id}/takes/{take_id}")

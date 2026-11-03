@@ -76,17 +76,16 @@
   --shadow: none;
   --focus-ring: 0 0 0 3px var(--blue-soft);
   --sky-tint: none;
-  /* Subtitle tokens: the burn-in's look (backend/subtitles.py, drawn on 1080x1920) and the live preview share
-     them. Sizes are the burn-in pixel sizes as a share of the frame width (44, 56, 72 of 1080), used with
-     container units; --sub-bottom is the 460 px under the text block. They sit on top of video, so they are the same in light and dark. */
-  --sub-fg: #ffffff;
-  --sub-bg: rgb(0 0 0 / 0.67);
-  --sub-stroke: #000000;
-  --sub-size-s: 4.07cqw;
-  --sub-size-m: 5.19cqw;
-  --sub-size-l: 6.67cqw;
-  --sub-bottom: 42.59cqw;
-  --sub-margin-x: 6.48%;
+  /* Hook emotion tags (PlanHooks, hookEmotion.ts): a pale tint and same-hue text, one muted hue each, no blue.
+     Every pair passes AA (6.3:1 to 7.8:1). Design: docs/design-review/hook-emotion-options/option-c-refined.html */
+  --emo-curiosity-bg: #e3f2f0; --emo-curiosity-fg: #1d5c57; /* teal */
+  --emo-surprise-bg: #fdecd9; --emo-surprise-fg: #84470d; /* apricot */
+  --emo-relief-bg: #e8f0e2; --emo-relief-fg: #3d5a2c; /* sage */
+  --emo-insider-bg: #f1e8f3; --emo-insider-fg: #6a2f72; /* plum */
+  --emo-humour-bg: #f8f0d6; --emo-humour-fg: #6e5208; /* honey */
+  --emo-desire-bg: #fbe7f0; --emo-desire-fg: #8e2a5e; /* rose */
+  --emo-recognition-bg: #e9ecf0; --emo-recognition-fg: #3c4a5c; /* slate */
+  --emo-alarm-bg: #f7e2dc; --emo-alarm-fg: #8a2f1d; /* brick */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"])[data-ui="altitude"] {
@@ -107,9 +106,6 @@
     --line: #262a48;
     --line-strong: #454a78;
     --frost: rgb(11 13 28 / 0.88);
-    --sub-fg: #ffffff;
-    --sub-bg: rgb(0 0 0 / 0.67);
-    --sub-stroke: #000000;
     --scrim: rgb(0 0 0 / 0.6);
     --accent-fg: #ffffff;
     --hot-fg: #0b0d1c;
@@ -122,6 +118,15 @@
     --swatch-ring: rgb(255 255 255 / 0.4);
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
     --shadow-float: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 64px rgb(0 0 0 / 0.55);
+    /* Hook emotion tags on the dark card surface (7.7:1 to 9.1:1) */
+    --emo-curiosity-bg: #12302f; --emo-curiosity-fg: #8fd6cc;
+    --emo-surprise-bg: #3a2414; --emo-surprise-fg: #f4b98a;
+    --emo-relief-bg: #1e2c1a; --emo-relief-fg: #b5d29e;
+    --emo-insider-bg: #2e1c36; --emo-insider-fg: #d9b3e0;
+    --emo-humour-bg: #33290c; --emo-humour-fg: #e8cc78;
+    --emo-desire-bg: #3a1a2c; --emo-desire-fg: #f0a9cc;
+    --emo-recognition-bg: #222a36; --emo-recognition-fg: #b8c3d2;
+    --emo-alarm-bg: #3a1c16; --emo-alarm-fg: #f0a594;
   }
 }
 /* Explicit Dark setting: same rules, regardless of the OS */
@@ -143,9 +148,6 @@
     --line: #262a48;
     --line-strong: #454a78;
     --frost: rgb(11 13 28 / 0.88);
-    --sub-fg: #ffffff;
-    --sub-bg: rgb(0 0 0 / 0.67);
-    --sub-stroke: #000000;
     --scrim: rgb(0 0 0 / 0.6);
     --accent-fg: #ffffff;
     --hot-fg: #0b0d1c;
@@ -158,6 +160,15 @@
     --swatch-ring: rgb(255 255 255 / 0.4);
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
     --shadow-float: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 64px rgb(0 0 0 / 0.55);
+    /* Hook emotion tags on the dark card surface (7.7:1 to 9.1:1) */
+    --emo-curiosity-bg: #12302f; --emo-curiosity-fg: #8fd6cc;
+    --emo-surprise-bg: #3a2414; --emo-surprise-fg: #f4b98a;
+    --emo-relief-bg: #1e2c1a; --emo-relief-fg: #b5d29e;
+    --emo-insider-bg: #2e1c36; --emo-insider-fg: #d9b3e0;
+    --emo-humour-bg: #33290c; --emo-humour-fg: #e8cc78;
+    --emo-desire-bg: #3a1a2c; --emo-desire-fg: #f0a9cc;
+    --emo-recognition-bg: #222a36; --emo-recognition-fg: #b8c3d2;
+    --emo-alarm-bg: #3a1c16; --emo-alarm-fg: #f0a594;
   }
 
 /* Canvas: plain, no sky tint */
@@ -184,10 +195,7 @@
 :root[data-ui="altitude"] .btn { border-radius: var(--radius-pill); font-weight: 500; padding-inline: 20px; min-height: 40px; }
 :root[data-ui="altitude"] .btn-sm { min-height: 34px; padding-inline: 14px; }
 :root[data-ui="altitude"] .btn-primary { background: var(--blue); color: #ffffff; box-shadow: none; }
-:root[data-ui="altitude"] .btn-primary:hover:not(:disabled) { background: var(--blue-hover); }
 :root[data-ui="altitude"] .btn-ghost { background: var(--accent-soft); border-color: transparent; color: var(--accent-soft-fg); }
-:root[data-ui="altitude"] .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 16%, var(--accent-soft)); }
-:root[data-ui="altitude"] .link-strong:hover { color: var(--label); }
 :root[data-ui="altitude"] :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* Inputs: 8px corners, blue focus */
@@ -214,7 +222,6 @@
 /* Cards: hairline border, 12px corners, no shadow unless they float */
 :root[data-ui="altitude"] :is(.board-card, .stat, .review-card, .search-box, .best, .cchip) { border-color: var(--line); box-shadow: none; }
 :root[data-ui="altitude"] :is(.board-card, .stat, .review-card, .search-box) { border-style: solid; border-width: 1px; border-radius: var(--radius); }
-:root[data-ui="altitude"] .board-card:hover { box-shadow: var(--shadow-card); }
 :root[data-ui="altitude"] .best { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 :root[data-ui="altitude"] .drawer { border-radius: var(--radius-lg) 0 0 var(--radius-lg); }
 :root[data-ui="altitude"] .drawer-head { background: var(--surface); }
@@ -223,7 +230,7 @@
 :root[data-ui="altitude"] .sidebar { background: var(--surface); border-right-color: var(--line); }
 :root[data-ui="altitude"] .brand-mark { border-radius: 7px; background: var(--navy); color: var(--on-navy); font-size: 13px; }
 :root[data-ui="altitude"] .side-link { border-radius: var(--radius-pill); }
-:root[data-ui="altitude"] .side-on, :root[data-ui="altitude"] .side-on:hover:not(:disabled) { background: var(--canvas-alt); box-shadow: inset 0 0 0 1px var(--line); }
+:root[data-ui="altitude"] .side-on { background: var(--canvas-alt); box-shadow: inset 0 0 0 1px var(--line); }
 :root[data-ui="altitude"] .side-on svg { color: var(--violet); }
 :root[data-ui="altitude"] .side-on .side-count { background: var(--navy); color: var(--on-navy); }
 :root[data-ui="altitude"] .switcher-btn { box-shadow: none; }
@@ -238,7 +245,6 @@
 :root[data-ui="altitude"] .score-breakout { color: var(--fg); }
 :root[data-ui="altitude"] .score-strong { color: var(--label); }
 :root[data-ui="altitude"] .cchip-trending { border-color: var(--line); background: var(--surface); }
-:root[data-ui="altitude"] .cchip-trending:hover, :root[data-ui="altitude"] .cchip-trending:focus-visible { border-color: var(--line-strong); background: var(--canvas-alt); }
 :root[data-ui="altitude"] .cchip-trending .cchip-trend, :root[data-ui="altitude"] .cchip-trending .cchip-hint { color: var(--violet); }
 :root[data-ui="altitude"] .cchip-trending.cchip-hot::after { background: var(--mustard); color: var(--on-mustard); }
 :root[data-ui="altitude"] .q-chip-topic { background: var(--blue-soft); color: var(--label); }
@@ -296,7 +302,7 @@
 :root[data-ui="altitude"] .cchip-hot::before { background: var(--mustard); }
 :root[data-ui="altitude"] .stat-score.stat-breakout::before { background: var(--mustard); }
 :root[data-ui="altitude"] .stat-breakout .stat-big { color: var(--fg); }
-:root[data-ui="altitude"] .mic-on, :root[data-ui="altitude"] .mic-on:hover { background: var(--blue); color: #ffffff; }
+:root[data-ui="altitude"] .mic-on { background: var(--blue); color: #ffffff; }
 /* The search field's frame shows focus; the input inside it stays borderless */
 :root[data-ui="altitude"] .search-input input, :root[data-ui="altitude"] .search-input input:focus { border: 0; box-shadow: none; outline: none; }
 /* Big numbers: serif like the headings; colour stays ink (the tier badge carries the meaning) */
@@ -333,13 +339,9 @@
   padding: 12px 0; border: 0; background: none; color: var(--fg); text-align: left; cursor: pointer; font: inherit;
 }
 :root[data-ui="altitude"] .find-start-text { display: grid; gap: 2px; min-width: 0; }
-:root[data-ui="altitude"] .find-start-label { font-weight: 500; overflow-wrap: anywhere; transition: color var(--dur-fast) var(--ease); }
+:root[data-ui="altitude"] .find-start-label { font-weight: 500; overflow-wrap: anywhere; }
 :root[data-ui="altitude"] .find-start-why { font-size: var(--text-sm); line-height: 1.45; color: var(--muted); }
-:root[data-ui="altitude"] .find-start-arrow { flex: none; color: var(--muted); transition: transform var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
-:root[data-ui="altitude"] .find-start-item:hover .find-start-label,
-:root[data-ui="altitude"] .find-start-item:focus-visible .find-start-label { color: var(--label); }
-:root[data-ui="altitude"] .find-start-item:hover .find-start-arrow,
-:root[data-ui="altitude"] .find-start-item:focus-visible .find-start-arrow { transform: translateX(3px); color: var(--label); }
+:root[data-ui="altitude"] .find-start-arrow { flex: none; color: var(--muted); }
 :root[data-ui="altitude"] .find-start-skeleton { height: 44px; margin: 8px 0; border-radius: var(--radius-sm); background: var(--canvas-alt); }
 :root[data-ui="altitude"] .find-start-list > li.find-start-skeleton + li { border-top: 0; }
 
@@ -376,10 +378,6 @@
 
 @media (max-width: 760px) {
   :root[data-ui="altitude"] .find-start-card { padding: 14px 16px 4px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  :root[data-ui="altitude"] :is(.find-start-label, .find-start-arrow) { transition: none; }
-  :root[data-ui="altitude"] .find-start-item:hover .find-start-arrow { transform: none; }
 }
 
 /* Find ideas: after saving, say where the saved video went (Plans, under "Still planning"). */
@@ -430,6 +428,23 @@
 @media (prefers-reduced-motion: reduce) {
   /* No movement: keep the strong blue glow, still. */
   :root[data-ui="altitude"] .platform-on { animation: none; }
+}
+
+/* Hover colours (used by src/styles/interactive.css). Declared again on .rk so the landing and login pages,
+   which carry their own copy of the tokens, resolve them against that copy. Timing lives in tokens.css. */
+:root[data-ui="altitude"], .rk {
+  --hover-fill: var(--blue-hover);                                         /* filled (blue) buttons darken */
+  --hover-soft: color-mix(in srgb, var(--blue) 16%, var(--blue-soft));     /* light-blue buttons deepen */
+  --hover-tint: color-mix(in srgb, currentColor 7%, transparent);          /* quiet controls: a wash of their own text colour,
+                                                                              so it reads on white, grey, navy and in dark mode */
+  --hover-media: rgb(7 11 36 / 0.82);                                      /* dark controls on a video cover go more opaque */
+  --hover-media-light: var(--surface);                                     /* light (frosted) controls on a cover go solid */
+  --hover-edge: color-mix(in srgb, var(--ink) 28%, var(--line-strong));    /* chips, options, inputs, dropdowns: the edge firms up */
+  --hover-border: var(--line-strong);                                      /* cards: the hairline firms up... */
+  --hover-shadow: var(--shadow-card);                                      /* ...and a soft shadow appears */
+  --hover-text: var(--ink);                                                /* links and quiet controls: text goes to full ink */
+  --hover-add-fill: var(--blue-soft);                                      /* dashed "+ Add" tiles */
+  --hover-add-border: var(--blue);
 }
 
 /* Production board tokens (StepProgress, FlagBadge). They point at tokens that already have dark values, so

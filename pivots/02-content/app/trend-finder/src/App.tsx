@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgencySettings, ClientEvent, IdeaStatus, Role, SavedIdea } from './types'
 import { clients as sampleClients, formats, sampleIdeas, videos } from './data/sample'
 import { formatTrend, groupFailures, hasDate, outlierScore, platformList, platformName, stageOrder, viewsPerDay, viewsPerFollower } from './lib/metrics'
@@ -17,6 +17,7 @@ import type { Answer } from './lib/answer'
 import { BreakdownPanel } from './components/BreakdownPanel'
 import { COHORT_PLATFORMS, cohortsByPattern, cohortsByVideo, fillBaseline } from './lib/evidence'
 import { PlanScreen } from './components/PlanScreen'
+import { fillShotIds } from './lib/storyboard'
 import { Sidebar } from './components/Sidebar'
 import type { View } from './components/Sidebar'
 import { OverviewScreen } from './components/OverviewScreen'
@@ -30,7 +31,7 @@ import { CompareScreen } from './components/CompareScreen'
 import type { PickVideo } from './components/CompareScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { LandingAltitude } from './components/landing/LandingAltitude'
-import type { Client, ContentType, Format, Platform, Video } from './types'
+import type { Client, ContentType, Format, Platform, Shot, Video } from './types'
 import {
   analyzeVideo,
   applyBreakdown,
@@ -64,6 +65,8 @@ import type { Key, Lang, Vars } from './lib/i18n'
 import { AppContext } from './lib/appContext'
 import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
+import { CanvasPick } from './components/CanvasPick'
+import { approvedPlans } from './lib/canvasPick'
 import { AddClientScreen } from './components/AddClientScreen'
 import { logout, me, type Account } from './lib/auth'
 import { nextView, onUnauthorized } from './lib/authGate'
@@ -85,6 +88,7 @@ import type { RowPick } from './components/research/ResearchScreen'
 import { SaveToVideo } from './components/research/SaveToVideo'
 import { entryFromVideo, newSlot, planDueDate, planHasWork, planOf, researchId, researchStatus, slotSummary, videoFromLink, withPlanRows } from './lib/research'
 import type { LinkInput, ResearchEntry } from './lib/research'
+import { pickLabel } from './lib/compare'
 
 // The platforms Find ideas can search, offered by Research's "Add from link".
 const SEARCH_PLATFORMS: Platform[] = ['tiktok', 'instagram', 'youtube', 'reddit', 'x']
@@ -114,10 +118,12 @@ function restoreTab(workspace: Workspace): View {
   }
   if (workspace === 'all') return 'overview'
   if (saved === 'results') return 'search'
-  if (saved === 'plan' || saved === 'board' || saved === 'review') return 'shortlist'
+  if (saved === 'plan' || saved === 'canvas' || saved === 'board' || saved === 'review') return 'shortlist'
   if (saved === 'home' || saved === 'search' || saved === 'research' || saved === 'shortlist' || saved === 'settings') return saved
   return 'search'
 }
+
+const CanvasScreen = lazy(() => import('./components/canvas/CanvasScreen'))
 
 export default function App() {
   const [signedIn, setSignedIn] = useStored('trend-finder.signed-in', false)
@@ -155,6 +161,7 @@ export default function App() {
   const [researchFocus, setResearchFocus] = useState<string | null>(null)
   const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void } | null>(null)
   const [planIdeaId, setPlanIdeaId] = useState<string | null>(null)
+  const [canvasEditor, setCanvasEditor] = useState(false) // the canvas opens with the editor showing
   // The screen a plan was opened from, so Back returns there.
   const [planFrom, setPlanFrom] = useState<View>('results')
   // The stage a Home pipeline chip asked Plans to scroll to.
@@ -759,9 +766,10 @@ export default function App() {
       try {
         // The automatic check only reads the cache; only the refresh button may start a paid search.
         const res = await searchLive(topic, fresh, 'tiktok', !fresh)
+        if (!fresh && !res.videos.length) return // nothing saved yet: show no pulse, no banner
         setPulses((prev) => ({ ...prev, [c.id]: pulseFrom(topic, res.videos, findPatterns(res.videos, topic)) }))
       } catch (e) {
-        // No saved result for an automatic check is normal (404): show no pulse, no banner.
+        // A failed automatic check stays quiet; only the refresh button shows a banner.
         if (fresh) setPulseError(e instanceof Error ? e.message : t('shell.search.trendFailed'))
       } finally {
         setPulseLoading(null)
@@ -1006,6 +1014,33 @@ export default function App() {
     setView('plan')
   }
 
+  // The canvas needs the plan's shots saved with ids on the server; a plan that never edited its shots has none yet.
+  const openCanvas = (idea: SavedIdea, formatShots: Shot[], editor = false) => {
+    if (!idea.shots) setIdeas((prev) => prev.map((i) => (i.id === idea.id ? { ...i, shots: fillShotIds(formatShots) } : i)))
+    setCanvasEditor(editor)
+    setView('canvas')
+  }
+
+  // The plan's canvas with the editor closed, as the sidebar's Canvas opens it.
+  const openPlanCanvas = (ideaId: string) => {
+    const idea = ideas.find((i) => i.id === ideaId)
+    const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
+    if (!idea || !format) return openPlan(ideaId)
+    setPlanFrom(view)
+    setPlanIdeaId(ideaId)
+    openCanvas(idea, format.shotList, false)
+  }
+
+  // The Plans board's "Make the video": the plan's canvas, with the editor already open.
+  const makeVideo = (ideaId: string) => {
+    const idea = ideas.find((i) => i.id === ideaId)
+    const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
+    if (!idea || !format) return openPlan(ideaId)
+    setPlanFrom(view)
+    setPlanIdeaId(ideaId)
+    openCanvas(idea, format.shotList, true)
+  }
+
   // The planning board for the plan that is open; its Back returns to the plan.
   const openBoard = () => {
     if (planIdeaId) setView('board')
@@ -1128,6 +1163,8 @@ export default function App() {
     role,
     setRole,
     addClient: (c) => setClients((prev) => [...prev, c]),
+    clients,
+    setClientBrand: (clientId, brand) => setClients((prev) => prev.map((c) => (c.id === clientId ? { ...c, brand } : c))),
     lang,
     setLang,
     recordEvent,
@@ -1147,7 +1184,7 @@ export default function App() {
   // Videos the Compare screen offers: the saved plans' videos (this client's, or everyone's from All
   // clients), then the latest live search results. Only real videos with a link can be compared.
   const comparePicks = (() => {
-    const label = (v: Video) => `@${v.handle} · ${v.hook || v.caption || ''}`.slice(0, 120)
+    const label = (v: Video) => pickLabel(v.handle, v.hook || v.caption || '')
     const pick = (v: Video): PickVideo => ({ url: v.url!, label: label(v), thumbnail: v.thumbnail })
     const seen = new Set<string>()
     const fresh = (v: Video | undefined): v is Video => {
@@ -1170,6 +1207,8 @@ export default function App() {
     results: t('shell.back.results'),
     review: t('shell.back.review'),
     plan: t('shell.back.plan'),
+    canvas: t('shell.back.canvas'),
+    canvasPick: t('shell.back.canvas'),
     board: t('board.backLabel'),
     settings: t('shell.back.settings'),
     preferences: t('shell.back.preferences'),
@@ -1220,12 +1259,17 @@ export default function App() {
 
   // Sidebar "Find ideas": come back to this client's last results if they're still on screen, not an empty search page.
   const navTo = (v: View) => {
+    if (v === 'canvas') {
+      // One approved plan opens its canvas straight away; otherwise pick one (or see why there is none).
+      const plans = approvedPlans(shownIdeas, client.id)
+      return plans.length === 1 ? openPlanCanvas(plans[0].id) : setView('canvasPick')
+    }
     if (v === 'search' && lastSearch && shownSearch === `${client.id}|${lastSearch}`) return setView('results')
     setView(v)
   }
 
   // A plan view without its plan (e.g. after switching sample/live data) would be blank: show Plans instead.
-  const planMissing = (view === 'plan' || view === 'board') && !(planIdea && planVideo && planFormat && planClient)
+  const planMissing = (view === 'plan' || view === 'canvas' || view === 'board') && !(planIdea && planVideo && planFormat && planClient)
   useEffect(() => {
     if (planMissing) setViewRaw('shortlist')
   }, [planMissing])
@@ -1547,6 +1591,7 @@ export default function App() {
               onChangeIdeas={setIdeas}
               onDecide={decide}
               onOpenPlan={openPlan}
+              onMakeVideo={makeVideo}
               onFindMore={() => setView('search')}
               onReview={() => openReview('shortlist')}
               inResearch={inResearch}
@@ -1577,6 +1622,30 @@ export default function App() {
             <SettingsScreen client={client} onChange={updateClient} ideas={ideas} videoById={videoById} formatById={formatById} />
           )}
 
+          {inClient && view === 'canvasPick' && (
+            <CanvasPick
+              clientName={client.name}
+              plans={approvedPlans(shownIdeas, client.id)}
+              videoById={videoById}
+              formatById={formatById}
+              onPick={openPlanCanvas}
+              onGoPlans={() => setView('shortlist')}
+            />
+          )}
+
+          {inClient && view === 'canvas' && planIdea && planVideo && planFormat && planClient && (
+            <Suspense fallback={<p className="muted">{t('canvas.loading')}</p>}>
+              <CanvasScreen
+                idea={planIdea}
+                shots={planIdea.shots ?? planFormat.shotList}
+                onChange={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
+                onBack={() => setView('plan')}
+                backLabel={t('shell.back.plan')}
+                openEditor={canvasEditor}
+              />
+            </Suspense>
+          )}
+
           {inClient && view === 'plan' && planIdea && planVideo && planFormat && planClient && (
             <PlanScreen
               idea={planIdea}
@@ -1586,6 +1655,7 @@ export default function App() {
               onChange={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
               onBack={() => setView(planFrom)}
               backLabel={backLabel[planFrom]}
+              onOpenCanvas={(editor) => openCanvas(planIdea, planFormat.shotList, editor)}
               onFindMore={planAnother}
               onPlanAnother={planAnother}
               onGoApprovals={() => setView('shortlist')} // stream B: the board replaces Approvals

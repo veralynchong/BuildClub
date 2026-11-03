@@ -2,10 +2,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MAX_TAKE_BYTES,
+  canClean,
   canEdit,
   checkFile,
   checklistProgress,
+  cutSeconds,
   formatSize,
+  isNothingToCut,
   takesByShot,
   uploadTake,
   videoType,
@@ -40,6 +43,14 @@ test('takesByShot groups by shot and drops out-of-range ones', () => {
   )
 })
 
+test('takesByShot leaves out takes whose shot was removed (shot null)', () => {
+  const t = (id, shot) => ({ id, shot, shotId: shot === null ? 'gone' : `s${shot}` })
+  assert.deepEqual(
+    takesByShot([t('a', 0), t('b', null)], 2).map((g) => g.map((x) => x.id)),
+    [['a'], []],
+  )
+})
+
 test('formatSize', () => {
   assert.equal(formatSize(0), '0 B')
   assert.equal(formatSize(1536), '1.5 KB')
@@ -70,4 +81,24 @@ test('uploadTake surfaces the server error', async () => {
   globalThis.fetch = async () => ({ ok: false, status: 409, json: async () => ({ error: 'Only an approved plan can take footage.' }) })
   const file = new File([new Uint8Array([1])], 'a.mp4', { type: 'video/mp4' })
   await assert.rejects(uploadTake('ia', 0, file), { message: 'Only an approved plan can take footage.' })
+})
+
+test('canClean: only an original take with no cleaned version yet', () => {
+  const orig = { id: 'a', cleanedFrom: null }
+  const cleaned = { id: 'b', cleanedFrom: 'a' }
+  assert.equal(canClean(orig, [orig]), true)
+  assert.equal(canClean(cleaned, [orig, cleaned]), false)
+  assert.equal(canClean(orig, [orig, cleaned]), false)
+})
+
+test('cutSeconds: seconds cut by a clean-up, one decimal, never negative', () => {
+  assert.equal(cutSeconds({ originalSec: 4.35, cleanSec: 2.33 }), '2.0')
+  assert.equal(cutSeconds({ originalSec: 3, cleanSec: 3.2 }), '0.0')
+})
+
+test('isNothingToCut: only the "no speech" and "no fillers" refusals are results, not errors', () => {
+  assert.equal(isNothingToCut('No speech was found in this take, so nothing was cut.'), true)
+  assert.equal(isNothingToCut('This take has no fillers or long pauses to cut.'), true)
+  assert.equal(isNothingToCut('This take has no sound, so there is nothing to clean.'), false)
+  assert.equal(isNothingToCut(undefined), false)
 })

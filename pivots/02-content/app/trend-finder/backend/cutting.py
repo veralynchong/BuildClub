@@ -1,27 +1,26 @@
-"""Cutting a rough take into a publishable reel: pure helpers (word timing, keep intervals,
-ffmpeg filtergraph strings, tool output parsers). Nothing here runs a program or touches the database."""
+"""Small ffmpeg / whisper tools and the pause-cutting rules (used to clean up a take)."""
 
 import json
-import math
-import os
+import logging
 import re
 import shutil
 import string
 import subprocess
-import threading
 from pathlib import Path
 
 import analyze
+
+log = logging.getLogger(__name__)
 
 Word = tuple[float, float, str]  # start, end, text (seconds)
 
 FILLERS = {"um", "umm", "uh", "uhh", "er", "erm", "hm", "hmm"}  # English only; Chinese fillers are unverified
 MIN_FRAGMENT = 0.08  # seconds; shorter keep intervals are dropped
 FADE = 0.012         # seconds of fade at every seam
-MAX_INPUT_SEC = 600  # total length of the chosen takes
 WHISPER_TIMEOUT = 900
+DTW_PRESET = "large.v3.turbo"  # alignment heads of analyze.MODEL; DTW needs flash attention off (-nfa)
+DTW_EARLY = 0.2  # seconds; a DTW start (the previous word's end) can sit this far before a silence it swallowed
 FFMPEG_TIMEOUT = 1800  # seconds; any single ffmpeg/ffprobe call, so a hung process can't stall the worker
-LOUDNORM = "I=-13:TP=-1.5:LRA=11"  # reel-studio finish.py target, not a platform rule
 
 NO_FFMPEG = ("ffmpeg isn't installed on this computer, so the cut can't be made. "
              "Install it (brew install ffmpeg) and try again.")
@@ -35,14 +34,51 @@ def num(x: float) -> str:
 
 
 def parse_words(data: dict) -> list[Word]:
-    """whisper-cli JSON (one word per segment, offsets in ms) to sorted (start, end, text) in seconds."""
-    words = []
+    """whisper-cli JSON (one word per segment, offsets in ms) to sorted (start, end, text) in seconds.
+    With -dtw each token has t_dtw (10 ms units, about where the token ends): a word then runs from the
+    previous token's t_dtw to its own last token's (a trailing comma's time is where the next word
+    starts). The segment offsets drift badly after a pause, so they are only the fallback (and the
+    first word's start)."""
+    words, prev = [], None
     for seg in data.get("transcription", []):
         text = seg.get("text", "").strip()
+        start, end = seg["offsets"]["from"] / 1000, seg["offsets"]["to"] / 1000
+        toks = [t for t in seg.get("tokens", []) if t.get("t_dtw", -1) >= 0 and not t["text"].startswith("[_")]
+        begin = prev if prev is not None else start
+        if toks:
+            end = toks[-1]["t_dtw"] / 100
+            start = min(begin, end)
+            prev = end
         if not text or (text[0], text[-1]) in {("[", "]"), ("(", ")")}:
             continue
-        words.append((seg["offsets"]["from"] / 1000, seg["offsets"]["to"] / 1000, text))
+        if text[0] == "*" or text[-1] == "*":  # a sound note such as "*phone rings*", split per word
+            continue
+        if not any(c.isalnum() for c in text):  # "." or a music note: whisper's guess at noise, not speech
+            continue
+        if toks and CJK_RE.search(text):
+            words.extend(_token_words(toks, begin))  # no spaces in Chinese: the whole sentence is one segment
+            continue
+        words.append((start, end, text))
     return sorted(words, key=lambda w: w[0])
+
+
+CJK_RE = re.compile("[\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff]")
+
+
+def _token_words(toks: list[dict], begin: float) -> list[Word]:
+    """One word per token of a segment that has no spaces to split on. A token runs from the previous
+    one's t_dtw to its own; punctuation joins the word before it and adds no time of its own."""
+    out: list[Word] = []
+    for tok in toks:
+        text = tok["text"].strip()
+        end = max(begin, tok["t_dtw"] / 100)
+        if not any(c.isalnum() for c in text):
+            if out and text:
+                out[-1] = (out[-1][0], out[-1][1], out[-1][2] + text)
+            continue
+        out.append((begin, end, text))
+        begin = end
+    return out
 
 
 def is_filler(text: str) -> bool:
@@ -60,15 +96,20 @@ def _effective_ends(words: list[Word], silences: list[tuple[float, float]]) -> l
     return ends
 
 
-def wordless_spans(durations: list[float], words: list[Word]) -> list[tuple[float, float]]:
-    """(start, end) in the joined timeline of every take that has no transcribed word starting inside it."""
-    spans, offset = [], 0.0
-    for d in durations:
-        end = offset + d
-        if not any(offset <= w[0] < end for w in words):
-            spans.append((offset, end))
-        offset = end
-    return spans
+def _effective_starts(words: list[Word], silences: list[tuple[float, float]]) -> list[float]:
+    """A DTW word start is the previous word's end (often a little early), so it can swallow the silence
+    before it; start after a silence that ends inside the word and begins at (or just after) its start.
+    A silence beginning later is a pause inside the word and leaves the start alone."""
+    return [max([e for s, e in silences if start < e < end and s <= start + DTW_EARLY], default=start)
+            for start, end, _ in words]
+
+
+def fit_to_silences(words: list[Word], silences: list[tuple[float, float]]) -> list[Word]:
+    """Sorted word times moved off the silences around them (the same rule the clean-up cut uses), so a
+    word after a pause starts when it is spoken."""
+    words = sorted(words, key=lambda w: w[0])
+    return [(s, max(s, e), w[2]) for s, e, w in
+            zip(_effective_starts(words, silences), _effective_ends(words, silences), words)]
 
 
 def keep_intervals(words: list[Word], silences: list[tuple[float, float]], total: float,
@@ -80,14 +121,15 @@ def keep_intervals(words: list[Word], silences: list[tuple[float, float]], total
         return [(0.0, total)]
     words = sorted(words, key=lambda w: w[0])
     ends = _effective_ends(words, silences)
+    starts = _effective_starts(words, silences)
     removals = []
-    for (start, _, text), end in zip(words, ends):
+    for (_, _, text), start, end in zip(words, starts, ends):
         if is_filler(text):
             removals.append((start, end))
     # gaps: head, between words, tail; each side next to a filler gets no keep (the filler goes whole)
-    edges = [(0.0, words[0][0], False, is_filler(words[0][2]))]
+    edges = [(0.0, starts[0], False, is_filler(words[0][2]))]
     for i in range(len(words) - 1):
-        edges.append((ends[i], words[i + 1][0], is_filler(words[i][2]), is_filler(words[i + 1][2])))
+        edges.append((ends[i], starts[i + 1], is_filler(words[i][2]), is_filler(words[i + 1][2])))
     edges.append((ends[-1], total, is_filler(words[-1][2]), False))
     for lo, hi, left_filler, right_filler in edges:
         if hi - lo > min_gap:
@@ -123,6 +165,19 @@ def keep_intervals(words: list[Word], silences: list[tuple[float, float]], total
     return keeps
 
 
+def build_clean_graph(keeps: list[tuple[float, float]], *, video_label: str = "v") -> str:
+    """filter_complex joining the kept intervals of input 0 (the take itself) into [v] and [a]. Audio gets a
+    short fade at every seam; the picture keeps its size and frame rate."""
+    parts = []
+    for i, (a, b) in enumerate(keeps):
+        fade = f"afade=t=in:d={num(FADE)},afade=t=out:st={num(b - a - FADE)}:d={num(FADE)}"
+        parts.append(f"[0:v]trim=start={num(a)}:end={num(b)},setpts=PTS-STARTPTS[v{i}]")
+        parts.append(f"[0:a]atrim=start={num(a)}:end={num(b)},asetpts=PTS-STARTPTS,{fade}[a{i}]")
+    joined = "".join(f"[v{i}][a{i}]" for i in range(len(keeps)))
+    parts.append(f"{joined}concat=n={len(keeps)}:v=1:a=1[{video_label}][a]")
+    return ";\n".join(parts)
+
+
 def describe_trims(keeps: list[tuple[float, float]], words: list[Word], durations: list[float],
                    total: float) -> list[dict]:
     """What the auto-cut removed, per take: [{shot, kind: 'pause'|'filler', start, end}] with start/end in
@@ -147,82 +202,16 @@ def describe_trims(keeps: list[tuple[float, float]], words: list[Word], duration
     return out
 
 
-def atempo_chain(speed: float) -> str:
-    """ffmpeg atempo only accepts 0.5-2.0 per filter, so larger speeds are split."""
-    if speed == 1.0:
-        return ""
-    parts, rest = [], speed
-    while rest > 2.0:
-        parts.append(2.0)
-        rest /= 2.0
-    parts.append(round(rest, 6))
-    return ",".join(f"atempo={p}" for p in parts)
+def find_silences(wav: Path, total: float) -> list[tuple[float, float]]:
+    """The pauses in a wav: silencedetect at -35 dB for 0.15 s or longer."""
+    found = _ffmpeg(["-i", str(wav), "-af", "silencedetect=n=-35dB:d=0.15", "-f", "null", "-"],
+                    "Finding the pauses", quiet=False)
+    return parse_silences(found.stderr, total)
 
 
-def output_duration(keeps: list[tuple[float, float]], speed: float) -> float:
-    return sum(b - a for a, b in keeps) / speed
-
-
-def build_join_graph(takes: list[dict]) -> str:
-    """Filtergraph that crops every take to 1080x1920/30fps/48 kHz stereo and concatenates them.
-    Input i is take i; a take without audio gets generated silence of its length."""
-    parts, labels = [], ""
-    for i, take in enumerate(takes):
-        parts.append(f"[{i}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
-                     f"setsar=1,fps=30,format=yuv420p[v{i}]")
-        if take["hasAudio"]:
-            parts.append(f"[{i}:a]aresample=48000,aformat=channel_layouts=stereo[a{i}]")
-        else:
-            parts.append(f"anullsrc=r=48000:cl=stereo,atrim=0:{num(take['duration'])}[a{i}]")
-        labels += f"[v{i}][a{i}]"
-    parts.append(f"{labels}concat=n={len(takes)}:v=1:a=1[v][a]")
-    return ";".join(parts)
-
-
-def build_cut_graph(keeps: list[tuple[float, float]], speed: float, *, music: bool, audio_only: bool,
-                    loudnorm: dict | None) -> str:
-    """Filtergraph over the joined file (input 0) and optional music (input 1): keep the intervals,
-    speed up, mix, loudnorm. loudnorm None is measuring pass 1; a dict is pass 2 with those measurements.
-    Outputs are [v] (unless audio_only) and [a]."""
-    parts, labels = [], ""
-    for i, (a, b) in enumerate(keeps):
-        span = f"start={num(a)}:end={num(b)}"
-        if not audio_only:
-            parts.append(f"[0:v]trim={span},setpts=PTS-STARTPTS[v{i}]")
-        fade_out = num(b - a - FADE)
-        parts.append(f"[0:a]atrim={span},asetpts=PTS-STARTPTS,afade=t=in:d={FADE},"
-                     f"afade=t=out:st={fade_out}:d={FADE}[a{i}]")
-        labels += ("" if audio_only else f"[v{i}]") + f"[a{i}]"
-    n = len(keeps)
-    if audio_only:
-        parts.append(f"{labels}concat=n={n}:v=0:a=1[ac]")
-    else:
-        parts.append(f"{labels}concat=n={n}:v=1:a=1[vc][ac]")
-        parts.append(f"[vc]setpts=PTS/{num(speed)}[v]" if speed != 1.0 else "[vc]null[v]")
-    tempo = atempo_chain(speed)
-    parts.append(f"[ac]{tempo or 'anull'}[as]")
-    mixed = "as"
-    if music:
-        out = output_duration(keeps, speed)
-        fade = min(1.2, out / 2)  # a very short video still gets a valid (non-negative) fade-out start
-        parts.append(f"[1:a]atrim=0:{num(out)},volume=0.25,afade=t=in:d={num(fade)},"
-                     f"afade=t=out:st={num(max(0, out - fade))}:d={num(fade)}[m]")
-        parts.append("[as][m]amix=inputs=2:duration=first:normalize=0[am]")
-        mixed = "am"
-    if loudnorm is None:
-        norm = f"loudnorm={LOUDNORM}:print_format=json"
-    else:
-        norm = (f"loudnorm={LOUDNORM}:measured_I={num(loudnorm['input_i'])}:measured_TP={num(loudnorm['input_tp'])}:"
-                f"measured_LRA={num(loudnorm['input_lra'])}:measured_thresh={num(loudnorm['input_thresh'])}:"
-                f"offset={num(loudnorm['target_offset'])}:linear=true")
-    parts.append(f"[{mixed}]{norm},aresample=48000[a]")
-    return ";".join(parts)
-
-
-def parse_loudnorm(stderr: str) -> dict:
-    """The measurement block loudnorm prints at the end of ffmpeg's stderr."""
-    block = json.loads(stderr[stderr.rindex("{"):stderr.rindex("}") + 1])
-    return {k: float(block[k]) for k in ("input_i", "input_tp", "input_lra", "input_thresh", "target_offset")}
+def is_silent(silences: list[tuple[float, float]], total: float) -> bool:
+    """True when the pauses cover the whole file. whisper invents text ("Thank you.") for such audio."""
+    return total > 0 and sum(e - s for s, e in silences) >= total * 0.98
 
 
 def parse_silences(stderr: str, total: float) -> list[tuple[float, float]]:
@@ -237,14 +226,6 @@ def parse_silences(stderr: str, total: float) -> list[tuple[float, float]]:
     if start is not None:
         out.append((start, total))
     return out
-
-
-def parse_progress(line: str, total: float) -> float | None:
-    """One `-progress pipe:1` line to a 0-1 fraction of total, or None for any other line."""
-    m = re.match(r"out_time_us=(\d+)$", line.strip())
-    if not m or total <= 0:
-        return None
-    return min(1.0, int(m.group(1)) / 1e6 / total)
 
 
 def missing_tools() -> str | None:
@@ -269,9 +250,9 @@ def run(cmd: list[str], *, timeout: float | None = FFMPEG_TIMEOUT) -> subprocess
         raise CutError(f"{Path(cmd[0]).name} took too long, so the cut was stopped.")
 
 
-def _ffmpeg(args: list[str], what: str, *, quiet: bool = True) -> subprocess.CompletedProcess:
-    """Run ffmpeg; a failure becomes a CutError carrying the tail of stderr."""
-    r = run(["ffmpeg", "-y", "-nostdin", "-v", "error" if quiet else "info", *args])
+def _ffmpeg(args: list[str], what: str, *, quiet: bool = True, binary: str = "ffmpeg") -> subprocess.CompletedProcess:
+    """Run ffmpeg (or `binary`); a failure becomes a CutError carrying the tail of stderr."""
+    r = run([binary, "-y", "-nostdin", "-v", "error" if quiet else "info", *args])
     if r.returncode != 0:
         raise CutError(f"{what} failed: {r.stderr.strip()[-200:]}")
     return r
@@ -291,19 +272,8 @@ def probe(path: Path) -> dict:
         fps = round(float(n) / float(d), 3) if float(d) else 0.0
     return {"duration": float(data.get("format", {}).get("duration") or 0),
             "width": v.get("width"), "height": v.get("height"), "fps": fps, "hasAudio": bool(a),
-            "vcodec": v.get("codec_name"), "acodec": a.get("codec_name"), "pix_fmt": v.get("pix_fmt"),
+            "vcodec": v.get("codec_name"), "color_transfer": v.get("color_transfer"), "acodec": a.get("codec_name"), "pix_fmt": v.get("pix_fmt"),
             "sample_rate": int(a["sample_rate"]) if a.get("sample_rate") else None}
-
-
-def measure_loudness(path: Path) -> dict:
-    """Integrated loudness (LUFS) and true peak (dBFS) from ebur128's closing summary."""
-    r = run(["ffmpeg", "-nostdin", "-i", str(path), "-af", "ebur128=peak=true", "-f", "null", "-"])
-    summary = r.stderr[r.stderr.rfind("Summary:"):]
-    i = re.search(r"\bI:\s+(-?[\d.]+|-inf) LUFS", summary)
-    pk = re.search(r"Peak:\s+(-?[\d.]+|-inf) dBFS", summary)
-    if r.returncode != 0 or not i or not pk:
-        raise CutError("Could not measure the loudness of the result.")
-    return {"I": float(i.group(1)), "peak": float(pk.group(1))}
 
 
 def transcribe_words(wav: Path, work: Path) -> list[Word]:
@@ -312,150 +282,16 @@ def transcribe_words(wav: Path, work: Path) -> list[Word]:
         raise CutError(NO_WHISPER)
     base = Path(work) / "words"
     base.with_suffix(".json").unlink(missing_ok=True)
-    r = run([analyze.WHISPER, "-m", str(analyze.MODEL), "-f", str(wav), "-l", "auto", "-ml", "1", "-sow",
-             "-ojf", "-of", str(base), "-np"], timeout=WHISPER_TIMEOUT)
+    cmd = [analyze.WHISPER, "-m", str(analyze.MODEL), "-f", str(wav), "-l", "auto", "-ml", "1", "-sow",
+           "-ojf", "-of", str(base), "-np"]
+    r = run(cmd[:1] + ["-dtw", DTW_PRESET, "-nfa"] + cmd[1:], timeout=WHISPER_TIMEOUT)
+    if r.returncode == 0 and not base.with_suffix(".json").is_file():
+        log.warning("whisper-cli wrote no JSON with -dtw/-nfa (an older build?); running it again without -dtw, "
+                    "so word times after a pause will drift")
+        r = run(cmd, timeout=WHISPER_TIMEOUT)
     if r.returncode != 0:
         raise CutError(f"Finding the words failed: {r.stderr.strip()[-200:]}")
     try:
         return parse_words(json.loads(base.with_suffix(".json").read_text(encoding="utf-8", errors="replace")))
     except (OSError, ValueError):
         raise CutError("Finding the words failed: whisper.cpp produced no readable result.")
-
-
-def _render_pass(cmd: list[str], total: float, on_progress, err_path: Path) -> None:
-    """Run ffmpeg with `-progress pipe:1`, reporting a 0-1 fraction; stderr goes to a file so it can't block."""
-    timed_out = False
-    with open(err_path, "w+") as err:
-        try:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=err, stdin=subprocess.DEVNULL, text=True)
-        except FileNotFoundError:
-            raise CutError(NO_FFMPEG)
-
-        def expire():
-            nonlocal timed_out
-            timed_out = True
-            proc.kill()
-
-        timer = threading.Timer(FFMPEG_TIMEOUT, expire)
-        timer.start()
-        try:
-            for line in proc.stdout:
-                frac = parse_progress(line, total)
-                if frac is not None:
-                    on_progress(frac)
-            code = proc.wait()
-        finally:
-            timer.cancel()
-            if proc.poll() is None:
-                proc.kill()
-                proc.wait()
-        err.seek(0)
-        tail = err.read().strip()[-200:]
-    if timed_out:
-        raise CutError("Rendering the video took too long, so the cut was stopped.")
-    if code != 0:
-        raise CutError(f"Rendering the video failed: {tail}")
-
-
-def render_cut(takes: list[dict], music: Path | None, speed: float, work: Path, out: Path, step,
-               *, words_fn=transcribe_words, grade: str = "none", burn=None, cues: list | None = None) -> dict:
-    """Join the takes, cut silences and fillers, speed up, mix music, two-pass loudnorm, and write `out`
-    (via out.with_suffix('.part')). `step(progress, text)` is called at each milestone. Intermediate
-    files stay in `work`; removing `work` is the caller's job. `grade` is a grading.PRESETS name and `burn`
-    a subtitles.BurnStyle (None: no burned-in subtitles); `cues` replaces the cues made from the words.
-    The result also carries the subtitle `cues` of the final video."""
-    import grading
-    import subtitles
-    work, out = Path(work), Path(out)
-    work.mkdir(parents=True, exist_ok=True)
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    step(0.02, "Checking the takes")
-    infos = [{**t, **probe(t["path"])} for t in takes]
-    if not infos:
-        raise CutError("There are no takes to cut.")
-    if sum(i["duration"] for i in infos) > MAX_INPUT_SEC:
-        raise CutError(f"The chosen takes are too long (over {MAX_INPUT_SEC // 60} minutes in total).")
-
-    step(0.10, "Joining the takes")
-    joined = work / "joined.mkv"
-    (work / "join.txt").write_text(build_join_graph(infos))
-    cmd = []
-    for i in infos:
-        cmd += ["-i", str(i["path"])]
-    _ffmpeg([*cmd, "-/filter_complex", str(work / "join.txt"), "-map", "[v]", "-map", "[a]",
-             "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-c:a", "pcm_s16le", str(joined)],
-            "Joining the takes")
-    total = probe(joined)["duration"]
-
-    step(0.15, "Listening for words")
-    wav = work / "audio.wav"
-    _ffmpeg(["-i", str(joined), "-vn", "-ac", "1", "-ar", "16000", str(wav)], "Extracting the sound")
-    words = words_fn(wav, work)
-
-    if words:
-        step(0.50, "Finding silences")
-        r = _ffmpeg(["-i", str(joined), "-vn", "-af", "silencedetect=n=-35dB:d=0.15", "-f", "null", "-"],
-                    "Finding silences", quiet=False)
-        silences = parse_silences(r.stderr, total)
-    else:
-        step(0.50, "No speech found, so nothing was cut.")
-        silences = []
-    keeps = keep_intervals(words, silences, total, protected=wordless_spans([i["duration"] for i in infos], words))
-    if sum(b - a for a, b in keeps) < 1.0:
-        raise CutError("Less than a second would be left after cutting, so nothing was made.")
-
-    step(0.60, "Measuring the sound")
-    use_music = music is not None
-    src = ["-i", str(joined)] + (["-stream_loop", "-1", "-i", str(music)] if use_music else [])
-    g1, g2 = work / "g1.txt", work / "g2.txt"
-    g1.write_text(build_cut_graph(keeps, speed, music=use_music, audio_only=True, loudnorm=None))
-    r = _ffmpeg([*src, "-/filter_complex", str(g1), "-map", "[a]", "-f", "null", "-"],
-                "Measuring the sound", quiet=False)
-    measured = None
-    if "{" not in r.stderr:
-        raise CutError("Measuring the sound failed: ffmpeg gave no loudness reading.")
-    try:
-        measured = parse_loudnorm(r.stderr)
-    except (ValueError, KeyError):
-        raise CutError("Measuring the sound failed: the loudness reading was unreadable.")
-    if not all(math.isfinite(v) for v in measured.values()):
-        measured = None  # all-silent audio: nothing to normalise, so drop loudnorm from the final graph
-    graph = build_cut_graph(keeps, speed, music=use_music, audio_only=False, loudnorm=measured)
-    if measured is None:
-        graph = re.sub(r"loudnorm=[^,;]*,", "", graph)
-    expected = output_duration(keeps, speed)
-    cues = subtitles.build_cues(words, keeps, speed) if cues is None else cues
-    label, extra_in = "v", []
-    grade_chain = grading.grade_filter(grade)
-    if grade_chain:
-        graph += f";[v]{grade_chain}[vg]"
-        label = "vg"
-    if burn is not None and cues:
-        step(0.62, "Drawing the subtitles")
-        try:
-            listing = subtitles.write_overlay(cues, burn, work / "subs", expected)
-        except subtitles.SubtitleError as e:
-            raise CutError(str(e))
-        extra_in = ["-f", "concat", "-safe", "0", "-i", str(listing)]
-        graph += subtitles.overlay_graph(label, 2 if use_music else 1)
-        label = "vo"
-    g2.write_text(graph)
-    part = out.with_suffix(".part")
-    step(0.65, "Rendering")
-    _render_pass(["ffmpeg", "-y", "-nostdin", "-v", "error", *src, *extra_in, "-/filter_complex", str(g2),
-                  "-map", f"[{label}]", "-map", "[a]", "-c:v", "libx264", "-crf", "18", "-preset", "medium",
-                  "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
-                  "-movflags", "+faststart", "-t", num(expected + 0.5), "-f", "mp4",
-                  "-progress", "pipe:1", "-nostats", str(part)],
-                 expected, lambda f: step(0.65 + 0.30 * f, "Rendering"), work / "render.err")
-
-    step(0.97, "Checking the result")
-    p = probe(part)
-    got = (p["width"], p["height"], p["fps"], p["vcodec"], p["acodec"], p["pix_fmt"], p["sample_rate"])
-    if got != (1080, 1920, 30, "h264", "aac", "yuv420p", 48000):
-        part.unlink(missing_ok=True)
-        raise CutError("The finished video didn't match the expected format, so it was discarded.")
-    os.replace(part, out)
-    return {"size": out.stat().st_size, "durationSec": p["duration"], "cues": cues, "originalSec": total,
-            "trims": describe_trims(keeps, words, [i["duration"] for i in infos], total)}

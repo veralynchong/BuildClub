@@ -111,8 +111,26 @@
   --duration-fast: var(--dur-fast);
   --duration: var(--dur);
   --duration-slow: var(--dur-slow);
-  --duration-hover: 200ms;   /* border / background hover on selectable cards */
   --duration-pulse: 1.2s;    /* skeleton pulse, slow on purpose */
+
+  /* Hover system (src/styles/interactive.css). One timing and one easing for every clickable thing in the app.
+     What changes differs by kind of control (see interactive.css); how it moves never does. */
+  --hover-duration: 160ms;
+  --hover-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --duration-hover: var(--hover-duration);   /* older name, same value */
+  --hover-transition:
+    background-color var(--hover-duration) var(--hover-ease),
+    border-color var(--hover-duration) var(--hover-ease),
+    color var(--hover-duration) var(--hover-ease),
+    text-decoration-color var(--hover-duration) var(--hover-ease),
+    box-shadow var(--hover-duration) var(--hover-ease),
+    opacity var(--hover-duration) var(--hover-ease),
+    filter var(--hover-duration) var(--hover-ease);
+  /* The same, plus movement, for controls that lift or press (never on anything positioned with transform) */
+  --hover-transition-move: var(--hover-transition), transform var(--hover-duration) var(--hover-ease);
+  --hover-lift: -2px;     /* a clickable card rises this much */
+  --hover-nudge: 3px;     /* an arrow inside a link or button slides this much */
+  --press-scale: 0.97;    /* buttons and chips while pressed */
 
   /* Colour aliases: --color-* names for the surface, text and status tokens above */
   --color-bg: var(--bg);

@@ -70,6 +70,9 @@ export function parseLinks(text: string): string[] {
   return [...new Set(text.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))]
 }
 
+// "@name · hook" for the picker. A handle may already carry its "@" (live results) or be a "r/community".
+export const pickLabel = (handle: string, text: string): string => `${/^(@|r\/)/.test(handle) ? handle : `@${handle}`} · ${text}`.slice(0, 120)
+
 // Pasted links and ticked videos together, in that order, without repeats.
 export const mergeLinks = (pasted: string[], picked: string[]): string[] => [...new Set([...pasted, ...picked])]
 

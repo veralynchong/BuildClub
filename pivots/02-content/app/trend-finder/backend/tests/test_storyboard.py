@@ -1,11 +1,11 @@
 """Per-shot script lines and storyboard frames: model back-compat, generate all / one, `edited`, fake and
-mocked-real frame images, path traversal. No test reaches Claude or OpenAI."""
+model-made frame images, path traversal. No test reaches Claude or a model provider."""
 
-import base64
 import json
 
 import pytest
 
+import gen_providers
 import server
 import storyboard
 from models import SavedIdea, Shot
@@ -29,8 +29,7 @@ def idea(id="i1", shots=SHOTS, status="saved"):
 @pytest.fixture(autouse=True)
 def demo_mode(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("FRAME_IMAGE_PROVIDER", raising=False)
+    monkeypatch.delenv("FRAME_IMAGE_MODEL", raising=False)
 
     def no_claude(*a, **k):
         raise AssertionError("Claude called in demo mode")
@@ -53,11 +52,11 @@ def test_old_shots_load_without_new_fields():
 
 def test_old_saved_plans_still_load(client, setup):
     got = client.get("/api/ideas").json()
-    assert got[0]["shots"][0] == {"time": "0-3s", "shot": "Close-up of tofu sizzling"}
+    assert got[0]["shots"][0] == {"id": "s1", "time": "0-3s", "shot": "Close-up of tofu sizzling"}
 
 
 def test_new_fields_round_trip_through_put(client, setup):
-    shot = {**SHOTS[0], "line": "Hi", "purpose": "hook", "options": ["a", "b", "c"], "edited": True,
+    shot = {**SHOTS[0], "id": "s1", "line": "Hi", "purpose": "hook", "options": ["a", "b", "c"], "edited": True,
             "frameImage": "/api/ideas/i1/frames/0-abc.svg", "palette": ["#112233", "#AABBCC"]}
     r = client.put("/api/ideas", json=[idea(shots=[shot])])
     assert r.status_code == 200
@@ -107,7 +106,7 @@ def test_regenerate_one_shot_returns_only_that_shot(client, setup):
     body = r.json()
     assert body["index"] == 1 and body["purpose"] == "body" and body["line"] and len(body["options"]) == 3
     assert "shots" not in body
-    assert client.get("/api/ideas").json()[0]["shots"] == SHOTS  # nothing touched
+    assert client.get("/api/ideas").json()[0]["shots"] == [{**sh, "id": f"s{n + 1}"} for n, sh in enumerate(SHOTS)]  # nothing touched, ids filled
 
 
 def test_regenerate_one_matches_the_full_script_for_that_shot(client, setup):
@@ -201,68 +200,137 @@ def test_frame_path_traversal_rejected(client, setup, tmp_path):
     assert storyboard.frames_dir(server.MEDIA_DIR, "i1") is not None
 
 
-def test_real_provider_is_mocked_and_budgeted(client, setup, monkeypatch):
-    monkeypatch.setenv("FRAME_IMAGE_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    png = b"\x89PNG\r\n\x1a\n" + b"0" * 20
-    calls = []
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 20
 
-    def fake_request(prompt, key):
-        calls.append((prompt, key))
-        return base64.b64encode(png).decode()
-    monkeypatch.setattr(storyboard, "openai_image", fake_request)
+
+class FakeAdapter:
+    """submit returns an id (or raises); poll walks `polls` (a Poll, an exception, or a list of them)."""
+
+    def __init__(self, polls=None, submit_error=None):
+        self.polls = list(polls if polls is not None else [gen_providers.Poll("done", data=PNG, ext="png")])
+        self.submit_error, self.jobs, self.polled = submit_error, [], 0
+
+    def submit(self, job):
+        self.jobs.append(job)
+        if self.submit_error:
+            raise self.submit_error
+        return "req-1"
+
+    def poll(self, job, request_id):
+        self.polled += 1
+        step = self.polls.pop(0) if len(self.polls) > 1 else self.polls[0]
+        if isinstance(step, Exception):
+            raise step
+        return step
+
+
+@pytest.fixture
+def frame_model(monkeypatch):
+    """FRAME_IMAGE_MODEL set to a fal image model (priced 0.04) behind a fake adapter; no network."""
+    monkeypatch.setenv("FRAME_IMAGE_MODEL", "seedream-4.5")
+    monkeypatch.setenv("FAL_KEY", "k")
+    monkeypatch.setattr(storyboard, "FRAME_POLL_S", 0)
+    adapter = FakeAdapter()
+    monkeypatch.setattr(gen_providers, "adapter_for", lambda provider, *a, **k: adapter)
+    return adapter
+
+
+def spent(wallet="gen_image"):
+    return (server.load(f"spend:{server.today()}") or {}).get(wallet, 0)
+
+
+def frames_on_disk():
+    return [p for p in server.MEDIA_DIR.rglob("*") if p.is_file() and "frames" in p.parts]
+
+
+def test_frame_uses_frame_image_model(client, setup, frame_model):
     body = client.post("/api/ideas/i1/shots/1/frame", json={"line": "Pour it"}).json()
-    assert body["provider"] == "openai" and body["frameImage"].endswith(".png")
-    assert client.get(body["frameImage"]).content == png
-    assert calls[0][1] == "sk-test" and "Pour the sauce" in calls[0][0] and "Pour it" in calls[0][0]
-    assert server.load(f"spend:{server.today()}")["image"] == storyboard.IMAGE_USD
+    assert body["provider"] == "seedream-4.5" and body["frameImage"].endswith(".png")
+    got = client.get(body["frameImage"])
+    assert got.content == PNG and got.headers["content-type"] == "image/png"
+    job = frame_model.jobs[0]
+    assert job.model["id"] == "seedream-4.5" and "Pour the sauce" in job.prompt and "Pour it" in job.prompt
+    assert spent() == 0.04 and spent("image") == 0  # the generation wallet pays; the old wallet is gone
 
 
-def test_real_provider_without_key_falls_back_to_fake(client, setup, monkeypatch):
-    monkeypatch.setenv("FRAME_IMAGE_PROVIDER", "openai")
+def test_frame_default_is_free_svg(client, setup, monkeypatch):
+    monkeypatch.delenv("FRAME_IMAGE_MODEL", raising=False)
+    monkeypatch.setattr(gen_providers, "adapter_for", lambda *a, **k: pytest.fail("adapter used"))
+    body = client.post("/api/ideas/i1/shots/0/frame", json={}).json()
+    assert body["provider"] == "fake" and body["frameImage"].endswith(".svg")
+    assert spent() == 0
 
-    def boom(*a):
-        raise AssertionError("OpenAI called without a key")
-    monkeypatch.setattr(storyboard, "openai_image", boom)
+
+@pytest.mark.parametrize("env", ["", "no-such-model", "mock-video", "seedream-4.5"])
+def test_frame_unusable_model_falls_back_to_free_svg(client, setup, monkeypatch, env):
+    monkeypatch.setenv("FRAME_IMAGE_MODEL", env)
+    monkeypatch.delenv("FAL_KEY", raising=False)  # seedream without its key is not available
+    monkeypatch.setattr(gen_providers, "adapter_for", lambda *a, **k: pytest.fail("adapter used"))
     assert client.post("/api/ideas/i1/shots/0/frame", json={}).json()["provider"] == "fake"
 
 
-def test_real_provider_failure_is_502_and_bad_png_rejected(client, setup, monkeypatch):
-    monkeypatch.setenv("FRAME_IMAGE_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-
-    def fail(prompt, key):
-        raise OSError("down")
-    monkeypatch.setattr(storyboard, "openai_image", fail)
-    assert client.post("/api/ideas/i1/shots/0/frame", json={}).status_code == 502
-    monkeypatch.setattr(storyboard, "openai_image", lambda p, k: base64.b64encode(b"not a png").decode())
-    assert client.post("/api/ideas/i1/shots/0/frame", json={}).status_code == 502
+def test_frame_provider_error_refunds(client, setup, frame_model):
+    frame_model.submit_error = gen_providers.ProviderError("refused")
+    r = client.post("/api/ideas/i1/shots/0/frame", json={})
+    assert r.status_code == 502 and r.json()["error"] == "Could not make the image. Try again."
+    assert spent() == 0 and frames_on_disk() == []
 
 
-def test_real_provider_over_budget_is_429(client, setup, monkeypatch):
-    monkeypatch.setenv("FRAME_IMAGE_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    monkeypatch.setattr(server, "DAILY_IMAGE_USD", 0)
-    monkeypatch.setattr(storyboard, "openai_image", lambda p, k: pytest.fail("called"))
-    assert client.post("/api/ideas/i1/shots/0/frame", json={}).status_code == 429
+def test_frame_poll_failed_refunds(client, setup, frame_model):
+    frame_model.polls = [gen_providers.Poll("failed", error="The model reported a failure.")]
+    r = client.post("/api/ideas/i1/shots/0/frame", json={})
+    assert r.status_code == 502 and r.json()["error"] == "Could not make the image. Try again."
+    assert spent() == 0 and frames_on_disk() == []
 
 
-def test_openai_request_shape(monkeypatch):
-    sent = {}
+@pytest.mark.parametrize("failure", [gen_providers.ResultLost("gone"), gen_providers.FileUnusable("bad file"),
+                                     gen_providers.ProviderError("after accept"), RuntimeError("boom")])
+def test_frame_lost_after_submit_may_have_charged_no_refund(client, setup, frame_model, failure):
+    frame_model.polls = [failure]
+    r = client.post("/api/ideas/i1/shots/0/frame", json={})
+    assert r.status_code == 502 and "may have charged" in r.json()["error"]
+    assert spent() == 0.04 and frames_on_disk() == []
 
-    class Resp:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def read(self): return json.dumps({"data": [{"b64_json": "QUJD"}]}).encode()
 
-    def fake_open(req, timeout=0):
-        sent["url"], sent["auth"] = req.full_url, req.get_header("Authorization")
-        sent["body"] = json.loads(req.data)
-        return Resp()
-    monkeypatch.setattr(storyboard.urllib.request, "urlopen", fake_open)
-    assert storyboard.openai_image("draw", "sk-x") == "QUJD"
-    assert sent["url"] == "https://api.openai.com/v1/images/generations" and sent["auth"] == "Bearer sk-x"
-    assert sent["body"]["model"] == "gpt-image-1" and sent["body"]["quality"] == "low" and sent["body"]["n"] == 1
+def test_frame_submit_without_answer_may_have_charged(client, setup, frame_model):
+    frame_model.submit_error = gen_providers.ResultLost("no answer")
+    r = client.post("/api/ideas/i1/shots/0/frame", json={})
+    assert r.status_code == 502 and "may have charged" in r.json()["error"] and spent() == 0.04
+
+
+def test_frame_timeout_may_have_charged_no_refund(client, setup, frame_model, monkeypatch):
+    frame_model.polls = [gen_providers.Poll("running")]
+    monkeypatch.setattr(storyboard, "FRAME_TIMEOUT_S", 0)
+    r = client.post("/api/ideas/i1/shots/0/frame", json={})
+    assert r.status_code == 502 and "may have charged" in r.json()["error"]
+    assert spent() == 0.04 and frame_model.polled == 1 and frames_on_disk() == []
+
+
+def test_frame_polls_until_done(client, setup, frame_model):
+    frame_model.polls = [gen_providers.Poll("running"), gen_providers.Poll("running"),
+                         gen_providers.Poll("done", data=PNG, ext="png")]
+    assert client.post("/api/ideas/i1/shots/0/frame", json={}).status_code == 200
+    assert frame_model.polled == 3
+
+
+def test_frame_over_budget_is_429_and_adapter_not_called(client, setup, frame_model, monkeypatch):
+    monkeypatch.setattr(server, "DAILY_GEN_IMAGE_USD", 0.03)
+    r = client.post("/api/ideas/i1/shots/0/frame", json={})
+    assert r.status_code == 429 and frame_model.jobs == [] and spent() == 0
+
+
+def test_frame_save_failure_leaves_no_file_and_keeps_spend(client, setup, frame_model, monkeypatch):
+    def broken(src, dst):
+        raise OSError("disk full")
+    monkeypatch.setattr(storyboard.os, "replace", broken)
+    r = client.post("/api/ideas/i1/shots/0/frame", json={})
+    assert r.status_code == 502 and spent() == 0.04 and frames_on_disk() == []
+
+
+def test_frame_jpg_and_webp_are_served(client, setup, frame_model):
+    frame_model.polls = [gen_providers.Poll("done", data=b"\xff\xd8\xff" + b"0" * 20, ext="jpg")]
+    url = client.post("/api/ideas/i1/shots/0/frame", json={}).json()["frameImage"]
+    assert url.endswith(".jpg") and client.get(url).headers["content-type"] == "image/jpeg"
 
 
 def test_camera_fields_round_trip_and_old_plans_have_none(client, setup):

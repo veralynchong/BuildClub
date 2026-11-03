@@ -13,13 +13,25 @@ import { tiktokVideoId } from '../lib/tiktokPlayer.ts'
 
 const REPLACED = 'This video was replaced while you were watching. Here is the new one.'
 
+// When the "send back" box opens, bring it into view and put the cursor in its text field.
+function useRevealOnOpen(open: boolean) {
+  const box = useRef<HTMLDivElement>(null)
+  const field = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (!open) return
+    box.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    field.current?.focus({ preventScroll: true })
+  }, [open])
+  return { box, field }
+}
+
 // The approver's page, opened from the link the team shares: no sidebar and no sign-in.
 export function SharedReviewPage({ token }: { token: string }) {
   // undefined = loading, null = the link is closed.
   const [review, setReview] = useState<Review | null | undefined>(undefined)
   const [loadError, setLoadError] = useState('')
   const [notice, setNotice] = useState('')
-  const [answered, setAnswered] = useState<string[]>([])
+  const [answered, setAnswered] = useState<{ label: string; note?: string }[]>([])
 
   const load = useCallback(() => {
     setLoadError('')
@@ -30,8 +42,8 @@ export function SharedReviewPage({ token }: { token: string }) {
   useEffect(load, [load])
 
   // The answer is saved; the card is replaced by a line saying what was decided.
-  const decided = (label: string) => {
-    setAnswered((a) => [...a, label])
+  const decided = (label: string, note?: string) => {
+    setAnswered((a) => [...a, { label, note }])
     setNotice('')
     load()
   }
@@ -94,7 +106,8 @@ export function SharedReviewPage({ token }: { token: string }) {
         )}
         {answered.map((a, i) => (
           <p key={i} className="shared-answered small" role="status">
-            {a}
+            {a.label}. Your team can see this now.
+            {a.note && <> Your note: "{a.note}"</>}
           </p>
         ))}
         {n === 0 && (
@@ -141,7 +154,7 @@ export function SharedReviewPage({ token }: { token: string }) {
 interface CardProps {
   item: ReviewItem
   token: string
-  onDecided: (label: string) => void
+  onDecided: (label: string, note?: string) => void
   onAlreadyReviewed: () => void
   onClosed: () => void
 }
@@ -159,6 +172,7 @@ function SharedCard({ item, token, onDecided, onAlreadyReviewed, onClosed }: Car
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const playerControl = useRef<PlayerControl | null>(null)
+  const reveal = useRevealOnOpen(back)
 
   const toggle = (t: string) => setTags((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]))
 
@@ -168,7 +182,7 @@ function SharedCard({ item, token, onDecided, onAlreadyReviewed, onClosed }: Car
     setError('')
     const reason = text.trim()
     sendDecision(token, idea.id, approved, approved ? undefined : reason || undefined, approved ? undefined : tags)
-      .then(() => onDecided(`${approved ? 'Approved' : 'Sent back'}: ${title}`))
+      .then(() => onDecided(`${approved ? 'Approved' : 'Sent back'}: ${title}`, approved ? undefined : reason || undefined))
       .catch((e: Error) => {
         if (e instanceof AlreadyReviewed) return onAlreadyReviewed()
         if (e instanceof LinkClosed) return onClosed()
@@ -226,7 +240,7 @@ function SharedCard({ item, token, onDecided, onAlreadyReviewed, onClosed }: Car
         onClosed={onClosed}
       />
       {back ? (
-        <div className="review-reject">
+        <div className="review-reject" ref={reveal.box}>
           <fieldset className="chip-group">
             <legend className="chip-group-title">What didn't work? Pick any that apply.</legend>
             <div className="chip-row">
@@ -239,14 +253,14 @@ function SharedCard({ item, token, onDecided, onAlreadyReviewed, onClosed }: Car
           </fieldset>
           <label className="field">
             <span className="field-label">Anything to add?</span>
-            <textarea rows={3} value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} />
+            <textarea ref={reveal.field} rows={3} value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} />
           </label>
           <div className="review-actions">
             <button className="btn btn-ghost" onClick={() => setBack(false)} disabled={busy}>
               Cancel
             </button>
             <button className="btn btn-primary" onClick={() => send(false)} disabled={busy || (!tags.length && !text.trim())}>
-              Send back
+              Send back with this note
             </button>
           </div>
         </div>
@@ -272,7 +286,7 @@ function SharedCard({ item, token, onDecided, onAlreadyReviewed, onClosed }: Car
 interface CutCardProps {
   item: ReviewCutItem
   token: string
-  onDecided: (label: string) => void
+  onDecided: (label: string, note?: string) => void
   onAlreadyReviewed: () => void
   onReplaced: () => void
   onClosed: () => void
@@ -286,13 +300,14 @@ function SharedCutCard({ item, token, onDecided, onAlreadyReviewed, onReplaced, 
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const reveal = useRevealOnOpen(back)
 
   const send = (approved: boolean) => {
     if (busy) return
     setBusy(true)
     setError('')
     decideCut(token, idea.id, approved, cut.version, approved ? undefined : text.trim())
-      .then(() => onDecided(`${approved ? 'Approved' : 'Sent back'} the video: ${title}`))
+      .then(() => onDecided(`${approved ? 'Approved' : 'Sent back'} the video: ${title}`, approved ? undefined : text.trim() || undefined))
       .catch((e: Error) => {
         if (e instanceof LinkClosed) return onClosed()
         setBusy(false)
@@ -312,17 +327,17 @@ function SharedCutCard({ item, token, onDecided, onAlreadyReviewed, onReplaced, 
       </div>
       <video className="shared-cut-video" controls playsInline preload="metadata" src={cut.url} />
       {back ? (
-        <div className="review-reject">
+        <div className="review-reject" ref={reveal.box}>
           <label className="field">
             <span className="field-label">What should change?</span>
-            <textarea rows={3} value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} />
+            <textarea ref={reveal.field} rows={3} value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} />
           </label>
           <div className="review-actions">
             <button className="btn btn-ghost" onClick={() => setBack(false)} disabled={busy}>
               Cancel
             </button>
             <button className="btn btn-primary" onClick={() => send(false)} disabled={busy || !text.trim()}>
-              Send back
+              Send back with this note
             </button>
           </div>
         </div>

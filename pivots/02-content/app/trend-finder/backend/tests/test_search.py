@@ -256,7 +256,7 @@ def test_instagram_with_no_results_has_no_medians_to_wait_for(client, monkeypatc
 
 def test_a_poll_for_scores_never_searches_live(client):
     r = client.get("/api/search", params={"q": "tofu", "cachedOnly": "1"})
-    assert r.status_code == 404  # the offline fixture would fail the test if Apify were called
+    assert r.status_code == 200 and r.json()["videos"] == []  # the offline fixture would fail the test if Apify were called
 
 
 def test_live_search_returns_baseline_details(client, monkeypatch):
@@ -390,7 +390,7 @@ def test_failed_call_is_a_502(client, monkeypatch):
 
 def test_types_need_a_saved_search_and_never_search(client, monkeypatch):
     calls = fake_classifier(monkeypatch, "{}")
-    assert client.get("/api/search/types", params={"q": "tofu"}).status_code == 404  # run_actor would fail the test if called
+    assert client.get("/api/search/types", params={"q": "tofu"}).json() == {"types": {}}  # run_actor would fail the test if called
     assert client.get("/api/search/types", params={"q": ""}).status_code == 400
     assert calls == []
 

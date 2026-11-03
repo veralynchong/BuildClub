@@ -33,8 +33,11 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 import assist
+import brand
+import canvas
 import channels
 import covers
+import editing
 import instagram
 import reddit
 import comments
@@ -47,16 +50,16 @@ import google_auth
 import production
 import publishing
 import cut_review
-import grading
 import recheck
+import generations
 import renders
 import shotlist
 import storyboard
-import subtitles
+import cleaning
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
 from compare import CompareJobs, compare_id_for
-from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Client,
+from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Brand, Client,
                     CompareJob, CompareRequest, CompareStarted, Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
 
 HERE = Path(__file__).resolve().parent
@@ -104,7 +107,9 @@ MEDIAN_DAYS = 30  # an account's usual views are reused this long before they ar
 # counted before it runs; cached searches and finished breakdowns are free and never counted.
 DAILY_APIFY_USD = float(os.environ.get("DAILY_APIFY_USD", 2.00))
 DAILY_CLAUDE_USD = float(os.environ.get("DAILY_CLAUDE_USD", 1.00))
-DAILY_IMAGE_USD = float(os.environ.get("DAILY_IMAGE_USD", 0.50))  # storyboard frames from gpt-image
+DAILY_GEN_IMAGE_USD = float(os.environ.get("DAILY_GEN_IMAGE_USD", 0.50))  # canvas image generations
+DAILY_GEN_VIDEO_USD = float(os.environ.get("DAILY_GEN_VIDEO_USD", 1.00))  # canvas video generations
+DAILY_GEN_VOICE_USD = float(os.environ.get("DAILY_GEN_VOICE_USD", 0.30))  # editor voiceover (text to speech)
 # Channel summaries: Jev labelling in US$; ScrapeCreators (Instagram only) in credits, 1 per 12 reels.
 DAILY_JEV_USD = float(os.environ.get("DAILY_JEV_USD", 0.50))
 DAILY_SCRAPECREATORS_CREDITS = float(os.environ.get("DAILY_SCRAPECREATORS_CREDITS", 20))
@@ -129,8 +134,11 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
 
 @contextlib.asynccontextmanager
 async def lifespan(_app):
+    generations.recover(db, gen_jobs)
     renders.recover(db)  # a cut that was running when the server stopped will never finish
+    editing.prewarm_bundle()  # builds the Remotion bundle in a background thread; never blocks startup
     yield
+    editing.kill_active()  # no render outlives the server
 
 
 app = FastAPI(title="Trend Finder API", lifespan=lifespan)
@@ -658,7 +666,8 @@ def search(q: str = "", fresh: str = "", platform: str = "tiktok", cachedOnly: s
         if cached:
             return {**cached, "cached": True}
     if cachedOnly == "1":  # the front end's poll for scores must never start a paid search
-        return error(404, "No saved search for that. Search it first.")
+        # Not an error: a 404 would put a red line in the browser console on every Home load.
+        return {"query": query, "platform": platform, "fetchedAt": 0, "videos": [], "cached": False}
     if platform == "youtube":
         return search_youtube(query)
     if not spend("apify", SEARCH_USD[platform], DAILY_APIFY_USD):
@@ -711,13 +720,13 @@ def read_types(query: str, platform: str, fetched_at: int):
 @app.get("/api/search/types", response_model=ContentTypes)
 def search_types(q: str = "", platform: str = "tiktok"):
     """Content type of each video in a saved search. One cheap Claude call the first time, then free.
-    Never starts a search: without a saved search it is a 404. The front end shows the results without types if this fails."""
+    Never starts a search: without a saved search the types are empty. The front end shows the results without types if this fails."""
     query = q.strip()[:120]
     if not query or platform not in ("tiktok", "instagram", "youtube", "reddit", "x"):
         return error(400, "Give a saved search and a platform.")
     saved = read_cache(query, platform)
     if not saved:
-        return error(404, "No saved search for that. Search it first.")
+        return {"types": {}}  # not a 404: that would put a red line in the browser console
     known = read_types(query, platform, saved["fetchedAt"])
     if known is not None:
         return {"types": known}
@@ -753,10 +762,13 @@ def db() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
     migrate_medians(conn)
-    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + renders.SCHEMA + grading.SCHEMA + recheck.SCHEMA:
+    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + editing.SCHEMA + generations.SCHEMA + renders.SCHEMA + recheck.SCHEMA:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
+    generations.migrate(conn)
+    renders.migrate(conn)
+    takes.migrate(conn)
     return conn
 
 
@@ -782,7 +794,12 @@ def get_clients():
 
 @app.put("/api/clients", response_model=list[Client], response_model_exclude_none=True)
 def put_clients(clients: list[Client]):
-    save("clients", clients)
+    # The brand kit belongs to the brand routes: a brand carried by the request is dropped and the stored one kept.
+    with brand.lock:
+        stored = {c["id"]: c.get("brand") for c in load("clients") or []}
+        for c in clients:
+            c.brand = Brand(**stored[c.id]) if stored.get(c.id) else None
+        save("clients", clients)
     return clients
 
 
@@ -892,20 +909,58 @@ app.include_router(comments.make_router(load, save))
 app.include_router(google_auth.make_router(db, session_cookie_secure))
 app.include_router(publishing.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(takes.make_router(db, load, lambda: MEDIA_DIR))
+app.include_router(cleaning.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(production.make_router(db))
 def storyboard_budget(wallet: str, usd: float):
-    """None when the paid call may go ahead, else the 429 to return."""
-    cap, env = (DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD") if wallet == "claude" else (DAILY_IMAGE_USD, "DAILY_IMAGE_USD")
-    return None if spend(wallet, usd, cap) else over_budget("Claude" if wallet == "claude" else "Image", cap, env)
+    """None when the paid call may go ahead, else the 429 to return. Frame images use the generation wallet."""
+    if wallet == "image":
+        return gen_budget("image", usd)
+    return None if spend(wallet, usd, DAILY_CLAUDE_USD) else over_budget("Claude", DAILY_CLAUDE_USD, "DAILY_CLAUDE_USD")
 
 
-app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget))
+def storyboard_refund(wallet: str, usd: float) -> None:
+    gen_refund("image", usd)
+
+
+app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget, storyboard_refund))
 app.include_router(shotlist.make_router(storyboard_budget))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
+GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_video", "DAILY_GEN_VIDEO_USD"),
+               "voice": ("gen_voice", "DAILY_GEN_VOICE_USD")}
+
+
+def gen_cap(kind: str) -> float:
+    return globals()[GEN_WALLETS[kind][1]]  # looked up at call time, so a test can change the cap
+
+
+def gen_budget(kind: str, usd: float):
+    """None when a generation of this kind may be paid for, else the 429 to return."""
+    wallet, env = GEN_WALLETS[kind]
+    cap = gen_cap(kind)
+    if spend(wallet, usd, cap):
+        return None
+    left = remaining(wallet, cap)
+    return error(429, f"Today's {kind} generation budget has US${left:.2f} left, and this needs US${usd:.2f}. "
+                      f"The budget resets at midnight; to allow more, raise {env} in .env and restart the API.")
+
+
+def gen_refund(kind: str, usd: float) -> None:
+    refund(GEN_WALLETS[kind][0], usd)
+
+
+def gen_remaining() -> dict:
+    return {k: {"spent": round(gen_cap(k) - remaining(w, gen_cap(k)), 4), "cap": gen_cap(k)}
+            for k, (w, _) in GEN_WALLETS.items()}
+
+
+gen_router = generations.make_router(db, load, lambda: MEDIA_DIR, gen_budget, gen_refund, gen_remaining)
+gen_jobs = gen_router.jobs
+app.include_router(gen_router)
+app.include_router(canvas.make_router(db, load))
+app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR, gen_router))
+app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
-app.include_router(grading.make_router(db, lambda: MEDIA_DIR))
 app.include_router(recheck.make_router(db, lambda u: is_video_link(u)))
-app.include_router(subtitles.make_router(lambda: MEDIA_DIR, lambda i: any(x["id"] == i for x in load("ideas") or [])))
 publishing.seed_demo(db)
 
 
@@ -929,6 +984,22 @@ def spend(wallet: str, usd: float, cap: float) -> bool:
                          (key, json.dumps({**spent, wallet: total})))
     print(f"[budget] {wallet} US${total:.4f} of US${cap:.2f} today", flush=True)
     return True
+
+
+def refund(wallet: str, usd: float) -> None:
+    """Take money back off today's count after a paid call that did not produce anything. Never below 0."""
+    key = f"spend:{today()}"
+    with budget_lock:
+        spent = load(key) or {}
+        total = round(max(0.0, spent.get(wallet, 0) - usd), 4)
+        with db() as conn:
+            conn.execute("INSERT OR REPLACE INTO store (key, value) VALUES (?, ?)",
+                         (key, json.dumps({**spent, wallet: total})))
+    print(f"[budget] {wallet} refunded US${usd:.4f}, now US${total:.4f} today", flush=True)
+
+
+def remaining(wallet: str, cap: float) -> float:
+    return round(max(0.0, cap - (load(f"spend:{today()}") or {}).get(wallet, 0)), 4)
 
 
 def saved_searches(limit: int = 3) -> list[str]:

@@ -51,7 +51,7 @@ export function FromScript({ shots, interviewGuess, onShots }: Props) {
   if (!open) {
     return (
       <div className="from-script-bar">
-        <button type="button" className="btn btn-ghost btn-sm" aria-expanded="false" aria-controls="from-script-panel" onClick={() => setOpen(true)}>
+        <button type="button" className="btn btn-ghost" aria-expanded="false" aria-controls="from-script-panel" onClick={() => setOpen(true)}>
           {t('shots.fs.open')}
         </button>
         {notice && (

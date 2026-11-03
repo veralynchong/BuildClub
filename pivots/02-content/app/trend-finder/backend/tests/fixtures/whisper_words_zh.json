@@ -1,0 +1,416 @@
+{
+"result": {
+"language": "zh"
+},
+"transcription": [
+{
+"offsets": {
+"from": 0,
+"to": 14320
+},
+"text": "大家好,今天我们来聊三个剪辑小技巧,第一,先把素材整理好,第二,剪掉多余的停顿,第三,加上字幕和音乐,就完成了。",
+"tokens": [
+{
+"text": "[_BEG_]",
+"offsets": {
+"from": 0,
+"to": 0
+},
+"t_dtw": -1
+},
+{
+"text": "大家好",
+"offsets": {
+"from": 10,
+"to": 730
+},
+"t_dtw": 56
+},
+{
+"text": ",",
+"offsets": {
+"from": 1110,
+"to": 1310
+},
+"t_dtw": 104
+},
+{
+"text": "今天",
+"offsets": {
+"from": 1360,
+"to": 1640
+},
+"t_dtw": 132
+},
+{
+"text": "我们",
+"offsets": {
+"from": 1640,
+"to": 1960
+},
+"t_dtw": 174
+},
+{
+"text": "来",
+"offsets": {
+"from": 1960,
+"to": 2120
+},
+"t_dtw": 206
+},
+{
+"text": "聊",
+"offsets": {
+"from": 2120,
+"to": 2280
+},
+"t_dtw": 230
+},
+{
+"text": "三",
+"offsets": {
+"from": 2280,
+"to": 2370
+},
+"t_dtw": 254
+},
+{
+"text": "个",
+"offsets": {
+"from": 2460,
+"to": 2600
+},
+"t_dtw": 276
+},
+{
+"text": "剪",
+"offsets": {
+"from": 2600,
+"to": 3060
+},
+"t_dtw": 294
+},
+{
+"text": "辑",
+"offsets": {
+"from": 3130,
+"to": 3540
+},
+"t_dtw": 318
+},
+{
+"text": "小",
+"offsets": {
+"from": 3630,
+"to": 3720
+},
+"t_dtw": 346
+},
+{
+"text": "技",
+"offsets": {
+"from": 3720,
+"to": 3830
+},
+"t_dtw": 370
+},
+{
+"text": "巧",
+"offsets": {
+"from": 3870,
+"to": 4060
+},
+"t_dtw": 404
+},
+{
+"text": ",",
+"offsets": {
+"from": 4060,
+"to": 4420
+},
+"t_dtw": 432
+},
+{
+"text": "第一",
+"offsets": {
+"from": 4420,
+"to": 4730
+},
+"t_dtw": 462
+},
+{
+"text": ",",
+"offsets": {
+"from": 5090,
+"to": 5140
+},
+"t_dtw": 492
+},
+{
+"text": "先",
+"offsets": {
+"from": 5170,
+"to": 5320
+},
+"t_dtw": 526
+},
+{
+"text": "把",
+"offsets": {
+"from": 5320,
+"to": 5500
+},
+"t_dtw": 552
+},
+{
+"text": "素",
+"offsets": {
+"from": 5500,
+"to": 5680
+},
+"t_dtw": 572
+},
+{
+"text": "材",
+"offsets": {
+"from": 5680,
+"to": 6220
+},
+"t_dtw": 590
+},
+{
+"text": "整",
+"offsets": {
+"from": 6220,
+"to": 6400
+},
+"t_dtw": 620
+},
+{
+"text": "理",
+"offsets": {
+"from": 6400,
+"to": 6580
+},
+"t_dtw": 642
+},
+{
+"text": "好",
+"offsets": {
+"from": 6580,
+"to": 6780
+},
+"t_dtw": 676
+},
+{
+"text": ",",
+"offsets": {
+"from": 6800,
+"to": 6800
+},
+"t_dtw": 786
+},
+{
+"text": "第二",
+"offsets": {
+"from": 6800,
+"to": 7580
+},
+"t_dtw": 854
+},
+{
+"text": ",",
+"offsets": {
+"from": 7580,
+"to": 7970
+},
+"t_dtw": 898
+},
+{
+"text": "剪",
+"offsets": {
+"from": 8240,
+"to": 8550
+},
+"t_dtw": 908
+},
+{
+"text": "掉",
+"offsets": {
+"from": 8550,
+"to": 8640
+},
+"t_dtw": 940
+},
+{
+"text": "多",
+"offsets": {
+"from": 8930,
+"to": 8930
+},
+"t_dtw": 960
+},
+{
+"text": "余",
+"offsets": {
+"from": 9010,
+"to": 9510
+},
+"t_dtw": 976
+},
+{
+"text": "的",
+"offsets": {
+"from": 9510,
+"to": 9700
+},
+"t_dtw": 998
+},
+{
+"text": "停",
+"offsets": {
+"from": 9700,
+"to": 9890
+},
+"t_dtw": 1020
+},
+{
+"text": "顿",
+"offsets": {
+"from": 9890,
+"to": 10470
+},
+"t_dtw": 1038
+},
+{
+"text": ",",
+"offsets": {
+"from": 10470,
+"to": 10860
+},
+"t_dtw": 1072
+},
+{
+"text": "第三",
+"offsets": {
+"from": 10860,
+"to": 11250
+},
+"t_dtw": 1110
+},
+{
+"text": ",",
+"offsets": {
+"from": 11250,
+"to": 11260
+},
+"t_dtw": 1150
+},
+{
+"text": "加",
+"offsets": {
+"from": 11640,
+"to": 11820
+},
+"t_dtw": 1174
+},
+{
+"text": "上",
+"offsets": {
+"from": 11830,
+"to": 12020
+},
+"t_dtw": 1204
+},
+{
+"text": "字",
+"offsets": {
+"from": 12020,
+"to": 12210
+},
+"t_dtw": 1226
+},
+{
+"text": "幕",
+"offsets": {
+"from": 12210,
+"to": 12400
+},
+"t_dtw": 1246
+},
+{
+"text": "和",
+"offsets": {
+"from": 12400,
+"to": 12490
+},
+"t_dtw": 1266
+},
+{
+"text": "音",
+"offsets": {
+"from": 12590,
+"to": 12780
+},
+"t_dtw": 1290
+},
+{
+"text": "乐",
+"offsets": {
+"from": 12780,
+"to": 12970
+},
+"t_dtw": 1312
+},
+{
+"text": ",",
+"offsets": {
+"from": 12970,
+"to": 13180
+},
+"t_dtw": 1336
+},
+{
+"text": "就",
+"offsets": {
+"from": 13510,
+"to": 13550
+},
+"t_dtw": 1362
+},
+{
+"text": "完成",
+"offsets": {
+"from": 13550,
+"to": 13930
+},
+"t_dtw": 1396
+},
+{
+"text": "了",
+"offsets": {
+"from": 13940,
+"to": 14290
+},
+"t_dtw": 1430
+},
+{
+"text": "。",
+"offsets": {
+"from": 14320,
+"to": 14320
+},
+"t_dtw": 1430
+},
+{
+"text": "[_TT_716]",
+"offsets": {
+"from": 14320,
+"to": 14320
+},
+"t_dtw": -1
+}
+]
+}
+]
+}

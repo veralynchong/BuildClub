@@ -17,7 +17,9 @@ def test_clients_round_trip(client):
 def test_ideas_round_trip(client):
     assert client.put("/api/ideas", json=[IDEA]).status_code == 200
     got = client.get("/api/ideas").json()
-    assert [{k: v for k, v in i.items() if k != "updatedAt"} for i in got] == [IDEA]  # the server adds updatedAt
+    # the server adds updatedAt, and fills a missing shot id
+    expected = {**IDEA, "shots": [{**sh, "id": f"s{n + 1}"} for n, sh in enumerate(IDEA["shots"])]}
+    assert [{k: v for k, v in i.items() if k != "updatedAt"} for i in got] == [expected]
 
 
 def test_bad_idea_status_is_rejected(client):

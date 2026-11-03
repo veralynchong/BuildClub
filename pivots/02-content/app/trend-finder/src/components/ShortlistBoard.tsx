@@ -22,6 +22,7 @@ import type { Client, Format, IdeaStatus, SavedIdea, Video } from "../types";
 import type { Decision } from "../lib/memory";
 import { useApp, useManagerName } from "../lib/appContext";
 import { t } from "../lib/i18n";
+import { createShareLink, revokeClientLinks } from "../lib/share";
 import { postedThisMonth } from "../lib/stage";
 import { needsConfirm, patchFor, stepOf, targetsOf } from "../lib/steps.ts";
 import { useProduction } from "../lib/production.ts";
@@ -58,6 +59,8 @@ interface Props {
   // The manager's decision (approve / send back), saved to client memory like Review does.
   onDecide: (ideaId: string, d: Decision) => void;
   onOpenPlan: (ideaId: string) => void;
+  // Opens an approved plan's canvas with the editor showing.
+  onMakeVideo: (ideaId: string) => void;
   onFindMore: () => void;
   onReview: () => void;
   // Videos in this client's Research sheet: their cards get a "From research" link to the Research tab.
@@ -90,6 +93,10 @@ export function ShortlistBoard(p: Props) {
   const manager = useManagerName();
   // The approved plan (and where it is going) waiting for "Continue?" before its approval is taken back.
   const [confirm, setConfirm] = useState<{ id: string; to: Column } | null>(null);
+  // The approver's link for the client being shown: null url = turned off here.
+  const [link, setLink] = useState<{ clientId: string; url: string | null } | null>(null);
+  const [linkError, setLinkError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const mine = p.ideas.filter((i) => i.clientId === p.client.id);
   const signalsById = useProduction(p.client.id);
@@ -128,6 +135,7 @@ export function ShortlistBoard(p: Props) {
   const postedCount = postedThisMonth(mine, new Date());
   const approvedCount = mine.filter((i) => i.status === "approved").length;
   const progress = Math.min(approvedCount / Math.max(p.client.monthlyTarget, 1), 1) * 100;
+  const shownLink = link?.clientId === p.client.id ? link.url : null;
   const dragging = mine.find((i) => i.id === dragId);
   const dragTargets = dragging ? (infos.get(dragging.id)?.targets ?? null) : null;
 
@@ -170,6 +178,29 @@ export function ShortlistBoard(p: Props) {
     p.onChangeIdeas((prev) =>
       prev.map((i) => (ids.has(i.id) ? { ...i, ...patch(i) } : i)),
     );
+
+  // Making the link again returns the client's existing one, so this is safe to call more than once.
+  const makeLink = () => {
+    setLinkError("");
+    createShareLink(p.client.id)
+      .then((l) => setLink({ clientId: p.client.id, url: l.url }))
+      .catch((e: Error) => setLinkError(e.message));
+  };
+  const turnOff = () => {
+    setLinkError("");
+    revokeClientLinks(p.client.id)
+      .then(() => setLink({ clientId: p.client.id, url: null }))
+      .catch((e: Error) => setLinkError(e.message));
+  };
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shownLink ?? "");
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setLinkError(t("plan.board.copyFailed"));
+    }
+  };
 
   // Send for approval (dragging a card into Waiting for approval). The due date and the note to the approver are
   // set on the plan page. A plan with no shots of its own keeps the ones it shows now (none for a saved idea), so it
@@ -288,9 +319,15 @@ export function ShortlistBoard(p: Props) {
           targets={info.targets}
           onOpenPlan={() => p.onOpenPlan(idea.id)}
           onRemove={() => remove(idea.id)}
+          cutSentBack={signalsById[idea.id]?.cutSentBack}
           onFromResearch={p.onOpenResearch && p.inResearch?.has(idea.videoId) ? p.onOpenResearch : undefined}
           actions={
             <>
+              {idea.status === "approved" && (
+                <button className="btn btn-primary btn-sm" onClick={() => p.onMakeVideo(idea.id)}>
+                  {t("canvas.makeVideo")}
+                </button>
+              )}
               {idea.status === "approved" && (
                 <StageSelect
                   idea={idea}
@@ -317,11 +354,39 @@ export function ShortlistBoard(p: Props) {
   };
 
   const extra: Partial<Record<Column, React.ReactNode>> = {
-    waiting: lists.waiting.length > 0 && (
+    // The approver's link is needed for finished videos too, so it shows even when no plan is waiting.
+    waiting: (
       <div className="board-link">
-        <button className="btn btn-ghost btn-sm board-review" onClick={p.onReview}>
-          {canDecide ? t("plan.board.review", { n: lists.waiting.length }) : t("plan.board.preview", { manager })}
-        </button>
+        {shownLink ? (
+          <>
+            <label className="field">
+              <span className="field-label">{t("plan.board.linkFor", { manager })}</span>
+              <input readOnly value={shownLink} onFocus={(e) => e.currentTarget.select()} />
+            </label>
+            <div className="board-link-row">
+              <button className="btn btn-primary btn-sm" onClick={copyLink}>
+                {copied ? t("plan.common.copied") : t("plan.board.copyLink")}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={turnOff}>
+                {t("plan.board.turnOff")}
+              </button>
+            </div>
+          </>
+        ) : (
+          <button className="btn btn-primary btn-sm" onClick={makeLink}>
+            {link?.clientId === p.client.id ? t("plan.board.newLink") : t("plan.board.getLink")}
+          </button>
+        )}
+        {linkError && (
+          <p className="error" role="alert">
+            {linkError}
+          </p>
+        )}
+        {lists.waiting.length > 0 && (
+          <button className="btn btn-ghost btn-sm board-review" onClick={p.onReview}>
+            {canDecide ? t("plan.board.review", { n: lists.waiting.length }) : t("plan.board.preview", { manager })}
+          </button>
+        )}
       </div>
     ),
   };
@@ -413,6 +478,7 @@ export function ShortlistBoard(p: Props) {
                     idea={dragging}
                     video={dragVideo}
                     format={formatOf(dragging)}
+                    cutSentBack={signalsById[dragging.id]?.cutSentBack}
                   />
                 </div>
               ) : null}

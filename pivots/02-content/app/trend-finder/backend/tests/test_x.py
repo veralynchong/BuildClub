@@ -139,7 +139,7 @@ def test_repeat_search_comes_from_the_cache(client, actor):
 
 def test_cached_only_never_searches(client, actor):
     r = x_search(client, cachedOnly="1")
-    assert r.status_code == 404 and actor.calls == []
+    assert r.status_code == 200 and r.json()["videos"] == [] and actor.calls == []
 
 
 def test_over_the_cap_is_429_before_any_call(client, actor, monkeypatch):

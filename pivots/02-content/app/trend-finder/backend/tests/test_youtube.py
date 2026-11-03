@@ -138,7 +138,7 @@ def test_a_failed_search_is_a_502(client, ytdlp, monkeypatch):
 
 def test_cached_only_never_runs_yt_dlp(client, ytdlp):
     r = yt_search(client, cachedOnly="1")
-    assert r.status_code == 404 and ytdlp.calls == []
+    assert r.status_code == 200 and r.json()["videos"] == [] and ytdlp.calls == []
 
 
 def test_youtube_cache_is_kept_apart():

@@ -128,7 +128,7 @@ def test_over_the_daily_cap_is_a_429_with_no_actor_call(client, actor, monkeypat
 
 def test_cached_only_never_calls_the_actor(client, actor):
     r = rd(client, cachedOnly="1")
-    assert r.status_code == 404 and actor.calls == []
+    assert r.status_code == 200 and r.json()["videos"] == [] and actor.calls == []
 
 
 def test_a_failed_search_is_a_502(client, monkeypatch):

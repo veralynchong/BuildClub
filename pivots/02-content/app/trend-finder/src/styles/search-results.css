@@ -23,12 +23,10 @@
   position: relative; flex: 1 1 240px; display: flex; align-items: center; gap: 6px; min-width: 0;
   background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
   padding: 4px 6px 4px 8px;
-  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
-.search-input:hover:not(:focus-within) { border-color: color-mix(in srgb, var(--fg) 25%, var(--line-strong)); }
 .search-input:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
 .search-input input { flex: 1; min-width: 0; border: 0; background: none; font-size: 18px; padding: 8px 6px; outline: none; }
-.search-input input:focus, .search-input input:hover { box-shadow: none; border: 0; }
+.search-input input:focus { box-shadow: none; border: 0; }
 
 /* Monthly progress and a way back to the last results */
 .progress-line { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--text-sm); color: var(--muted); }
@@ -41,11 +39,8 @@
 .mic-btn {
   display: grid; place-items: center; width: 38px; height: 38px; flex: none; border: 0; border-radius: 50%;
   background: none; color: var(--muted);
-  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-.mic-btn:hover { background: var(--surface-2); color: var(--accent); }
 .mic-on { background: var(--hot); color: var(--hot-fg); animation: mic calc(var(--dur-slow) * 4) var(--ease) infinite; }
-.mic-on:hover { background: var(--hot); color: var(--hot-fg); }
 .mic-off { opacity: 0.35; cursor: not-allowed; }
 @keyframes mic { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--hot) 25%, transparent); } }
 .mic-error {
@@ -62,11 +57,8 @@
 .suggestion {
   border: 1px solid transparent; border-radius: var(--radius-pill); padding: 5px 12px; font-size: 14px; font-weight: 500;
   background: var(--accent-soft); color: var(--accent);
-  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-.suggestion:hover, .suggestion:focus-visible { border-color: var(--accent); }
 .suggestion-question { background: var(--surface); border-color: var(--line-strong); color: var(--fg); }
-.suggestion-question:hover, .suggestion-question:focus-visible { border-color: var(--accent); color: var(--accent); }
 
 /* ---------- Results page ---------- */
 .results { display: grid; gap: 28px; }
@@ -131,10 +123,8 @@
 .trend-card {
   text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
   padding: 12px 14px; display: grid; gap: 4px; align-content: start; position: relative; box-shadow: var(--shadow-sm);
-  transition: border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
-.trend-card:hover, .trend-card:focus-visible { border-color: var(--line-strong); transform: translateY(-1px); box-shadow: var(--shadow-md); }
-.trend-active, .trend-active:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm); }
+.trend-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm); }
 .trend-card strong { font-size: 14px; line-height: 1.3; }
 .trend-text { font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
 .pattern-label { overflow-wrap: anywhere; }
@@ -179,22 +169,17 @@
   padding: 8px 14px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 600; text-decoration: none;
   color: #fff; background: rgb(0 0 0 / 0.65); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
-.best-fail-link:hover, .best-fail-link:focus-visible { background: rgb(0 0 0 / 0.85); }
 .best-video-sample:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .best-video-sample .thumb {
   position: absolute; inset: 0; max-width: none; height: 100%; aspect-ratio: auto; border-radius: inherit;
-  transition: transform var(--dur-slow) var(--ease);
 }
 .best-video-sample .thumb-hook { display: none; }
-button.best-video-sample:hover .thumb, button.best-video-sample:focus-visible .thumb { transform: scale(1.03); }
 /* On media: fixed light-on-dark */
 .best-play {
   position: absolute; inset: 0; margin: auto; width: 64px; height: 64px; border-radius: 50%;
   display: grid; place-items: center; padding-left: 4px; font-size: 22px; color: #fff;
   background: rgb(0 0 0 / 0.38); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-  transition: transform var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
-button.best-video-sample:hover .best-play, button.best-video-sample:focus-visible .best-play { transform: scale(1.06); background: rgb(0 0 0 / 0.5); }
 .best-video-note {
   position: absolute; left: 10px; bottom: 10px; font-size: 11px; font-weight: 500; color: #fff;
   background: rgb(0 0 0 / 0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
@@ -234,10 +219,8 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
 .fchip {
   display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface);
   border-radius: var(--radius-pill); padding: 5px 12px 5px 6px; font-size: 14px; font-weight: 500;
-  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
-.fchip:hover { border-color: var(--line-strong); }
-.fchip-on, .fchip-on:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.fchip-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .fchip-count { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- Video grid and tiles ---------- */
@@ -246,14 +229,8 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
 .tile { position: relative; display: grid; align-content: start; min-width: 0; }
 .tile-main { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 10px; border-radius: var(--radius-sm); min-width: 0; }
 .tile-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-/* Hover or keyboard focus previews the tile: the cover lifts a little and the picture zooms inside it. */
-.tile-main .thumb {
-  border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);
-  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-}
-.tile-main .thumb img { transition: transform var(--dur-slow) var(--ease); }
-.tile-main:hover .thumb, .tile-main:focus-visible .thumb { transform: translateY(-3px) scale(1.015); box-shadow: var(--shadow-lg); }
-.tile-main:hover .thumb img, .tile-main:focus-visible .thumb img { transform: scale(1.06); }
+/* The cover is the card: on hover it lifts like any clickable card (interactive.css). */
+.tile-main .thumb { border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .tile-body { display: grid; gap: 3px; min-width: 0; }
 .tile-hook { overflow-wrap: anywhere; font-weight: 600; font-size: 14px; line-height: 1.3; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tile-type { justify-self: start; font-size: var(--text-3xs); font-weight: 600; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 1px 8px; }
@@ -265,10 +242,7 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
   display: grid; place-items: center; font-size: var(--text-sm); font-weight: 600; line-height: 1; white-space: nowrap;
   background: var(--frost); color: var(--fg); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   box-shadow: var(--shadow-md);
-  transition: transform var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-.tile-save:hover, .tile-save:focus-visible { transform: scale(1.05); }
-.tile-save:active { transform: scale(0.94); }
 .tile-save-on { background: var(--accent); color: var(--accent-fg); }
 .tile-save-pop { animation: star-pop var(--dur-slow) var(--ease); }
 @keyframes star-pop { 0% { transform: scale(0.8); } 55% { transform: scale(1.22); } 100% { transform: scale(1); } }
@@ -331,7 +305,6 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
 .thumb-ctl:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .thumb-sound { width: 28px; height: 28px; }
 .thumb-fail { padding: 4px 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-.thumb-ctl:hover { background: rgb(0 0 0 / 0.8); }
 .thumb-hook { position: relative; font-size: 11px; font-weight: 600; line-height: 1.2; text-shadow: 0 1px 4px rgb(0 0 0 / 0.5); }
 .thumb-lg .thumb-hook { font-size: 15px; }
 .thumb-len {
@@ -414,12 +387,6 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
 
 /* ---------- Reduced motion: no movement, no shimmer, no count or bar growth ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .tile-main:hover .thumb, .tile-main:focus-visible .thumb,
-  .tile-main:hover .thumb img, .tile-main:focus-visible .thumb img,
-  button.best-video-sample:hover .thumb, button.best-video-sample:focus-visible .thumb,
-  button.best-video-sample:hover .best-play, button.best-video-sample:focus-visible .best-play,
-  .trend-card:hover, .trend-card:focus-visible,
-  .tile-save:hover, .tile-save:focus-visible, .tile-save:active { transform: none; }
   .cmp-bar-this, .tile-save-pop, .suggest, .reading, .phone-wrap, .mic-on { animation: none; }
   .skeleton { animation: none; background: var(--surface-2); }
   .reading-steps li.now .reading-dot { animation: none; border-top-color: var(--accent); border-style: dotted; }
@@ -430,9 +397,8 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
 .kbd-hint-btn {
   width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface);
   color: var(--muted); font-size: var(--text-sm); font-weight: 600; line-height: 1; display: grid; place-items: center;
-  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
-.kbd-hint-btn:hover, .kbd-hint-btn[aria-expanded="true"] { color: var(--fg); border-color: var(--muted); background: var(--surface-2); }
+.kbd-hint-btn[aria-expanded="true"] { color: var(--fg); border-color: var(--muted); background: var(--surface-2); }
 .kbd-hint-pop {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; width: 272px; padding: 14px 16px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg);
@@ -467,7 +433,6 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
 .toast-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .toast-ok { color: var(--accent); font-weight: 700; }
 .toast-x { background: none; border: 0; color: var(--muted); padding: 4px 6px; border-radius: var(--radius-sm); }
-.toast-x:hover { color: var(--fg); background: var(--surface-2); }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } .toast { animation: none; } }
 
 /* ---------- Results filter panel ---------- */
@@ -496,7 +461,6 @@ button.best-video-sample:hover .best-play, button.best-video-sample:focus-visibl
 /* "Where these numbers come from": a quiet disclosure under a tile and in the breakdown panel */
 .numsrc { font-size: var(--text-sm); min-width: 0; margin-top: 6px; }
 .numsrc > summary { white-space: normal; overflow-wrap: anywhere; cursor: pointer; color: var(--muted); font-size: var(--text-xs); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: transparent; list-style-position: inside; }
-.numsrc > summary:hover, .numsrc > summary:focus-visible { color: var(--fg); text-decoration-color: currentColor; }
 .numsrc-list { margin: 8px 0 0; display: grid; gap: 8px; }
 .numsrc-list > div { display: grid; gap: 2px; min-width: 0; }
 .numsrc-list dt { font-size: var(--text-xs); color: var(--muted); }

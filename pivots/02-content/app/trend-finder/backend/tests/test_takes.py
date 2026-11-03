@@ -215,3 +215,79 @@ def test_idea_id_cannot_leave_the_media_folder(client, setup):
     assert r.status_code == 404
     outside = [p for p in server.MEDIA_DIR.parent.glob("*.mp4")]
     assert outside == [] and media_files() == []
+
+
+# ---- takes follow the shot's id, not its place in the list ----
+
+def with_shots(id, *ids, status="approved"):
+    shots = [{"id": i, "time": "0-3s", "shot": f"shot {i}"} for i in ids]
+    return SavedIdea(id=id, videoId=f"v-{id}", clientId="a", status=status, dueDate="2026-11-02", notes="", shots=shots)
+
+
+def test_take_keeps_shot_after_reorder(client, setup):
+    store_ideas(with_shots("ia", "s1", "s2", "s3"))
+    t = up(client, shot=1).json()
+    assert t["shotId"] == "s2" and t["shot"] == 1
+    store_ideas(with_shots("ia", "s0", "s1", "s2", "s3"))  # a shot is added in front
+    got = client.get("/api/ideas/ia/takes").json()
+    assert got[0]["id"] == t["id"] and got[0]["shotId"] == "s2" and got[0]["shot"] == 2
+
+
+def test_take_of_removed_shot_has_null_index(client, setup):
+    store_ideas(with_shots("ia", "s1", "s2"))
+    up(client, shot=1)
+    store_ideas(with_shots("ia", "s1"))
+    got = client.get("/api/ideas/ia/takes").json()
+    assert got[0]["shot"] is None and got[0]["shotId"] == "s2"
+
+
+def test_choose_and_limits_are_per_shot_id(client, setup):
+    store_ideas(with_shots("ia", "s1", "s2"))
+    a = up(client, shot=1).json()
+    store_ideas(with_shots("ia", "s0", "s1", "s2"))
+    b = up(client, shot=2).json()  # the same shot, now at index 2
+    assert b["shotId"] == "s2" and b["chosen"] is False
+    after = {t["id"]: t["chosen"] for t in client.post(f"/api/ideas/ia/takes/{b['id']}/choose").json()}
+    assert after == {a["id"]: False, b["id"]: True}
+
+
+def test_legacy_take_backfills_shot_id(client, setup):
+    store_ideas(with_shots("ia", "s1", "s2"))
+    with server.db() as conn:  # a row written before shot_id existed
+        conn.execute("INSERT INTO takes (id, idea_id, shot, ext, size, name, chosen, created_at, shot_id) "
+                     "VALUES ('old', 'ia', 1, 'mp4', 5, 'x.mp4', 1, 1, NULL)")
+    got = client.get("/api/ideas/ia/takes").json()
+    assert got[0]["shotId"] == "s2" and got[0]["shot"] == 1
+    with server.db() as conn:
+        assert conn.execute("SELECT shot_id FROM takes WHERE id = 'old'").fetchone()[0] == "s2"
+    store_ideas(with_shots("ia", "s9", "s1", "s2"))  # the id was stored, so a later reorder cannot move it
+    assert client.get("/api/ideas/ia/takes").json()[0]["shot"] == 2
+
+
+def test_cut_uses_current_shot_order(client, setup):
+    store_ideas(with_shots("ia", "s1", "s2"))
+    a = up(client, shot=0).json()
+    b = up(client, shot=1).json()
+    store_ideas(with_shots("ia", "s2", "s1"))  # swapped
+    with server.db() as conn:
+        import renders
+        assert [t[0] for t in renders.chosen_ids(conn, "ia", 2)] == [b["id"], a["id"]]
+        assert [t[0] for t in renders.chosen_ids(conn, "ia", 1)] == [b["id"]]  # only the first listed shot
+
+
+def test_old_database_gets_the_shot_id_column(tmp_path):
+    import sqlite3
+    conn = sqlite3.connect(tmp_path / "old.db")
+    conn.execute("CREATE TABLE takes (id TEXT PRIMARY KEY, idea_id TEXT NOT NULL, shot INTEGER NOT NULL, ext TEXT NOT NULL, "
+                 "size INTEGER NOT NULL, name TEXT NOT NULL, chosen INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)")
+    takes.migrate(conn)
+    takes.migrate(conn)  # twice is fine
+    assert "shot_id" in {r[1] for r in conn.execute("PRAGMA table_info(takes)")}
+
+
+def test_upload_past_the_shot_list_422(client, setup):
+    store_ideas(with_shots("ia", "s1", "s2"))
+    r = up(client, shot=2)
+    assert r.status_code == 422 and r.json()["error"] == "That shot isn't on this plan."
+    assert client.get("/api/ideas/ia/takes").json() == [] and media_files() == []
+    assert up(client, shot=1).status_code == 200

@@ -4,7 +4,7 @@
 .chan-form .chip-group { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
 .chan-form .chip-group legend { width: 100%; }
 .chan-form .cchip { cursor: pointer; }
-:root .chan-form .cchip.cchip-on, :root .chan-form .cchip.cchip-on:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+:root .chan-form .cchip.cchip-on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .chan-form .cchip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chan-row { display: flex; flex-wrap: wrap; gap: var(--space-base); align-items: end; }
 .chan-handle { flex: 1 1 240px; }

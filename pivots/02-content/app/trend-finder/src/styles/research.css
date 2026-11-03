@@ -47,7 +47,7 @@
 }
 :root[data-ui="altitude"] .rs-table .rs-col-head th { padding-block: var(--space-sm); white-space: nowrap; background: var(--surface-2); }
 :root[data-ui="altitude"] .rs-table tbody:last-child tr:last-child :is(th, td) { border-bottom: 0; }
-:root[data-ui="altitude"] .rs-table tbody tr:not(.rs-group-row) { transition: background-color var(--dur-fast) var(--ease); }
+:root[data-ui="altitude"] .rs-table tbody tr:not(.rs-group-row) { transition: var(--hover-transition); }
 :root[data-ui="altitude"] .rs-table tbody tr:not(.rs-group-row, .rs-group-empty):hover { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
 :root[data-ui="altitude"] .rs-table tbody th { font-weight: 500; }
 :root[data-ui="altitude"] .rs-table .is-num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -70,10 +70,8 @@
   padding: var(--space-2xs) 0; border: 0; background: none; cursor: pointer;
   font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; border-radius: var(--radius-xs);
 }
-:root[data-ui="altitude"] .rs-sort:hover { color: var(--fg); }
-:root[data-ui="altitude"] .rs-sort:focus-visible { outline: none; box-shadow: var(--focus-ring); color: var(--fg); }
-:root[data-ui="altitude"] .rs-sort-icon { opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
-:root[data-ui="altitude"] .rs-sort:hover .rs-sort-icon { opacity: 0.5; }
+:root[data-ui="altitude"] .rs-sort:focus-visible { color: var(--fg); }
+:root[data-ui="altitude"] .rs-sort-icon { opacity: 0; }
 :root[data-ui="altitude"] .rs-sort-icon.is-on { opacity: 1; color: var(--label); }
 
 /* Account: opens the video; the small arrow opens the post on its platform */
@@ -84,12 +82,9 @@
   white-space: nowrap; border-radius: var(--radius-xs);
   max-width: 220px; overflow: hidden; text-overflow: ellipsis;
 }
-:root[data-ui="altitude"] .rs-account-btn:hover { text-decoration-color: currentColor; color: var(--label); }
 :root[data-ui="altitude"] .rs-ext {
   display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: var(--radius-xs); color: var(--muted);
 }
-:root[data-ui="altitude"] .rs-ext:hover { color: var(--label); background: var(--accent-soft); }
-:root[data-ui="altitude"] :is(.rs-account-btn, .rs-ext):focus-visible { outline: none; box-shadow: var(--focus-ring); }
 :root[data-ui="altitude"] .rs-platform { display: inline-flex; vertical-align: middle; }
 
 /* Cells you click to edit */
@@ -97,9 +92,7 @@
   display: block; width: 100%; min-height: 32px; margin: -4px -6px; padding: 4px 6px; box-sizing: content-box;
   border: 1px solid transparent; border-radius: var(--radius-sm); background: none; cursor: text;
   font: inherit; color: var(--fg); text-align: left; white-space: pre-wrap; overflow-wrap: anywhere;
-  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
-:root[data-ui="altitude"] .rs-edit-view:hover { border-color: var(--line-strong); background: var(--surface); }
 :root[data-ui="altitude"] .rs-edit-view:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 :root[data-ui="altitude"] .rs-edit-empty { color: var(--muted); font-size: var(--text-sm); }
 :root[data-ui="altitude"] .rs-edit { display: grid; gap: var(--space-2xs); }
@@ -123,10 +116,7 @@
   border: 1px solid transparent; border-radius: var(--radius-pill); cursor: pointer;
   font: inherit; font-size: var(--text-sm); font-weight: 500; white-space: nowrap;
   background: var(--surface-2); color: var(--fg);
-  transition: border-color var(--dur-fast) var(--ease), filter var(--dur-fast) var(--ease);
 }
-:root[data-ui="altitude"] .rs-status:hover { border-color: var(--line-strong); }
-:root[data-ui="altitude"] .rs-status:focus-visible { outline: none; box-shadow: var(--focus-ring); border-color: var(--accent); }
 :root[data-ui="altitude"] .rs-status-waiting { background: var(--rising-soft); color: var(--rising); }
 :root[data-ui="altitude"] .rs-status-approved,
 :root[data-ui="altitude"] .rs-status-filming,
@@ -169,8 +159,6 @@
   display: inline-flex; align-items: center; gap: var(--space-2xs); min-height: 32px; padding: 0 var(--space-2xs);
   border: 0; border-radius: var(--radius-sm); background: none; color: var(--fg); cursor: pointer; font: inherit;
 }
-:root[data-ui="altitude"] .rs-group-toggle:hover { background: var(--surface-3); }
-:root[data-ui="altitude"] .rs-group-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 :root[data-ui="altitude"] .rs-group-chev { flex: none; color: var(--muted); transition: transform var(--dur-fast) var(--ease); }
 :root[data-ui="altitude"] .rs-group-toggle[aria-expanded="true"] .rs-group-chev { transform: rotate(90deg); }
 :root[data-ui="altitude"] .rs-group-num {
@@ -195,10 +183,8 @@
 /* Remove video: a small cross after the due date */
 :root[data-ui="altitude"] .rs-x {
   display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-xs);
-  background: none; color: var(--muted); cursor: pointer; transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  background: none; color: var(--muted); cursor: pointer;
 }
-:root[data-ui="altitude"] .rs-x:hover { background: var(--surface-3); color: var(--no); }
-:root[data-ui="altitude"] .rs-x:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 :root[data-ui="altitude"] .rs-group-help { min-width: 0; }
 :root[data-ui="altitude"] .rs-table .rs-group-empty td { padding-block: var(--space-sm); padding-left: calc(var(--space-base) + 44px); }
 
@@ -267,9 +253,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root[data-ui="altitude"] :is(.rs-table tbody tr, .rs-sort-icon, .rs-edit-view, .rs-status, .rs-group-chev, .rs-x) {
-    transition: none;
-  }
+  :root[data-ui="altitude"] :is(.rs-table tbody tr, .rs-group-chev) { transition: none; }
 }
 
 /* "Which video is this for?" (Save to Research) */
@@ -288,16 +272,12 @@
 :root[data-ui="altitude"] .stv-option {
   display: flex; align-items: center; gap: var(--space-sm); width: 100%; min-height: 44px; padding: var(--space-sm) var(--space-base);
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--fg); font: inherit; text-align: left; cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
-:root[data-ui="altitude"] .stv-option:hover { background: var(--surface-2); border-color: var(--line-strong); }
-:root[data-ui="altitude"] .stv-option:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 :root[data-ui="altitude"] .stv-topic { font-weight: 600; }
 :root[data-ui="altitude"] .stv-unsure { flex-direction: column; align-items: flex-start; gap: 2px; border-style: dashed; }
 :root[data-ui="altitude"] .stv-cancel { justify-self: end; }
 @media (prefers-reduced-motion: reduce) {
   :root[data-ui="altitude"] .stv-wrap { animation: none; }
-  :root[data-ui="altitude"] .stv-option { transition: none; }
 }
 
 /* "Open in Research": the row just brought into view glows for a moment */

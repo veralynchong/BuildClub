@@ -6,6 +6,9 @@ import * as cut from './strings/cut.ts'
 import * as research from './strings/research.ts'
 import * as shots from './strings/shots.ts'
 import * as compare from './strings/compare.ts'
+import * as canvas from './strings/canvas.ts'
+import * as editor from './strings/editor.ts'
+import * as server from './strings/server.ts'
 import * as board from './strings/board.ts'
 
 export type Lang = 'en' | 'zh-Hant'
@@ -48,12 +51,12 @@ export function writeLang(lang: Lang, store: Store | null = defaultStore()): voi
 export const htmlLang = (lang: Lang): string => lang
 
 // Per-area dictionaries, exported so the unit test can check each one.
-export const areas = { shell, home, find, plan, cut, research, shots, compare, board }
+export const areas = { shell, home, find, plan, cut, research, shots, compare, canvas, editor, server, board }
 
 const dictEn: Record<string, string> = Object.assign({}, ...Object.values(areas).map((a) => a.en))
 const dictZh: Record<string, string> = Object.assign({}, ...Object.values(areas).map((a) => a.zhHant))
 
-type AllEn = typeof shell.en & typeof home.en & typeof find.en & typeof plan.en & typeof cut.en & typeof research.en & typeof shots.en & typeof compare.en & typeof board.en
+type AllEn = typeof shell.en & typeof home.en & typeof find.en & typeof plan.en & typeof cut.en & typeof research.en & typeof shots.en & typeof compare.en & typeof canvas.en & typeof editor.en & typeof server.en & typeof board.en
 export type Key = keyof AllEn
 // "x.one" / "x.other" pairs, picked by tp(): the base name is "x".
 export type PluralKey = Key extends infer K ? (K extends `${infer B}.one` ? B : never) : never

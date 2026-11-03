@@ -7,7 +7,7 @@ import pytest
 import renders
 import server
 from test_auth import add_user, login
-from test_renders import A, fake_pipeline, finished_cut, review_link, send, setup, start, wait_for, with_take  # noqa: F401
+from test_renders import A, export, fake_export, finished_cut, put_project, review_link, send, setup, wait_for, with_take  # noqa: F401
 from test_takes import idea, store_ideas
 
 B = {**A, "id": "b", "name": "Plant Pal"}
@@ -18,7 +18,7 @@ def token_of(client, client_id="a"):
 
 
 @pytest.fixture
-def sent(client, setup, fake_pipeline):
+def sent(client, fake_export):
     """A finished, sent cut for plan ia; returns its review token."""
     finished_cut(client)
     token = token_of(client)
@@ -49,10 +49,10 @@ def test_review_lists_waiting_cut(client, sent):
     cut = item["cut"]
     assert cut["url"] == f"/api/review/{sent}/cuts/ia/file?v={cut['version']}"
     assert isinstance(cut["version"], str) and cut["version"].isdigit()
-    assert cut["durationSec"] == 12.5 and isinstance(cut["sentAt"], int)
+    assert cut["durationSec"] == 2.0 and isinstance(cut["sentAt"], int)
 
 
-def test_review_lists_no_unsent_cut(client, setup, fake_pipeline):
+def test_review_lists_no_unsent_cut(client, fake_export):
     finished_cut(client)
     assert client.get(f"/api/review/{token_of(client)}").json()["cuts"] == []
 
@@ -82,8 +82,8 @@ def other_client(client, sent):
     client.put("/api/clients", json=[A, B])
     store_ideas(idea("ia"), idea("ib"), idea("iw", "waiting"))
     server.save("ideas", [idea("ia"), idea("ib").model_copy(update={"clientId": "b"})])
-    with_take(client, idea_id="ib")
-    assert start(client, "ib").status_code == 202
+    put_project(client, with_take(client, idea_id="ib")["id"], idea_id="ib")
+    assert export(client, "ib").status_code == 202
     wait_for(client, "ib")
     token_of(client, "b")
     assert send(client, "ib").status_code == 200
@@ -198,13 +198,12 @@ def test_signed_in_cut_file_still_needs_login(client, sent):
     assert client.get("/api/ideas/ia/cut/file").status_code == 200
 
 
-def test_reapproved_plan_hides_cut_when_takes_changed(client, sent):
+def test_reapproved_plan_hides_cut_when_the_edit_changed(client, sent):
     server.save("ideas", [idea("ia", "waiting")])
     assert client.get(f"/api/review/{sent}").json()["cuts"] == []
     assert row()[0] == "waiting"  # the row stays; only the view is hidden
     server.save("ideas", [idea("ia")])
-    other = with_take(client)
-    client.post(f"/api/ideas/ia/takes/{other['id']}/choose")
+    put_project(client, client.get("/api/ideas/ia/takes").json()[0]["id"], (0.0, 1.0))  # the edit changed
     assert client.get(f"/api/review/{sent}").json()["cuts"] == []
     assert client.get(f"/api/review/{sent}/cuts/ia/file").status_code == 404
 
@@ -214,3 +213,10 @@ def test_reapproved_plan_lists_cut_again_when_nothing_changed(client, sent):
     server.save("ideas", [idea("ia", "waiting")])
     server.save("ideas", [idea("ia")])
     assert len(client.get(f"/api/review/{sent}").json()["cuts"]) == 1
+
+
+def test_a_sent_back_video_cannot_be_sent_again_unchanged(client, sent):
+    assert decide(client, sent, "rejected", reason="Cut the intro").status_code == 200
+    r = send(client)
+    assert r.status_code == 409 and r.json()["error"] == renders.SENT_BACK
+    assert row()[0] == "rejected"  # the refusal leaves the answer as it was

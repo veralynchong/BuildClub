@@ -3,6 +3,8 @@ import type { Client, Format, Shot, Video } from '../types'
 import { pickHook, suggestedHooks, withHookOptions } from '../lib/hooks'
 import { writeShotScript } from '../lib/storyboard'
 import { t } from '../lib/i18n'
+import { emotionKey, hookEmotion } from '../lib/hookEmotion'
+import type { HookEmotion } from '../lib/hookEmotion'
 
 interface Props {
   ideaId: string
@@ -22,6 +24,17 @@ interface Props {
 // (same wait as StoryboardSection).
 const SAVE_SETTLE_MS = 800
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+// What the viewer feels: a fixed label, not a control (no hover, pointer or focus). Screen readers hear
+// "Viewer feels: Curiosity"; the screen shows the word only.
+function EmotionTag({ emotion }: { emotion: HookEmotion }) {
+  return (
+    <span className={`hook-emo emo-${emotion}`}>
+      <span className="sr-only">{t('plan.hooks.emotionLead')}</span>
+      {t(emotionKey(emotion))}
+    </span>
+  )
+}
 
 // The first section of the plan screen: suggested hooks for the client's version. Picking one sets shot 1's line.
 export function PlanHooks({ ideaId, saved, video, format, client, shots, editable, onShots }: Props) {
@@ -65,54 +78,67 @@ export function PlanHooks({ ideaId, saved, video, format, client, shots, editabl
     }
   }
 
+  // Hook cards (drawer-plan.css "Studio layout"): a title, then one card per way to start.
   return (
-      <section className="block plan-sec hook-ideas" aria-labelledby="hook-ideas-title">
-        <header className="plan-sec-head">
-          <h2 id="hook-ideas-title">{t('plan.hooks.ideasTitle', { client: client.name })}</h2>
-          {!editable && <p>{t('plan.hooks.ideasHintLocked')}</p>}
-        </header>
-        {editable ? (
-          <>
-            <ul className="hook-list">
-              {ideas.map((h) => {
-                const picked = !!current && current === h.text
-                return (
-                  <li key={h.text} className={`hook-option${picked ? ' is-picked' : ''}`}>
-                    <span className="hook-option-text">{h.text}</span>
-                    <button
-                      type="button"
-                      className={`btn btn-sm ${picked ? 'btn-ghost' : 'btn-primary'}`}
-                      aria-pressed={picked}
-                      aria-label={t('plan.hooks.useAria', { text: h.text })}
-                      onClick={() => pick(h.text)}
-                    >
-                      {picked ? t('plan.hooks.picked') : t('plan.hooks.use')}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-            {ideas.some((h) => h.source === 'sample') && <p className="small muted">{t('plan.hooks.sampleNote')}</p>}
-            {video.live && shots.length > 0 && (
-              <div className="hook-actions">
-                <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => void writeMore()}>
-                  {busy ? t('plan.hooks.writing') : t('plan.hooks.writeMore')}
-                </button>
-                {notice && (
-                  <span className="small muted" role="status">
-                    {notice}
-                  </span>
-                )}
-              </div>
-            )}
-            {problem && (
-              <p className="sb-error" role="alert">
-                {problem}
-              </p>
-            )}
-          </>
-        ) : null}
-        {!editable && <p className="hook-yours">{current ? t('plan.hooks.yours', { text: current }) : t('plan.hooks.none')}</p>}
-      </section>
+    <section className="plan-sec hook-ideas" aria-labelledby="hook-ideas-title">
+      <header className="plan-sec-head">
+        <h2 id="hook-ideas-title">{t('plan.hooks.ideasTitle', { client: client.name })}</h2>
+      </header>
+      {!editable && <p className="plan-sec-hint">{t('plan.hooks.ideasHintLocked')}</p>}
+      {editable ? (
+        <>
+          <ul className="hook-list">
+            {ideas.map((h, i) => {
+              const picked = !!current && current === h.text
+              return (
+                <li key={h.text} className={`hook-option${picked ? ' is-picked' : ''}`}>
+                  <div className="hook-head">
+                    <span className="hook-option-no" aria-hidden="true">
+                      {t('plan.hooks.no', { n: i + 1 })}
+                    </span>
+                    <EmotionTag emotion={hookEmotion(h)} />
+                  </div>
+                  <span className="hook-option-text">{h.text}</span>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${picked ? 'btn-primary' : 'btn-ghost'}`}
+                    aria-pressed={picked}
+                    aria-label={t('plan.hooks.useAria', { text: h.text })}
+                    onClick={() => pick(h.text)}
+                  >
+                    {picked ? t('plan.hooks.picked') : t('plan.hooks.use')}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          {ideas.some((h) => h.source === 'sample') && <p className="plan-sec-note">{t('plan.hooks.sampleNote')}</p>}
+          {video.live && shots.length > 0 && (
+            <div className="hook-actions">
+              <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => void writeMore()}>
+                {busy ? t('plan.hooks.writing') : t('plan.hooks.writeMore')}
+              </button>
+              {notice && (
+                <span className="small muted" role="status">
+                  {notice}
+                </span>
+              )}
+            </div>
+          )}
+          {problem && (
+            <p className="sb-error" role="alert">
+              {problem}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="hook-yours">
+          {current && (
+            <EmotionTag emotion={hookEmotion(ideas.find((h) => h.text === current) ?? { text: current })} />
+          )}
+          <span>{current ? t('plan.hooks.yours', { text: current }) : t('plan.hooks.none')}</span>
+        </p>
+      )}
+    </section>
   )
 }
