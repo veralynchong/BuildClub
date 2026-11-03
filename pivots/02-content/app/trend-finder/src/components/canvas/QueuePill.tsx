@@ -18,7 +18,12 @@ export function QueuePill({ items, onJump }: Props) {
   if (!items.length) return null
   const left = queueLeft(items)
   return (
-    <div className="cv-queue nodrag nopan">
+    <div
+      className="cv-queue nodrag nopan"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setOpen(false)
+      }}
+    >
       {open && (
         <ul className="cv-queue-list" aria-label={t('canvas.queue.list')}>
           {items.map((i) => (

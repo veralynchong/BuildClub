@@ -831,12 +831,14 @@ function CanvasBoard({
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const el = e.target instanceof HTMLElement ? e.target : null
       const typing = !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
-      const { fullscreen: full, dialogOpen, editorOpen } = keyState.current
+      const { fullscreen: full, dialogOpen: dlg, editorOpen } = keyState.current
+      // an open add-node menu or queue list takes Esc first (this listener runs in the capture phase, before they close)
+      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list')
       const act = shellKey({ key: e.key, typing, dialogOpen, editorOpen }, full)
       if (act) setFull(act === 'enter')
     }
-    window.addEventListener('keydown', on)
-    return () => window.removeEventListener('keydown', on)
+    window.addEventListener('keydown', on, true)
+    return () => window.removeEventListener('keydown', on, true)
   }, [setFull])
 
   // The running queue; the clock ticks only while something is running.
