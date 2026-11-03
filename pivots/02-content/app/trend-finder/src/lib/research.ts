@@ -130,6 +130,11 @@ export const viewsPerFollower = (e: Pick<ResearchEntry, 'views' | 'followers'>):
 export const planOf = (e: ResearchEntry, ideas: SavedIdea[]): SavedIdea | undefined =>
   ideas.find((i) => i.clientId === e.clientId && i.videoId === e.videoId)
 
+// The due date of the client video this row is filed under, so a plan made from it starts with that date.
+// Only the same client's slot counts, like slotSummary.
+export const rowDueDate = (e: ResearchEntry, slots: ResearchSlot[]): string | undefined =>
+  slots.find((s) => s.id === e.slotId && s.clientId === e.clientId)?.dueDate || undefined
+
 export function researchStatus(e: ResearchEntry, ideas: SavedIdea[]): ResearchStatus {
   const plan = planOf(e, ideas)
   if (!plan) return 'none'

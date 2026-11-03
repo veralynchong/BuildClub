@@ -213,3 +213,10 @@ def test_reapproved_plan_lists_cut_again_when_nothing_changed(client, sent):
     server.save("ideas", [idea("ia", "waiting")])
     server.save("ideas", [idea("ia")])
     assert len(client.get(f"/api/review/{sent}").json()["cuts"]) == 1
+
+
+def test_a_sent_back_video_cannot_be_sent_again_unchanged(client, sent):
+    assert decide(client, sent, "rejected", reason="Cut the intro").status_code == 200
+    r = send(client)
+    assert r.status_code == 409 and r.json()["error"] == renders.SENT_BACK
+    assert row()[0] == "rejected"  # the refusal leaves the answer as it was

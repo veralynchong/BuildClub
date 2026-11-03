@@ -65,6 +65,7 @@ STALE_CUT = "The takes or music changed after this was made. Make it again befor
 CUTTING = "Wait for the cut to finish before sending it."
 NO_LINK = "This client's review link is turned off. Make a new one on the Shortlist first."
 ALREADY_APPROVED = "This video is already approved."
+SENT_BACK = "This video was sent back. Export a new version before sending it again."
 NOT_WAITING = "This video isn't waiting for review."
 REPLACED = "This video was replaced while you were watching. Here is the new one."
 NEED_REASON = "Say what to change."
@@ -349,6 +350,8 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
                     sent = review_row(conn, idea_id)
                     if sent is not None and sent[1] == "approved" and sent[0] == version:
                         refused = error(409, ALREADY_APPROVED)
+                    elif sent is not None and sent[1] == "rejected" and sent[0] == version:
+                        refused = error(409, SENT_BACK)
                 if refused:
                     conn.rollback()
                     return refused

@@ -11,6 +11,7 @@ import {
   slotSummary,
   researchProgress,
   newSlot,
+  rowDueDate,
 } from '../src/lib/research.ts'
 import { sampleResearch, sampleResearchSlots } from '../src/data/sampleResearch.ts'
 import { videos, sampleIdeas } from '../src/data/sample.ts'
@@ -374,4 +375,17 @@ test('groupRows: the picked reference goes to the top of its video; rowRole read
   assert.equal(rowRole(c, g), 'picked')
   assert.equal(rowRole(b, g), 'backup')
   assert.equal(rowRole(a, g), 'open')
+})
+
+test('rowDueDate: a row filed under a dated client video gives that date; otherwise none', () => {
+  const slots = [
+    { id: 's1', clientId: 'c1', number: 1, topic: 'Tofu', dueDate: '2026-11-10', createdAt: 0 },
+    { id: 's2', clientId: 'c1', number: 2, topic: 'Soup', createdAt: 0 },
+    { id: 's3', clientId: 'c2', number: 1, topic: 'Other client', dueDate: '2026-12-01', createdAt: 0 },
+  ]
+  const row = (o) => ({ id: 'r', clientId: 'c1', videoId: 'v1', ...o })
+  assert.equal(rowDueDate(row({ slotId: 's1' }), slots), '2026-11-10')
+  assert.equal(rowDueDate(row({ slotId: 's2' }), slots), undefined)
+  assert.equal(rowDueDate(row({}), slots), undefined)
+  assert.equal(rowDueDate(row({ slotId: 's3' }), slots), undefined) // another client's slot never counts
 })

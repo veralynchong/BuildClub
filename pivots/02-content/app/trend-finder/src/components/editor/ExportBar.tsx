@@ -155,7 +155,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
   const active = isActive(cut) && !pollDead
   const output = cut?.source === 'editor' ? cut.output : undefined
   const review = output ? (cut?.review ?? null) : null
-  const canSend = !readOnly && !!output && !cut?.stale && !active && review?.status !== 'waiting' && review?.status !== 'approved'
+  const canSend = !readOnly && !!output && !cut?.stale && !active && review?.status !== 'waiting' && review?.status !== 'approved' && review?.status !== 'rejected'
   const line = reviewLine(review, manager, formatDay)
 
   return (
@@ -202,6 +202,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
             <span className="muted small">{formatDuration(output.durationSec)}</span>
           </div>
           {canSend && <p className="muted small">{t('editor.export.approver', { name: manager })}</p>}
+          {review?.status === 'rejected' && !cut?.stale && <p className="muted small">{t('cut.panel.sentBackExport', { name: manager })}</p>}
           {line && <p className="small cut-review-line">{line}</p>}
           {review?.status === 'rejected' && review.reason && <p className="quote">{review.reason}</p>}
         </div>
