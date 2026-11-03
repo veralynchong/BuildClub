@@ -3,7 +3,8 @@ import { t } from '../../../lib/i18n'
 import { canClean, formatSize } from '../../../lib/takes'
 import { ClipActions, ClipGrip } from './ClipActions'
 import { useCanvas } from './ctx'
-import { PortLabels, Ports } from './Ports'
+import { CardHead, CardMedia } from './Card'
+import { Ports } from './Ports'
 import type { CvNodeProps } from './types'
 
 // The takes of this node's shot (matched by the shot's id): which one is used, add one, use another.
@@ -17,20 +18,12 @@ export function FootageNode({ id, data: { node } }: CvNodeProps) {
   const busy = uploading(id)
   const [cleaning, setCleaning] = useState(false) // the busy state is a clean-up, not an upload
   return (
-    <div className="cv-node cv-footage">
-      <div className="cv-node-title">{t('canvas.node.footage')}</div>
+    <div className="cv-node cv-card cv-footage">
+      <CardHead title={t('canvas.node.footage')} status={busy ? { key: cleaning ? 'canvas.footage.cleaning' : 'canvas.footage.uploading', tone: 'busy' } : null} />
       {gone && <p className="small muted">{t('canvas.footage.gone')}</p>}
-      <div className="cv-preview small muted">
-        {busy ? (
-          <span role="status">
-            <span className="cv-spin" aria-hidden="true" /> {t(cleaning ? 'canvas.footage.cleaning' : 'canvas.footage.uploading')}
-          </span>
-        ) : chosen ? (
-          <video className="nodrag" src={chosen.url} muted playsInline controls preload="metadata" aria-label={t('canvas.footage.video')} />
-        ) : (
-          t('canvas.footage.empty')
-        )}
-      </div>
+      <CardMedia kind="video" url={chosen?.url} running={busy} label={t('canvas.footage.video')}>
+        <span className="small muted">{t('canvas.footage.empty')}</span>
+      </CardMedia>
       {mine.length > 0 && (
         <ul className="cv-takes nodrag nowheel" aria-label={t('canvas.footage.takes')}>
           {mine.map((x) => (
@@ -80,7 +73,6 @@ export function FootageNode({ id, data: { node } }: CvNodeProps) {
       <button type="button" className="btn btn-ghost btn-sm nodrag" disabled={readOnly || gone || busy} onClick={() => input.current?.click()}>
         {t('canvas.footage.upload')}
       </button>
-      <PortLabels node={node} />
       <Ports node={node} />
     </div>
   )

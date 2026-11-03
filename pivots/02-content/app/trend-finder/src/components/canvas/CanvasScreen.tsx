@@ -15,21 +15,27 @@ import '@xyflow/react/dist/style.css'
 import type { Kit, SavedIdea, Shot } from '../../types'
 import { t, type Key, type Vars } from '../../lib/i18n'
 import { getBudget, getCanvas, getKit, getModels, NoShots, pollGen, putCanvas, quoteChain, StaleCanvas, startChain, startGen, uploadImage } from '../../lib/canvas/api'
-import { fromFlow, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
-import { addNode, chainBusy, chainPair, isRetired, freeSpot, roomBelow, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
+import { fromFlow, reframe, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
+import { frameBoxes, frameOf, migrateDoc, slotInFrame } from '../../lib/canvas/frames'
+import { edgeLook, focusSet } from '../../lib/canvas/edges'
+import { addNode, budgetLeft, chainBusy, chainPair, freeSpot, genFinished, genRequest, genStarted, genView, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
+import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeInfo, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
+import { NodePanel } from './NodePanel'
 import { mergeFrame } from '../../lib/storyboard'
 import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, NothingToCut, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
-import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
-import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
+import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
+import type { Budget, CanvasDoc, CanvasState, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
 import { ErrorText } from '../ErrorText'
 import { CanvasToolbar } from './CanvasToolbar'
 import { ToolRail } from './ToolRail'
+import { DropMenu } from './DropMenu'
 import { QueuePill } from './QueuePill'
 import { ZoomBar } from './ZoomBar'
 import { runningQueue, shellKey, writeFullscreen } from '../../lib/canvas/shell'
+import { nodeStatus } from '../../lib/canvas/status'
 import { EditorPanel } from '../editor/EditorPanel'
 import { useSources } from '../../lib/editor/useSources'
 import { useTimelineActions } from '../../lib/editor/useTimelineActions'
@@ -43,8 +49,9 @@ const MAX_RETRIES = 5
 const NOTE_MS = 8000 // how long an info note (e.g. clean-up done) stays up; errors stay until dismissed
 const ADD_KINDS: NodeKind[] = ['prompt', 'storyboard', 'video', 'upload']
 const ADD_KINDS_WITH_KIT: NodeKind[] = [...ADD_KINDS, 'kit']
-const MEDIA_COLOR = { text: 'var(--violet)', image: 'var(--blue)', video: 'var(--mustard)', kit: 'var(--muted)' } as const
 const POLL_RETRY_MS = 2000 // wait after a poll request fails before asking again
+// A single Generate with a paid model asks once; after a yes it doesn't ask again until the page reloads (spec §6.4).
+let paidConfirmed = false
 
 interface Props {
   idea: SavedIdea
@@ -172,7 +179,8 @@ function CanvasBoard({
   fullscreen: boolean
   onFullscreen: (on: boolean) => void
 }) {
-  const first = useMemo(() => toFlow(initial.doc), [initial])
+  // migrateDoc runs on every load: the backend still writes a shot text line for each new shot.
+  const first = useMemo(() => toFlow(migrateDoc(initial.doc)), [initial])
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(first.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(first.edges)
   const { screenToFlowPosition, getZoom, getViewport, setViewport: moveTo, fitView } = useReactFlow()
@@ -347,16 +355,19 @@ function CanvasBoard({
       const nodeIds = new Set(cur.nodes.map((n) => n.id))
       const lineIds = new Set(cur.edges.map((e) => e.id))
       const added = toFlow({ nodes: next.nodes.filter((n) => !nodeIds.has(n.id)), edges: next.edges.filter((e) => !lineIds.has(e.id)) })
-      setNodes((ns) => [
-        ...ns.map((n) => {
-          const m = next.nodes.find((x) => x.id === n.id)
-          const base = cur.nodes.find((x) => x.id === n.id)
-          if (!m || !base) return n
-          const data = mergeKitData(base.data, m.data, n.data.node.data) // only what the sync changed; newer edits stay
-          return data === n.data.node.data ? n : { ...n, data: { node: { ...n.data.node, data } } }
-        }),
-        ...added.nodes,
-      ])
+      setNodes((ns) => {
+        const out = [
+          ...ns.map((n) => {
+            const m = next.nodes.find((x) => x.id === n.id)
+            const base = cur.nodes.find((x) => x.id === n.id)
+            if (!m || !base) return n
+            const data = mergeKitData(base.data, m.data, n.data.node.data) // only what the sync changed; newer edits stay
+            return data === n.data.node.data ? n : { ...n, data: { node: { ...n.data.node, data } } }
+          }),
+          ...added.nodes,
+        ]
+        return added.nodes.length ? reframe(out) : out // a new node joins its frame, a new kit goes left of the frames
+      })
       if (added.edges.length) setEdges((es) => [...es, ...added.edges])
     },
     [setNodes, setEdges],
@@ -436,97 +447,124 @@ function CanvasBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial])
 
-  const onGenerate = async (nodeId: string) => {
+  // The node's model and whether it can generate now (genView is the one Generate rule), or null.
+  const readyToGen = (nodeId: string) => {
     const d = latest.current.doc
     const node = d.nodes.find((n) => n.id === nodeId)
-    const kind = node?.type === 'video' ? 'video' : 'image'
-    const model = models.find((m) => m.id === node?.data.model && m.kind === kind) ?? models.find((m) => m.kind === kind)
-    if (!node || !model || !model.available || isRetired(models, kind, node.data.model) || blocked || pendingGen(nodeId, gensRef.current) || starting.current.has(nodeId)) return
-    if (missingInput(d, nodeId, model, shots, gensRef.current)) return
+    if (!node || blocked || pendingGen(nodeId, gensRef.current) || starting.current.has(nodeId)) return null
+    const model = genView(node, models, null, null).model
+    if (!model) return null
+    const v = genView(node, models, null, missingInput(d, nodeId, model, shots, gensRef.current))
+    return v.canGenerate && v.model ? { model: v.model, usd: v.usd } : null
+  }
+
+  // Starts one node's generation; false when it could not start (the reason is shown when there is one).
+  const startOne = async (nodeId: string): Promise<boolean> => {
+    const ready = readyToGen(nodeId)
+    if (!ready) return false
+    const { model } = ready
+    const d = latest.current.doc
+    const kind = model.kind === 'video' ? 'video' : 'image'
     const req = genRequest(d, nodeId, shots, gensRef.current, kitRef.current, model)
     if (kind === 'video' && req.duration === undefined && model.durations) req.duration = model.durations[0]
     starting.current.add(nodeId)
     try {
       const g = await startGen(ideaId, { nodeId, model: model.id, ...req })
-      if (!mounted.current) return
+      if (!mounted.current) return false
       // the chosen version stays until the new one is done, so a failed try leaves the plan's frame alone
       setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { node: { ...n.data.node, data: genStarted(n.data.node.data, model.id, g.id) } } } : n)))
       upsertGen(g)
       track(g)
       refreshBudget()
+      return true
     } catch (e) {
       if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
+      return false
     } finally {
       starting.current.delete(nodeId)
     }
   }
 
-  // ---- run the whole shot: a storyboard image and the video that starts from it, priced together ----
-  const [chaining, setChaining] = useState(false) // a quote or a confirmed start is on its way
-  const [ask, setAsk] = useState<{ body: ChainBody; quote: Quote } | null>(null)
+  // The first Generate with a paid model in this session asks first.
+  const [paidAsk, setPaidAsk] = useState<{ nodeId: string; model: string; usd: number } | null>(null)
+  const onGenerate = async (nodeId: string) => {
+    const ready = readyToGen(nodeId)
+    if (!ready) return
+    if (paidConfirmNeeded(ready.usd, paidConfirmed)) return setPaidAsk({ nodeId, model: ready.model.label, usd: ready.usd })
+    await startOne(nodeId)
+  }
+  const confirmPaid = () => {
+    if (!paidAsk) return
+    paidConfirmed = true
+    setPaidAsk(null)
+    void startOne(paidAsk.nodeId)
+  }
 
-  const chainStarting = useRef(false) // a ref, so a double click can't start the chain twice before state updates
-  const onChain = async (nodeId: string) => {
-    const d = latest.current.doc
-    const pair = chainPair(d, nodeId)
-    if (!pair || blocked || chaining || chainStarting.current || chainBusy(d, nodeId, gensRef.current)) return
-    if (starting.current.has(pair.imageNodeId) || starting.current.has(pair.videoNodeId)) return
-    const image = d.nodes.find((n) => n.id === pair.imageNodeId)
-    const video = d.nodes.find((n) => n.id === pair.videoNodeId)
-    const imageModel = models.find((m) => m.id === image?.data.model && m.kind === 'image')
-    const videoModel = models.find((m) => m.id === video?.data.model && m.kind === 'video')
-    if (!image || !video || !imageModel || !videoModel || !imageModel.available || !videoModel.available) return showNote('canvas.chain.noKey')
-    if (missingInput(d, pair.imageNodeId, imageModel, shots, gensRef.current)) return showNote('canvas.chain.missing')
-    const imageReq = genRequest(d, pair.imageNodeId, shots, gensRef.current, kitRef.current, imageModel)
-    const videoReq = genRequest(d, pair.videoNodeId, shots, gensRef.current)
-    if (videoReq.references.length) return showNote('canvas.chain.noRef') // the video starts from the storyboard image only
-    const body: ChainBody = {
-      imageNodeId: pair.imageNodeId,
-      videoNodeId: pair.videoNodeId,
-      imageModel: imageModel.id,
-      videoModel: videoModel.id,
-      prompt: imageReq.prompt,
-      videoPrompt: videoReq.prompt,
-      duration: videoReq.duration ?? videoModel.durations?.[0],
-      ...(imageReq.references.length ? { references: imageReq.references } : {}),
-    }
+  // ---- Run all and Run the whole shot: what would run, priced, asked once, then started batch by batch ----
+  const [chaining, setChaining] = useState(false) // a save before the dialog or a confirmed run is on its way
+  const [runAsk, setRunAsk] = useState<{ title: 'canvas.toolbar.runAll' | 'canvas.chain.title'; items: RunItem[]; batches: RunBatch[]; skippedNoKey: number } | null>(null)
+
+  const chainStarting = useRef(false) // a ref, so a double click can't start the run twice before state updates
+  const preparing = useRef(false) // a ref, so a double click can't prepare the dialog twice before state updates
+  const onRunScope = async (opts: { shotId?: string; includeStale: boolean }) => {
+    if (blocked || preparing.current || chainStarting.current) return
+    preparing.current = true
     setChaining(true)
     try {
-      // the server prices the saved canvas, so save what is on screen first
+      // the server checks the saved canvas, so save what is on screen first
       while (inflight.current) await new Promise((r) => setTimeout(r, 50))
       if (latest.current.key !== savedKey.current) await save()
       if (blockedRef.current || latest.current.key !== savedKey.current) return showNote('canvas.save.failed')
-      const quote = await quoteChain(ideaId, body)
-      if (mounted.current) setAsk({ body, quote })
+      const d = latest.current.doc
+      const info = runScopeInfo(d, shots, gensRef.current, models, opts)
+      let items = info.items
+      if (!items.length) return info.skippedNoKey > 0 ? showNote('canvas.chain.noKey') : showNote('canvas.run.nothing', undefined, true)
+      if (info.deferred.length) showNote('canvas.run.deferred', { n: info.deferred.length })
+      // A chain the server would refuse is left out with its reason (for one shot: no dialog), before anything is asked.
+      for (const b of runBatches(d, items)) {
+        if (!('chain' in b)) continue
+        const made = chainBody(d, b.chain, models, shots, gensRef.current, kitRef.current)
+        if ('error' in made) {
+          showNote(made.error)
+          if (opts.shotId) return
+          items = items.filter((i) => i.nodeId !== b.chain.imageNodeId && i.nodeId !== b.chain.videoNodeId)
+          continue
+        }
+        await quoteChain(ideaId, made.body) // nothing is spent; a refusal (e.g. the daily cap) stops here with its message
+      }
+      if (!items.length || !mounted.current) return
+      setRunAsk({ title: opts.shotId ? 'canvas.chain.title' : 'canvas.toolbar.runAll', items, batches: runBatches(d, items), skippedNoKey: info.skippedNoKey })
     } catch (e) {
       if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
     } finally {
+      preparing.current = false
       if (mounted.current) setChaining(false)
     }
   }
 
-  // Escape cancels the dialog, unless the start is on its way.
+  // Escape cancels a dialog, unless the start is on its way.
   useEffect(() => {
-    if (!ask || chaining) return
-    const on = (e: KeyboardEvent) => e.key === 'Escape' && setAsk(null)
+    if ((!runAsk && !paidAsk) || chaining) return
+    const on = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setRunAsk(null)
+      setPaidAsk(null)
+    }
     window.addEventListener('keydown', on)
     return () => window.removeEventListener('keydown', on)
-  }, [ask, chaining])
+  }, [runAsk, paidAsk, chaining])
 
-  const confirmChain = async () => {
-    if (!ask || chaining || chainStarting.current) return
-    const { body } = ask
-    // a Generate may have begun since the quote was shown
-    if (chainBusy(latest.current.doc, body.imageNodeId, gensRef.current) || starting.current.has(body.imageNodeId) || starting.current.has(body.videoNodeId)) {
-      setAsk(null)
+  // One storyboard + video chain. A failure shows its message; the run goes on with the next batch.
+  const runChain = async (pair: { imageNodeId: string; videoNodeId: string }) => {
+    // a Generate may have begun since the dialog was shown
+    if (chainBusy(latest.current.doc, pair.imageNodeId, gensRef.current) || starting.current.has(pair.imageNodeId) || starting.current.has(pair.videoNodeId)) {
       return showNote('canvas.chain.busy')
     }
-    chainStarting.current = true
-    setChaining(true)
+    const made = chainBody(latest.current.doc, pair, models, shots, gensRef.current, kitRef.current)
+    if ('error' in made) return showNote(made.error)
     try {
-      const { image, video } = await startChain(ideaId, body)
+      const { image, video } = await startChain(ideaId, made.body)
       if (!mounted.current) return
-      setAsk(null)
       setNodes((ns) =>
         ns.map((n) => {
           const g = n.id === image.nodeId ? image : n.id === video.nodeId ? video : null
@@ -539,13 +577,26 @@ function CanvasBoard({
       track(video)
       refreshBudget()
     } catch (e) {
-      if (mounted.current) {
-        setAsk(null)
-        showText(e instanceof Error ? e.message : t('canvas.err.start'))
+      if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
+    }
+  }
+
+  const confirmRun = async () => {
+    if (!runAsk || chaining || chainStarting.current) return
+    chainStarting.current = true
+    setChaining(true)
+    try {
+      for (const b of runAsk.batches) {
+        if (!mounted.current) return
+        if ('chain' in b) await runChain(b.chain)
+        else await startOne(b.single)
       }
     } finally {
       chainStarting.current = false
-      if (mounted.current) setChaining(false)
+      if (mounted.current) {
+        setRunAsk(null)
+        setChaining(false)
+      }
     }
   }
 
@@ -662,9 +713,26 @@ function CanvasBoard({
     markFrom(c.target, true)
   }
 
-  // A line dropped on a port that refuses it never reaches onConnect, so say why here.
-  const onConnectEnd = (_: unknown, cs: FinalConnectionState) => {
+  // A line let go on empty board (not on a node; a frame's empty space counts as board) offers the kinds of node it
+  // could feed. A line dropped on a port that refuses it never reaches onConnect, so say why here.
+  const [drop, setDrop] = useState<{ source: string; screen: { x: number; y: number }; at: { x: number; y: number }; options: { kind: NodeKind; handle: string }[] } | null>(null)
+  const onConnectEnd = (event: MouseEvent | TouchEvent, cs: FinalConnectionState) => {
     setDragFrom(null)
+    if (!cs.toNode && cs.fromNode && cs.fromHandle?.type === 'source' && !blocked) {
+      const p = 'changedTouches' in event ? event.changedTouches[0] : event
+      const onNode = event.target instanceof Element && event.target.closest('.react-flow__node:not(.react-flow__node-shot)')
+      const d = latest.current.doc
+      const options = compatibleKinds(d, cs.fromNode.id)
+      const box = flowBox.current?.getBoundingClientRect()
+      if (p && box && !onNode && options.length) {
+        // nothing new goes into a frame whose shot left the plan (its "+" is gone too)
+        const src = d.nodes.find((n) => n.id === cs.fromNode?.id)
+        const frame = src && frameOf(d, src)
+        if (frame && d.nodes.find((n) => n.id === frame)?.data.removed) return showNote('canvas.drop.removed')
+        setDrop({ source: cs.fromNode.id, screen: { x: p.clientX - box.left, y: p.clientY - box.top }, at: screenToFlowPosition({ x: p.clientX, y: p.clientY }), options })
+      }
+      return
+    }
     if (cs.isValid !== false || !cs.fromHandle || !cs.toHandle || !cs.fromNode || !cs.toNode) return
     const fromOut = cs.fromHandle.type === 'source'
     const [out, inp] = fromOut ? [cs.fromNode, cs.toNode] : [cs.toNode, cs.fromNode]
@@ -674,12 +742,55 @@ function CanvasBoard({
     if (!r.ok) showNote(r.reason, r.vars)
   }
 
+  // Puts the doc's last node (just added) and its new lines on the board; reframe takes it into its shot's frame.
   const place = (doc: CanvasDoc) => {
     const node = doc.nodes[doc.nodes.length - 1]
     const have = new Set(latest.current.doc.edges.map((e) => e.id))
     const f = toFlow({ nodes: [node], edges: doc.edges.filter((e) => !have.has(e.id)) })
-    setNodes((ns) => [...ns, ...f.nodes])
+    setNodes((ns) => reframe([...ns, ...f.nodes]))
     setEdges((es) => [...es, ...f.edges])
+  }
+
+  // The nodes' sizes as drawn, so a new node lands clear of the ones already in its frame.
+  const drawnSizes = () => new Map(nodes.filter((n) => n.measured?.width && n.measured?.height).map((n) => [n.id, { w: n.measured!.width!, h: n.measured!.height! }]))
+
+  // A new node in a shot's frame: at `at` when that is inside the frame, else right of the frame's last node. A video
+  // gets the frame's newest storyboard on its start frame; a storyboard joins the kit.
+  const addInShot = (d: CanvasDoc, kind: NodeKind, shotNodeId: string, at?: { x: number; y: number }, line?: { source: string; handle: string }) => {
+    const shotId = d.nodes.find((n) => n.id === shotNodeId)?.shotId
+    if (!shotId) return null
+    const sizes = drawnSizes()
+    const box = frameBoxes(d, sizes).get(shotNodeId)
+    const inside = at && box && at.x >= box.x && at.y >= box.y && at.x < box.x + box.w && at.y < box.y + box.h
+    let next = addNode(d, kind, at ?? { x: 0, y: 0 }, shotId)
+    const id = next.nodes[next.nodes.length - 1].id
+    const spot = inside ? { x: Math.round(at.x), y: Math.round(at.y) } : slotInFrame(d, shotNodeId, sizes)
+    next = { ...next, nodes: next.nodes.map((n) => (n.id === id ? { ...n, position: spot } : n)) }
+    if (line) next = withLine(next, line.source, id, line.handle)
+    if (kind === 'video') next = wireStart(next, id, models)
+    return { doc: wireKit(next), id }
+  }
+
+  const withLine = (d: CanvasDoc, source: string, target: string, handle: string): CanvasDoc => ({
+    ...d,
+    edges: [...d.edges, { id: `e_${source}_${target}_${handle}`, source, sourceHandle: 'out', target, targetHandle: handle }],
+  })
+
+  const pickDrop = (o: { kind: NodeKind; handle: string }) => {
+    if (!drop) return
+    setDrop(null)
+    const d = latest.current.doc
+    const src = d.nodes.find((n) => n.id === drop.source)
+    if (!src || blocked) return
+    const frame = frameOf(d, src)
+    if (frame) {
+      const made = addInShot(d, o.kind, frame, drop.at, { source: src.id, handle: o.handle })
+      if (made) place(made.doc)
+      return
+    }
+    if (o.kind === 'footage') return // a footage node needs a shot
+    const added = addNode(d, o.kind, drop.at)
+    place(wireKit(withLine(added, src.id, added.nodes[added.nodes.length - 1].id, o.handle)))
   }
 
   // The kit node goes left of (or above) the shots; it starts with every kit item picked and is wired to every storyboard.
@@ -738,7 +849,18 @@ function CanvasBoard({
     notify: showNote,
   })
 
+  // The running queue and the node statuses; the clock ticks only while something is running.
+  const [now, setNow] = useState(() => Date.now())
+  const running = gens.some((g) => g.status === 'queued' || g.status === 'waiting' || g.status === 'running')
+  useEffect(() => {
+    if (!running) return
+    setNow(Date.now())
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [running])
+
   const ctx: CanvasCtx = {
+    doc,
     addToTimeline: (src) => void timeline.addClip(src),
     setPrimary: timeline.setPrimary,
     isPrimary: timeline.isPrimary,
@@ -759,7 +881,7 @@ function CanvasBoard({
     onGenerate: (id) => void onGenerate(id),
     budget,
     chainOf: (id) => chainPair(doc, id),
-    onChain: (id) => void onChain(id),
+    onRunScope: (opts) => void onRunScope(opts),
     chaining,
     onSelectVersion,
     edited: (id) => markFrom(id, latest.current.doc.nodes.find((n) => n.id === id)?.type !== 'prompt'),
@@ -777,17 +899,17 @@ function CanvasBoard({
       const model = models.find((m) => m.id === node?.data.model) ?? models.find((m) => m.kind === (node?.type === 'video' ? 'video' : 'image'))
       return model ? missingInput(doc, id, model, shots, gens) : null
     },
+    status: (id) => nodeStatus(doc, id, gens, models, shots, now),
     addAfterShot: (shotNodeId, kind) => {
-      const shot = latest.current.doc.nodes.find((n) => n.id === shotNodeId)
-      if (!shot) return
-      const at = roomBelow(latest.current.doc, { x: shot.position.x + 360, y: shot.position.y })
-      const next = wireKit(addNode(latest.current.doc, kind, at, shot.shotId)) // a new storyboard joins the kit at once
-      place(next)
-      // Once the new node is on screen and measured, bring it and its shot into view without zooming in.
-      const ids = [{ id: shot.id }, { id: next.nodes[next.nodes.length - 1].id }]
+      const made = addInShot(latest.current.doc, kind, shotNodeId)
+      if (!made) return
+      place(made.doc)
+      // Once the new node is on screen and measured, bring it and its frame into view without zooming in.
+      const ids = [{ id: shotNodeId }, { id: made.id }]
       requestAnimationFrame(() => requestAnimationFrame(() => void fitView({ nodes: ids, padding: 0.3, maxZoom: getZoom(), duration: 300 })))
     },
     acceptsDrop: (nodeId, handleId) => dragFrom === null || check({ source: dragFrom, target: nodeId, targetHandle: handleId }).ok,
+    dragging: dragFrom !== null,
     clientId,
     kit,
     kitFailed,
@@ -825,15 +947,15 @@ function CanvasBoard({
   )
   // F enters and Esc leaves full screen, unless typing, a dialog or the editor has the key.
   const keyState = useRef({ fullscreen, dialogOpen: false, editorOpen: false })
-  keyState.current = { fullscreen, dialogOpen: !!ask, editorOpen: editing }
+  keyState.current = { fullscreen, dialogOpen: !!runAsk || !!paidAsk, editorOpen: editing }
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const el = e.target instanceof HTMLElement ? e.target : null
       const typing = !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
       const { fullscreen: full, dialogOpen: dlg, editorOpen } = keyState.current
-      // an open add-node menu or queue list takes Esc first (this listener runs in the capture phase, before they close)
-      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list')
+      // an open add-node menu, queue list or larger view takes Esc first (this listener runs in the capture phase, before they close)
+      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-queue-list, .cv-drop, .cv-lightbox, .cv-model-list')
       const act = shellKey({ key: e.key, typing, dialogOpen, editorOpen }, full)
       if (act) setFull(act === 'enter')
     }
@@ -841,29 +963,44 @@ function CanvasBoard({
     return () => window.removeEventListener('keydown', on, true)
   }, [setFull])
 
-  // The running queue; the clock ticks only while something is running.
-  const [now, setNow] = useState(() => Date.now())
-  const running = gens.some((g) => g.status === 'queued' || g.status === 'waiting' || g.status === 'running')
-  useEffect(() => {
-    if (!running) return
-    setNow(Date.now())
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [running])
   const queue = useMemo(() => runningQueue(doc, gens, models, shots, now), [doc, gens, models, shots, now])
+
+  // The toolbar total is what Run all would cost now: the same scope as its dialog (spec §6.4, ruling P7).
+  const scope = useMemo(() => runScopeInfo(doc, shots, gens, models, { includeStale: true }), [doc, shots, gens, models])
+  const scopeSum = scopeTotal(scope.items)
+  const liveShots = liveShotIds(doc, shots).length
+  const shotNo = (shotId: string) => shots.findIndex((s) => s.id === shotId) + 1
+  const leftImage = budgetLeft(budget, 'image')
+  const leftVideo = budgetLeft(budget, 'video')
+  const leftText = leftImage === null || leftVideo === null ? null : t('canvas.chain.left', { image: leftImage.toFixed(2), video: leftVideo.toFixed(2) })
+  const totalTitle = [
+    t('canvas.toolbar.totalHint'),
+    ...scopeSum.perShot.map((p) => t('canvas.run.shot', { n: shotNo(p.shotId), usd: p.usd.toFixed(2) })),
+    ...(scope.skippedNoKey > 0 ? [t('canvas.run.noKeySkipped', { n: scope.skippedNoKey })] : []),
+    ...(leftText ? [leftText] : []),
+  ].join('\n')
   const jumpTo = (id: string) => {
     setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })))
     void fitView({ nodes: [{ id }], padding: 0.6, maxZoom: 1, duration: 250 })
   }
 
-  const dragSource = dragFrom ? doc.nodes.find((n) => n.id === dragFrom) : undefined
-  const dragMedia = dragSource ? outMedia(dragSource) : null
+  // Lines are thin and grey; selection, a running job and an upstream with no result yet change their look (spec §5.2).
+  const selectedKey = nodes.filter((n) => n.selected).map((n) => n.id).join(',')
+  const focus = useMemo(() => focusSet(doc, selectedKey ? selectedKey.split(',') : []), [doc, selectedKey])
+  // The right panel shows while exactly one storyboard or video node is selected (spec §6.3).
+  const picked = nodes.filter((n) => n.selected)
+  const panelId = picked.length === 1 && (picked[0].data.node.type === 'storyboard' || picked[0].data.node.type === 'video') ? picked[0].id : null
   const shownEdges = edges.map((e) => {
-    const src = doc.nodes.find((n) => n.id === e.source)
-    const media = src && outMedia(src)
-    const label = edgeLabel({ targetHandle: e.targetHandle ?? '' })
-    return { ...e, className: media ? `cv-media-${media}${media === 'kit' && selectedKit ? ' is-kit-on' : ''}` : undefined, label: label ? t(label) : undefined }
+    const look = edgeLook({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? '', targetHandle: e.targetHandle ?? '' }, doc, gens, takes, focus, selectedKit)
+    return { ...e, className: look.className, animated: look.animated }
   })
+
+  // A node that moved or got its drawn size: frames fit their nodes again and never overlap.
+  const onNodes: typeof onNodesChange = (changes) => {
+    onNodesChange(changes)
+    const frames = new Set(nodes.filter((n) => n.type === 'shot').map((n) => n.id))
+    if (changes.some((c) => c.type === 'dimensions' && !frames.has(c.id))) setNodes((ns) => reframe(ns))
+  }
 
   return (
     <section className="cv-screen">
@@ -883,7 +1020,16 @@ function CanvasBoard({
         fullscreen={fullscreen}
         onFullscreen={setFull}
         saveText={saveText}
-      />
+      >
+        <span className="cv-bar-total small" title={totalTitle}>
+          {t('canvas.toolbar.total', { n: liveShots, usd: scopeSum.total.toFixed(2) })}
+        </span>
+        {!readOnly && (
+          <button type="button" className="btn btn-primary btn-sm cv-runall-btn" disabled={blocked || chaining} onClick={() => void onRunScope({ includeStale: true })}>
+            {t('canvas.toolbar.runAll')}
+          </button>
+        )}
+      </CanvasToolbar>
 
       {stale && (
         <div className="cv-note cv-note-error" role="alert">
@@ -899,20 +1045,21 @@ function CanvasBoard({
         </div>
       )}
 
+      <CanvasContext.Provider value={ctx}>
       <div className="cv-layout">
         <div className="cv-flow" ref={flowBox}>
-          <CanvasContext.Provider value={ctx}>
           <ReactFlow
             nodes={nodes}
             edges={shownEdges}
             nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
+            onNodesChange={onNodes}
+            onNodeDragStop={() => setNodes((ns) => reframe(ns))}
             onEdgesChange={onEdges}
             onConnect={onConnect}
             onConnectStart={(_, p) => setDragFrom(p.handleType === 'source' ? p.nodeId : null)}
             onConnectEnd={onConnectEnd}
             isValidConnection={(c) => !!c.targetHandle && check({ source: c.source, target: c.target, targetHandle: c.targetHandle }).ok}
-            connectionLineStyle={{ stroke: dragMedia ? MEDIA_COLOR[dragMedia] : 'var(--muted)', strokeWidth: 2 }}
+            connectionLineStyle={{ stroke: 'var(--accent)', strokeWidth: 1.4 }}
             onMoveEnd={(event, vp) => {
               if (event) setViewport(vp) // only the user's own pan or zoom, not the first fit
             }}
@@ -931,33 +1078,60 @@ function CanvasBoard({
             <MiniMap pannable zoomable />
             <ZoomBar />
           </ReactFlow>
-          </CanvasContext.Provider>
           <ToolRail mode={tool} onMode={setTool} addKinds={clientId ? ADD_KINDS_WITH_KIT : ADD_KINDS} disabledKinds={kitNode ? ['kit'] : undefined} onAdd={addAtCenter} readOnly={readOnly} />
           <QueuePill items={queue} onJump={jumpTo} />
-          {ask && (
+          {drop && <DropMenu at={drop.screen} options={drop.options} onPick={pickDrop} onClose={() => setDrop(null)} />}
+          {runAsk && (
             <div className="cv-modal-back">
-              <div className="cv-modal" role="dialog" aria-modal="true" aria-label={t('canvas.chain.title')}>
-                <h2>{t('canvas.chain.title')}</h2>
+              <div className="cv-modal cv-run-modal" role="dialog" aria-modal="true" aria-label={t(runAsk.title)}>
+                <h2>{t(runAsk.title)}</h2>
                 <ul>
-                  {ask.quote.items.map((it) => {
-                    const m = models.find((x) => x.id === it.model)
-                    const type = doc.nodes.find((n) => n.id === it.nodeId)?.type
-                    return (
-                      <li key={it.nodeId}>
-                        <span>{t('canvas.chain.item', { node: type === 'storyboard' || type === 'video' ? t(`canvas.node.${type}`) : it.nodeId, model: m?.label ?? it.model })}</span>
-                        <span>{t('canvas.gen.cost', { usd: it.usd.toFixed(2) })}</span>
-                      </li>
-                    )
+                  {scopeTotal(runAsk.items).perShot.flatMap((p) => {
+                    const paid = runAsk.items.filter((it) => it.shotId === p.shotId && it.usd > 0)
+                    if (!paid.length) return []
+                    return [
+                      <li key={p.shotId} className="cv-run-shot">
+                        <strong>{t('canvas.run.shot', { n: shotNo(p.shotId), usd: p.usd.toFixed(2) })}</strong>
+                      </li>,
+                      ...paid.map((it) => {
+                        const m = models.find((x) => x.id === it.model)
+                        const type = doc.nodes.find((n) => n.id === it.nodeId)?.type
+                        return (
+                          <li key={it.nodeId}>
+                            <span>{t('canvas.chain.item', { node: type === 'storyboard' || type === 'video' ? t(`canvas.node.${type}`) : it.nodeId, model: m?.label ?? it.model })}</span>
+                            <span>{t('canvas.gen.cost', { usd: it.usd.toFixed(2) })}</span>
+                          </li>
+                        )
+                      }),
+                    ]
                   })}
                 </ul>
-                <strong>{t('canvas.chain.total', { total: ask.quote.total.toFixed(2) })}</strong>
-                <span className="small muted">{t('canvas.chain.left', { image: ask.quote.remaining.image.toFixed(2), video: ask.quote.remaining.video.toFixed(2) })}</span>
+                <strong>{t('canvas.chain.total', { total: scopeTotal(runAsk.items).total.toFixed(2) })}</strong>
+                {runAsk.skippedNoKey > 0 && <span className="small muted">{t('canvas.run.noKeySkipped', { n: runAsk.skippedNoKey })}</span>}
+                {leftText && <span className="small muted">{leftText}</span>}
                 <div className="cv-modal-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" autoFocus disabled={chaining} onClick={() => setAsk(null)}>
+                  <button type="button" className="btn btn-ghost btn-sm" autoFocus disabled={chaining} onClick={() => setRunAsk(null)}>
                     {t('canvas.chain.cancel')}
                   </button>
-                  <button type="button" className="btn btn-primary btn-sm" disabled={chaining} onClick={() => void confirmChain()}>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={chaining} onClick={() => void confirmRun()}>
                     {t('canvas.chain.confirm')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {paidAsk && (
+            <div className="cv-modal-back">
+              <div className="cv-modal cv-paid-modal" role="dialog" aria-modal="true" aria-label={t('canvas.paid.title')}>
+                <h2>{t('canvas.paid.title')}</h2>
+                <p>{t('canvas.paid.body', { model: paidAsk.model, usd: paidAsk.usd.toFixed(2) })}</p>
+                {leftText && <span className="small muted">{leftText}</span>}
+                <div className="cv-modal-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" autoFocus onClick={() => setPaidAsk(null)}>
+                    {t('canvas.chain.cancel')}
+                  </button>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={confirmPaid}>
+                    {t('canvas.paid.confirm')}
                   </button>
                 </div>
               </div>
@@ -987,7 +1161,9 @@ function CanvasBoard({
             />
           </div>
         )}
+        {panelId && <NodePanel key={panelId} nodeId={panelId} onClose={() => setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)))} />}
       </div>
+      </CanvasContext.Provider>
       </div>
     </section>
   )

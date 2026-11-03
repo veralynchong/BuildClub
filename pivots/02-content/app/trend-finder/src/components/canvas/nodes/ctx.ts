@@ -4,10 +4,12 @@ import type { Key } from '../../../lib/i18n'
 import type { Take } from '../../../lib/takes'
 import type { ClipSource } from '../../../lib/editor/types'
 import type { KitRefs } from '../../../lib/canvas/kit'
-import type { Budget, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
+import type { NodeStatus } from '../../../lib/canvas/status'
+import type { Budget, CanvasDoc, GenModel, Generation, NodeData, NodeKind } from '../../../lib/canvas/types'
 
 // What the node components need from the board: the shot list, whether editing is allowed, and a few actions.
 export interface CanvasCtx {
+  doc: CanvasDoc // the board as it is now (what a save would send)
   shots: Shot[]
   readOnly: boolean
   shotNumbers: Map<string, number> // shot node id -> its place in the list, from 1
@@ -18,13 +20,15 @@ export interface CanvasCtx {
   onGenerate: (nodeId: string) => void
   budget: Budget | null // today's spending; null until loaded
   chainOf: (nodeId: string) => { imageNodeId: string; videoNodeId: string } | null // storyboard -> video pair
-  onChain: (nodeId: string) => void // quote the pair, then ask before starting it
-  chaining: boolean // a quote or a confirmed start is on its way
+  // Run all limited to a shot (Run the whole shot): price what would run, ask, then start it. shotId is the plan Shot id.
+  onRunScope: (opts: { shotId?: string; includeStale: boolean }) => void
+  chaining: boolean // a save before the dialog or a confirmed run is on its way
   onSelectVersion: (nodeId: string, genId: string) => void
   // The node's own prompt or a prompt node's text was edited: the generated nodes it feeds are out of date.
   edited: (nodeId: string) => void
   incomingHandles: (nodeId: string) => string[] // the inputs that have a line
   missing: (nodeId: string) => Key | null // what a generation still needs, or null
+  status: (nodeId: string) => NodeStatus // the one status the node card shows
   takes: Take[]
   shotIndex: (shotId: string | undefined) => number // the shot's current place in the shot list from 0, or -1 when gone
   uploading: (nodeId: string) => boolean
@@ -40,6 +44,7 @@ export interface CanvasCtx {
   isPrimary: (shotId: string, src: ClipSource) => boolean
   // While a line is being dragged: whether it could end on this input (true when nothing is being dragged).
   acceptsDrop: (nodeId: string, handleId: string) => boolean
+  dragging: boolean // a line is being dragged from an output
   // Consistency kit. kit is null while it loads, when it failed, or when the idea has no client.
   clientId: string
   kit: Kit | null

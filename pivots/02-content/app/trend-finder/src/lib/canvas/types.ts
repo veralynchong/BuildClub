@@ -20,6 +20,7 @@ export interface NodeData {
   duration?: number
   kitItems?: string[] // kit node: the kit item ids this video uses
   kitOff?: string[] // storyboard: kit items left out of this shot
+  shotTextOff?: boolean // storyboard/video: do not use the shot's text
   kitCut?: boolean // storyboard: the kit line was cut by hand, so it is not put back
 }
 

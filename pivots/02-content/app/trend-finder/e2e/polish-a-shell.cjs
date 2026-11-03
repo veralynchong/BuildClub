@@ -53,10 +53,11 @@ const inside = (p) => p.evaluate(() => {
     await page.screenshot({ path: out + '/02-zoom.png' })
 
     // 3. typing f in a textarea does not enter full screen
-    await page.locator('.react-flow__node textarea').first().click()
+    await page.locator('.react-flow__node-storyboard .cv-card-head').first().click() // the prompt lives in the right panel (B6)
+    await page.locator('.cv-panel textarea').first().click()
     await page.keyboard.type('f')
     await page.waitForTimeout(300)
-    L.ok('typing f in a node textarea stays out of full screen', !/is-full/.test(await shell(page)) && (await page.locator('.sidebar').isVisible()), '')
+    L.ok('typing f in the panel textarea stays out of full screen', !/is-full/.test(await shell(page)) && (await page.locator('.sidebar').isVisible()), '')
 
     // 4. F enters, Esc leaves, reload keeps the choice
     await page.locator('.cv-flow .react-flow__pane').click({ position: { x: 700, y: 40 } })
