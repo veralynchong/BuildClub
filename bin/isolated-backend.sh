@@ -6,6 +6,7 @@
 #                jobs_source_dir, this checkout's backend/jobs, or the same folder of a sibling worktree
 #   --user       create a sign-in account once the server answers
 #   REMOTION_PORT  if set, passed through to the backend (the clean environment drops everything else)
+#   MOCK_GEN_DELAY_S  if set, passed through too: how long a mock generation takes (default 2)
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -68,11 +69,12 @@ rm -f "$tmp/.env" "$tmp/backend/.env"
 
 demo_env=(); [ "$demo" != 1 ] || demo_env=(REMAKE_DEMO=1)
 remotion_env=(); [ -z "${REMOTION_PORT:-}" ] || remotion_env=(REMOTION_PORT="$REMOTION_PORT")
+mock_env=(); [ -z "${MOCK_GEN_DELAY_S:-}" ] || mock_env=(MOCK_GEN_DELAY_S="$MOCK_GEN_DELAY_S")
 # Clean environment, dummy token, zero budgets: any paid call is rejected before it happens.
 cd "$tmp"
 # The backend runs from a copy, so it can't find render/ and node_modules by itself: point it at this checkout.
 clean_env=(env -i HOME="$HOME" PATH="$PATH" REMOTION_APP_DIR="$app_dir"
-  ${demo_env[@]+"${demo_env[@]}"} ${remotion_env[@]+"${remotion_env[@]}"} APIFY_TOKEN=dummy DAILY_APIFY_USD=0 DAILY_CLAUDE_USD=0 DAILY_JEV_USD=0 DAILY_GEN_IMAGE_USD=0 DAILY_GEN_VIDEO_USD=0 DAILY_GEN_VOICE_USD=0 DAILY_SCRAPECREATORS_CREDITS=0)
+  ${demo_env[@]+"${demo_env[@]}"} ${remotion_env[@]+"${remotion_env[@]}"} ${mock_env[@]+"${mock_env[@]}"} APIFY_TOKEN=dummy DAILY_APIFY_USD=0 DAILY_CLAUDE_USD=0 DAILY_JEV_USD=0 DAILY_GEN_IMAGE_USD=0 DAILY_GEN_VIDEO_USD=0 DAILY_GEN_VOICE_USD=0 DAILY_SCRAPECREATORS_CREDITS=0)
 "${clean_env[@]}" "$venv/bin/uvicorn" server:app --app-dir backend --port "$port" >"$tmp/server.log" 2>&1 &
 pid=$!
 echo "temp dir: $tmp"; echo "url:      http://127.0.0.1:$port"; echo "pid:      $pid  (kill $pid to stop)"
