@@ -6,7 +6,7 @@ import { Reel } from './Reel.tsx'
 const EMPTY: ReelInput = {
   project: {
     fps: 30, width: 1080, height: 1920, clips: [], texts: [], captions: { enabled: false },
-    music: null, voiceover: [], primaries: {}, showLogo: false,
+    music: null, voiceover: [], primaries: {}, showLogo: false, logoSize: 'medium', logoCorner: 'top-right',
   },
   urls: {},
   lines: {},

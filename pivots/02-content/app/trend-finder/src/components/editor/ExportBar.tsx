@@ -20,12 +20,13 @@ interface Props {
   brandKey: string // changes when the client's logo, colour or font does, which also makes a finished video out of date
   musicKey: number // bumps when the music file is uploaded or replaced
   linesKey: string // the shots' lines, which are the captions while captions are on
+  onCut: (cut: CutState | null) => void // the latest state of the export, for the step bar
 }
 
 const isActive = (c: CutState | null) => c?.status === 'queued' || c?.status === 'running'
 
 // Export the timeline as a video, show the render's progress, then preview it and send it for review.
-export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey, linesKey }: Props) {
+export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey, linesKey, onCut }: Props) {
   const [cut, setCut] = useState<CutState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pollDead, setPollDead] = useState(false) // the polling failed while the export was active
@@ -38,7 +39,8 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
   const cutRef = useRef<CutState | null>(null)
   useEffect(() => {
     cutRef.current = cut
-  }, [cut])
+    onCut(cut)
+  }, [cut, onCut])
 
   // The polling in flight; replaced when a new export starts and stopped on unmount.
   const poller = useRef<AbortController | null>(null)
@@ -159,7 +161,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
   return (
     <section className="cv-ed-export">
       <div className="cv-ed-export-row">
-        <button type="button" className="btn btn-primary btn-sm" disabled={readOnly || busy || active || reason !== null} onClick={() => void run()}>
+        <button type="button" data-step="export" className="btn btn-primary btn-sm" disabled={readOnly || busy || active || reason !== null} onClick={() => void run()}>
           {busy || active ? t('editor.export.working') : cut?.status === 'failed' ? t('cut.common.tryAgain') : t('editor.export.button')}
         </button>
         {reason && !readOnly && <span className="muted small">{t(reason)}</span>}
@@ -193,7 +195,7 @@ export function ExportBar({ ideaId, edit, timeline, readOnly, brandKey, musicKey
               {t('cut.panel.download')}
             </a>
             {canSend && (
-              <button type="button" className="btn btn-primary btn-sm" disabled={sending} onClick={() => void send()}>
+              <button type="button" data-step="send" className="btn btn-primary btn-sm" disabled={sending} onClick={() => void send()}>
                 {t('cut.panel.send', { name: manager })}
               </button>
             )}

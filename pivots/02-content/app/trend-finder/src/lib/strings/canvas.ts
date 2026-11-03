@@ -25,6 +25,7 @@ export const en = {
   "canvas.err.take": "Couldn't use that take.",
   "canvas.node.shotGone": "Shot",
   "canvas.open": "Open the canvas",
+  "canvas.makeVideo": "Make the video",
   "canvas.back": "← Back to {label}",
   "canvas.title": "Canvas",
   "canvas.loading": "Loading the canvas…",
@@ -118,9 +119,7 @@ export const en = {
   "canvas.clip.primary": "Make this shot's main clip",
   "canvas.clip.isPrimary": "Main clip of this shot",
   "canvas.editor.open": "Open editor",
-  "canvas.editor.close": "Close editor",
   "canvas.editor.title": "Editor",
-  "canvas.editor.resize": "Resize the editor",
   "canvas.flow.label": "Canvas",
 }
 
@@ -149,6 +148,7 @@ export const zhHant: Record<keyof typeof en, string> = {
   "canvas.err.take": "無法選用這份素材。",
   "canvas.node.shotGone": "鏡頭",
   "canvas.open": "開啟畫布",
+  "canvas.makeVideo": "製作影片",
   "canvas.back": "← 返回{label}",
   "canvas.title": "畫布",
   "canvas.loading": "正在載入畫布…",
@@ -242,8 +242,6 @@ export const zhHant: Record<keyof typeof en, string> = {
   "canvas.clip.primary": "設為這個 shot 的主片段",
   "canvas.clip.isPrimary": "這個 shot 的主片段",
   "canvas.editor.open": "開啟剪輯",
-  "canvas.editor.close": "收起剪輯",
   "canvas.editor.title": "剪輯",
-  "canvas.editor.resize": "調整剪輯器寬度",
   "canvas.flow.label": "畫布",
 }

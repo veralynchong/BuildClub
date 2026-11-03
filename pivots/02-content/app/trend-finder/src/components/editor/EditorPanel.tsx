@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import type { Shot } from '../../types'
 import { useApp } from '../../lib/appContext'
-import { getCut } from '../../lib/cut'
+import { getCut, type CutState } from '../../lib/cut'
 import { t } from '../../lib/i18n'
 import { serverText } from '../../lib/serverText'
 import type { SourcesHook } from '../../lib/editor/useSources'
@@ -14,7 +14,9 @@ import { fillShotIds } from '../../lib/storyboard'
 import { addVoice, reelDurationInFrames, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { Reel } from '../../remotion/Reel'
+import { stepsDone, type EditorStep } from '../../lib/editor/steps'
 import { ToolTabs, type Tool } from './ToolTabs'
+import { StepBar } from './StepBar'
 import { TextTool } from './tools/TextTool'
 import { CaptionTool } from './tools/CaptionTool'
 import { VoiceTool } from './tools/VoiceTool'
@@ -33,16 +35,19 @@ interface Props {
   sources: SourcesHook // the plan's footage with lengths, kept above the drawer
   timeline: TimelineActions
   readOnly: boolean
+  onBack: () => void // back to the canvas
 }
 
 const FONT_URL = '/fonts/NotoSansTC-VF.ttf'
 
-export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, readOnly }: Props) {
+export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, readOnly, onBack }: Props) {
   const { project, loadError, save, stale, update, flush, current, reload } = edit
   const { sources, error: sourceError } = footage
   const [skipped, setSkipped] = useState<string[]>([])
   const [frame, setFrame] = useState(0)
   const [tool, setTool] = useState<Tool>('clips')
+  const [cut, setCut] = useState<CutState | null>(null) // the export's state, reported by ExportBar for the step bar
+  const [exportOpen, setExportOpen] = useState(false)
   const [musicFile, setMusicFile] = useState<MusicFile | undefined>(undefined)
   const [pending, setPending] = useState<PendingVoice[]>([])
   const [musicKey, setMusicKey] = useState(0) // counts music uploads and replacements, so a finished video is looked at again
@@ -210,60 +215,88 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const locked = readOnly || stale
   const fill = async () => setSkipped(await timeline.fill())
 
+  const done = stepsDone({ project, clientHasLogo: !!kit?.logo, cut })
+  const onStep = (step: EditorStep) => {
+    if (step === 'export' || step === 'send') {
+      setExportOpen(true)
+      // the controls are shown on the next render; focus the one the step is about
+      requestAnimationFrame(() => {
+        const box = document.getElementById('cv-ed-export')
+        const target = box?.querySelector<HTMLElement>(`[data-step="${step}"]:not(:disabled)`) ?? box?.querySelector<HTMLElement>('button:not(:disabled)')
+        target?.focus()
+      })
+      return
+    }
+    setTool(step === 'logo' ? 'brand' : step)
+  }
+  const activeStep: EditorStep | null = exportOpen ? 'export' : tool === 'clips' ? 'clips' : tool === 'captions' ? 'captions' : tool === 'brand' ? 'logo' : null
+
   return (
-    <div className="cv-ed nokey">
-      <div className="cv-ed-status" role="status">
-        {stale ? (
-          <span className="cv-ed-stale">
-            {t('editor.stale')}{' '}
-            <button type="button" className="btn btn-ghost btn-sm" onClick={reload}>{t('editor.reload')}</button>
-          </span>
-        ) : save === 'failed' ? (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void flush()}>{t('editor.save.failed')}</button>
-        ) : save === 'saving' ? (
-          <span className="muted">{t('editor.save.saving')}</span>
-        ) : save === 'saved' ? (
-          <span className="muted">{t('editor.save.saved')}</span>
-        ) : null}
-        {readOnly && <span className="muted">{t('editor.readOnly')}</span>}
-      </div>
-      <div className="cv-ed-player">
-        <Player
-          ref={player}
-          component={Reel}
-          inputProps={inputProps}
-          durationInFrames={reelDurationInFrames(project)}
-          compositionWidth={1080}
-          compositionHeight={1920}
-          fps={30}
-          controls
-          style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '55vh' }}
-        />
-      </div>
-      <ToolTabs tool={tool} onTool={setTool} />
-      <div className="cv-ed-panel" role="tabpanel" id={`cv-ed-panel-${tool}`} aria-labelledby={`cv-ed-tab-${tool}`}>
+    <div className="cv-ed cv-ed-full nokey">
+      <header className="cv-ed-top">
+        <button type="button" className="link-btn" onClick={onBack}>{t('editor.back')}</button>
+        <StepBar done={done} active={activeStep} onStep={onStep} />
+        <div className="cv-ed-top-end">
+          <div className="cv-ed-status" role="status">
+            {stale ? (
+              <span className="cv-ed-stale">
+                {t('editor.stale')}{' '}
+                <button type="button" className="btn btn-ghost btn-sm" onClick={reload}>{t('editor.reload')}</button>
+              </span>
+            ) : save === 'failed' ? (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void flush()}>{t('editor.save.failed')}</button>
+            ) : save === 'saving' ? (
+              <span className="muted">{t('editor.save.saving')}</span>
+            ) : save === 'saved' ? (
+              <span className="muted">{t('editor.save.saved')}</span>
+            ) : null}
+            {readOnly && <span className="muted">{t('editor.readOnly')}</span>}
+          </div>
+          <button type="button" className="btn btn-primary btn-sm" aria-expanded={exportOpen} aria-controls="cv-ed-export" onClick={() => setExportOpen((o) => !o)}>
+            {t('editor.exportMenu')}
+          </button>
+        </div>
+        {/* always mounted, so a running export keeps being followed while this is closed */}
+        <div id="cv-ed-export" className="cv-ed-export-pop" hidden={!exportOpen} onKeyDown={(e) => e.key === 'Escape' && setExportOpen(false)}>
+          <ExportBar ideaId={ideaId} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} onCut={setCut} />
+        </div>
+      </header>
+      <div className="cv-ed-main">
+        <div className="cv-ed-player">
+          <Player
+            ref={player}
+            component={Reel}
+            inputProps={inputProps}
+            durationInFrames={reelDurationInFrames(project)}
+            compositionWidth={1080}
+            compositionHeight={1920}
+            fps={30}
+            controls
+            style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '100%' }}
+          />
+        </div>
+        <div className="cv-ed-side">
+          <ToolTabs tool={tool} onTool={setTool} />
+          <div className="cv-ed-panel" role="tabpanel" id={`cv-ed-panel-${tool}`} aria-labelledby={`cv-ed-tab-${tool}`}>
         {tool === 'clips' && (
-          <>
-          {project.clips.length === 0 && (
-            <div className="cv-ed-empty">
-              <p className="muted">{t('editor.empty')}</p>
-              <button type="button" className="btn btn-primary btn-sm" disabled={locked} onClick={() => void fill()}>
-                {t('editor.fill')}
+          <section className="cv-ed-sources" aria-label={t('editor.sources.title')}>
+        <h3>{t('editor.sources.title')}</h3>
+        {sourceError && <ErrorText text={sourceError} />}
+        {sources && sources.length === 0 && <p className="muted">{t('editor.sources.empty')}</p>}
+        {full && <p className="muted">{t('editor.sources.full')}</p>}
+        <ul className="cv-ed-source-list">
+          {(sources ?? []).map((s) => (
+            <li key={s.key}>
+              <span className="cv-ed-source-name">
+                {clipName(s, shots)} · {s.kind === 'take' ? t('editor.sources.take') : t('editor.sources.generation')} · {t('editor.clip.seconds', { sec: Math.round(s.duration * 10) / 10 })}
+              </span>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={locked || full} onClick={() => void timeline.addClip({ kind: s.kind, id: s.id, nodeId: s.nodeId, shotId: s.shotId })}>
+                {t('editor.sources.add')}
               </button>
-            </div>
-          )}
-          {skipped.length > 0 && (
-            <ul className="cv-ed-skipped small muted" role="status">
-              {skipped
-                .map((id) => ({ id, n: shots.findIndex((s) => s.id === id) + 1 }))
-                .filter((x) => x.n > 0)
-                .map(({ id, n }) => (
-                  <li key={id}>{t('editor.fill.skipped', { n })}</li>
-                ))}
-            </ul>
-          )}
-          <Timeline project={project} sources={byKey} shots={shots} frame={frame} readOnly={locked} timeline={timeline} onProject={update} onSeek={seek} />
-          </>
+            </li>
+          ))}
+        </ul>
+      </section>
         )}
         {tool === 'text' && <TextTool project={project} seconds={frame / 30} readOnly={locked} onProject={update} />}
         {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} />}
@@ -286,26 +319,30 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
         )}
         {tool === 'music' && <MusicTool ideaId={ideaId} project={project} file={musicFile} onFile={(f) => { setMusicFile(f); setMusicKey((n) => n + 1) }} readOnly={locked} onProject={update} />}
         {tool === 'brand' && <BrandTool client={client} project={project} readOnly={locked} onProject={update} />}
+          </div>
+        </div>
       </div>
-      <ExportBar ideaId={ideaId} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} />
-      <section className="cv-ed-sources" aria-label={t('editor.sources.title')}>
-        <h3>{t('editor.sources.title')}</h3>
-        {sourceError && <ErrorText text={sourceError} />}
-        {sources && sources.length === 0 && <p className="muted">{t('editor.sources.empty')}</p>}
-        {full && <p className="muted">{t('editor.sources.full')}</p>}
-        <ul className="cv-ed-source-list">
-          {(sources ?? []).map((s) => (
-            <li key={s.key}>
-              <span className="cv-ed-source-name">
-                {clipName(s, shots)} · {s.kind === 'take' ? t('editor.sources.take') : t('editor.sources.generation')} · {t('editor.clip.seconds', { sec: Math.round(s.duration * 10) / 10 })}
-              </span>
-              <button type="button" className="btn btn-ghost btn-sm" disabled={locked || full} onClick={() => void timeline.addClip({ kind: s.kind, id: s.id, nodeId: s.nodeId, shotId: s.shotId })}>
-                {t('editor.sources.add')}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <div className="cv-ed-bottom">
+        {project.clips.length === 0 && (
+          <div className="cv-ed-empty">
+            <p className="muted">{t('editor.empty')}</p>
+            <button type="button" className="btn btn-primary btn-sm" disabled={locked} onClick={() => void fill()}>
+              {t('editor.fill')}
+            </button>
+          </div>
+        )}
+        {skipped.length > 0 && (
+          <ul className="cv-ed-skipped small muted" role="status">
+            {skipped
+              .map((id) => ({ id, n: shots.findIndex((s) => s.id === id) + 1 }))
+              .filter((x) => x.n > 0)
+              .map(({ id, n }) => (
+                <li key={id}>{t('editor.fill.skipped', { n })}</li>
+              ))}
+          </ul>
+        )}
+        <Timeline project={project} sources={byKey} shots={shots} frame={frame} readOnly={locked} timeline={timeline} onProject={update} onSeek={seek} />
+      </div>
     </div>
   )
 }
