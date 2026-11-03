@@ -186,11 +186,12 @@ test('pollGen resolves on done and null on abort', async () => {
 import { toFlow, fromFlow } from '../src/lib/canvas/flow.ts'
 
 test('toFlow / fromFlow keep the saved node data and only take positions and viewport from the screen', () => {
+  // n1 sits where its frame's top-left is (sb1 at 300,0 minus FRAME_PAD and FRAME_HEAD), so the doc round-trips as is
   const doc = {
     nodes: [
       { id: 'n2', type: 'shot', shotId: 's2', position: { x: 0, y: 300 }, data: {} },
-      { id: 'n1', type: 'shot', shotId: 's1', position: { x: 0, y: 0 }, data: { removed: true } },
-      { id: 'sb1', type: 'storyboard', position: { x: 300, y: 0 }, data: { primary: true } },
+      { id: 'n1', type: 'shot', shotId: 's1', position: { x: 284, y: -64 }, data: { removed: true } },
+      { id: 'sb1', type: 'storyboard', shotId: 's1', position: { x: 300, y: 0 }, data: { primary: true } },
     ],
     edges: [{ id: 'e1', source: 'n1', sourceHandle: 'out:text', target: 'sb1', targetHandle: 'in:text' }],
     viewport: { x: 1, y: 2, zoom: 1 },
@@ -200,8 +201,10 @@ test('toFlow / fromFlow keep the saved node data and only take positions and vie
   assert.deepEqual(nodes.map((n) => n.deletable), [false, false, true])
   assert.equal(edges[0].sourceHandle, 'out:text')
   assert.equal(edges[0].targetHandle, 'in:text')
+  assert.equal(nodes[2].parentId, 'n1')
+  assert.deepEqual(nodes[2].position, { x: 16, y: 64 }) // relative to its frame on screen
   assert.deepEqual(fromFlow(nodes, edges, doc.viewport), doc)
-  nodes[2].position = { x: 310.4, y: 5.6 }
+  nodes[2].position = { x: 26.4, y: 69.6 }
   const moved = fromFlow(nodes, edges, { x: 0.4, y: 0, zoom: 1.23456 })
   assert.deepEqual(moved.nodes[2].position, { x: 310, y: 6 })
   assert.deepEqual(moved.nodes[2].data, { primary: true })
