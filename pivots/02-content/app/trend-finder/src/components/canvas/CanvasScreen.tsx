@@ -35,7 +35,7 @@ import { nodeTypes } from './nodes'
 const SAVE_DELAY_MS = 800
 const RETRY_MS = 2000
 const MAX_RETRIES = 5
-const NOTE_MS = 4000 // how long the reason for a blocked line stays up
+const NOTE_MS = 8000 // how long an info note (e.g. clean-up done) stays up; errors stay until dismissed
 const ADD_KINDS: NodeKind[] = ['prompt', 'storyboard', 'video', 'upload']
 const MEDIA_COLOR = { text: 'var(--violet)', image: 'var(--blue)', video: 'var(--mustard)' } as const
 const POLL_RETRY_MS = 2000 // wait after a poll request fails before asking again
@@ -249,13 +249,12 @@ function CanvasBoard({
   const showNote = useCallback((key: Key, vars?: Vars, info?: boolean) => {
     setNote({ key, vars, info })
     clearTimeout(noteTimer.current)
-    noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
+    if (info) noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
   }, [])
 
   const showText = useCallback((text: string) => {
     setNote({ text })
     clearTimeout(noteTimer.current)
-    noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
   }, [])
 
   // ---- generation ----
@@ -783,8 +782,13 @@ function CanvasBoard({
               </div>
             </div>
           )}
-          <div className={note?.info ? 'cv-conn-note is-info' : 'cv-conn-note'} role="status">
+          <div className={note?.info ? 'cv-conn-note is-info' : 'cv-conn-note'} role={note && !note.info ? 'alert' : 'status'}>
             {note && (note.text ?? (note.key && t(note.key, note.vars)))}
+            {note && !note.info && (
+              <button type="button" className="cv-conn-note-x" aria-label={t('canvas.note.dismiss')} onClick={() => setNote(null)}>
+                ×
+              </button>
+            )}
           </div>
         </div>
         <EditorDrawer

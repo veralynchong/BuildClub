@@ -2,7 +2,8 @@
 
 <!-- The agent reads this file to know what to test. Keep each flow short and in plain language.
      Persona agents must NOT be given this file or the source code: only the persona block and the URL. -->
-<!-- Written 2026-11-03 for the node canvas P1–P4 (PRs #28–#32), mock models only. -->
+<!-- Written 2026-11-03 for the node canvas P1–P4 (PRs #28–#32), mock models only.
+     Corrected 2026-11-03: Annie is the agency's approver (owner), not the client; the first persona runs used the wrong framing. -->
 
 ## Site
 - URL (local): http://127.0.0.1:8871/ (review link: http://127.0.0.1:8871/review/<token>)
@@ -18,7 +19,7 @@
 - `#fail` anywhere in a generate prompt makes the mock fail ("The mock video failed. Try again.").
 - `MOCK_GEN_DELAY_S` (env, default 2 s): how long a mock image or video takes.
 - Seed helpers in `e2e/lib.cjs`: `login`, `seed` (client "Evergreen Foods" plus approved plan `idea1` with three shots), `uploadTake`, `uploadVoice`. They need `PW_CORE` set to a playwright-core path.
-- Review link: there is no button for it in the UI. Create one before F4 with `POST /api/share {"clientId":"evergreen"}` while logged in. The reply has `url`. The missing button is logged as a finding (see Known gaps).
+- Review link: the client's Plans board has "Get link" in the Waiting column (added 2026-11-03, fix B1). To skip the UI, `POST /api/share {"clientId":"evergreen"}` while logged in; the reply has `url`.
 - Media fixtures: `bash e2e/make-fixtures.sh <dir>` (ffmpeg and macOS `say`). It makes these files:
   - `clip-1.mp4` … `clip-9.mp4`: 8 s, tone only.
   - `speech-sdr.mp4` and `speech-hevc.mov`: English speech with "um" and a 1.5 s pause. Use them for Clean up.
@@ -80,8 +81,8 @@
 - Success check: the preview plays and shows the text, captions and logo. The timeline order and lengths match what was set. Nothing is lost after reloading the page.
 - Layer: explore
 
-### F4 Export, send for approval, client approves
-- Goal: The manager exports the video and sends it to the client. The client approves it, or sends it back, from the review link without logging in. The manager then sees the decision.
+### F4 Export, send for approval, approver approves
+- Goal: The team member exports the video and sends it to the agency's approver (Annie, the agency owner). Annie approves it, or sends it back, from the review link without logging in. The team then sees the decision.
 - Steps:
   1. Start from `seed` with takes and a review link. "Open editor" → "Fill in shot order" → "Export the video". This takes about 20 s.
   2. "Send to … for approval". The panel should show "Waiting for …'s approval".
@@ -95,7 +96,6 @@
 - Layer: explore
 
 ## Known gaps (do not report again as new)
-- No UI creates the review link. `createShareLink` has no caller, so "Send for approval" fails with 409 when no link exists. Logged 2026-11-03; it waits for the user's decision on a fix.
 - The review page is English only.
 - Voiceover "Record" needs a microphone; the test machine has none that works.
 - Whisper writes Simplified Chinese captions for Mandarin. The user chose to keep this for now.
@@ -107,11 +107,11 @@
 ### P1 Daphne, first-time manager making a video
 - Who: Account manager at a small social-media agency in Sydney. Comfortable with Instagram and Canva, never used a node canvas or a video editor timeline. Laptop, Chrome, 1440 wide, interface in English.
 - Start: logged in on the client dashboard. Client "Evergreen Foods" has an approved plan with three shots. Each shot already has one filmed take.
-- Goal: Make a short video for Evergreen Foods from the approved plan, with captions and the client's logo, and send it to the client for approval.
+- Goal: Make a short video for Evergreen Foods from the approved plan, with captions and the client's logo, and send it to Annie, the agency owner, for approval.
 - Patience: gives up after 15 steps without visible progress toward the goal.
 
-### P2 Annie, client approving a video
-- Who: Marketing lead at Evergreen Foods, the agency's client. Busy, opens links between meetings. Has no account and won't make one. Laptop, Chrome, English.
-- Start: a review link the agency emailed her (http://127.0.0.1:8871/review/<token>), with one finished video waiting.
+### P2 Annie, agency owner approving a video
+- Who: Owner of the agency (the buyer, per `docs/client-workspace-nav.md`), who signs off every plan and finished video before it goes to the client. The default approver name in the app is "Annie" (`src/state.ts`). Busy, opens links between meetings. Has no account in the tool and won't make one. Laptop, Chrome, English.
+- Start: the review link her team messaged her (http://127.0.0.1:8871/review/<token>), with one finished video for client Evergreen Foods waiting.
 - Goal: Watch the video and either approve it, or send it back with one sentence about what to change.
 - Patience: gives up after 5 steps.
