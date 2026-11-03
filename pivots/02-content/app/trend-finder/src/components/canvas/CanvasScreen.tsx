@@ -23,6 +23,7 @@ import type { Box } from '../../lib/canvas/frames'
 import { useApp } from '../../lib/appContext'
 import { reelBrand } from '../../lib/editor/preview'
 import { addNode, budgetLeft, chainBusy, chainPair, freeSpot, genFinished, genRequest, genStarted, genView, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway, wireStart } from '../../lib/canvas/graph'
+import { quoteChanged, quoteLines, type QuoteLine } from '../../lib/canvas/requote'
 import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeInfo, scopeTotal, type RunBatch, type RunItem } from '../../lib/canvas/run'
 import { kitRefs, kitStale, kitTargets, mergeKitData, syncKit, wireKit } from '../../lib/canvas/kit'
 import { KitPanel } from './KitPanel'
@@ -72,6 +73,9 @@ interface Props {
   fullscreen: boolean // the app frame is hidden
   onFullscreen: (on: boolean) => void
 }
+
+// Open menus and larger views that take Esc before the shell or the agent panel do.
+const OVERLAYS = '.cv-add-list, .cv-agent-list, .cv-queue-list, .cv-drop, .cv-lightbox, .cv-model-list'
 
 // Loads the canvas (waiting a little for a just-edited shot list to reach the server), then shows the board.
 export default function CanvasScreen({ idea, shots, onChange, onBack, backLabel, openEditor = false, title, clientName, fullscreen, onFullscreen }: Props) {
@@ -500,15 +504,23 @@ function CanvasBoard({
   }
 
   // The first Generate with a paid model in this session asks first.
-  const [paidAsk, setPaidAsk] = useState<{ nodeId: string; model: string; usd: number } | null>(null)
+  const [paidAsk, setPaidAsk] = useState<{ nodeId: string; model: string; usd: number; lines: QuoteLine[] } | null>(null)
   const onGenerate = async (nodeId: string) => {
     const ready = readyToGen(nodeId)
     if (!ready) return
-    if (paidConfirmNeeded(ready.usd, paidConfirmed)) return setPaidAsk({ nodeId, model: ready.model.label, usd: ready.usd })
+    if (paidConfirmNeeded(ready.usd, paidConfirmed)) return setPaidAsk({ nodeId, model: ready.model.label, usd: ready.usd, lines: quoteLines(latest.current.doc, [{ nodeId, model: ready.model.id, usd: ready.usd }]) })
     await startOne(nodeId)
   }
   const confirmPaid = () => {
     if (!paidAsk) return
+    // the price is asked again when the node's model or length changed since the dialog opened
+    const ready = readyToGen(paidAsk.nodeId)
+    if (!ready) return setPaidAsk(null)
+    const lines = quoteLines(latest.current.doc, [{ nodeId: paidAsk.nodeId, model: ready.model.id, usd: ready.usd }])
+    if (quoteChanged(paidAsk.lines, lines)) {
+      setPaidAsk({ nodeId: paidAsk.nodeId, model: ready.model.label, usd: ready.usd, lines })
+      return showNote('canvas.paid.changed')
+    }
     paidConfirmed = true
     setPaidAsk(null)
     void startOne(paidAsk.nodeId)
@@ -516,7 +528,7 @@ function CanvasBoard({
 
   // ---- Run all and Run the whole shot: what would run, priced, asked once, then started batch by batch ----
   const [chaining, setChaining] = useState(false) // a save before the dialog or a confirmed run is on its way
-  const [runAsk, setRunAsk] = useState<{ title: 'canvas.toolbar.runAll' | 'canvas.chain.title'; items: RunItem[]; batches: RunBatch[]; skippedNoKey: number } | null>(null)
+  const [runAsk, setRunAsk] = useState<{ title: 'canvas.toolbar.runAll' | 'canvas.chain.title'; items: RunItem[]; batches: RunBatch[]; skippedNoKey: number; opts: { shotId?: string; includeStale: boolean }; lines: QuoteLine[] } | null>(null)
 
   const chainStarting = useRef(false) // a ref, so a double click can't start the run twice before state updates
   const preparing = useRef(false) // a ref, so a double click can't prepare the dialog twice before state updates
@@ -547,7 +559,7 @@ function CanvasBoard({
         await quoteChain(ideaId, made.body) // nothing is spent; a refusal (e.g. the daily cap) stops here with its message
       }
       if (!items.length || !mounted.current) return
-      setRunAsk({ title: opts.shotId ? 'canvas.chain.title' : 'canvas.toolbar.runAll', items, batches: runBatches(d, items), skippedNoKey: info.skippedNoKey })
+      setRunAsk({ title: opts.shotId ? 'canvas.chain.title' : 'canvas.toolbar.runAll', items, batches: runBatches(d, items), skippedNoKey: info.skippedNoKey, opts, lines: quoteLines(d, items) })
     } catch (e) {
       if (mounted.current) showText(e instanceof Error ? e.message : t('canvas.err.start'))
     } finally {
@@ -597,6 +609,18 @@ function CanvasBoard({
 
   const confirmRun = async () => {
     if (!runAsk || chaining || chainStarting.current) return
+    // nothing starts if the nodes, models, lengths or total are not what the dialog showed: ask again with the new price
+    const d = latest.current.doc
+    const info = runScopeInfo(d, shots, gensRef.current, models, runAsk.opts)
+    const lines = quoteLines(d, info.items)
+    if (quoteChanged(runAsk.lines, lines)) {
+      if (!info.items.length) {
+        setRunAsk(null)
+        return showNote('canvas.run.nothing', undefined, true)
+      }
+      setRunAsk({ ...runAsk, items: info.items, batches: runBatches(d, info.items), skippedNoKey: info.skippedNoKey, lines })
+      return showNote('canvas.run.priceChanged')
+    }
     chainStarting.current = true
     setChaining(true)
     try {
@@ -636,7 +660,11 @@ function CanvasBoard({
   useEffect(() => {
     if (!agent || runAsk || paidAsk) return
     const on = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !document.querySelector('.cv-model-list')) closeAgent()
+      if (e.key !== 'Escape' || document.querySelector(OVERLAYS)) return
+      // Esc while typing in a prompt must not throw the whole plan away
+      const el = e.target instanceof HTMLElement ? e.target : null
+      if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return
+      closeAgent()
     }
     window.addEventListener('keydown', on)
     return () => window.removeEventListener('keydown', on)
@@ -1010,6 +1038,7 @@ function CanvasBoard({
     chainOf: (id) => chainPair(doc, id),
     onRunScope: (opts) => void onRunScope(opts),
     chaining,
+    dialogOpen: !!runAsk || !!paidAsk,
     buildShot: (shotId) => buildShot(shotId),
     onSelectVersion,
     edited: (id) => markFrom(id, latest.current.doc.nodes.find((n) => n.id === id)?.type !== 'prompt'),
@@ -1083,7 +1112,7 @@ function CanvasBoard({
       const typing = !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
       const { fullscreen: full, dialogOpen: dlg, editorOpen } = keyState.current
       // an open add-node menu, queue list or larger view takes Esc first (this listener runs in the capture phase, before they close)
-      const dialogOpen = dlg || !!document.querySelector('.cv-add-list, .cv-agent-list, .cv-queue-list, .cv-drop, .cv-lightbox, .cv-model-list')
+      const dialogOpen = dlg || !!document.querySelector(OVERLAYS)
       const act = shellKey({ key: e.key, typing, dialogOpen, editorOpen }, full)
       if (act) setFull(act === 'enter')
     }

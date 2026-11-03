@@ -21,7 +21,8 @@ const noRefusal = () => null
 // the price of each, the total, and the three choices. Nothing runs until the user approves; the run still goes
 // through the price dialog.
 export function AgentPanel({ shotId, plan, loading, error, onChange, onApprove, onCreate, onCancel }: Props) {
-  const { models, shots, blocked, chaining } = useCanvas()
+  const { models, shots, blocked: frozenDoc, chaining, dialogOpen } = useCanvas()
+  const blocked = frozenDoc || dialogOpen
   const shotNo = shots.findIndex((s) => s.id === shotId) + 1
   const usable = (id: string) => models.some((m) => m.id === id && m.available)
   const modelsOk = !!plan && usable(plan.storyboard.model) && usable(plan.video.model)

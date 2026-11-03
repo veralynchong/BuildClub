@@ -23,6 +23,7 @@ export interface CanvasCtx {
   // Run all limited to a shot (Run the whole shot): price what would run, ask, then start it. shotId is the plan Shot id.
   onRunScope: (opts: { shotId?: string; includeStale: boolean }) => void
   chaining: boolean // a save before the dialog or a confirmed run is on its way
+  dialogOpen: boolean // a price dialog is open: the side panels are frozen so the price can't change under it
   buildShot: (shotId: string) => void // open the agent's plan for a shot (plan Shot id)
   onSelectVersion: (nodeId: string, genId: string) => void
   // The node's own prompt or a prompt node's text was edited: the generated nodes it feeds are out of date.
