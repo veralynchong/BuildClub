@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { placeShotClip, oneClipPerShot, timelineSummary, isOnTimeline, shotOnTimeline, splitAt, applyNewer } from '../src/lib/editor/timeline.ts'
+import { placeShotClip, oneClipPerShot, sourcesWithShots, timelineSummary, isOnTimeline, shotOnTimeline, splitAt, applyNewer } from '../src/lib/editor/timeline.ts'
 import { clipLabel } from '../src/components/editor/clipName.ts'
 import { timelineFlow, isVirtual, TIMELINE_NODE_ID } from '../src/lib/canvas/timelineNode.ts'
 import { toFlow, fromFlow } from '../src/lib/canvas/flow.ts'
@@ -166,4 +166,18 @@ test('timelineFlow starts a take line at the upload node holding it, and split p
   const split = splitAt(project, 1.5, 'c9')
   assert.equal(split.clips.length, 3)
   assert.deepEqual(timelineFlow(doc, split, boxes).edges.map((e) => e.id), ['e_tl_n_vid_s1', 'e_tl_n_ft_s2'])
+})
+
+test('sourcesWithShots gives a generation its node\'s shot and leaves takes and free nodes alone', () => {
+  const doc = { nodes: [{ id: 'n_vid_s1', type: 'video', shotId: 's1', position: { x: 0, y: 0 }, data: {} }, { id: 'n_free', type: 'video', position: { x: 0, y: 0 }, data: {} }], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }
+  const list = [
+    { key: 'generation:g1', kind: 'generation', id: 'g1', url: 'u', duration: 4, nodeId: 'n_vid_s1' },
+    { key: 'generation:g9', kind: 'generation', id: 'g9', url: 'u', duration: 4, nodeId: 'n_free' },
+    { key: 'take:t1', kind: 'take', id: 't1', url: 'u', duration: 3, shotId: 's2' },
+    { key: 'generation:gx', kind: 'generation', id: 'gx', url: 'u', duration: 4, nodeId: 'n_gone' },
+  ]
+  const out = sourcesWithShots(list, doc)
+  assert.deepEqual(out.map((s) => s.shotId), ['s1', undefined, 's2', undefined])
+  assert.equal(out[2], list[2])
+  assert.equal(out[1], list[1])
 })

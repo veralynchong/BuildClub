@@ -11,7 +11,7 @@ import type { EditHook } from '../../lib/editor/useEditProject'
 import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, clipLength, reelDurationInFrames, sourceKey, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import { addVoice, clipLength, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
@@ -92,6 +92,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const player = useRef<PlayerRef>(null)
 
   const byKey = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s])), [sources])
+  const shotSources = useMemo(() => (sources ? sourcesWithShots(sources, doc) : null), [sources, doc])
   const urls = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s.url])), [sources])
   // The plan's music track is looked up once; MusicTool keeps it current after an upload or removal.
   useEffect(() => {
@@ -291,7 +292,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
       </header>
       <div className="cv-ed-main">
         <aside className="cv-ed-left">
-          <ShotClips shots={filled} project={project} sources={sources} error={sourceError} gens={gens} takes={takes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
+          <ShotClips shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={takes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
         </aside>
         <div className="cv-ed-centre">
           <div className="cv-ed-player">

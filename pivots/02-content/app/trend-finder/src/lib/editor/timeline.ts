@@ -119,6 +119,15 @@ export function oneClipPerShot(p: EditProject): { project: EditProject; removed:
   return clips.length === p.clips.length ? { project: p, removed: 0 } : { project: { ...p, clips }, removed: p.clips.length - clips.length }
 }
 
+// The server lists a generation with its node only: its shot is that node's shot on the canvas. Takes keep their own.
+export function sourcesWithShots(sources: SourceInfo[], doc: CanvasDoc): SourceInfo[] {
+  return sources.map((s) => {
+    if (s.shotId || !s.nodeId) return s
+    const shotId = doc.nodes.find((n) => n.id === s.nodeId)?.shotId
+    return shotId ? { ...s, shotId } : s
+  })
+}
+
 // Whether `src` (same kind and id) is one of the clips, and whether a shot has a clip.
 export function isOnTimeline(p: EditProject | null, src: Pick<ClipSource, 'kind' | 'id'>): boolean {
   return !!p && p.clips.some((c) => c.source.kind === src.kind && c.source.id === src.id)
