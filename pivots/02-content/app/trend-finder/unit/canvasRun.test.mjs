@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScope, runScopeInfo, scopeTotal } from '../src/lib/canvas/run.ts'
+import { chainBody, liveShotIds, paidConfirmNeeded, runBatches, runScopeInfo, scopeTotal } from '../src/lib/canvas/run.ts'
 
 const at = (id, type, shotId, data = {}) => ({ id, type, ...(shotId ? { shotId } : {}), position: { x: 0, y: 0 }, data })
 const start = (id, source, target) => ({ id, source, sourceHandle: 'out', target, targetHandle: 'in:start' })
@@ -32,6 +32,7 @@ const models = [
 ]
 const g = (id, nodeId, status, createdAt) => ({ id, nodeId, status, createdAt, kind: nodeId.includes('vid') ? 'video' : 'image', model: 'mock-image', inputs: {}, url: status === 'done' ? `/m/${id}.png` : null })
 const doneSb2 = [g('d', 'n_sb_s2', 'done', 1)]
+const runScope = (...args) => runScopeInfo(...args).items
 const ids = (items) => items.map((i) => i.nodeId)
 
 test('runScope skips done, running, removed and retired nodes; includeStale adds stale ones', () => {

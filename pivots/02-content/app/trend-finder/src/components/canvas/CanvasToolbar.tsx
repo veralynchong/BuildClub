@@ -24,7 +24,7 @@ export function CanvasToolbar({ title, clientName, onBack, backLabel, mode, onMo
         <h1>{title}</h1>
         {clientName && <span className="small muted">{clientName}</span>}
       </div>
-      <div className="cv-seg" role="group" aria-label={t('canvas.flow.label')}>
+      <div className="cv-seg" role="group" aria-label={t('canvas.toolbar.mode')}>
         {(['canvas', 'timeline'] as const).map((m) => (
           <button key={m} type="button" className={mode === m ? 'is-on' : ''} aria-pressed={mode === m} onClick={() => onMode(m)}>
             {t(`canvas.toolbar.${m}`)}

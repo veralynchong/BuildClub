@@ -30,6 +30,10 @@ test('shellKey ignores typing and yields Esc to dialogs', () => {
 test('aboutTime rounds up', () => {
   assert.deepEqual(aboutTime(12), { key: 'canvas.time.sec', n: 15 })
   assert.deepEqual(aboutTime(61), { key: 'canvas.time.min', n: 2 })
+  assert.deepEqual(aboutTime(55), { key: 'canvas.time.sec', n: 55 })
+  assert.deepEqual(aboutTime(56), { key: 'canvas.time.min', n: 1 })
+  assert.deepEqual(aboutTime(59), { key: 'canvas.time.min', n: 1 })
+  assert.deepEqual(aboutTime(60), { key: 'canvas.time.min', n: 1 })
 })
 test('etaOf: left from typicalSeconds, null without it or while waiting', () => {
   const g = { status: 'running', createdAt: 10_000 }

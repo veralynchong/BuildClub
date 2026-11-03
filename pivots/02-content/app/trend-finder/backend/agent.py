@@ -3,13 +3,15 @@ answers which prompts, models and length its storyboard and video nodes should u
 previews the answer and writes the canvas itself, so nothing is saved here.
 
 Claude (assist.CHEAP_MODEL, one call) when ANTHROPIC_API_KEY is set and REMAKE_DEMO is not 1, otherwise a
-deterministic sample. Every answer is checked against the generation menu before it goes back."""
+deterministic sample. A Claude answer is checked against the generation menu before it goes back; the sample
+is built from the menu, so it needs no check."""
 
 import json
 from typing import Annotated, Callable, Optional
 
 import anthropic
 import assist
+import canvas
 import generations
 import storyboard
 from fastapi import APIRouter
@@ -124,7 +126,8 @@ def make_router(load: Callable[[str], object], budget: Callable[[str, float], Op
         idea = next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
         if idea is None:
             return error(404, "That plan doesn't exist.")
-        shots = idea.get("shots") or []
+        # plans saved before shots had ids get them here, the same ids the canvas shows
+        shots = [s.model_dump() for s in canvas.shots_of(idea)]
         shot = next((s for s in shots if s.get("id") == body.shotId), None)
         if shot is None:
             return error(404, "That shot isn't in this plan.")

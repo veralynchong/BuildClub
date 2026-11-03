@@ -20,6 +20,9 @@ export function QueuePill({ items, onJump }: Props) {
   return (
     <div
       className="cv-queue nodrag nopan"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false)
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Escape') setOpen(false)
       }}

@@ -56,6 +56,15 @@ def test_agent_demo_plan_without_key(client):
     assert body["storyboard"]["model"] == "mock-image" and body["video"]["model"] == "mock-video" and body["video"]["duration"] == 4
 
 
+def test_agent_plans_a_shot_of_a_plan_saved_without_ids(client):
+    old = idea("io")
+    old.shots = [Shot(time="0:00", shot="pour", line="Fresh tofu daily"), Shot(time="0:05", shot="plate")]
+    store_ideas(old)
+    assert all(not s.id for s in old.shots)
+    r = client.post("/api/ideas/io/agent/plan", json={"shotId": "s2"})
+    assert r.status_code == 200 and r.json()["shotId"] == "s2"
+
+
 def test_agent_uses_shot_line_in_demo_prompts(client):
     body = plan_for(client).json()
     assert "Fresh tofu daily" in body["storyboard"]["prompt"] and "Fresh tofu daily" in body["video"]["prompt"]

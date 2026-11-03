@@ -229,9 +229,6 @@ export function newClipId(p: EditProject): string {
 }
 
 // ---- canvas -> timeline ----
-// The drag type a canvas node sets and the timeline accepts; the data is JSON.stringify(ClipSource).
-export const CLIP_MIME = 'application/x-remake-clip'
-
 // Same rule as canvas/graph.ts selectedGen, copied so the Remotion bundle (which imports this file) stays free of
 // the canvas modules and their strings.
 function selectedGen(node: CanvasNode, gens: Generation[]): Generation | null {
@@ -307,10 +304,6 @@ export function clipStatus(clip: Clip, doc: CanvasDoc, gens: Generation[], takes
 }
 
 const sameSource = (a: ClipSource | undefined, b: ClipSource): boolean => !!a && a.kind === b.kind && a.id === b.id
-
-export function withPrimary(primaries: Record<string, ClipSource>, shotId: string, src: ClipSource): Record<string, ClipSource> {
-  return { ...primaries, [shotId]: src }
-}
 
 // When a newer version replaces the pinned one, the pin follows it; any other pin is left alone.
 export function repinIfOld(primaries: Record<string, ClipSource>, shotId: string | undefined, oldSrc: ClipSource, newSrc: ClipSource): Record<string, ClipSource> {

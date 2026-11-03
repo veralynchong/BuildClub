@@ -20,7 +20,7 @@ export type RunBatch = { chain: { imageNodeId: string; videoNodeId: string } } |
 const round4 = (n: number) => Math.round(n * 1e4) / 1e4
 
 // The plan's shots (limited to shotId) that still have a shot node not marked removed, in plan order. The toolbar count
-// and runScope share it.
+// and runScopeInfo share it.
 export function liveShotIds(doc: CanvasDoc, shots: Shot[], shotId?: string): string[] {
   return shots.flatMap((s) => {
     if (!s.id || (shotId !== undefined && s.id !== shotId)) return []
@@ -78,10 +78,6 @@ export function runScopeInfo(doc: CanvasDoc, shots: Shot[], gens: Generation[], 
     return true
   })
   return { items, deferred, skippedNoKey }
-}
-
-export function runScope(doc: CanvasDoc, shots: Shot[], gens: Generation[], models: GenModel[], opts: { shotId?: string; includeStale: boolean }): RunItem[] {
-  return runScopeInfo(doc, shots, gens, models, opts).items
 }
 
 function startOf(doc: CanvasDoc, nodeId: string): string | undefined {

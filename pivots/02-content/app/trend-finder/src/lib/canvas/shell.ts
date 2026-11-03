@@ -41,7 +41,8 @@ export function shellKey(
 }
 
 export function aboutTime(seconds: number): { key: 'canvas.time.sec' | 'canvas.time.min'; n: number } {
-  if (seconds < 60) return { key: 'canvas.time.sec', n: Math.max(5, Math.ceil(seconds / 5) * 5) }
+  const rounded = Math.max(5, Math.ceil(seconds / 5) * 5)
+  if (rounded < 60) return { key: 'canvas.time.sec', n: rounded } // 55 to 59 s read as 1 min, never "60 s"
   return { key: 'canvas.time.min', n: Math.ceil(seconds / 60) }
 }
 
