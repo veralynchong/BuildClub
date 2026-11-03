@@ -1,11 +1,13 @@
 """Clean a real take: cut its filler words and long pauses and save the result as a new take, which becomes
 the shot's chosen one. The original stays. Only real takes are cleaned, never AI clips."""
 
+import logging
 import os
 import secrets
 import shutil
 import threading
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -35,6 +37,55 @@ CONTENT_ERRORS = {NO_AUDIO, NO_SPEECH, NOTHING, TOO_SHORT, TOO_LONG}
 
 words_fn = cutting.transcribe_words  # looked up at call time, so a test can swap it
 
+log = logging.getLogger(__name__)
+
+HDR_TRANSFERS = {"smpte2084", "arib-std-b67"}  # PQ (HDR10) and HLG
+HDR_FALLBACK_BIN = "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg"  # keg-only Homebrew build that has zscale
+# Linear light -> bt709 primaries -> tone map -> bt709 transfer, limited range, 8-bit.
+HDR_CHAIN = ("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,"
+             "zscale=t=bt709:m=bt709:r=tv,format=yuv420p")
+BT709_TAGS = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
+
+_UNSET = object()
+_hdr_bin = _UNSET  # looked up once: the path of an ffmpeg with zscale, or None
+
+
+def has_zscale(binary: str) -> bool:
+    try:
+        r = cutting.run([binary, "-hide_banner", "-filters"], timeout=30)
+    except CutError:
+        return False
+    return r.returncode == 0 and " zscale " in r.stdout
+
+
+def hdr_ffmpeg() -> str | None:
+    """An ffmpeg that can tone-map (FFMPEG_HDR_BIN, else the Homebrew ffmpeg-full), or None; logs once."""
+    global _hdr_bin
+    if _hdr_bin is _UNSET:
+        candidates = [c for c in (os.environ.get("FFMPEG_HDR_BIN"), HDR_FALLBACK_BIN) if c]
+        _hdr_bin = next((c for c in candidates if os.path.isfile(c) and has_zscale(c)), None)
+        if _hdr_bin is None:
+            log.warning("No ffmpeg with zscale found (set FFMPEG_HDR_BIN); HDR takes are cleaned without tone mapping.")
+    return _hdr_bin
+
+
+@dataclass
+class EncodePlan:
+    binary: str
+    graph: str
+    out_label: str
+    out_args: list[str] = field(default_factory=list)
+
+
+def encode_plan(info: dict, keeps: list[tuple[float, float]], hdr_bin: str | None) -> EncodePlan:
+    """Which ffmpeg and filter graph the clean-up encode uses: HDR (PQ/HLG) takes are tone-mapped to bt709
+    when an HDR-capable ffmpeg is at hand; everything else is exactly the plain command."""
+    if info.get("color_transfer") in HDR_TRANSFERS and hdr_bin:
+        graph = cutting.build_clean_graph(keeps, video_label="vc") + f";\n[vc]{HDR_CHAIN}[vt]"
+        return EncodePlan(hdr_bin, graph, "[vt]", list(BT709_TAGS))
+    return EncodePlan("ffmpeg", cutting.build_clean_graph(keeps), "[v]")
+
+
 _cleaning: set[str] = set()
 _cleaning_lock = threading.Lock()
 
@@ -62,13 +113,15 @@ def clean_take(src: Path, work: Path, out: Path) -> dict:
     if kept < MIN_KEEP_S:
         raise CutError(TOO_SHORT)
     graph = work / "clean.txt"
-    graph.write_text(cutting.build_clean_graph(keeps), encoding="utf-8")
+    hdr = info.get("color_transfer") in HDR_TRANSFERS
+    plan = encode_plan(info, keeps, hdr_ffmpeg() if hdr else None)
+    graph.write_text(plan.graph, encoding="utf-8")
     part = out.with_suffix(".part")
     try:
-        cutting._ffmpeg(["-i", str(src), "-/filter_complex", str(graph), "-map", "[v]", "-map", "[a]",
-                         "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+        cutting._ffmpeg(["-i", str(src), "-/filter_complex", str(graph), "-map", plan.out_label, "-map", "[a]",
+                         "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p", *plan.out_args,
                          "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart",
-                         "-f", "mp4", str(part)], "Cutting the take")
+                         "-f", "mp4", str(part)], "Cutting the take", binary=plan.binary)
         os.replace(part, out)
     finally:
         part.unlink(missing_ok=True)

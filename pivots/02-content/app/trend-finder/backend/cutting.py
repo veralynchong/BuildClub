@@ -165,7 +165,7 @@ def keep_intervals(words: list[Word], silences: list[tuple[float, float]], total
     return keeps
 
 
-def build_clean_graph(keeps: list[tuple[float, float]]) -> str:
+def build_clean_graph(keeps: list[tuple[float, float]], *, video_label: str = "v") -> str:
     """filter_complex joining the kept intervals of input 0 (the take itself) into [v] and [a]. Audio gets a
     short fade at every seam; the picture keeps its size and frame rate."""
     parts = []
@@ -174,7 +174,7 @@ def build_clean_graph(keeps: list[tuple[float, float]]) -> str:
         parts.append(f"[0:v]trim=start={num(a)}:end={num(b)},setpts=PTS-STARTPTS[v{i}]")
         parts.append(f"[0:a]atrim=start={num(a)}:end={num(b)},asetpts=PTS-STARTPTS,{fade}[a{i}]")
     joined = "".join(f"[v{i}][a{i}]" for i in range(len(keeps)))
-    parts.append(f"{joined}concat=n={len(keeps)}:v=1:a=1[v][a]")
+    parts.append(f"{joined}concat=n={len(keeps)}:v=1:a=1[{video_label}][a]")
     return ";\n".join(parts)
 
 
@@ -250,9 +250,9 @@ def run(cmd: list[str], *, timeout: float | None = FFMPEG_TIMEOUT) -> subprocess
         raise CutError(f"{Path(cmd[0]).name} took too long, so the cut was stopped.")
 
 
-def _ffmpeg(args: list[str], what: str, *, quiet: bool = True) -> subprocess.CompletedProcess:
-    """Run ffmpeg; a failure becomes a CutError carrying the tail of stderr."""
-    r = run(["ffmpeg", "-y", "-nostdin", "-v", "error" if quiet else "info", *args])
+def _ffmpeg(args: list[str], what: str, *, quiet: bool = True, binary: str = "ffmpeg") -> subprocess.CompletedProcess:
+    """Run ffmpeg (or `binary`); a failure becomes a CutError carrying the tail of stderr."""
+    r = run([binary, "-y", "-nostdin", "-v", "error" if quiet else "info", *args])
     if r.returncode != 0:
         raise CutError(f"{what} failed: {r.stderr.strip()[-200:]}")
     return r
@@ -272,7 +272,7 @@ def probe(path: Path) -> dict:
         fps = round(float(n) / float(d), 3) if float(d) else 0.0
     return {"duration": float(data.get("format", {}).get("duration") or 0),
             "width": v.get("width"), "height": v.get("height"), "fps": fps, "hasAudio": bool(a),
-            "vcodec": v.get("codec_name"), "acodec": a.get("codec_name"), "pix_fmt": v.get("pix_fmt"),
+            "vcodec": v.get("codec_name"), "color_transfer": v.get("color_transfer"), "acodec": a.get("codec_name"), "pix_fmt": v.get("pix_fmt"),
             "sample_rate": int(a["sample_rate"]) if a.get("sample_rate") else None}
 
 
