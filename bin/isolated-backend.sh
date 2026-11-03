@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Throwaway Trend Finder backend for UI testing. Cannot spend money: no .env, all budgets 0.
-# Usage: bash bin/isolated-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>]
+# Usage: [REMOTION_PORT=<port>] bash bin/isolated-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>]
 #   (runs in foreground; Ctrl-C or kill <pid> cleans up)
 #   --demo-data  also copy the finished breakdowns (jobs/<id>/) of the pinned searches' videos, found in
 #                jobs_source_dir, this checkout's backend/jobs, or the same folder of a sibling worktree
 #   --user       create a sign-in account once the server answers
+#   REMOTION_PORT  if set, passed through to the backend (the clean environment drops everything else)
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -66,11 +67,12 @@ fi
 rm -f "$tmp/.env" "$tmp/backend/.env"
 
 demo_env=(); [ "$demo" != 1 ] || demo_env=(REMAKE_DEMO=1)
+remotion_env=(); [ -z "${REMOTION_PORT:-}" ] || remotion_env=(REMOTION_PORT="$REMOTION_PORT")
 # Clean environment, dummy token, zero budgets: any paid call is rejected before it happens.
 cd "$tmp"
 # The backend runs from a copy, so it can't find render/ and node_modules by itself: point it at this checkout.
 clean_env=(env -i HOME="$HOME" PATH="$PATH" REMOTION_APP_DIR="$app_dir"
-  ${demo_env[@]+"${demo_env[@]}"} APIFY_TOKEN=dummy DAILY_APIFY_USD=0 DAILY_CLAUDE_USD=0 DAILY_JEV_USD=0 DAILY_GEN_IMAGE_USD=0 DAILY_GEN_VIDEO_USD=0 DAILY_GEN_VOICE_USD=0 DAILY_SCRAPECREATORS_CREDITS=0)
+  ${demo_env[@]+"${demo_env[@]}"} ${remotion_env[@]+"${remotion_env[@]}"} APIFY_TOKEN=dummy DAILY_APIFY_USD=0 DAILY_CLAUDE_USD=0 DAILY_JEV_USD=0 DAILY_GEN_IMAGE_USD=0 DAILY_GEN_VIDEO_USD=0 DAILY_GEN_VOICE_USD=0 DAILY_SCRAPECREATORS_CREDITS=0)
 "${clean_env[@]}" "$venv/bin/uvicorn" server:app --app-dir backend --port "$port" >"$tmp/server.log" 2>&1 &
 pid=$!
 echo "temp dir: $tmp"; echo "url:      http://127.0.0.1:$port"; echo "pid:      $pid  (kill $pid to stop)"
