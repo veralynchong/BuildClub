@@ -19,7 +19,7 @@ import { clampDrawerWidth, defaultDrawerWidth, readDrawer, writeDrawer } from '.
 import { fromFlow, isDefaultViewport, toFlow, type FlowEdge, type FlowNode } from '../../lib/canvas/flow'
 import { addNode, chainBusy, chainPair, isRetired, freeSpot, genFinished, genRequest, genStarted, missingInput, pendingGen, primaryFrames, staleIds, finishedWhileAway } from '../../lib/canvas/graph'
 import { mergeFrame } from '../../lib/storyboard'
-import { chooseTake, checkFile, cleanTake as cleanTakeRequest, listTakes, uploadTake, type Take } from '../../lib/takes'
+import { chooseTake, checkFile, cleanTake as cleanTakeRequest, cutSeconds, listTakes, uploadTake, type Take } from '../../lib/takes'
 import { uploadKind } from '../../lib/canvas/upload'
 import { canConnect, edgeLabel, outMedia } from '../../lib/canvas/ports'
 import type { Budget, CanvasDoc, CanvasState, ChainBody, Quote, GenModel, Generation, NodeData, NodeKind } from '../../lib/canvas/types'
@@ -243,11 +243,11 @@ function CanvasBoard({
 
   // ---- lines and new nodes ----
   const [dragFrom, setDragFrom] = useState<string | null>(null) // the node a line is being dragged from
-  const [note, setNote] = useState<{ key?: Key; vars?: Vars; text?: string } | null>(null)
+  const [note, setNote] = useState<{ key?: Key; vars?: Vars; text?: string; info?: boolean } | null>(null)
   const noteTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(noteTimer.current), [])
-  const showNote = useCallback((key: Key, vars?: Vars) => {
-    setNote({ key, vars })
+  const showNote = useCallback((key: Key, vars?: Vars, info?: boolean) => {
+    setNote({ key, vars, info })
     clearTimeout(noteTimer.current)
     noteTimer.current = setTimeout(() => setNote(null), NOTE_MS)
   }, [])
@@ -498,7 +498,7 @@ function CanvasBoard({
       const res = await cleanTakeRequest(ideaId, takeId)
       if (!mounted.current) return
       setTakes(res.takes)
-      showNote('canvas.footage.cleanDone', { sec: (res.originalSec - res.cleanSec).toFixed(1) })
+      showNote('canvas.footage.cleanDone', { sec: cutSeconds(res) }, true)
     }, 'canvas.footage.cleanFailed')
   }
 
@@ -783,7 +783,7 @@ function CanvasBoard({
               </div>
             </div>
           )}
-          <div className="cv-conn-note" role="status">
+          <div className={note?.info ? 'cv-conn-note is-info' : 'cv-conn-note'} role="status">
             {note && (note.text ?? (note.key && t(note.key, note.vars)))}
           </div>
         </div>

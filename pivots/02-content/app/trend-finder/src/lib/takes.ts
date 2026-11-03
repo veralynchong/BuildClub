@@ -107,6 +107,9 @@ export function canClean(take: Take, all: Take[]): boolean {
   return !take.cleanedFrom && !all.some((x) => x.cleanedFrom === take.id)
 }
 
+// The seconds a clean-up cut, as the note shows them.
+export const cutSeconds = (r: Pick<CleanResult, 'originalSec' | 'cleanSec'>): string => Math.max(0, r.originalSec - r.cleanSec).toFixed(1)
+
 export async function cleanTake(ideaId: string, takeId: string): Promise<CleanResult> {
   return send(await fetch(`${base(ideaId)}/takes/${encodeURIComponent(takeId)}/clean`, { method: 'POST' }), t('canvas.footage.cleanFailed'))
 }

@@ -6,6 +6,7 @@ import {
   canEdit,
   checkFile,
   checklistProgress,
+  cutSeconds,
   formatSize,
   takesByShot,
   uploadTake,
@@ -87,4 +88,9 @@ test('canClean: only an original take with no cleaned version yet', () => {
   assert.equal(canClean(orig, [orig]), true)
   assert.equal(canClean(cleaned, [orig, cleaned]), false)
   assert.equal(canClean(orig, [orig, cleaned]), false)
+})
+
+test('cutSeconds: seconds cut by a clean-up, one decimal, never negative', () => {
+  assert.equal(cutSeconds({ originalSec: 4.35, cleanSec: 2.33 }), '2.0')
+  assert.equal(cutSeconds({ originalSec: 3, cleanSec: 3.2 }), '0.0')
 })
