@@ -7,11 +7,12 @@ AI sessions: read this at the start; remind the user of any open item in "Tommy 
 - [ ] Add `GEMINI_API_KEY` to `pivots/02-content/app/trend-finder/.env` (Nano Banana 2 / Pro image models)
 - [ ] Add `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` to `.env` (AI voiceover; set `DAILY_GEN_VOICE_USD` budget)
 - [ ] Decide: real Claude for the "✦ 幫我建好" agent at the demo? (needs the Anthropic key, paid)
-- [x] `FAL_KEY` in `.env` (user says done, 2026-11-04; confirmed by the smoke test row in `docs/test-log.md`)
+- [x] `FAL_KEY` in `.env` (2026-11-04, confirmed by the paid smoke test in `docs/test-log.md`)
 
 ## Before Demo Night (Sat 2026-11-07)
 - [ ] Teammate reviews PR #49 (demo integration branch) tonight, 2026-11-04; merge only when Tommy says "merge"
-- [ ] fal smoke test (~US$0.25, cap US$1)
+- [x] fal smoke test, Seedream + Hailuo, ~US$0.23 (2026-11-04)
+- [ ] Fix P1 issues in `pivots/02-content/docs/demo-qa/issues.md` (Research→Plans demo row, Plans status after send, table overflow, title casing; board vs canvas entry needs a call with the teammate)
 - [ ] Generate the demo footage with real models (quote first, cap ~US$2-4, needs Tommy's OK)
 - [ ] Tommy walks the full flow, screenshots into `pivots/02-content/docs/demo-qa/`
 - [ ] Fix all P0 in `pivots/02-content/docs/demo-qa/issues.md`
