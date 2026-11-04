@@ -13,7 +13,7 @@ SERVER_TS = BACKEND.parent / "src" / "lib" / "strings" / "server.ts"
 
 # Modules whose errors and progress words reach the canvas, the editor or the plan's finished-cut area.
 # server.py is left out (mostly the search pages); its generation-wallet 429 sentences are listed by hand below.
-MODULES = ("canvas", "generations", "gen_providers", "editing", "brand", "takes", "renders", "cleaning", "cutting", "kit", "agent")
+MODULES = ("canvas", "generations", "gen_providers", "editing", "brand", "takes", "renders", "cleaning", "cutting", "kit", "agent", "workspaces")
 
 # server.py sentences the canvas can receive that the ast rules cannot see.
 MANUAL = {
@@ -54,7 +54,7 @@ def sentences(path):
         if isinstance(node, ast.Call):
             fn = node.func
             name = fn.id if isinstance(fn, ast.Name) else fn.attr if isinstance(fn, ast.Attribute) else None
-            if name in CALLS:
+            if name in CALLS or (path.stem == "workspaces" and name == "ValueError"):
                 # error(status, message) has an int first: the message is the first *string* argument.
                 if name == "step":
                     args = node.args[1:2]
@@ -63,8 +63,12 @@ def sentences(path):
                 for a in args:
                     found.update(_texts(a))
             for kw in node.keywords:
-                if kw.arg in ("step", "error"):  # step="..." and Poll("failed", error="...")
+                if kw.arg in ("step", "error") or (path.stem == "workspaces" and name == "HTTPException" and kw.arg == "detail"):  # step="..." and Poll("failed", error="...")
                     found.update(_texts(kw.value))
+        if path.stem == "workspaces" and isinstance(node, ast.Return) and isinstance(node.value, ast.Tuple):
+            # check_graph returns (user-facing sentence, machine code).
+            first = node.value.elts[:1]
+            found.update(s for item in first for s in _texts(item) if _looks_like_sentence(s))
     for node in tree.body:
         if isinstance(node, ast.Assign):
             value = _text(node.value)
