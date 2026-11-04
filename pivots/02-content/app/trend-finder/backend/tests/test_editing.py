@@ -194,6 +194,7 @@ REAL_PREWARM = editing.prewarm_bundle  # conftest replaces editing.prewarm_bundl
 
 import json  # noqa: E402
 import os  # noqa: E402
+import signal  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
 import threading  # noqa: E402
@@ -514,22 +515,52 @@ def test_pid_file_written_then_removed(tmp_path):
     assert seen == [True] and not pf.exists()
 
 
-def test_recover_kills_orphaned_render_group(client, setup, tmp_path):
+def test_recover_kills_orphaned_render_group(client, setup, tmp_path, monkeypatch):
     import renders
     pidfile = tmp_path / "pids"
     cut = server.MEDIA_DIR / "ia" / "cut"
     (cut / "work").mkdir(parents=True)
     proc = subprocess.Popen([sys.executable, "-c", GRANDCHILD.format(pids=str(pidfile)), "render-reel.mjs"],
                             start_new_session=True)
-    child, grandchild = read_pids(pidfile)
-    (cut / "render.pid").write_text(str(proc.pid))
-    with server.db() as conn:
-        conn.execute("INSERT INTO renders (idea_id, status, progress, step, speed, signature, started_at, source) "
-                     "VALUES ('ia', 'running', 0.4, 'Exporting', 1.0, '', 1, 'editor')")
-    renders.recover(server.db)
-    proc.wait(10)  # reaped here; the grandchild has no parent to reap it
-    assert gone(child) and gone(grandchild)
-    assert not (cut / "render.pid").exists() and not (cut / "work").exists()
+    try:
+        child, grandchild = read_pids(pidfile)
+        # macOS sandbox refuses setuid ps; identity is covered at its subprocess boundary below.
+        monkeypatch.setattr(editing, "_is_render", lambda pid: pid == proc.pid)
+        (cut / "render.pid").write_text(str(proc.pid))
+        with server.db() as conn:
+            conn.execute("INSERT INTO renders (idea_id, status, progress, step, speed, signature, started_at, source) "
+                         "VALUES ('ia', 'running', 0.4, 'Exporting', 1.0, '', 1, 'editor')")
+        renders.recover(server.db)
+        proc.wait(10)  # reaped here; the grandchild has no parent to reap it
+        assert gone(child) and gone(grandchild)
+        assert not (cut / "render.pid").exists() and not (cut / "work").exists()
+    finally:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.wait(10)
+
+
+@pytest.mark.parametrize("code,command,expected", [
+    (0, "node render-reel.mjs", True),
+    (0, "python foreign-script.py", False),
+    (1, "node render-reel.mjs", False),
+])
+def test_is_render_checks_command_and_exit(monkeypatch, code, command, expected):
+    def run(args, **kwargs):
+        assert args == ["ps", "-o", "command=", "-p", "12345"]
+        return subprocess.CompletedProcess(args, code, command)
+    monkeypatch.setattr(editing.subprocess, "run", run)
+    assert editing._is_render(12345) is expected
+
+
+@pytest.mark.parametrize("error", [OSError("denied"), subprocess.TimeoutExpired("ps", 5)])
+def test_is_render_fails_closed(monkeypatch, error):
+    def run(*args, **kwargs):
+        raise error
+    monkeypatch.setattr(editing.subprocess, "run", run)
+    assert editing._is_render(12345) is False
 
 
 def test_kill_orphan_ignores_junk_and_foreign_pids(tmp_path):
