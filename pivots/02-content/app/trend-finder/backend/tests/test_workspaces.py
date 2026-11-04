@@ -338,3 +338,17 @@ def test_inline_prompt_precedence_and_prompt_chain(client):
     assert quote['inputs']['prompt'] == 'Local text'
     assert client.post(base + '/gen', json={'nodeId': [], 'canvasVersion': 3}).status_code == 422
     assert client.post(base + '/agent/plan', json={'promptNodeId': 'p', 'canvasVersion': True}).status_code == 422
+
+
+def test_editor_output_and_unknown_target_ports_are_rejected(client):
+    staff(client)
+    base, doc = setup_graph(client, [node('n_editor', 'editor'), node('u', 'upload', media='image'),
+        node('p', 'prompt', text='Bicycle'), node('s', 'storyboard', model='mock-image')])
+    for source, target, handle in [('n_editor', 'u', 'in:unknown'), ('n_editor', 'p', 'in:unknown'),
+                                   ('n_editor', 'p', 'in:text'), ('p', 's', 'in:unknown')]:
+        doc['edges'] = [connect(source, target, handle)]
+        refused = client.put(base, json={'version': 2, 'doc': doc})
+        assert refused.status_code == 422, (source, target, handle, refused.text)
+        assert refused.json()['code'] == 'invalid_graph'
+    assert client.get(base).json()['version'] == 2
+    assert client.get(base).json()['doc']['edges'] == []
