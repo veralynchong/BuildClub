@@ -410,6 +410,7 @@
   .fc-editor > .cv-ed-full { height:100%; min-height:0; padding:16px; }
 }
 .fc-screen *, .fc-picker * { box-sizing:border-box; }
+.fc-screen :is(.fc-dock, .fc-node, .fc-modal) :is(h1, h2, h3) { color:var(--fc-fg); }
 .fc-board button, .fc-picker button { font:inherit; cursor:pointer; }
 .fc-board button:disabled, .fc-picker button:disabled { opacity:.35; cursor:default; }
 .fc-board button { color:inherit; border:1px solid transparent; background:transparent; border-radius:7px; padding:7px 10px; }
