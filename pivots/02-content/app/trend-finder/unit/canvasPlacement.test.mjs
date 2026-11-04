@@ -2,6 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { toolbarPosition } from '../src/lib/canvas/placement.ts'
 import { createNode } from '../src/lib/canvas/freeform.ts'
+import { compatibleKinds } from '../src/lib/canvas/ports.ts'
+import { readFileSync } from 'node:fs'
+import ts from 'typescript'
 
 test('sequential toolbar adds have separate cards before any measurements arrive', () => {
   const preferred = { x: 100, y: 160 }
@@ -38,4 +41,68 @@ test('explicit drag-to-empty coordinates bypass toolbar placement unchanged', ()
   const explicit = { x: -37.5, y: 82.25 }
   const nodes = [{ position: explicit }]
   assert.equal(toolbarPosition(nodes, { x: 100, y: 160 }, explicit), explicit)
+})
+
+// Execute the component's actual handlers so menu-origin wiring is covered, too.
+const source = ts.createSourceFile('CanvasScreen.tsx', readFileSync(new URL('../src/components/canvas/CanvasScreen.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+function findNodes(root, predicate) {
+  const found = []
+  function visit(node) { if (predicate(node)) found.push(node); ts.forEachChild(node, visit) }
+  visit(root)
+  return found
+}
+const arrow = (name) => findNodes(source, (n) => ts.isVariableDeclaration(n) && n.name.getText(source) === name)[0].initializer
+const rail = findNodes(source, (n) => ts.isJsxElement(n) && n.openingElement.attributes.properties.some((a) => a.name?.getText(source) === 'className' && a.initializer?.text === 'fc-rail'))[0]
+const clicks = (root) => findNodes(root, (n) => ts.isJsxAttribute(n) && n.name.text === 'onClick').map((n) => n.initializer.expression)
+const menuClick = clicks(source).find((n) => ts.isArrowFunction(n) && ts.isCallExpression(n.body) && n.body.expression.getText(source) === 'add' && n.body.arguments[1]?.getText(source) === 'menu.at')
+function handler(node, scope) {
+  const code = ts.transpileModule(`const callback = ${node.getText(source)}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
+  return new Function(...Object.keys(scope), `${code}; return callback`)(...Object.values(scope))
+}
+function componentAdds() {
+  let doc = { nodes: [], edges: [] }
+  let menu = null
+  const connections = []
+  const scope = {
+    readOnly: false, stale: false, quote: null,
+    flowBox: { current: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000 }) } },
+    screenToFlowPosition: ({ x, y }) => ({ x: (x - 80) / 2, y: (y - 40) / 2 }),
+    getNode: () => undefined, toolbarPosition, createNode, compatibleKinds,
+    session: { doc: () => doc }, change: (next) => { doc = next },
+    setSelected: () => {}, setSearch: () => {}, setMenu: (next) => { menu = next },
+    connect: async (connection) => { connections.push(connection) },
+    drag: { current: null }, setNote: () => {}, ff: (key) => key,
+  }
+  scope.add = handler(arrow('add'), scope)
+  return {
+    doc: () => doc, connections,
+    plus: () => handler(clicks(rail)[0], { ...scope, menu })(),
+    choose: (k) => handler(menuClick, { ...scope, menu, k })(),
+    icon: (k) => handler(clicks(rail).find((n) => n.getText(source) === '() => add(k)'), { ...scope, k })(),
+    drop: (from, point) => {
+      scope.drag.current = from
+      handler(arrow('endConnect'), scope)({ ...point, target: { closest: () => null } }, { isValid: false })
+    },
+  }
+}
+
+test('actual plus-menu and direct icon paths both avoid occupied positions', () => {
+  const app = componentAdds()
+  for (const kind of ['prompt', 'storyboard']) { app.plus(); app.choose(kind) }
+  app.icon('video')
+  const nodes = app.doc().nodes
+  assert.equal(nodes.length, 3)
+  for (let i = 1; i < nodes.length; i++) assert.ok(nodes[i].position.x >= nodes[i - 1].position.x + 350 + 48)
+})
+
+test('actual drag-to-empty menu preserves transformed drop position and auto-connects', () => {
+  const app = componentAdds()
+  app.plus(); app.choose('prompt')
+  const prompt = structuredClone(app.doc().nodes[0])
+  app.drop(prompt.id, { clientX: 960, clientY: 600 })
+  app.choose('storyboard')
+  const image = app.doc().nodes[1]
+  assert.deepEqual(image.position, { x: 440, y: 280 })
+  assert.deepEqual(app.doc().nodes[0], prompt)
+  assert.deepEqual(app.connections, [{ source: prompt.id, sourceHandle: 'out', target: image.id, targetHandle: 'in:text' }])
 })
