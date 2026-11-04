@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgencySettings, ClientEvent, IdeaStatus, Role, SavedIdea } from './types'
+import { approverNote } from './lib/approverNote'
 import { clients as sampleClients, formats, sampleIdeas, videos } from './data/sample'
 import { formatTrend, groupFailures, hasDate, outlierScore, platformList, platformName, stageOrder, viewsPerDay, viewsPerFollower } from './lib/metrics'
 import { defaultAgency, defaultQuery, inTwoWeeks, useResearch, useResearchSlots, useSavedIdeas, useStored } from './state'
@@ -71,6 +72,8 @@ import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
 import { CanvasPick } from './components/CanvasPick'
 import { approvedPlans } from './lib/canvasPick'
+import { readFullscreen, writeFullscreen } from './lib/canvas/shell'
+import { planName } from './components/plans/moves'
 import { AddClientScreen } from './components/AddClientScreen'
 import { logout, me, type Account } from './lib/auth'
 import { nextView, onUnauthorized } from './lib/authGate'
@@ -166,6 +169,11 @@ export default function App() {
   // `move`: the video is already saved; picking a video re-files it (the saved toast's Change).
   const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void; move?: boolean } | null>(null)
   const [planIdeaId, setPlanIdeaId] = useState<string | null>(null)
+  const [canvasFull, setCanvasFull] = useState(readFullscreen)
+  const setFull = (on: boolean) => {
+    setCanvasFull(on)
+    writeFullscreen(on)
+  }
   const [canvasEditor, setCanvasEditor] = useState(false) // the canvas opens with the editor showing
   // The screen a plan was opened from, so Back returns there.
   const [planFrom, setPlanFrom] = useState<View>('results')
@@ -903,6 +911,12 @@ export default function App() {
   // This client's Research rows, and the videos they hold.
   const myResearch = research.filter((e) => e.clientId === client.id)
   const inResearch = new Set(myResearch.map((e) => e.videoId))
+  // Which of the client's videos (1 to 12) each Research video is filed under, for the Plans cards.
+  const videoNoById = new Map<string, number>()
+  for (const e of myResearch) {
+    const slot = e.slotId ? researchSlots.find((s) => s.id === e.slotId && s.clientId === client.id) : undefined
+    if (slot) videoNoById.set(e.videoId, slot.number)
+  }
 
   // Saving or planning a real video asks the API for its AI breakdown (about a minute the first time).
   // It replaces the placeholder shot list and "why it works".
@@ -1421,7 +1435,7 @@ export default function App() {
   return (
     <AppContext.Provider value={appContext}>
     {/* Keyed by language so every screen redraws in the new one (the switch happens on Settings, which holds no work in progress). */}
-    <div className="shell" key={lang}>
+    <div className={`shell${view === 'canvas' ? ' is-compact' : ''}${view === 'canvas' && canvasFull ? ' is-full' : ''}`} key={lang}>
       <Sidebar
         clients={clients}
         workspace={workspace}
@@ -1438,6 +1452,7 @@ export default function App() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         live={live}
+        compact={view === 'canvas'}
       />
 
       <div className="shell-main">
@@ -1688,6 +1703,7 @@ export default function App() {
               onFindMore={() => setView('search')}
               onReview={() => openReview('shortlist')}
               inResearch={inResearch}
+              videoNoById={videoNoById}
               onOpenResearch={() => setView('research')}
               focus={boardFocus}
               onFocusDone={clearBoardFocus}
@@ -1735,6 +1751,10 @@ export default function App() {
                 onBack={() => setView('plan')}
                 backLabel={t('shell.back.plan')}
                 openEditor={canvasEditor}
+                title={planName(planVideo, planFormat)}
+                clientName={planClient.name}
+                fullscreen={canvasFull}
+                onFullscreen={setFull}
               />
             </Suspense>
           )}
@@ -1767,6 +1787,18 @@ export default function App() {
                 live={live}
                 onSave={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
                 onBack={() => setView('plan')}
+                // Send for approval lives on the board: the plan goes to the approver, then back to the (now locked) plan page.
+                onSend={() => {
+                  const note = planIdea.noteToApprover ?? approverNote(planClient, planFormat, 'en')
+                  setIdeas((prev) =>
+                    prev.map((i) =>
+                      i.id === planIdea.id
+                        ? { ...i, status: 'waiting', sentAt: Date.now(), noteToApprover: note, rejectReason: undefined, rejectTags: undefined }
+                        : i,
+                    ),
+                  )
+                  setView('plan')
+                }}
               />
             </Suspense>
           )}

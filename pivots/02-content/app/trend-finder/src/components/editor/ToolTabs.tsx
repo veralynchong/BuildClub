@@ -1,8 +1,8 @@
 import { t } from '../../lib/i18n'
 import type { Key } from '../../lib/i18n'
+import { EDITOR_TABS as TOOLS, type Tool } from '../../lib/editor/steps'
 
-const TOOLS = ['clips', 'text', 'captions', 'voice', 'music', 'brand'] as const
-export type Tool = (typeof TOOLS)[number]
+export type { Tool }
 
 const LABEL: Record<Tool, Key> = {
   clips: 'editor.tab.clips',
@@ -13,9 +13,9 @@ const LABEL: Record<Tool, Key> = {
   brand: 'editor.tab.brand',
 }
 
-
-// The tool tabs under the player. Arrow keys move between them.
-export function ToolTabs({ tool, onTool }: { tool: Tool; onTool: (tool: Tool) => void }) {
+// The editor's tabs on the right. A tab carries a tick once it was opened and its part is done (tabsDone). Arrow keys
+// move between them.
+export function ToolTabs({ tool, onTool, done }: { tool: Tool; onTool: (tool: Tool) => void; done: Partial<Record<Tool, boolean>> }) {
   const move = (e: React.KeyboardEvent, i: number) => {
     const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
     if (!step) return
@@ -36,10 +36,13 @@ export function ToolTabs({ tool, onTool }: { tool: Tool; onTool: (tool: Tool) =>
           aria-selected={tool === id}
           aria-controls={`cv-ed-panel-${id}`}
           tabIndex={tool === id ? 0 : -1}
+          data-done={done[id] || undefined}
           onClick={() => onTool(id)}
           onKeyDown={(e) => move(e, i)}
         >
+          {done[id] && <span className="cv-ed-tab-tick" aria-hidden="true">✓</span>}
           {t(LABEL[id])}
+          {done[id] && <span className="sr-only"> ({t('editor.step.done')})</span>}
         </button>
       ))}
     </div>

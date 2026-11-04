@@ -1,8 +1,6 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Background,
   Controls,
-  MiniMap,
   Panel,
   ReactFlow,
   ReactFlowProvider,
@@ -35,7 +33,6 @@ import {
   setPosition,
   tidy,
   toPlan,
-  totalSeconds,
   updateShot,
   type Board,
 } from '../../lib/shotBoard'
@@ -54,6 +51,8 @@ interface Props {
   // Saves the ordered shots (and where each card sits) into the plan, the same way the plan page saves shots.
   onSave: (patch: { shots: Shot[]; boardLayout: BoardPos[] }) => void
   onBack: () => void
+  // Sends the plan to the approver. Only on a plan that can still be edited.
+  onSend?: () => void
 }
 
 const nodeTypes = { shot: ShotNode }
@@ -77,21 +76,13 @@ function buildNodes(board: Board, prev: ShotFlowNode[], editable: boolean): Shot
 const sampleNote = (r: Assisted<unknown>): string | undefined =>
   r.source === 'sample' ? (r.reason === 'failed' ? t('board.sample.failed') : t('board.sample.offline')) : undefined
 
-const startsClosed = (): boolean => {
-  try {
-    return window.matchMedia('(max-width: 720px)').matches
-  } catch {
-    return false
-  }
-}
-
 interface Message {
   text: string
   note?: string
   undo?: boolean
 }
 
-function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
+function BoardScreen({ idea, format, live, onSave, onBack, onSend }: Props) {
   const editable = boardEditable(idea)
   const [makeId] = useState(() => idMaker('n'))
   const [board, setBoard] = useState(() => boardFromShots(boardShots(idea, format.shotList), idea.boardLayout, makeId))
@@ -101,7 +92,7 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
   const [undo, setUndo] = useState<Board | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
   const [dropEdge, setDropEdge] = useState<string | null>(null)
-  const [toolsOpen, setToolsOpen] = useState(() => !startsClosed())
+  const [toolsOpen, setToolsOpen] = useState(false)
   // "Change the shot list"
   const [rewrite, setRewrite] = useState('')
   const [rewriteErr, setRewriteErr] = useState('')
@@ -112,6 +103,17 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
   const [busy, setBusy] = useState<'rewrite' | 'insert' | 'upload' | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const { fitView } = useReactFlow()
+  // The drawer: Esc closes it from anywhere on the page, and focus moves into it when it opens.
+  const toolsClose = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!toolsOpen) return
+    toolsClose.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setToolsOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toolsOpen])
 
   const commit = (next: Board, text?: string, opts: { undoable?: boolean; save?: boolean; note?: string; refit?: boolean } = {}) => {
     const prev = boardRef.current
@@ -293,13 +295,26 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
         {t('board.back')}
       </button>
       <header className="board-head">
-        <span className="eyebrow">{t('board.eyebrow', { client: client.name })}</span>
         <h1>{format.name}</h1>
-        <p className="small muted">
-          {tp('board.summary', shots.length, { secs: totalSeconds(shots) })}
-          {' · '}
-          {editable ? t('board.saves') : t('board.locked')}
-        </p>
+        {/* Only an approved (view-only) board says why it can't be changed. */}
+        {!editable && <p className="small">{t('board.locked')}</p>}
+        <div className="board-head-actions">
+          {editable && onSend && (
+            <button type="button" className="btn btn-primary board-send" disabled={shots.length === 0} onClick={onSend}>
+              {t('plan.common.sendForApproval')}
+            </button>
+          )}
+          {/* The side tools are closed by default; this opens them as a drawer over the board. */}
+          <button
+            type="button"
+            className="btn btn-ghost board-tools-toggle"
+            aria-expanded={toolsOpen}
+            aria-controls="board-tools"
+            onClick={() => setToolsOpen((o) => !o)}
+          >
+            {t('board.toolsOpen')}
+          </button>
+        </div>
       </header>
 
       <div className="board-layout">
@@ -321,11 +336,11 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
               fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
               minZoom={0.2}
               maxZoom={1.5}
+              proOptions={{ hideAttribution: true }}
               aria-label={t('board.canvasLabel', { name: format.name })}
             >
-              <Background gap={24} size={1} />
+              {/* No board dots of its own: the page's navy dots show through (one layer). */}
               <Controls showInteractive={false} />
-              <MiniMap className="board-minimap" ariaLabel={t('board.minimap')} pannable zoomable />
               {board.order.length === 0 && board.loose.length === 0 && (
                 <Panel position="top-center" className="board-empty">
                   {t('board.empty')}
@@ -367,9 +382,18 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
           </BoardActionsContext.Provider>
         </div>
 
-        <aside className="board-tools">
-          <details open={toolsOpen} onToggle={(e) => setToolsOpen(e.currentTarget.open)}>
-            <summary>{t('board.tools')}</summary>
+        <aside
+          id="board-tools"
+          className="board-tools"
+          hidden={!toolsOpen}
+          aria-labelledby="board-tools-title"
+        >
+          <div className="board-tools-head">
+            <h2 id="board-tools-title">{t('board.tools')}</h2>
+            <button ref={toolsClose} type="button" className="board-tools-close" aria-label={t('board.toolsClose')} onClick={() => setToolsOpen(false)}>
+              ✕
+            </button>
+          </div>
             <p className="small muted">{t('board.help')}</p>
 
             <form className="board-tool" onSubmit={runRewrite}>
@@ -419,7 +443,6 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
             >
               {t('board.tidy')}
             </button>
-          </details>
         </aside>
       </div>
 

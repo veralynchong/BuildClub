@@ -72,6 +72,19 @@ class Brand(BaseModel):
     color: Optional[Hex] = None
 
 
+class KitItem(BaseModel):
+    id: str = Field(pattern=r"^k_[A-Za-z0-9_-]{6,40}$")
+    kind: Literal["character", "product", "place", "style"]
+    name: str = Field(min_length=1, max_length=40)
+    note: str = Field("", max_length=200)
+    images: list[str] = Field(default_factory=list, max_length=4)
+    updatedAt: int  # epoch milliseconds; strictly increases on every change to the item
+
+
+class Kit(BaseModel):
+    items: list[KitItem] = Field(default_factory=list, max_length=20)
+
+
 class Client(BaseModel):
     id: str
     name: str
@@ -82,6 +95,7 @@ class Client(BaseModel):
     topics: Optional[list[str]] = None
     cannot: list[str]
     brand: Optional[Brand] = None
+    kit: Optional[Kit] = None
 
 
 Framing = Literal["wide", "medium", "close_up", "extreme_close_up", "overhead", "pov"]

@@ -5,6 +5,9 @@
 //  d) a model that needs a key: Generate disabled, key-less options disabled, Run refused with a note, no request
 // Run: bash e2e/restart-backend.sh 8871 <log>; node e2e/a5-chain-guards.cjs <fixtures_dir> <out_dir>
 // Exits 1 when a check fails.
+// Out of date since Polish B6 (2026-11-03): its node-select selectors and the settings it reads on the node card
+// predate the right panel, so several steps fail. Not a merge gate; e2e/polish-b-nodes.cjs and panel-backspace.cjs
+// cover the current canvas.
 const L = require('./lib.cjs')
 const [fx, out] = process.argv.slice(2)
 const IDEA = 'idea1'

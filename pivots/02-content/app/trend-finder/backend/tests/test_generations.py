@@ -1,6 +1,9 @@
 """Generation jobs with the free mock provider: models, submit, poll, files, restart recovery."""
 
+from collections import Counter
 import json
+import os
+from pathlib import Path
 import shutil
 import subprocess
 
@@ -10,7 +13,7 @@ import gen_providers
 import generations
 import server
 from test_canvas import plan
-from test_takes import store_ideas
+from test_takes import A, store_ideas
 
 
 @pytest.fixture
@@ -40,6 +43,19 @@ def test_models_file_shape(client):
 
 def test_models_file_valid():
     assert generations.validate_models(generations.load_models()) == []
+
+
+def test_models_have_typical_seconds():
+    for m in generations.load_models():
+        assert isinstance(m.get("typicalSeconds"), (int, float)) and m["typicalSeconds"] > 0, m["id"]
+
+
+def test_validate_models_rejects_bad_typical_seconds():
+    ok = {"id": "a", "kind": "image", "provider": "mock", "aspects": ["9:16"]}
+    assert generations.validate_models([{**ok, "typicalSeconds": 0}]) == ["a: typicalSeconds must be a positive number"]
+    assert generations.validate_models([{**ok, "typicalSeconds": "fast"}]) == ["a: typicalSeconds must be a positive number"]
+    assert generations.validate_models([{**ok, "typicalSeconds": True}]) == ["a: typicalSeconds must be a positive number"]
+    assert generations.validate_models([{**ok, "typicalSeconds": -1}]) == ["a: typicalSeconds must be a positive number"]
 
 
 def test_validate_models_catches_errors():
@@ -1067,3 +1083,260 @@ def test_elevenlabs_is_available_only_with_key_and_voice(monkeypatch):
     assert not generations.is_available(model)
     monkeypatch.setenv("ELEVENLABS_VOICE_ID", "v")
     assert generations.is_available(model)
+
+
+# --- P2.5: N references (plan generations and kit images) and the kit prompt prefix ---
+
+B = {**A, "id": "b", "name": "Other Shop"}
+
+
+def kit_item(client, name="Mia", kind="character", note="short bob", images=1, cid="a", write_files=True):
+    """A kit item of client `cid` with `images` real files; returns the item as the kit route reports it."""
+    client.put("/api/clients", json=[A, B])
+    made = client.post(f"/api/clients/{cid}/kit/items", json={"kind": kind, "name": name, "note": note}).json()
+    for _ in range(images):
+        made = client.put(f"/api/clients/{cid}/kit/items/{made['id']}/images", content=PNG_BYTES,
+                          headers={"content-type": "image/png"}).json()
+    return made
+
+
+def kref(item, n=0):
+    return {"source": "kit", "itemId": item["id"], "image": item["images"][n]}
+
+
+def test_refs_kit_item_ok_and_copied(gen):
+    mia = kit_item(gen)
+    r = post(gen, references=[kref(mia)])
+    assert r.status_code == 201
+    inputs = r.json()["inputs"]
+    ref = inputs["references"][0]
+    assert ref["source"] == "kit" and ref["name"] == "Mia" and ref["kind"] == "character"
+    assert (server.MEDIA_DIR / "ia" / "gen" / ref["file"]).is_file()
+    assert inputs["kitStamp"] == {mia["id"]: mia["updatedAt"]}
+    assert inputs["prompt"] == "a tofu bar" and inputs["sentPrompt"].startswith("Reference images:")
+    assert inputs["sentPrompt"].endswith("a tofu bar")
+
+
+def test_no_kit_refs_sent_prompt_equals_prompt(gen):
+    mine = post(gen).json()["id"]
+    inputs = post(gen, references=[{"source": "gen", "genId": mine}]).json()["inputs"]
+    assert inputs["sentPrompt"] == inputs["prompt"] and inputs["kitStamp"] == {}
+    assert inputs["references"] == [{"source": "gen", "genId": mine}]
+
+
+def test_kit_ref_other_client_422(gen):
+    theirs = kit_item(gen, cid="b")
+    assert post(gen, references=[kref(theirs)]).status_code == 422
+    mia = kit_item(gen, name="Mia")
+    assert post(gen, references=[{**kref(mia), "image": "ka_nope.png"}]).status_code == 422  # not this item's image
+    assert post(gen, references=[{"source": "kit", "itemId": "k_nope", "image": "x.png"}]).status_code == 422
+
+
+def test_kit_ref_deleted_file_422(real):
+    mia = kit_item(real)
+    (server.MEDIA_DIR / "kit" / "a" / mia["images"][0]).unlink()
+    real.spent.clear()
+    r = post(real, model="seedream-4.5", references=[kref(mia)])
+    assert r.status_code == 422 and r.json()["error"] == "An input image is missing."
+    assert real.spent == []
+
+
+def test_refs_over_max_422(gen):
+    mia = kit_item(gen, images=4)
+    ok = [kref(mia, n) for n in range(4)] * 3 + [kref(mia, 0), kref(mia, 1)]
+    assert len(ok) == 14 and post(gen, references=ok).status_code == 201
+    assert post(gen, references=ok + [kref(mia, 2)]).status_code == 422
+
+
+def test_refs_on_none_model_422(gen, monkeypatch):
+    fake_models(monkeypatch, {"id": "n", "provider": "mock", "inputs": {"text": "required", "reference": "none"},
+                              "maxRefs": 5})
+    mia = kit_item(gen)
+    r = post(gen, model="n", references=[kref(mia)])
+    assert r.status_code == 422 and r.json()["error"] == "This model doesn't take a reference image."
+
+
+def test_missing_maxrefs_means_one(gen, monkeypatch):
+    fake_models(monkeypatch, {"id": "m", "provider": "mock", "price": {"per": "image", "usd": 0},
+                              "inputs": {"text": "required", "reference": "optional"}})
+    mia = kit_item(gen, images=2)
+    assert post(gen, model="m", references=[kref(mia, 0), kref(mia, 1)]).status_code == 422
+    assert post(gen, model="m", references=[kref(mia, 0)]).status_code == 201
+
+
+def test_legacy_reference_field_still_works(gen):
+    mine = post(gen).json()["id"]
+    r = post(gen, reference=mine)
+    assert r.status_code == 201 and r.json()["inputs"]["references"] == [{"source": "gen", "genId": mine}]
+    both = post(gen, reference="nope", references=[{"source": "gen", "genId": mine}])  # references wins
+    assert both.status_code == 201
+
+
+def test_legacy_row_reads_as_references(gen):
+    with server.db() as conn:
+        conn.execute("INSERT INTO generations (id, idea_id, node_id, kind, model, inputs, input_hash, status, "
+                     "est_usd, created_at) VALUES ('old1','ia','n_sb_s1','image','mock-image',?,'h','done',0,1)",
+                     (json.dumps({"prompt": "p", "reference": "g_7"}),))
+    inputs = gen.get("/api/ideas/ia/gen/old1").json()["inputs"]
+    assert inputs["references"] == [{"source": "gen", "genId": "g_7"}] and "reference" not in inputs
+
+
+def test_input_hash_order_independent():
+    a, b = {"source": "gen", "genId": "g1"}, {"source": "kit", "itemId": "k1", "image": "x.png"}
+    h = generations.input_hash
+    assert h("m", "p", None, [a, b], None) == h("m", "p", None, [b, a], None)
+    assert h("m", "p", None, [a], None) != h("m", "p", None, [a, b], None)
+
+
+def test_prefix_too_long_shortens_notes(gen):
+    long_note = "n" * 200
+    mia = kit_item(gen, note=long_note)
+    cup = kit_item(gen, name="Cup", kind="product", note=long_note)
+    # room for the prefix only once the notes are cut to 60 characters
+    r = post(gen, prompt="p" * 3560, references=[kref(mia), kref(cup)])
+    assert r.status_code == 201
+    sent = r.json()["inputs"]["sentPrompt"]
+    assert len(sent) <= generations.MAX_PROMPT and "n" * 60 in sent and "n" * 61 not in sent
+    # with no room for notes at all they are dropped
+    r = post(gen, prompt="p" * 3750, references=[kref(mia), kref(cup)])
+    assert r.status_code == 201 and "nnn" not in r.json()["inputs"]["sentPrompt"]
+    # nothing fits
+    assert post(gen, prompt="p" * 3990, references=[kref(mia), kref(cup)]).status_code == 422
+
+
+def test_mock_image_shows_ref_count(gen):
+    mia = kit_item(gen, images=3)
+    gid = post(gen, references=[kref(mia, n) for n in range(3)]).json()["id"]
+    assert "3 refs" in gen.get(f"/api/ideas/ia/gen/{gid}/file").text
+
+
+def test_chain_with_kit_refs(real):
+    chain_canvas()
+    mia = kit_item(real)
+    r = chain(real, references=[kref(mia)])
+    assert r.status_code == 201
+    image, video = r.json()["image"]["inputs"], r.json()["video"]["inputs"]
+    ref = image["references"][0]
+    assert ref["source"] == "kit" and ref["name"] == "Mia"
+    assert (server.MEDIA_DIR / "ia" / "gen" / ref["file"]).is_file()
+    assert image["kitStamp"] == {mia["id"]: mia["updatedAt"]}
+    assert image["sentPrompt"].startswith("Reference images:") and image["sentPrompt"].endswith("a tofu bar")
+    assert video["references"] == []
+    assert chain(real, references=[kref(mia)], videoReference="x").status_code == 422
+    assert chain(real, references=[kref(mia)], reference="x").status_code == 422
+
+
+def test_chain_quote_unchanged_by_refs(real):
+    chain_canvas()
+    mia = kit_item(real)
+    plain = chain(real, confirm=False).json()
+    with_refs = chain(real, confirm=False, references=[kref(mia)]).json()
+    assert plain["total"] == with_refs["total"] and plain["items"] == with_refs["items"]
+    assert real.spent == []
+    assert not (server.MEDIA_DIR / "ia" / "gen").exists() or not list((server.MEDIA_DIR / "ia" / "gen").glob("kit-*"))
+
+
+def test_chain_refs_over_max_422(real):
+    chain_canvas()
+    mia = kit_item(real, images=4)
+    real.spent.clear()
+    too_many = [kref(mia, n) for n in range(4)] * 3  # 12 > seedream-4.5's maxRefs of 10
+    for confirm in (False, True):
+        r = chain(real, confirm=confirm, references=too_many)
+        assert r.status_code == 422
+    assert real.spent == []
+
+
+def test_worker_sends_kit_files_and_full_prompt(real):
+    mia = kit_item(real)
+    a = post(real, model="seedream-4.5").json()["id"]
+    gid = post(real, model="seedream-4.5", references=[{"source": "gen", "genId": a}, kref(mia)]).json()["id"]
+    job = real.adapter.jobs[-1]
+    copy = server.MEDIA_DIR / "ia" / "gen" / row_of(real, gid)["inputs"]["references"][1]["file"]
+    assert job.references == [server.MEDIA_DIR / "ia" / "gen" / f"{a}.png", copy]
+    assert job.prompt.startswith("Reference images: image 2 is the character") and job.prompt.endswith("a tofu bar")
+
+
+def test_kit_copies_of_one_image_use_separate_temp_files(gen, monkeypatch):
+    mia = kit_item(gen)
+    stored = [{"source": "kit", "image": mia["images"][0], "file": f"kit-{mia['images'][0]}"}]
+    import kit
+    seen = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        seen.append(Path(src).name)
+        real_replace(src, dst)
+
+    monkeypatch.setattr(generations.os, "replace", spy)
+    for _ in range(2):
+        generations.copy_kit_images(kit, server.MEDIA_DIR, "a", "ia", stored)
+    assert len(seen) == 2 and seen[0] != seen[1]
+    folder = server.MEDIA_DIR / "ia" / "gen"
+    assert (folder / stored[0]["file"]).read_bytes() == PNG_BYTES
+    assert not [p for p in folder.iterdir() if p.name.endswith(".part")]
+
+
+def test_kit_copy_shrinks_big_image_and_keeps_small_one(gen):
+    from PIL import Image
+    import kit
+    folder = kit.kit_folder(server.MEDIA_DIR, "a")
+    folder.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", (3000, 2000), (200, 10, 10, 128)).save(folder / "ka_big.png")
+    Image.new("RGB", (800, 600), (1, 2, 3)).save(folder / "ka_small.png")
+    stored = [{"source": "kit", "image": n, "file": f"kit-{n}"} for n in ("ka_big.png", "ka_small.png")]
+    generations.copy_kit_images(kit, server.MEDIA_DIR, "a", "ia", stored)
+    out = server.MEDIA_DIR / "ia" / "gen"
+    with Image.open(out / "kit-ka_big.png") as big:
+        assert max(big.size) == 1536 and big.mode == "RGBA"
+    assert (out / "kit-ka_small.png").read_bytes() == (folder / "ka_small.png").read_bytes()  # never touched
+    with Image.open(folder / "ka_big.png") as original:
+        assert original.size == (3000, 2000)
+    assert not [p for p in out.iterdir() if p.name.endswith(".part")]
+
+
+def test_models_with_per_ref_price_are_rejected():
+    errors = generations.validate_models([{"id": "m", "provider": "mock", "kind": "image", "price": {"usd": 1, "perRefUsd": 0.1}}])
+    assert any("perRefUsd" in e for e in errors)
+
+
+def test_text_only_style_ref_adds_style_line(real):
+    film = kit_item(real, name="Warm film", kind="style", note="", images=0)
+    mia = kit_item(real)
+    text_only = {"source": "kit", "itemId": film["id"]}
+    r = post(real, model="seedream-4.5", references=[kref(mia), text_only])
+    assert r.status_code == 201
+    inputs = row_of(real, r.json()["id"])["inputs"]
+    assert "Style: Warm film" in inputs["sentPrompt"] and inputs["sentPrompt"].startswith("Reference images: image 1 is")
+    assert inputs["kitStamp"][film["id"]] == film["updatedAt"]
+    assert inputs["references"][1] == {"source": "kit", "itemId": film["id"], "name": "Warm film", "kind": "style"}
+    assert len(real.adapter.jobs[-1].references) == 1  # the style ref is not a file
+    # not counted against maxRefs: seedream-4.5 takes 10 images, plus the text-only one
+    ten = [kref(mia)] * 10
+    assert post(real, model="seedream-4.5", references=ten + [text_only]).status_code == 201
+
+
+def test_kit_ref_without_image_for_item_with_images_422(gen):
+    mia = kit_item(gen)
+    r = post(gen, references=[{"source": "kit", "itemId": mia["id"]}])
+    assert r.status_code == 422 and r.json()["error"] == "A kit item with images must send an image."
+
+
+def test_generate_adds_a_version_only_to_that_node(gen):
+    # spec §8.3: a Generate on the video node must not add a storyboard version.
+    client = gen
+    assert post(client).status_code == 201  # n_sb_s1 already has a version before the video runs
+    c = client.get("/api/ideas/ia/canvas").json()
+    c["doc"]["nodes"].append({"id": "n_vid_s1", "type": "video", "shotId": "s1", "position": {"x": 720, "y": 0}, "data": {}})
+    c["doc"]["edges"].append({"id": "e_sb_vid", "source": "n_sb_s1", "sourceHandle": "out", "target": "n_vid_s1", "targetHandle": "in:start"})
+    assert client.put("/api/ideas/ia/canvas", json={"version": c["version"], "doc": c["doc"]}).status_code == 200
+
+    def counts():
+        return Counter(g["nodeId"] for g in client.get("/api/ideas/ia/gen").json())
+
+    before = counts()
+    assert post(client, nodeId="n_vid_s1", model="mock-video", prompt="move", duration=4).status_code == 201
+    after = counts()
+    assert after["n_vid_s1"] == before["n_vid_s1"] + 1
+    assert after["n_sb_s1"] == before["n_sb_s1"] >= 1
+    assert {k: v for k, v in after.items() if k != "n_vid_s1"} == {k: v for k, v in before.items() if k != "n_vid_s1"}

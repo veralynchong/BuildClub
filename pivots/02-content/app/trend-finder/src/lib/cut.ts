@@ -1,5 +1,6 @@
 import { t } from './i18n.ts'
 import { serverText } from './serverText.ts'
+import { createShareLink } from './share.ts'
 
 // The cut of an approved plan: its chosen takes joined into one publishable 9:16 MP4. Mirrors backend/renders.py.
 export interface CutReview {
@@ -87,6 +88,29 @@ export async function deleteMusic(ideaId: string): Promise<CutState> {
 // Sends the finished video to the approver. Failures carry the server's reason.
 export async function sendCutForReview(ideaId: string): Promise<CutState> {
   return send(await fetch(`${base(ideaId)}/review`, { method: 'POST' }), t('cut.err.sendVideo'))
+}
+
+// The review link could not be turned on, so nothing was sent.
+export class NoLinkError extends Error {
+  constructor() {
+    super(t('cut.err.link'))
+    this.name = 'NoLinkError'
+  }
+}
+
+// Turns the client's review link on (idempotent: an existing link is kept), then sends the video. A send error passes through.
+export async function sendWithLink(
+  ideaId: string,
+  clientId: string,
+  deps: { link?: (clientId: string) => Promise<unknown>; send?: (ideaId: string) => Promise<CutState> } = {},
+): Promise<CutState> {
+  const link = deps.link ?? createShareLink
+  try {
+    await link(clientId)
+  } catch {
+    throw new NoLinkError()
+  }
+  return (deps.send ?? sendCutForReview)(ideaId)
 }
 
 // The status line for a sent video; the reason is shown separately. null when it was never sent.

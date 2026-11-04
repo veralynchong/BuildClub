@@ -1,17 +1,11 @@
-import type { Key } from '../i18n'
 import type { EditProject } from './types.ts'
 
-// The five steps of making the video, in order. Export and Send are done from the export controls.
-export const EDITOR_STEPS = ['clips', 'captions', 'logo', 'export', 'send'] as const
-export type EditorStep = (typeof EDITOR_STEPS)[number]
+// The editor's tabs, in order (spec §7.2: the old step bar became these tabs).
+export const EDITOR_TABS = ['clips', 'text', 'captions', 'voice', 'music', 'brand'] as const
+export type Tool = (typeof EDITOR_TABS)[number]
 
-export const STEP_LABEL: Record<EditorStep, Key> = {
-  clips: 'editor.step.clips',
-  captions: 'editor.step.captions',
-  logo: 'editor.step.logo',
-  export: 'editor.step.export',
-  send: 'editor.step.send',
-}
+// What stepsDone reports. Export and Send are done from the export controls.
+export type EditorStep = 'clips' | 'captions' | 'logo' | 'export' | 'send'
 
 export interface StepFacts {
   project: Pick<EditProject, 'clips' | 'captions' | 'showLogo'> | null
@@ -32,4 +26,19 @@ export function stepsDone({ project, clientHasLogo, cut }: StepFacts): Record<Ed
     export: exported,
     send: review === 'waiting' || review === 'approved',
   }
+}
+
+// Which tabs carry a tick: only one opened this session whose condition holds, so nothing is ticked in advance
+// (captions are on by default, but stay unticked until the Captions tab was looked at).
+export function tabsDone(facts: StepFacts & { texts: number; voices: number; music: boolean }, visited: ReadonlySet<Tool>): Partial<Record<Tool, boolean>> {
+  const steps = stepsDone(facts)
+  const holds: Record<Tool, boolean> = {
+    clips: steps.clips,
+    text: facts.texts > 0,
+    captions: steps.captions,
+    voice: facts.voices > 0,
+    music: facts.music,
+    brand: steps.logo,
+  }
+  return Object.fromEntries(EDITOR_TABS.map((tab) => [tab, visited.has(tab) && holds[tab]]))
 }

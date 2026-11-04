@@ -414,7 +414,8 @@ export const en = {
   // Find ideas desk: recent searches, saved to Research, typing suggestions, results blocks, saved toast
   "find.desk.eyebrow": "Find ideas · {client}",
   "find.desk.recent.tab": "01. Recent searches",
-  "find.desk.recent.title": "Your searches",
+  "find.desk.recent.newPill": "New",
+  "find.desk.recent.title": "Recent searches",
   "find.desk.recent.sub": "Searches run for {client} in this browser. Open one to see its videos again: anything that wasn't there last time is marked New.",
   "find.desk.recent.count.one": "{n} search",
   "find.desk.recent.count.other": "{n} searches",
@@ -906,7 +907,8 @@ export const zhHant: Record<keyof typeof en, string> = {
   // Find ideas desk
   "find.desk.eyebrow": "找點子 · {client}",
   "find.desk.recent.tab": "01. 最近的搜尋",
-  "find.desk.recent.title": "你的搜尋",
+  "find.desk.recent.newPill": "新",
+  "find.desk.recent.title": "最近的搜尋",
   "find.desk.recent.sub": "在這個瀏覽器為 {client} 跑過的搜尋。打開一個就能再看一次影片：上次沒有的會標上「新」。",
   "find.desk.recent.count.one": "{n} 個搜尋",
   "find.desk.recent.count.other": "{n} 個搜尋",

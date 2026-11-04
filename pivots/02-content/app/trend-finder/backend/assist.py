@@ -1,4 +1,5 @@
 """Small Claude helpers that describe real videos. They never write scripts or new content.
+Writing prompts for the canvas is agent.py's job (spec §9.1); these helpers only describe real videos.
 Every Claude call goes through call_claude, so tests replace that one function."""
 
 import json

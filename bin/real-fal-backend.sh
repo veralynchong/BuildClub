@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Trend Finder backend for a person testing with REAL fal models (demo prep). Like isolated-backend.sh,
+# but passes FAL_KEY from the trend-finder .env and allows fal spend up to US$0.50 images + US$1.00 video a day.
+# Claude, Apify, voice budgets stay 0. Data is a throwaway temp dir: a restart wipes it.
+# Usage: [REMOTION_PORT=<port>] bash bin/real-fal-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>]
+#   (runs in foreground; Ctrl-C or kill <pid> cleans up)
+#   --demo-data  also copy the finished breakdowns (jobs/<id>/) of the pinned searches' videos, found in
+#                jobs_source_dir, this checkout's backend/jobs, or the same folder of a sibling worktree
+#   --user       create a sign-in account once the server answers
+#   REMOTION_PORT  if set, passed through to the backend (the clean environment drops everything else)
+#   MOCK_GEN_DELAY_S  if set, passed through too: how long a mock generation takes (default 2)
+set -eu
+cd "$(dirname "$0")/.."
+[ -f pivots/02-content/app/trend-finder/.env ] || { echo "error: no pivots/02-content/app/trend-finder/.env (FAL_KEY lives there)" >&2; exit 1; }
+FAL_KEY="$(sed -n 's/^FAL_KEY=//p' pivots/02-content/app/trend-finder/.env | head -1)"; FAL_KEY="${FAL_KEY%\"}"; FAL_KEY="${FAL_KEY#\"}"
+
+usage="usage: bash bin/real-fal-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>]"
+port="${1:-}"; jobs_src=""; demo=0; user=""
+[ -n "$port" ] || { echo "$usage" >&2; exit 2; }
+shift
+if [ "$#" -gt 0 ] && [ "${1#--}" = "$1" ]; then jobs_src="$1"; shift; fi
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --demo-data) demo=1; shift;;
+    --user) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 2; }; user="$2"; shift 2;;
+    *) echo "$usage" >&2; exit 2;;
+  esac
+done
+case "$user" in ""|*:*) ;; *) echo "error: --user needs <email>:<password>" >&2; exit 2;; esac
+case "$port" in 8787|5195) echo "error: port $port is reserved (demo backend / video recording server)" >&2; exit 2;; esac
+if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then echo "error: port $port is already in use" >&2; exit 2; fi
+
+TF=pivots/02-content/app/trend-finder
+app_dir="$(pwd)/$TF"
+[ -d "$TF/dist" ] || { echo "error: $TF/dist is missing; run 'npm run build' in $TF first" >&2; exit 1; }
+[ -z "$jobs_src" ] || [ -d "$jobs_src" ] || { echo "error: jobs_source_dir not found: $jobs_src" >&2; exit 1; }
+venv="${TF_VENV:-/Users/tommy/Desktop/BuildClub/$TF/backend/.venv}"
+[ -x "$venv/bin/uvicorn" ] || { echo "error: no uvicorn in $venv (set TF_VENV)" >&2; exit 1; }
+
+tmp="$(mktemp -d)"
+pid=""
+cleanup() { [ -z "$pid" ] || kill "$pid" 2>/dev/null || true; rm -r "$tmp"; }
+trap cleanup EXIT
+trap 'exit 143' INT TERM
+
+# Copy the backend without local state or secrets; the backend reads ../.env, so none may exist.
+mkdir "$tmp/backend"
+rsync -a --exclude .venv --exclude data.db --exclude cache --exclude jobs --exclude __pycache__ \
+  --exclude .env "$TF/backend/" "$tmp/backend/"
+cp -R "$TF/dist" "$tmp/dist"
+[ -z "$jobs_src" ] || cp -R "$jobs_src" "$tmp/backend/jobs"
+if [ "$demo" = 1 ]; then
+  # pinned/ came with the rsync; add the breakdown folder of every pinned video that has one.
+  mkdir -p "$tmp/backend/jobs"
+  ids="$("$venv/bin/python" - "$tmp/backend" <<'PY'
+import glob, json, sys
+sys.path.insert(0, sys.argv[1])
+from analyze import job_id_for
+for f in glob.glob(sys.argv[1] + "/pinned/*.json"):
+    for v in json.load(open(f)).get("videos", []):
+        print(job_id_for(v["url"]))
+PY
+)"
+  for src in "$jobs_src" "$TF/backend/jobs" /Users/tommy/Desktop/BuildClub/$TF/backend/jobs ../*/$TF/backend/jobs; do
+    [ -n "$src" ] && [ -d "$src" ] || continue
+    for id in $ids; do
+      [ -f "$src/$id/breakdown.json" ] && [ ! -e "$tmp/backend/jobs/$id" ] && cp -R "$src/$id" "$tmp/backend/jobs/$id"
+    done
+  done
+  echo "demo data: $(ls "$tmp/backend/jobs" | wc -l | tr -d ' ') breakdowns, $(ls "$tmp/backend/pinned" | wc -l | tr -d ' ') pinned searches"
+fi
+rm -f "$tmp/.env" "$tmp/backend/.env"
+
+demo_env=(); [ "$demo" != 1 ] || demo_env=(REMAKE_DEMO=1)
+remotion_env=(); [ -z "${REMOTION_PORT:-}" ] || remotion_env=(REMOTION_PORT="$REMOTION_PORT")
+mock_env=(); [ -z "${MOCK_GEN_DELAY_S:-}" ] || mock_env=(MOCK_GEN_DELAY_S="$MOCK_GEN_DELAY_S")
+# Clean environment, dummy token, zero budgets: any paid call is rejected before it happens.
+cd "$tmp"
+# The backend runs from a copy, so it can't find render/ and node_modules by itself: point it at this checkout.
+clean_env=(env -i HOME="$HOME" PATH="$PATH" REMOTION_APP_DIR="$app_dir"
+  ${demo_env[@]+"${demo_env[@]}"} ${remotion_env[@]+"${remotion_env[@]}"} ${mock_env[@]+"${mock_env[@]}"} APIFY_TOKEN=dummy DAILY_APIFY_USD=0 DAILY_CLAUDE_USD=0 DAILY_JEV_USD=0 DAILY_GEN_IMAGE_USD=0.50 DAILY_GEN_VIDEO_USD=1.00 FAL_KEY="$FAL_KEY" DAILY_GEN_VOICE_USD=0 DAILY_SCRAPECREATORS_CREDITS=0)
+"${clean_env[@]}" "$venv/bin/uvicorn" server:app --app-dir backend --port "$port" >"$tmp/server.log" 2>&1 &
+pid=$!
+echo "temp dir: $tmp"; echo "url:      http://127.0.0.1:$port"; echo "pid:      $pid  (kill $pid to stop)"
+
+for _ in $(seq 1 60); do
+  if out="$(curl -fsS "http://127.0.0.1:$port/api/health" 2>/dev/null)"; then echo "health:   $out"
+    if [ -n "$user" ]; then
+      printf '%s\n' "${user#*:}" | "${clean_env[@]}" "$venv/bin/python" backend/server.py add-user "${user%%:*}" "E2E Tester" "E2E Agency" --password-stdin
+    fi
+    wait "$pid"; exit $?; fi
+  kill -0 "$pid" 2>/dev/null || { echo "error: server exited early:" >&2; tail -20 "$tmp/server.log" >&2; exit 1; }
+  sleep 0.5
+done
+echo "error: /api/health did not answer in 30s" >&2; exit 1

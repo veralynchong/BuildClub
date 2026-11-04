@@ -10,6 +10,8 @@ import {
   pollCut,
   putMusic,
   reviewLine,
+  sendWithLink,
+  NoLinkError,
   sendCutForReview,
 } from '../src/lib/cut.ts'
 
@@ -218,4 +220,19 @@ test('getCut passes the source of the video through', async () => {
   } finally {
     f.restore()
   }
+})
+
+test('sendWithLink turns the link on, then sends', async () => {
+  const calls = []
+  const cut = await sendWithLink('i1', 'c1', { link: async (c) => calls.push(['link', c]), send: async (i) => (calls.push(['send', i]), { status: 'done' }) })
+  assert.deepEqual(calls, [['link', 'c1'], ['send', 'i1']]); assert.equal(cut.status, 'done')
+})
+test('sendWithLink throws NoLinkError and does not send when the link fails', async () => {
+  let sent = false
+  await assert.rejects(sendWithLink('i1', 'c1', { link: async () => { throw new Error('403') }, send: async () => { sent = true; return { status: 'done' } } }), NoLinkError)
+  assert.equal(sent, false)
+})
+test('sendWithLink passes a send error through unchanged', async () => {
+  const boom = new Error('Wait for the cut to finish before sending it.')
+  await assert.rejects(sendWithLink('i1', 'c1', { link: async () => ({}), send: async () => { throw boom } }), (e) => e === boom)
 })

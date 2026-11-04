@@ -151,6 +151,22 @@ export interface Brand {
   color?: string | null
 }
 
+export type KitKind = 'character' | 'product' | 'place' | 'style'
+
+// One thing a client wants to look the same in every video: a person, a product, a place or a look.
+export interface KitItem {
+  id: string
+  kind: KitKind
+  name: string
+  note: string
+  images: string[]
+  updatedAt: number // epoch ms
+}
+
+export interface Kit {
+  items: KitItem[]
+}
+
 export interface Client {
   id: string
   name: string
@@ -166,6 +182,7 @@ export interface Client {
   // Every approval and rejection for this client, oldest first. Optional so older saved clients still load.
   memory?: ClientEvent[]
   brand?: Brand
+  kit?: Kit
 }
 
 export type IdeaStatus = 'saved' | 'waiting' | 'approved' | 'rejected'

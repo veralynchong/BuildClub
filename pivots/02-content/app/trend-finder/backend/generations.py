@@ -7,6 +7,7 @@ import json
 import os
 import queue
 import secrets
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -40,6 +41,8 @@ LOST = "The provider didn't answer in time. It may have charged."
 FILE_LOST = "The model finished but its file couldn't be saved. It may have charged."
 FAILED = "The generation failed. Try again."
 START_FRAME_LOST = "The start frame wasn't made, so the video didn't run."
+BAD_REFS = "The reference images aren't valid."
+PROMPT_TOO_LONG = "The prompt and the kit notes are too long together. Shorten the prompt."
 PENDING = "!pending"  # a chained video's startFrame in validation: the image isn't made yet
 MAX_PROMPT = 4000
 CSP = {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"}
@@ -102,6 +105,11 @@ def validate_models(models: list[dict]) -> list[str]:
             errors.append(f"{mid}: unknown provider {m.get('provider')!r}")
         if m.get("kind") == "video" and "9:16" not in m.get("aspects", []):
             errors.append(f"{mid}: video model without 9:16")
+        ts = m.get("typicalSeconds")
+        if ts is not None and (isinstance(ts, bool) or not isinstance(ts, (int, float)) or ts <= 0):
+            errors.append(f"{mid}: typicalSeconds must be a positive number")
+        if (m.get("price") or {}).get("perRefUsd") is not None:
+            errors.append(f"{mid}: perRefUsd is not supported yet")
     return errors
 
 
@@ -124,10 +132,22 @@ def enqueue(conn, idea_id: str, node_id: str, kind: str, model: str, inputs: dic
     now = int(time.time() * 1000)
     gid = secrets.token_urlsafe(9)
     row = (gid, idea_id, node_id, kind, model, json.dumps(inputs),
-           input_hash(model, inputs.get("prompt"), inputs.get("startFrame"), inputs.get("reference"),
-                      inputs.get("duration")), "queued", est, None, None, None, None, now, None, None)
+           input_hash(model, inputs.get("sentPrompt") or inputs.get("prompt"), inputs.get("startFrame"),
+                      inputs.get("references") or [], inputs.get("duration")), "queued", est, None, None, None, None, now, None, None)
     conn.execute(f"INSERT INTO generations ({COLUMNS}) VALUES ({', '.join('?' * NCOLUMNS)})", row)
     return to_json(row)
+
+
+def stored_inputs(raw: str) -> dict:
+    return read_inputs(json.loads(raw))
+
+
+def read_inputs(inputs: dict) -> dict:
+    """A row's inputs. A row from before references existed has one `reference`: it reads as a list of one."""
+    legacy = inputs.pop("reference", None)
+    if legacy and "references" not in inputs:
+        inputs["references"] = [{"source": "gen", "genId": legacy}]
+    return inputs
 
 
 def to_json(row) -> dict:
@@ -135,7 +155,7 @@ def to_json(row) -> dict:
      created, finished, after) = row
     url = source_url or (f"/api/ideas/{idea_id}/gen/{gid}/file" if file and status == "done" else None)
     return {"id": gid, "ideaId": idea_id, "nodeId": node_id, "kind": kind, "model": model,
-            "inputs": json.loads(inputs), "status": status, "estUsd": est, "actualUsd": actual, "url": url,
+            "inputs": stored_inputs(inputs), "status": status, "estUsd": est, "actualUsd": actual, "url": url,
             "error": err, "createdAt": created, "finishedAt": finished, "after": after}
 
 
@@ -190,8 +210,64 @@ def gen_folder(media: Path, idea_id: str) -> Optional[Path]:
     return folder / "gen" if folder.parent == root else None
 
 
-def input_hash(model: str, prompt: str, start, ref, duration) -> str:
-    text = json.dumps({"model": model, "prompt": prompt, "startFrame": start, "reference": ref,
+def with_prefix(kit, prompt: str, items: list) -> Optional[str]:
+    """The prompt with the kit prefix in front. Too long: cut each note to 60 characters, then drop the notes;
+    None when it still doesn't fit."""
+    for cut in (None, 60, 0):
+        shown = items if cut is None else [(i.model_copy(update={"note": i.note[:cut]}), n) for i, n in items]
+        text = kit.kit_prefix(shown) + prompt
+        if len(text) <= MAX_PROMPT:
+            return text
+    return None
+
+
+KIT_MAX_EDGE = 1536  # long edge of a kit image sent to a provider: phone photos would blow the request size
+
+
+def _write_shrunk(source: Path, part: Path) -> None:
+    """Write `source` to `part`, shrunk to KIT_MAX_EDGE on the long edge (never enlarged, format and alpha kept).
+    A file Pillow can't read, or one that is small enough already, is copied byte for byte. Pillow is imported
+    here, not at module load, so a venv without it still starts and just copies as is."""
+    try:
+        from PIL import Image, ImageOps, UnidentifiedImageError
+    except ImportError:
+        shutil.copyfile(source, part)
+        return
+    try:
+        with Image.open(source) as im:
+            fmt = im.format
+            if max(im.size) <= KIT_MAX_EDGE or fmt not in ("JPEG", "PNG", "WEBP"):
+                raise ValueError("copy as is")
+            im = ImageOps.exif_transpose(im)  # the shrunk copy drops EXIF, so bake the orientation in first
+            im.thumbnail((KIT_MAX_EDGE, KIT_MAX_EDGE))
+            if fmt == "JPEG" and im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            im.save(part, format=fmt, **({"quality": 90} if fmt != "PNG" else {}))
+    except (ValueError, UnidentifiedImageError, Image.DecompressionBombError):
+        shutil.copyfile(source, part)
+
+
+def copy_kit_images(kit, media: Path, client_id: str, idea_id: str, stored: list) -> None:
+    """Copy the kit images a generation uses into the plan's gen folder, so deleting the kit item later leaves
+    this generation (and a re-run of it) its own files. Raises OSError when a file is gone."""
+    source, folder = kit.kit_folder(media, client_id), gen_folder(media, idea_id)
+    for ref in stored:
+        if ref["source"] != "kit" or "file" not in ref:  # a text-only kit ref has no file
+            continue
+        folder.mkdir(parents=True, exist_ok=True)
+        part = folder / f".{ref['file']}.{secrets.token_hex(4)}.part"  # unique: copies may run at once
+        try:
+            _write_shrunk(source / ref["image"], part)
+            os.replace(part, folder / ref["file"])
+        finally:
+            part.unlink(missing_ok=True)
+
+
+def input_hash(model: str, prompt: str, start, refs: list, duration) -> str:
+    """`refs` are sorted first, so the order they were picked in doesn't change the hash."""
+    keys = ("source", "genId", "itemId", "image")
+    ordered = sorted(json.dumps({k: r[k] for k in keys if k in r}, sort_keys=True) for r in refs or [])
+    text = json.dumps({"model": model, "prompt": prompt, "startFrame": start, "references": ordered,
                        "duration": duration}, sort_keys=True)
     return hashlib.sha256(text.encode()).hexdigest()
 
@@ -271,6 +347,23 @@ class GenJobs:
         if self._finish(gen_id, "failed", error=message) and refund:
             self.refund(kind, est)
 
+    def _ref_paths(self, folder: Path, idea_id: str, inputs: dict) -> list[Path]:
+        """The files of a row's reference images, in order. A kit image was copied into the gen folder."""
+        paths = []
+        for ref in read_inputs(dict(inputs)).get("references") or []:
+            if ref.get("source") == "kit" and "image" not in ref:
+                continue  # text-only: it only adds a line to the prompt
+            if ref.get("source") == "kit":
+                name = ref.get("file") or ""
+                path = folder / name if name and Path(name).name == name else None
+                if path is None or not path.is_file():
+                    raise cutting.CutError("An input image is missing.")
+            else:
+                path = self._input_path(folder, idea_id, ref.get("genId"))
+            if path is not None:
+                paths.append(path)
+        return paths
+
     def _input_path(self, folder: Path, idea_id: str, ref_id) -> Optional[Path]:
         if not ref_id:
             return None
@@ -321,14 +414,14 @@ class GenJobs:
             folder = gen_folder(self._media(), idea_id)
             inputs = json.loads(raw)
             if resumed:  # polling needs only the request id, not the input files
-                job = gen_providers.Job(model, inputs.get("prompt") or "", None, [], inputs.get("duration"),
-                                        scratch=folder)
+                job = gen_providers.Job(model, inputs.get("sentPrompt") or inputs.get("prompt") or "", None, [],
+                                        inputs.get("duration"), scratch=folder)
             else:
                 if folder is None:
                     raise cutting.CutError("That plan doesn't exist.")
-                ref = self._input_path(folder, idea_id, inputs.get("reference"))
+                refs = self._ref_paths(folder, idea_id, inputs)
                 start = self._input_path(folder, idea_id, inputs.get("startFrame"))
-                job = gen_providers.Job(model, inputs.get("prompt") or "", start, [ref] if ref else [],
+                job = gen_providers.Job(model, inputs.get("sentPrompt") or inputs.get("prompt") or "", start, refs,
                                         inputs.get("duration"), scratch=folder)
             adapter = gen_providers.adapter_for(model["provider"])
             if not resumed:
@@ -408,6 +501,8 @@ def error(status: int, message: str) -> JSONResponse:
 def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd: None, refund=lambda kind, usd: None,
                 remaining=lambda: {"image": {"spent": 0, "cap": 0}, "video": {"spent": 0, "cap": 0},
                                    "voice": {"spent": 0, "cap": 0}}) -> APIRouter:
+    import kit  # here, not at the top: kit imports this module
+
     router = APIRouter()
     router.budget, router.refund, router.remaining = budget, refund, remaining  # used by the generate routes
     router.jobs = GenJobs(db, media_dir, refund)  # server.py keeps it as gen_jobs
@@ -426,9 +521,36 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
     def models():
         return {"models": menu_models()}
 
-    def check(idea_id: str, nodes: list, node_id, model_id, prompt, start, ref, duration, pending_start=False,
+    def check_ref(idea_id: str, ref):
+        """The error for one reference image, or None when it can be used."""
+        if not isinstance(ref, dict):
+            return error(422, BAD_REFS)
+        if ref.get("source") == "gen":
+            gen_id = ref.get("genId")
+            source = one(idea_id, gen_id) if isinstance(gen_id, str) else None
+            if source is None or source[3] != "image" or source[7] != "done":  # kind, status columns
+                return error(422, "An input image must be a finished image generated for this plan.")
+            return None
+        if ref.get("source") != "kit":
+            return error(422, BAD_REFS)
+        client_id = (find_idea(idea_id) or {}).get("clientId")
+        item_id, image = ref.get("itemId"), ref.get("image")
+        item = kit.find_item(load, client_id, item_id) if client_id and isinstance(item_id, str) else None
+        if item is not None and "image" not in ref:  # text-only: for an item with no images
+            return error(422, "A kit item with images must send an image.") if item.images else None
+        if item is None or not isinstance(image, str) or image not in item.images:
+            return error(422, "That kit image isn't in this plan's client kit.")
+        folder = kit.kit_folder(media_dir(), client_id)
+        if folder is None or not (folder / image).is_file():
+            return error(422, "An input image is missing.")
+        return None
+
+    def check(idea_id: str, nodes: list, node_id, model_id, prompt, start, refs, duration, pending_start=False,
               voice=False):
-        """The rules every generation follows. Returns (model, duration, None), or (None, None, the error)."""
+        """The rules every generation follows. `refs` is a list of references (plan generations or kit images), or
+        None. Returns (model, duration, None), or (None, None, the error)."""
+        refs = refs or []
+        files = [r for r in refs if not (isinstance(r, dict) and r.get("source") == "kit" and "image" not in r)]
         if not isinstance(node_id, str) or not node_id or not isinstance(prompt, str) or len(prompt) > MAX_PROMPT:
             return None, None, error(422, "Send the node, the model and a prompt.")
         model = next((m for m in load_models() if m["id"] == model_id), None)
@@ -452,22 +574,28 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                 return None, None, error(422, "That duration isn't available for this model.")
         elif model["kind"] == "video":
             duration = model["durations"][0]
-        for ref_id in (start, ref):
-            if ref_id is None:
-                continue
-            source = one(idea_id, ref_id) if isinstance(ref_id, str) else None
+        if start is not None:
+            source = one(idea_id, start) if isinstance(start, str) else None
             if source is None or source[3] != "image" or source[7] != "done":  # kind, status columns
                 return None, None, error(422, "An input image must be a finished image generated for this plan.")
+        for ref in refs:
+            bad = check_ref(idea_id, ref)
+            if bad is not None:
+                return None, None, bad
         if pending_start:  # a chained video: its start frame is the image being made now
             start = PENDING
         if (model.get("inputs") or {}).get("text") == "required" and not prompt.strip():
             return None, None, error(422, "This model needs a prompt.")
-        for field, given, what in (("startFrame", start, "a start frame"), ("reference", ref, "a reference image")):
+        for field, given, what in (("startFrame", start is not None, "a start frame"),
+                                   ("reference", bool(files), "a reference image")):
             rule = (model.get("inputs") or {}).get(field, "none")
-            if rule == "required" and given is None:
+            if rule == "required" and not given:
                 return None, None, error(422, f"This model needs {what}.")
-            if rule == "none" and given is not None:
+            if rule == "none" and given:
                 return None, None, error(422, f"This model doesn't take {what}.")
+        cap = model.get("maxRefs", 1)  # a model that doesn't say takes one
+        if len(files) > cap:  # text-only kit refs are not images
+            return None, None, error(422, f"The reference images are over this model's limit of {cap}.")
         return model, duration, None
 
     router.check = check
@@ -476,6 +604,39 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         with db() as conn:
             canvas_row = conn.execute("SELECT doc FROM canvases WHERE idea_id = ?", (idea_id,)).fetchone()
         return json.loads(canvas_row[0]) if canvas_row else {"nodes": [], "edges": []}
+
+    def prepare_refs(found: dict, idea_id: str, prompt: str, refs, copy: bool = True):
+        """What a generation stores for its references: (the inputs `references`, `kitStamp` and `sentPrompt`, None),
+        or (None, the error). Everything that can fail with 422 happens here, before any money is spent. `copy` false
+        (a quote) checks the same things but leaves the kit files where they are."""
+        stored, stamp, used, n = [], {}, {}, 0
+        for ref in refs or []:
+            if ref["source"] == "gen":
+                n += 1
+                stored.append({"source": "gen", "genId": ref["genId"]})
+                continue
+            item = kit.find_item(load, found.get("clientId"), ref["itemId"])
+            if item is not None and "image" not in ref and not item.images:
+                stored.append({"source": "kit", "itemId": item.id, "name": item.name, "kind": item.kind})
+                stamp[item.id] = item.updatedAt
+                used.setdefault(item.id, (item, []))
+                continue
+            if item is None or ref.get("image") not in item.images:  # removed since check ran
+                return None, error(422, "That kit image isn't in this plan's client kit.")
+            n += 1
+            stored.append({"source": "kit", "itemId": item.id, "image": ref["image"], "name": item.name,
+                           "kind": item.kind, "file": f"kit-{ref['image']}"})
+            stamp[item.id] = item.updatedAt
+            used.setdefault(item.id, (item, []))[1].append(n)
+        sent = with_prefix(kit, prompt, list(used.values()))
+        if sent is None:
+            return None, error(422, PROMPT_TOO_LONG)
+        if copy:
+            try:
+                copy_kit_images(kit, media_dir(), found["clientId"], idea_id, stored)
+            except OSError:
+                return None, error(422, "An input image is missing.")
+        return {"references": stored, "kitStamp": stamp, "sentPrompt": sent}, None
 
     @router.post("/api/ideas/{idea_id}/gen")
     async def create(idea_id: str, request: Request):
@@ -491,16 +652,24 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         if found["status"] != "approved":
             return error(409, "Only an approved plan can generate.")
         node_id, prompt = body.get("nodeId"), body.get("prompt", "")
-        start, ref, duration = body.get("startFrame"), body.get("reference"), body.get("duration")
+        start, duration = body.get("startFrame"), body.get("duration")
+        refs = body.get("references")
+        if refs is None and body.get("reference") is not None:  # the old single-image field
+            refs = [{"source": "gen", "genId": body["reference"]}]
+        if refs is not None and not isinstance(refs, list):
+            return error(422, BAD_REFS)
         model, duration, bad = check(idea_id, canvas_doc(idea_id)["nodes"], node_id, body.get("model"), prompt,
-                                     start, ref, duration)
+                                     start, refs, duration)
+        if bad is not None:
+            return bad
+        part, bad = prepare_refs(found, idea_id, prompt, refs)
         if bad is not None:
             return bad
         est = estimate_usd(model, duration)
         blocked = router.budget(model["kind"], est)  # spends the estimate; a failed job gives it back
         if blocked is not None:
             return blocked
-        inputs = {"prompt": prompt, "startFrame": start, "reference": ref, "duration": duration}
+        inputs = {"prompt": prompt, "startFrame": start, "duration": duration, **part}
         try:
             with db() as conn:
                 out = enqueue(conn, idea_id, node_id, model["kind"], model["id"], inputs, est)
@@ -530,17 +699,20 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return error(409, "Only an approved plan can generate.")
         if body.get("reference") is not None or body.get("videoReference") is not None:
             return error(422, "Run the whole shot doesn't send reference images yet. Use Generate on each node.")
+        refs = body.get("references")  # for the storyboard image only; the video starts from that image
+        if refs is not None and not isinstance(refs, list):
+            return error(422, BAD_REFS)
         prompt, video_prompt = body.get("prompt", ""), body.get("videoPrompt")
         if not isinstance(video_prompt, str) or not video_prompt.strip():
             video_prompt = prompt
         image_node, video_node = body.get("imageNodeId"), body.get("videoNodeId")
         doc = canvas_doc(idea_id)
         image_model, _, bad = check(idea_id, doc["nodes"], image_node, body.get("imageModel"), prompt,
-                                    None, None, None)
+                                    None, refs, None)
         if bad is not None:
             return bad
         video_model, duration, bad = check(idea_id, doc["nodes"], video_node, body.get("videoModel"), video_prompt,
-                                           None, None, body.get("duration"), pending_start=True)
+                                           None, [], body.get("duration"), pending_start=True)
         if bad is not None:
             return bad
         if image_model["kind"] != "image" or video_model["kind"] != "video":
@@ -551,6 +723,9 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         if not any(e.get("source") == image_node and e.get("target") == video_node
                    and e.get("targetHandle") == "in:start" for e in doc["edges"]):
             return error(422, "Connect the storyboard to the video's start frame first.")
+        part, bad = prepare_refs(found, idea_id, prompt, refs, copy=False)  # copies come after the budget checks
+        if bad is not None:
+            return bad
         image_usd, video_usd = estimate_usd(image_model, None), estimate_usd(video_model, duration)
         remaining = {"image": left("image"), "video": left("video")}
         if body.get("confirm") is not True:
@@ -561,6 +736,10 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return error(429, f"Today's budget has US${remaining['image']:.2f} left for images and "
                               f"US${remaining['video']:.2f} for videos, and this shot needs US${image_usd:.2f} and "
                               f"US${video_usd:.2f}. Nothing was started. The budget resets at midnight.")
+        try:  # the last thing that can fail with 422, so it runs before any money is spent
+            copy_kit_images(kit, media_dir(), found["clientId"], idea_id, part["references"])
+        except OSError:
+            return error(422, "An input image is missing.")
         blocked = router.budget("image", image_usd)
         if blocked is not None:
             return blocked
@@ -570,13 +749,13 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return blocked
         now = int(time.time() * 1000)
         image_id, video_id = secrets.token_urlsafe(9), secrets.token_urlsafe(9)
-        image_inputs = {"prompt": prompt, "startFrame": None, "reference": None, "duration": None}
-        video_inputs = {"prompt": video_prompt, "startFrame": image_id, "reference": None, "duration": duration}
+        image_inputs = {"prompt": prompt, "startFrame": None, "duration": None, **part}
+        video_inputs = {"prompt": video_prompt, "startFrame": image_id, "references": [], "duration": duration}
         rows = [(image_id, idea_id, image_node, "image", image_model["id"], json.dumps(image_inputs),
-                 input_hash(image_model["id"], prompt, None, None, None), "queued", image_usd,
+                 input_hash(image_model["id"], part["sentPrompt"], None, part["references"], None), "queued", image_usd,
                  None, None, None, None, now, None, None),
                 (video_id, idea_id, video_node, "video", video_model["id"], json.dumps(video_inputs),
-                 input_hash(video_model["id"], video_prompt, image_id, None, duration), "waiting", video_usd,
+                 input_hash(video_model["id"], video_prompt, image_id, [], duration), "waiting", video_usd,
                  None, None, None, None, now, None, image_id)]
         try:
             with db() as conn:

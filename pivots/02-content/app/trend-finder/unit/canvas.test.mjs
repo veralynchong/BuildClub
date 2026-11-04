@@ -1,7 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { canConnect, edgeLabel, outMedia } from '../src/lib/canvas/ports.ts'
-import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, roomBelow, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy } from '../src/lib/canvas/graph.ts'
+import { canConnect, outMedia } from '../src/lib/canvas/ports.ts'
+import { addNode, downstream, markStale, versionsOf, selectedGen, pendingGen, genRequest, missingInput, primaryFrames, failedGen, freeSpot, staleIds, finishedWhileAway, genStarted, genFinished, chainPair, priceOf, budgetLeft, isRetired, chainBusy, genView, priceLabel, shotTextSource, reuseSettings } from '../src/lib/canvas/graph.ts'
+import { t } from '../src/lib/i18n.ts'
+import { slotInFrame } from '../src/lib/canvas/frames.ts'
 import { putCanvas, getCanvas, NoShots, StaleCanvas, pollGen, getBudget, quoteChain, startChain } from '../src/lib/canvas/api.ts'
 
 const models = [
@@ -34,9 +36,6 @@ test('image into a video start frame is allowed and labelled', () => {
   const doc = docWith()
   doc.edges = doc.edges.filter((e) => e.target !== 'n_vid')
   assert.deepEqual(canConnect(doc, { source: 'n_sb_s1', target: 'n_vid', targetHandle: 'in:start' }, models), { ok: true })
-  assert.equal(edgeLabel({ targetHandle: 'in:start' }), 'canvas.edge.start')
-  assert.equal(edgeLabel({ targetHandle: 'in:ref' }), 'canvas.edge.ref')
-  assert.equal(edgeLabel({ targetHandle: 'in:text' }), null)
 })
 
 test('a port takes one line, no self or cycle, empty upload blocked', () => {
@@ -101,9 +100,9 @@ const shots = [{ id: 's1', time: '0-3s', shot: 'Wide shot of the cafe', line: 'W
 
 test('genRequest prefers the node prompt, then the shot line', () => {
   const doc = docWith()
-  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []), { prompt: 'Welcome in' })
+  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []), { prompt: 'Welcome in', references: [] })
   doc.nodes.find((n) => n.id === 'n_sb_s1').data.prompt = 'Neon cafe'
-  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []), { prompt: 'Neon cafe' })
+  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []), { prompt: 'Neon cafe', references: [] })
   const noLine = [{ ...shots[0], line: undefined }]
   const doc2 = docWith()
   assert.equal(genRequest(doc2, 'n_sb_s1', noLine, []).prompt, 'Wide shot of the cafe')
@@ -115,12 +114,13 @@ test('genRequest follows prompt nodes and picks start frame from the selected ve
     edges: [edge('n_p2', 'n_p1'), edge('n_p1', 'n_vid')],
   })
   const gens = [gen('g1', 'n_sb_s1', 'done', 1)]
-  assert.deepEqual(genRequest(doc, 'n_vid', shots, gens), { prompt: 'Slow zoom', startFrame: 'g1' })
+  assert.deepEqual(genRequest(doc, 'n_vid', shots, gens), { prompt: 'Slow zoom', startFrame: 'g1', references: [] })
 })
 
 test('missingInput says what is needed', () => {
   const doc = docWith()
   doc.edges = []
+  doc.nodes.find((n) => n.id === 'n_sb_s1').data.shotTextOff = true
   assert.equal(missingInput(doc, 'n_sb_s1', models[0], shots, []), 'canvas.gen.needText')
   const need = { ...models[1], inputs: { text: 'optional', startFrame: 'required' } }
   assert.equal(missingInput(doc, 'n_vid', need, shots, []), 'canvas.gen.needStart')
@@ -186,11 +186,12 @@ test('pollGen resolves on done and null on abort', async () => {
 import { toFlow, fromFlow } from '../src/lib/canvas/flow.ts'
 
 test('toFlow / fromFlow keep the saved node data and only take positions and viewport from the screen', () => {
+  // n1 sits where its frame's top-left is (sb1 at 300,0 minus FRAME_PAD and FRAME_HEAD), so the doc round-trips as is
   const doc = {
     nodes: [
       { id: 'n2', type: 'shot', shotId: 's2', position: { x: 0, y: 300 }, data: {} },
-      { id: 'n1', type: 'shot', shotId: 's1', position: { x: 0, y: 0 }, data: { removed: true } },
-      { id: 'sb1', type: 'storyboard', position: { x: 300, y: 0 }, data: { primary: true } },
+      { id: 'n1', type: 'shot', shotId: 's1', position: { x: 284, y: -64 }, data: { removed: true } },
+      { id: 'sb1', type: 'storyboard', shotId: 's1', position: { x: 300, y: 0 }, data: { primary: true } },
     ],
     edges: [{ id: 'e1', source: 'n1', sourceHandle: 'out:text', target: 'sb1', targetHandle: 'in:text' }],
     viewport: { x: 1, y: 2, zoom: 1 },
@@ -200,22 +201,15 @@ test('toFlow / fromFlow keep the saved node data and only take positions and vie
   assert.deepEqual(nodes.map((n) => n.deletable), [false, false, true])
   assert.equal(edges[0].sourceHandle, 'out:text')
   assert.equal(edges[0].targetHandle, 'in:text')
+  assert.equal(nodes[2].parentId, 'n1')
+  assert.deepEqual(nodes[2].position, { x: 16, y: 64 }) // relative to its frame on screen
   assert.deepEqual(fromFlow(nodes, edges, doc.viewport), doc)
-  nodes[2].position = { x: 310.4, y: 5.6 }
+  nodes[2].position = { x: 26.4, y: 69.6 }
   const moved = fromFlow(nodes, edges, { x: 0.4, y: 0, zoom: 1.23456 })
   assert.deepEqual(moved.nodes[2].position, { x: 310, y: 6 })
   assert.deepEqual(moved.nodes[2].data, { primary: true })
   assert.deepEqual(moved.viewport, { x: 0, y: 0, zoom: 1.235 })
   assert.equal(fromFlow(nodes, edges, undefined).viewport, undefined)
-})
-
-import { isDefaultViewport } from '../src/lib/canvas/flow.ts'
-
-test('the backend\'s starting view counts as not yet set', () => {
-  assert.equal(isDefaultViewport(undefined), true)
-  assert.equal(isDefaultViewport({ x: 0, y: 0, zoom: 1 }), true)
-  assert.equal(isDefaultViewport({ x: 0, y: 0, zoom: 1.2 }), false)
-  assert.equal(isDefaultViewport({ x: -40, y: 0, zoom: 1 }), false)
 })
 
 test('addNode gives every node a new id and leaves the input doc alone', () => {
@@ -242,26 +236,15 @@ test('addNode starts each kind with its own data', () => {
   assert.equal(pr.data.text, '')
 })
 
-test('addNode for a shot links the shot to the new node, and footage needs a shot', () => {
+test('addNode for a shot adds no text line, and footage needs a shot', () => {
   assert.throws(() => addNode(docWith(), 'footage', { x: 0, y: 0 }), /shot/i)
   assert.throws(() => addNode(docWith(), 'footage', { x: 0, y: 0 }, 'nope'), /shot/i)
   const d = addNode(docWith(), 'footage', { x: 700, y: 0 }, 's1')
   const ft = d.nodes[d.nodes.length - 1]
   assert.equal(ft.shotId, 's1')
-  const line = d.edges[d.edges.length - 1]
-  assert.deepEqual([line.source, line.sourceHandle, line.target, line.targetHandle], ['n_shot_s1', 'out', ft.id, 'in:text'])
-  const u = addNode(docWith(), 'upload', { x: 0, y: 0 }, 's1') // upload has no text port: no line
+  assert.equal(d.edges.length, docWith().edges.length)
+  const u = addNode(docWith(), 'upload', { x: 0, y: 0 }, 's1')
   assert.equal(u.edges.length, docWith().edges.length)
-})
-
-test('addNode with a shot moves right to a free spot on the shot row', () => {
-  const doc = docWith()
-  doc.nodes[0].position = { x: 0, y: 100 }
-  doc.nodes[1].position = { x: 360, y: 100 }
-  const d = addNode(doc, 'video', { x: 360, y: 100 }, 's1')
-  const v = d.nodes[d.nodes.length - 1]
-  assert.equal(v.position.y, 100)
-  assert.ok(v.position.x >= 720)
 })
 
 test('failedGen is the newest version only when it failed', () => {
@@ -270,14 +253,6 @@ test('failedGen is the newest version only when it failed', () => {
   assert.equal(failedGen('n_sb_s1', [...g, gen('c', 'n_sb_s1', 'done', 3)]), null)
   assert.equal(failedGen('n_sb_s1', [...g, gen('d', 'n_sb_s1', 'running', 3)]), null)
   assert.equal(failedGen('n_other', g), null)
-})
-
-test('roomBelow keeps the spot when it is empty and steps down past nodes in the way', () => {
-  const at = (x, y) => ({ ...node(`n_${x}_${y}`, 'video'), position: { x, y } })
-  assert.deepEqual(roomBelow(docWith({ nodes: [at(900, 0)] }), { x: 360, y: 0 }), { x: 360, y: 0 })
-  assert.deepEqual(roomBelow(docWith({ nodes: [at(360, 0)] }), { x: 360, y: 0 }), { x: 360, y: 280 })
-  const stacked = docWith({ nodes: [at(360, 0), at(380, 280), at(360, 560)] })
-  assert.deepEqual(roomBelow(stacked, { x: 360, y: 0 }), { x: 360, y: 840 })
 })
 
 test('freeSpot moves a new node off the ones already there', () => {
@@ -469,4 +444,106 @@ test('chainBusy: true when either end of the chain is queued, waiting or running
   assert.equal(chainBusy(doc, 'n_vid', [gen('a', 'n_sb_s1', 'queued', 1)]), true)
   assert.equal(chainBusy(doc, 'n_vid', [gen('a', 'n_sb_s1', 'done', 1), gen('b', 'n_vid', 'failed', 2)]), false)
   assert.equal(chainBusy(docWith(), 'n_vid2', []), false) // no chain
+})
+
+test('canConnect in:ref allows up to maxRefs', () => {
+  const model = { ...models[0], maxRefs: 2 }
+  const doc = docWith({ nodes: [node('n_a', 'upload', { media: 'image' }), node('n_b', 'upload', { media: 'image' }), node('n_c', 'upload', { media: 'image' })] })
+  const c = (source, d = doc) => canConnect(d, { source, target: 'n_sb_s1', targetHandle: 'in:ref' }, [model])
+  assert.deepEqual(c('n_a'), { ok: true })
+  const one = { ...doc, edges: [...doc.edges, edge('n_a', 'n_sb_s1', 'in:ref')] }
+  assert.deepEqual(c('n_b', one), { ok: true })
+  const two = { ...one, edges: [...one.edges, edge('n_b', 'n_sb_s1', 'in:ref')] }
+  assert.deepEqual(c('n_c', two), { ok: false, reason: 'canvas.conn.full', vars: { max: 2 } })
+  // a model without maxRefs counts as 1
+  assert.equal(canConnect(one, { source: 'n_b', target: 'n_sb_s1', targetHandle: 'in:ref' }, models).reason, 'canvas.conn.full')
+})
+
+test('canConnect kit only to in:kit', () => {
+  const doc = docWith({ nodes: [node('n_kit', 'kit', { kitItems: [] })] })
+  assert.equal(outMedia(doc.nodes.find((n) => n.id === 'n_kit')), 'kit')
+  const c = (target, targetHandle) => canConnect(doc, { source: 'n_kit', target, targetHandle }, models)
+  assert.deepEqual(c('n_sb_s1', 'in:kit'), { ok: true })
+  assert.equal(c('n_sb_s1', 'in:ref').reason, 'canvas.conn.media')
+  assert.equal(c('n_vid', 'in:ref').reason, 'canvas.conn.media')
+  assert.equal(c('n_vid', 'in:kit').reason, 'canvas.conn.media')
+  assert.equal(canConnect(doc, { source: 'n_sb_s1', target: 'n_sb_s1', targetHandle: 'in:kit' }, models).ok, false)
+})
+
+test('genRequest returns references', () => {
+  const doc = docWith({ nodes: [node('n_up', 'upload', { media: 'image' })], edges: [edge('n_up', 'n_sb_s1', 'in:ref')] })
+  const gens = [gen('g9', 'n_up', 'done', 1)]
+  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, gens).references, [{ source: 'gen', genId: 'g9' }])
+  assert.deepEqual(genRequest(doc, 'n_sb_s1', shots, []).references, [])
+})
+
+const migrated = { ...docWith(), edges: docWith().edges.filter((e) => e.source !== 'n_shot_s1') }
+
+test('genRequest uses the shot text with no text line, and the own prompt over it', () => {
+  assert.equal(genRequest(migrated, 'n_sb_s1', shots, []).prompt, 'Welcome in')
+  const own = structuredClone(migrated); own.nodes[1].data.prompt = 'Mine'
+  assert.equal(genRequest(own, 'n_sb_s1', shots, []).prompt, 'Mine')
+  const off = structuredClone(migrated); off.nodes[1].data.shotTextOff = true
+  assert.equal(genRequest(off, 'n_sb_s1', shots, []).prompt, '')
+  assert.equal(genRequest(migrated, 'n_sb_s1', [{ ...shots[0], line: undefined }], []).prompt, 'Wide shot of the cafe')
+})
+test('a Prompt node line replaces the shot text', () => {
+  const d = { ...migrated, nodes: [...migrated.nodes, node('n_p', 'prompt', { text: 'From prompt' })], edges: [...migrated.edges, edge('n_p', 'n_sb_s1')] }
+  assert.equal(genRequest(d, 'n_sb_s1', shots, []).prompt, 'From prompt')
+})
+test('free nodes (no shotId) get no shot text', () => {
+  assert.equal(genRequest(migrated, 'n_vid', shots, []).prompt, '')
+  assert.equal(shotTextSource(migrated, 'n_vid', shots).from, 'none')
+})
+test('shotTextSource says where the text comes from', () => {
+  assert.deepEqual(shotTextSource(migrated, 'n_sb_s1', shots), { text: 'Welcome in', from: 'shot', shotNumber: 1 })
+  const own = structuredClone(migrated); own.nodes[1].data.prompt = 'Mine'
+  assert.deepEqual(shotTextSource(own, 'n_sb_s1', shots), { text: 'Mine', from: 'own' })
+  const d = { ...migrated, nodes: [...migrated.nodes, node('n_p', 'prompt', { text: 'P' })], edges: [...migrated.edges, edge('n_p', 'n_vid')] }
+  assert.deepEqual(shotTextSource(d, 'n_vid', shots), { text: 'P', from: 'prompt' })
+  assert.deepEqual(shotTextSource(migrated, 'n_vid2', shots), { text: '', from: 'none' })
+})
+test('addNode in a frame adds no text line and lands right of the last member', () => {
+  const d = addNode(migrated, 'video', { x: 9999, y: 9999 }, 's1')
+  const v = d.nodes[d.nodes.length - 1]
+  assert.equal(v.shotId, 's1')
+  assert.equal(d.edges.length, migrated.edges.length)
+  assert.deepEqual(v.position, slotInFrame(migrated, 'n_shot_s1'))
+  assert.throws(() => addNode(migrated, 'footage', { x: 0, y: 0 }, 'nope'), /shot/i)
+})
+test('reuseSettings copies model, prompt and duration', () => {
+  assert.deepEqual(reuseSettings({ model: 'mock-video', inputs: { prompt: 'move', duration: 4 } }), { model: 'mock-video', prompt: 'move', duration: 4 })
+  assert.deepEqual(reuseSettings({ model: 'mock-image', inputs: { duration: null } }), { model: 'mock-image', prompt: '' })
+})
+
+test('genView: normal model can generate with its price; retired or keyless cannot; a missing input blocks', () => {
+  const list = [
+    { id: 'img', kind: 'image', available: true, price: { per: 'image', usd: 0.04 } },
+    { id: 'nokey', kind: 'image', available: false, price: { per: 'image', usd: 0.04 } },
+    { id: 'vid', kind: 'video', available: true, price: { per: 'second', usd: 0.1 }, durations: [5, 10] },
+  ]
+  const budget = { image: { cap: 1, spent: 0.5 }, video: { cap: 2, spent: 0 } }
+  const node = (type, data) => ({ id: 'n', type, shotId: 's1', position: { x: 0, y: 0 }, data })
+  const ok = genView(node('storyboard', { model: 'img' }), list, budget, null)
+  assert.equal(ok.canGenerate, true)
+  assert.equal(ok.usd, 0.04)
+  assert.equal(ok.left, 0.5)
+  assert.equal(ok.kind, 'image')
+  const retired = genView(node('storyboard', { model: 'gone' }), list, budget, null)
+  assert.equal(retired.retired, true)
+  assert.equal(retired.model, undefined)
+  assert.equal(retired.canGenerate, false)
+  assert.equal(genView(node('storyboard', { model: 'nokey' }), list, budget, null).canGenerate, false)
+  assert.equal(genView(node('storyboard', { model: 'img' }), list, budget, 'canvas.gen.needsKey').canGenerate, false)
+  const v = genView(node('video', { model: 'vid', duration: 10 }), list, null, null)
+  assert.equal(v.seconds, 10)
+  assert.equal(v.usd, 1)
+  assert.equal(v.left, null)
+  assert.equal(genView(node('video', { model: 'vid', duration: 7 }), list, null, null).seconds, 5)
+})
+
+test('priceLabel: free for a zero price, otherwise the cost to two decimals', () => {
+  assert.equal(priceLabel({ price: { per: 'image', usd: 0 } }, undefined), t('canvas.gen.free'))
+  assert.equal(priceLabel({ price: { per: 'image', usd: 0.04 } }, undefined), t('canvas.gen.cost', { usd: '0.04' }))
+  assert.equal(priceLabel({ price: { per: 'second', usd: 0.1 }, durations: [5] }, 5), t('canvas.gen.cost', { usd: '0.50' }))
 })

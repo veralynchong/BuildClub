@@ -72,6 +72,78 @@ export function insertClip(p: EditProject, src: ClipSource, duration: number, in
   return withClips(p, [...p.clips.slice(0, at), clip, ...p.clips.slice(at)])
 }
 
+// One clip per shot (spec 7.1). Puts `src` (whole, from 0) as its shot's clip: it replaces the shot's clip in place, or goes
+// after the clips of earlier shots. A source without a shot of `shotOrder`, or one that does not fit in the 180 s, leaves
+// the project alone. The shot's pin follows the source.
+export function placeShotClip(p: EditProject, src: ClipSource, duration: number, shotOrder: string[], id: string): EditProject {
+  const rank = src.shotId ? shotOrder.indexOf(src.shotId) : -1
+  if (rank < 0) return p
+  const len = Math.min(floorFrames(duration), MAX_F)
+  const mine = p.clips.filter((c) => c.source.shotId === src.shotId)
+  const room = MAX_F - (totalFrames(p) - mine.reduce((sum, c) => sum + frames(clipLength(c)), 0))
+  if (len < MIN_F || len > room) return p
+  const clip: Clip = { id, source: src, in: 0, out: secs(len), volume: 1, muted: false }
+  const at = p.clips.findIndex((c) => c.source.shotId === src.shotId)
+  let clips: Clip[]
+  if (at >= 0) {
+    clips = p.clips.flatMap((c, k) => (k === at ? [clip] : c.source.shotId === src.shotId ? [] : [c]))
+  } else {
+    let after = -1
+    p.clips.forEach((c, k) => {
+      const r = c.source.shotId ? shotOrder.indexOf(c.source.shotId) : -1
+      if (r >= 0 && r < rank) after = k
+    })
+    clips = [...p.clips.slice(0, after + 1), clip, ...p.clips.slice(after + 1)]
+  }
+  return { ...p, clips, primaries: { ...p.primaries, [src.shotId as string]: src } }
+}
+
+// Old edits may hold several clips of one shot: keep the one that matches the shot's pin, else its first, plus every
+// other piece of that same source (Split makes those). Clips of another source of the shot go; clips without a shot
+// stay. `removed` counts the clips dropped.
+export function oneClipPerShot(p: EditProject): { project: EditProject; removed: number } {
+  const keep = new Map<string, ClipSource>()
+  for (const c of p.clips) {
+    const sid = c.source.shotId
+    if (!sid) continue
+    const pin = p.primaries[sid]
+    const cur = keep.get(sid)
+    const isPin = !!pin && pin.kind === c.source.kind && pin.id === c.source.id
+    const curIsPin = !!cur && !!pin && pin.kind === cur.kind && pin.id === cur.id
+    if (!cur || (isPin && !curIsPin)) keep.set(sid, c.source)
+  }
+  const clips = p.clips.filter((c) => {
+    const k = c.source.shotId ? keep.get(c.source.shotId) : undefined
+    return !k || (k.kind === c.source.kind && k.id === c.source.id)
+  })
+  return clips.length === p.clips.length ? { project: p, removed: 0 } : { project: { ...p, clips }, removed: p.clips.length - clips.length }
+}
+
+// The server lists a generation with its node only: its shot is that node's shot on the canvas. Takes keep their own.
+export function sourcesWithShots(sources: SourceInfo[], doc: CanvasDoc): SourceInfo[] {
+  return sources.map((s) => {
+    if (s.shotId || !s.nodeId) return s
+    const shotId = doc.nodes.find((n) => n.id === s.nodeId)?.shotId
+    return shotId ? { ...s, shotId } : s
+  })
+}
+
+// Whether `src` (same kind and id) is one of the clips, and whether a shot has a clip.
+export function isOnTimeline(p: EditProject | null, src: Pick<ClipSource, 'kind' | 'id'>): boolean {
+  return !!p && p.clips.some((c) => c.source.kind === src.kind && c.source.id === src.id)
+}
+
+export function shotOnTimeline(p: EditProject | null, shotId: string | undefined): boolean {
+  return !!p && !!shotId && p.clips.some((c) => c.source.shotId === shotId)
+}
+
+// What the Timeline node shows: seconds in total and how many of the shots have a clip.
+export function timelineSummary(p: EditProject | null, shotOrder: string[]): { seconds: number; ready: number; total: number } {
+  if (!p) return { seconds: 0, ready: 0, total: shotOrder.length }
+  const have = new Set(p.clips.map((c) => c.source.shotId))
+  return { seconds: totalLength(p), ready: shotOrder.filter((id) => have.has(id)).length, total: shotOrder.length }
+}
+
 export function trimClip(p: EditProject, clipId: string, edge: 'in' | 'out', value: number, sourceDuration: number): EditProject {
   const i = p.clips.findIndex((c) => c.id === clipId)
   if (i < 0) return p
@@ -157,9 +229,6 @@ export function newClipId(p: EditProject): string {
 }
 
 // ---- canvas -> timeline ----
-// The drag type a canvas node sets and the timeline accepts; the data is JSON.stringify(ClipSource).
-export const CLIP_MIME = 'application/x-remake-clip'
-
 // Same rule as canvas/graph.ts selectedGen, copied so the Remotion bundle (which imports this file) stays free of
 // the canvas modules and their strings.
 function selectedGen(node: CanvasNode, gens: Generation[]): Generation | null {
@@ -236,14 +305,6 @@ export function clipStatus(clip: Clip, doc: CanvasDoc, gens: Generation[], takes
 
 const sameSource = (a: ClipSource | undefined, b: ClipSource): boolean => !!a && a.kind === b.kind && a.id === b.id
 
-export function isPrimaryPin(primaries: Record<string, ClipSource>, shotId: string, src: ClipSource): boolean {
-  return sameSource(primaries[shotId], src)
-}
-
-export function withPrimary(primaries: Record<string, ClipSource>, shotId: string, src: ClipSource): Record<string, ClipSource> {
-  return { ...primaries, [shotId]: src }
-}
-
 // When a newer version replaces the pinned one, the pin follows it; any other pin is left alone.
 export function repinIfOld(primaries: Record<string, ClipSource>, shotId: string | undefined, oldSrc: ClipSource, newSrc: ClipSource): Record<string, ClipSource> {
   if (!shotId || !sameSource(primaries[shotId], oldSrc)) return primaries
@@ -256,21 +317,39 @@ export function repinIfOld(primaries: Record<string, ClipSource>, shotId: string
 export function applyNewer(p: EditProject, clipId: string, source: ClipSource, duration: number, whole = false): EditProject {
   const c = p.clips.find((x) => x.id === clipId)
   if (!c) return p
+  // Every piece of the old source in this shot (Split makes several) takes the new one, so the shot keeps one source.
+  // A clip without a shot changes alone.
+  const old = c.source
+  const isPiece = (x: Clip) => x === c || (!!old.shotId && x.source.kind === old.kind && x.source.id === old.id && x.source.shotId === old.shotId)
   if (whole) {
+    // The whole new take replaces the pieces: their cut points belong to the old footage. It takes the first piece's place.
     const out = floorFrames(duration)
     if (out < MIN_F) return p
-    const next = withClips(p, p.clips.map((x) => (x.id === clipId ? { ...x, source, in: 0, out: secs(out) } : x)))
+    const first = p.clips.find(isPiece) as Clip
+    const next = withClips(p, p.clips.flatMap((x) => (x === first ? [{ ...x, source, in: 0, out: secs(out) }] : isPiece(x) ? [] : [x])))
     return totalFrames(next) > MAX_F ? p : next
   }
   const cap = floorFrames(duration)
-  let nin = frames(c.in)
-  let nout = Math.min(frames(c.out), cap)
-  if (nout - nin < MIN_F) {
-    nin = 0
-    nout = Math.min(frames(c.out) - frames(c.in), cap)
+  const fit = (x: Clip): Clip | null => {
+    let nin = frames(x.in)
+    let nout = Math.min(frames(x.out), cap)
+    if (nout - nin < MIN_F) {
+      nin = 0
+      nout = Math.min(frames(x.out) - frames(x.in), cap)
+    }
+    return nout - nin < MIN_F ? null : { ...x, source, in: secs(nin), out: secs(nout) }
   }
-  if (nout - nin < MIN_F) return p
-  return withClips(p, p.clips.map((x) => (x.id === clipId ? { ...x, source, in: secs(nin), out: secs(nout) } : x)))
+  const clips: Clip[] = []
+  for (const x of p.clips) {
+    if (!isPiece(x)) {
+      clips.push(x)
+      continue
+    }
+    const y = fit(x)
+    if (!y) return p // a piece that can't fit would leave the shot with two sources
+    clips.push(y)
+  }
+  return withClips(p, clips)
 }
 
 // Why the timeline can't be exported yet (the copy key), or null when it can. `statuses` maps clip id -> clipStatus state.

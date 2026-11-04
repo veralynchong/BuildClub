@@ -5,12 +5,10 @@ import { ErrorText } from './ErrorText'
 import { SearchBox } from './SearchBox'
 // The Altitude hero holds the search box.
 import { AltitudeHero } from './themes/AltitudeHero'
-import { StartingPoints } from './find/StartingPoints'
 import { TopicResults } from './publish/TopicResults'
 import { t } from '../lib/i18n'
 import type { RecentRow, SavedRow, TypeAheadItem } from '../lib/findDesk'
 import { RecentSearches } from './find/RecentSearches'
-import { SavedToResearch } from './find/SavedToResearch'
 
 interface Props {
   query: Query
@@ -45,41 +43,12 @@ interface Props {
 }
 
 // Find ideas, before searching. The first thing staff see after picking a client: the navy hero with the search
-// box (and suggestions while typing), then the desk as numbered blueprint blocks: 01 Recent searches and
-// 02 Saved to Research. A first visit (no searches yet) leads with Where to start, written from the brief and
-// what is catching on, and the two blocks show what will fill in.
+// box (and suggestions while typing). A first visit (no searches yet) shows only that. Once the client has
+// searches, Recent searches follows at the bottom.
 export function SearchScreen(props: Props) {
   const { query, setQuery, onSearch, clientName, live, error } = props
   const returning = props.recent.length > 0
-  const savedEmpty = props.saved.every((r) => r.refs.length === 0) && props.saved.every((r) => !r.slot)
-  const pick = (value: string) => {
-    setQuery({ ...query, keyword: value })
-    onSearch(value)
-  }
-  const start = (
-    <StartingPoints
-      clientName={clientName}
-      groups={props.chipGroups}
-      clientExamples={props.clientExamples}
-      pulse={props.pulse}
-      onPick={pick}
-      onRefresh={props.onRefreshPulse}
-      askExample={props.askExample}
-      onFocusSearch={() => document.getElementById('keyword')?.focus()}
-      onUpload={props.onImage ? () => document.getElementById('keyword-file')?.click() : undefined}
-    />
-  )
-  const recent = <RecentSearches clientName={clientName} rows={props.recent} onOpen={props.onOpenRecent} compact={!returning && savedEmpty} />
-  const saved = (
-    <SavedToResearch
-      clientName={clientName}
-      rows={props.saved}
-      coverOf={props.coverOf}
-      onOpenResearch={props.onOpenResearch}
-      onSearch={pick}
-      compact={!returning && savedEmpty}
-    />
-  )
+  const recent = <RecentSearches clientName={clientName} rows={props.recent} onOpen={props.onOpenRecent} />
   return (
     <section className="search-screen find-page fd-page">
       <AltitudeHero clientName={clientName}>
@@ -103,24 +72,12 @@ export function SearchScreen(props: Props) {
         />
       </AltitudeHero>
 
-      {(props.planned > 0 || props.lastSearch) && (
+      {/* The monthly "1 of 12 videos approved" line was taken off this page (4 Nov 2026). */}
+      {props.lastSearch && (
         <div className="find-status">
-          {props.planned > 0 && (
-            <span className="progress-line">
-              <span>
-                <strong>{t('find.search.approvedCount', { planned: props.planned, target: props.target })}</strong>
-                {t('find.search.approvedFor', { client: clientName })}
-              </span>
-              <span className="progress-mini" aria-hidden="true">
-                <span style={{ width: `${Math.min(props.planned / props.target, 1) * 100}%` }} />
-              </span>
-            </span>
-          )}
-          {props.lastSearch && (
-            <button type="button" className="link-btn" onClick={props.onBackToResults}>
-              {t('find.search.back', { q: props.lastSearch })}
-            </button>
-          )}
+          <button type="button" className="link-btn" onClick={props.onBackToResults}>
+            {t('find.search.back', { q: props.lastSearch })}
+          </button>
         </div>
       )}
 
@@ -132,27 +89,12 @@ export function SearchScreen(props: Props) {
 
       <TopicResults text={query.keyword} />
 
-      {returning ? (
-        <>
-          {recent}
-          {saved}
-          {start}
-        </>
-      ) : (
-        <>
-          {start}
-          <div className={savedEmpty ? 'fd-pair' : 'fd-stack'}>
-            {recent}
-            {saved}
-          </div>
-        </>
-      )}
+      {/* A first visit (no searches yet) shows only the search. Coming back, Recent searches sits at the bottom.
+          Where to start and Saved to Research were taken off this page. */}
+      {returning && recent}
 
-      <p className="hint find-hint">
-        {live
-          ? t('find.search.hintLive')
-          : t('find.search.hintDemo')}
-      </p>
+      {/* The demo's "only has sample videos about tofu" line was taken off (4 Nov 2026); the live hint stays. */}
+      {live && <p className="hint find-hint">{t('find.search.hintLive')}</p>}
     </section>
   )
 }

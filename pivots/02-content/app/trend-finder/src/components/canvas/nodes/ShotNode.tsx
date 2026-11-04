@@ -1,29 +1,44 @@
 import { t } from '../../../lib/i18n'
+import { shotChip } from '../../../lib/canvas/frames'
 import { AddNodeMenu } from '../AddNodeMenu'
 import { useCanvas } from './ctx'
-import { Ports } from './Ports'
 import type { CvNodeProps } from './types'
 
+// A shot is drawn as a frame around its nodes (spec §5.1). The header row is the frame's drag handle; the shot's text
+// reaches the nodes inside through their shotId, so the frame has no ports.
 export function ShotNode({ id, data: { node } }: CvNodeProps) {
-  const { shots, shotNumbers, readOnly, addAfterShot } = useCanvas()
+  const { shots, shotNumbers, readOnly, addAfterShot, shotHasClip, buildShot, blocked } = useCanvas()
   const shot = shots.find((s) => s.id === node.shotId)
   const line = shot?.line?.trim() ? shot.line : (shot?.shot ?? '')
+  const chip = shot ? shotChip(shot) : null
   const removed = node.data.removed === true
   return (
-    <div className={`cv-node cv-shot${removed ? ' is-removed' : ''}`}>
-      <div className="cv-node-title">{shotNumbers.has(id) ? t('canvas.node.shot', { n: shotNumbers.get(id) ?? 0 }) : t('canvas.node.shotGone')}</div>
-      <p className="cv-shot-line">{line || t('canvas.shot.noLine')}</p>
-      {removed && <p className="cv-shot-removed small">{t('canvas.shot.removed')}</p>}
-      {!readOnly && !removed && (
-        <AddNodeMenu
-          className="cv-add-corner"
-          icon="+"
-          label={t('canvas.add.after')}
-          kinds={['prompt', 'storyboard', 'video', 'upload', 'footage']}
-          onPick={(k) => addAfterShot(id, k)}
-        />
-      )}
-      <Ports node={node} />
+    <div className={`cv-frame${removed ? ' is-removed' : ''}`}>
+      <div className="cv-frame-head">
+        <span className="cv-frame-title">{shotNumbers.has(id) ? t('canvas.node.shot', { n: shotNumbers.get(id) ?? 0 }) : t('canvas.node.shotGone')}</span>
+        {chip && <span className="cv-chip">{chip}</span>}
+        <span className="cv-frame-line" title={line || undefined}>
+          {line || t('canvas.shot.noLine')}
+        </span>
+        {removed && <span className="cv-chip cv-frame-removed">{t('canvas.frame.removed')}</span>}
+        <span className="cv-frame-status">{!removed && shotHasClip(node.shotId) ? t('canvas.clip.main') : null}</span>
+        <span className="cv-frame-agent">
+          {!blocked && !removed && node.shotId ? (
+            <button type="button" className="cv-frame-agent-btn nodrag" onClick={() => buildShot(node.shotId!)}>
+              {t('canvas.agent.build')}
+            </button>
+          ) : null}
+        </span>
+        {!readOnly && !removed && (
+          <AddNodeMenu
+            className="cv-frame-add"
+            icon="+"
+            label={t('canvas.add.after')}
+            kinds={['prompt', 'storyboard', 'video', 'upload', 'footage']}
+            onPick={(k) => addAfterShot(id, k)}
+          />
+        )}
+      </div>
     </div>
   )
 }

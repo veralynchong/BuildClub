@@ -32,6 +32,9 @@ async function login(page) {
   await page.locator('#login-password').fill(PASSWORD)
   await page.keyboard.press('Enter')
   await page.waitForSelector('text=Client dashboard')
+  // let the app finish its first saves, or one can land after seed() and wipe the seeded library
+  await page.waitForLoadState('networkidle')
+  await page.waitForTimeout(1000)
 }
 
 // fetch from inside the page (cookies included): { status, body }
@@ -82,7 +85,7 @@ async function gotoCanvas(p) {
 }
 
 async function openEditor(p) {
-  if (!(await p.locator('.cv-ed').count())) await p.getByRole('button', { name: /Open editor/ }).click()
+  if (!(await p.locator('.cv-ed').count())) await p.getByRole('button', { name: 'Timeline', exact: true }).click()
   await p.waitForSelector('.cv-ed-timeline', { timeout: 10000 })
   await p.waitForTimeout(800)
 }

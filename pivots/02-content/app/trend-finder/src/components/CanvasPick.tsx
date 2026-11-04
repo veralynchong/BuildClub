@@ -1,5 +1,6 @@
 import type { Format, SavedIdea, Video } from '../types'
 import { t } from '../lib/i18n'
+import { planProgress } from '../lib/canvasPick'
 import { Thumb } from './Thumb'
 import { dueLabel, planName } from './plans/moves'
 
@@ -34,6 +35,7 @@ export function CanvasPick(p: Props) {
           {p.plans.map((idea) => {
             const v = p.videoById.get(idea.videoId)
             if (!v) return null
+            const prog = planProgress(idea, p.formatById.get(v.formatId)?.shotList ?? [])
             return (
               <li key={idea.id}>
                 <button type="button" className="board-card" style={{ width: '100%', textAlign: 'left' }} onClick={() => p.onPick(idea.id)}>
@@ -41,6 +43,7 @@ export function CanvasPick(p: Props) {
                   <div className="board-card-body">
                     <strong>{planName(v, p.formatById.get(v.formatId))}</strong>
                     <span className="small">{t('shell.canvasPick.due', { date: dueLabel(idea.dueDate) })}</span>
+                    <span className="small muted">{t('shell.canvasPick.counts', { shots: prog.shots, ready: prog.ready })}</span>
                   </div>
                 </button>
               </li>

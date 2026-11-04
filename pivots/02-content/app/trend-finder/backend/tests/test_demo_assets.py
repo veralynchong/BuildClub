@@ -65,8 +65,8 @@ def test_quote_rejects_bad_input(client, capsys, offline_net):
 
 
 def test_pick_duration():
-    assert demo_assets.pick_duration(MODELS["veo-3.1-fast"], None) == 4
-    assert demo_assets.pick_duration(MODELS["veo-3.1-fast"], 8) == 8
+    assert demo_assets.pick_duration(MODELS["omni-flash-1.1"], None) == 4
+    assert demo_assets.pick_duration(MODELS["omni-flash-1.1"], 8) == 8
 
 
 # ---- run, against a fake of the server ----------------------------------------------------------------------

@@ -156,13 +156,6 @@ body:has(.rk) { background: #ffffff; }
 .rk-ph-player { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .rk-hovercard-video > :not(.rk-ph-player) { position: relative; z-index: 1; }
 
-/* 2 · Proof */
-.rk-proof-wrap { padding-top: 56px; }
-.rk-proof { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 24px; font-size: 14px; color: var(--ink-muted); }
-.rk-proof li { display: flex; align-items: center; gap: 10px; }
-.rk-proof li + li::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--line-strong); margin-right: 14px; }
-.rk-proof strong { color: var(--ink); font-weight: 600; }
-.rk-pending { font-style: italic; }
 
 /* Placeholders for photos and videos still to come */
 .rk-ph { position: relative; display: grid; align-content: space-between; justify-items: start; gap: 12px; width: 100%; max-width: 100%; padding: 14px; border-radius: 12px; overflow: hidden; color: var(--ink-muted); background: var(--canvas-alt); border: 1px dashed var(--line-strong); }
@@ -426,8 +419,6 @@ body:has(.rk) { background: #ffffff; }
   .rk-demo { margin-top: -110px; }
   .rk-demo-top { grid-template-columns: 1fr; }
   .rk-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rk-proof { flex-direction: column; align-items: center; text-align: center; gap: 8px; }
-  .rk-proof li + li::before { display: none; }
   .rk-table { min-width: 0; }
   .rk-table th, .rk-table td { padding: 14px 10px; font-size: 13.5px; }
   .rk-tick { display: none; }
@@ -447,6 +438,12 @@ body:has(.rk) { background: #ffffff; }
 .rk-demo-platforms button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px 0 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--canvas); color: var(--ink-muted); font: 500 15px/1 var(--font-sans); cursor: pointer; }
 .rk-demo-platforms button.is-on { border-color: var(--navy); background: var(--navy); color: var(--on-navy); }
 .rk-demo-platforms .logo-round { flex: none; }
+/* Platforms not searchable yet: shown, faded, not clickable */
+.rk-demo-platforms button:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
+/* Demo search field: blinking caret while the phrases type out */
+.rk-demo-caret { display: inline-block; width: 2px; height: 1.1em; margin-left: 2px; vertical-align: -0.18em; background: currentColor; animation: rk-caret-blink 1s steps(1) infinite; }
+@keyframes rk-caret-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .rk-demo-caret { animation: none; } }
 
 /* Demo: hover card. On hover or keyboard focus the pick's video fades in just above its own card, with a "Playing"
    tag and a progress bar that fills once; it fades out on leave. pointer-events: none, so the pick stays hovered and

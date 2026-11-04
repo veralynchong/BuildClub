@@ -2,6 +2,8 @@ import { useRef } from 'react'
 import { t } from '../../../lib/i18n'
 import { selectedGen, versionsOf } from '../../../lib/canvas/graph'
 import { VersionStrip } from '../VersionStrip'
+import { CardHead, CardMedia } from './Card'
+import { ClipActions } from './ClipActions'
 import { useCanvas } from './ctx'
 import { Ports } from './Ports'
 import type { CvNodeProps } from './types'
@@ -17,22 +19,13 @@ export function UploadNode({ id, data: { node } }: CvNodeProps) {
   const shown = isVideo ? null : selectedGen(node, gens)
   const has = isVideo ? !!take : !!shown?.url
   return (
-    <div className="cv-node cv-upload">
-      <div className="cv-node-title">{t('canvas.node.upload')}</div>
-      <div className="cv-preview small muted">
-        {busy ? (
-          <span role="status">
-            <span className="cv-spin" aria-hidden="true" /> {t('canvas.upload.uploading')}
-          </span>
-        ) : take ? (
-          <video className="nodrag" src={take.url} muted playsInline controls preload="metadata" />
-        ) : shown?.url ? (
-          <img src={shown.url} alt={t('canvas.gen.image')} draggable={false} />
-        ) : (
-          t('canvas.upload.empty')
-        )}
-      </div>
+    <div className="cv-node cv-card cv-upload">
+      <CardHead title={t('canvas.node.upload')} status={busy ? { key: 'canvas.upload.uploading', tone: 'busy' } : null} />
+      <CardMedia kind={take ? 'video' : 'image'} url={take ? take.url : shown?.url} running={busy} label={t(take ? 'canvas.upload.video' : 'canvas.gen.image')}>
+        <span className="small muted">{t('canvas.upload.empty')}</span>
+      </CardMedia>
       {isVideo && take && <p className="cv-footage-name small muted">{t('canvas.upload.video')} · {take.name}</p>}
+      {take && <ClipActions src={{ kind: 'take', id: take.id, shotId: take.shotId ?? undefined }} />}
       {!isVideo && <VersionStrip versions={versions} selectedId={shown?.id ?? null} disabled={readOnly} onSelect={(g) => onSelectVersion(id, g)} />}
       <input
         ref={input}

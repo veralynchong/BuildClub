@@ -23,11 +23,9 @@ import type { Decision } from "../lib/memory";
 import { useApp, useManagerName } from "../lib/appContext";
 import { t } from "../lib/i18n";
 import { createShareLink, revokeClientLinks } from "../lib/share";
-import { postedThisMonth } from "../lib/stage";
 import { needsConfirm, patchFor, stepOf, targetsOf } from "../lib/steps.ts";
 import { useProduction } from "../lib/production.ts";
 import { ProgressRing } from "./ProgressRing";
-import { StageSelect } from "./StageSelect";
 import { PlanCard, PlanCardBody } from "./plans/PlanCard";
 import { PlanColumn } from "./plans/PlanColumn";
 import {
@@ -40,6 +38,8 @@ import {
   stepOfColumn,
 } from "./plans/moves";
 import type { Column } from "./plans/moves";
+import { ConfirmDelete } from "./plans/ConfirmDelete";
+import { ReviewLinkDialog } from "./plans/ReviewLinkDialog";
 
 // A Home pipeline chip names an idea status; the board's columns group the steps.
 const columnForStatus: Record<IdeaStatus, Column> = {
@@ -65,6 +65,8 @@ interface Props {
   onReview: () => void;
   // Videos in this client's Research sheet: their cards get a "From research" link to the Research tab.
   inResearch?: Set<string>;
+  // Video id → which of the client's videos (1 to 12) it is filed under in Research.
+  videoNoById?: Map<string, number>;
   onOpenResearch?: () => void;
   // Stage to scroll to when opened from a Home pipeline chip; cleared once done.
   focus?: IdeaStatus | null;
@@ -93,6 +95,10 @@ export function ShortlistBoard(p: Props) {
   const manager = useManagerName();
   // The approved plan (and where it is going) waiting for "Continue?" before its approval is taken back.
   const [confirm, setConfirm] = useState<{ id: string; to: Column } | null>(null);
+  // The plan whose bin was clicked: a pop-up asks before it is deleted.
+  const [toDelete, setToDelete] = useState<string | null>(null);
+  // The review-link pop-up, opened from "Get review link" on a waiting card.
+  const [linkOpen, setLinkOpen] = useState(false);
   // The approver's link for the client being shown: null url = turned off here.
   const [link, setLink] = useState<{ clientId: string; url: string | null } | null>(null);
   const [linkError, setLinkError] = useState("");
@@ -132,7 +138,6 @@ export function ShortlistBoard(p: Props) {
     // Every approved plan, whatever its production stage.
     approved: inColumn("approved").sort(byDue),
   };
-  const postedCount = postedThisMonth(mine, new Date());
   const approvedCount = mine.filter((i) => i.status === "approved").length;
   const progress = Math.min(approvedCount / Math.max(p.client.monthlyTarget, 1), 1) * 100;
   const shownLink = link?.clientId === p.client.id ? link.url : null;
@@ -315,12 +320,12 @@ export function ShortlistBoard(p: Props) {
           idea={idea}
           video={v}
           format={p.formatById.get(v.formatId)}
+          videoNo={p.videoNoById?.get(idea.videoId)}
           column={info.column}
           targets={info.targets}
           onOpenPlan={() => p.onOpenPlan(idea.id)}
-          onRemove={() => remove(idea.id)}
+          onRemove={() => setToDelete(idea.id)}
           cutSentBack={signalsById[idea.id]?.cutSentBack}
-          onFromResearch={p.onOpenResearch && p.inResearch?.has(idea.videoId) ? p.onOpenResearch : undefined}
           actions={
             <>
               {idea.status === "approved" && (
@@ -328,16 +333,21 @@ export function ShortlistBoard(p: Props) {
                   {t("canvas.makeVideo")}
                 </button>
               )}
-              {idea.status === "approved" && (
-                <StageSelect
-                  idea={idea}
-                  name={planName(v, formatOf(idea))}
-                  onChange={(patch) => update(new Set([idea.id]), () => patch)}
-                />
-              )}
               {idea.status === "waiting" && (
                 <button className="link-btn" onClick={() => withdraw(idea)}>
                   {t("plan.board.takeBack")}
+                </button>
+              )}
+              {idea.status === "waiting" && (
+                <button
+                  className="btn btn-primary btn-sm board-card-link"
+                  onClick={() => {
+                    setCopied(false);
+                    setLinkOpen(true);
+                    if (!shownLink) makeLink();
+                  }}
+                >
+                  {t("plan.board.getLink")}
                 </button>
               )}
             </>
@@ -354,41 +364,16 @@ export function ShortlistBoard(p: Props) {
   };
 
   const extra: Partial<Record<Column, React.ReactNode>> = {
-    // The approver's link is needed for finished videos too, so it shows even when no plan is waiting.
-    waiting: (
-      <div className="board-link">
-        {shownLink ? (
-          <>
-            <label className="field">
-              <span className="field-label">{t("plan.board.linkFor", { manager })}</span>
-              <input readOnly value={shownLink} onFocus={(e) => e.currentTarget.select()} />
-            </label>
-            <div className="board-link-row">
-              <button className="btn btn-primary btn-sm" onClick={copyLink}>
-                {copied ? t("plan.common.copied") : t("plan.board.copyLink")}
-              </button>
-              <button className="btn btn-ghost btn-sm" onClick={turnOff}>
-                {t("plan.board.turnOff")}
-              </button>
-            </div>
-          </>
-        ) : (
-          <button className="btn btn-primary btn-sm" onClick={makeLink}>
-            {link?.clientId === p.client.id ? t("plan.board.newLink") : t("plan.board.getLink")}
-          </button>
-        )}
-        {linkError && (
-          <p className="error" role="alert">
-            {linkError}
-          </p>
-        )}
-        {lists.waiting.length > 0 && (
+    // The review link is on each waiting card. Only the manager gets a button here, to review the waiting plans;
+    // team members no longer see "Preview as {manager}".
+    waiting:
+      canDecide && lists.waiting.length > 0 ? (
+        <div className="board-link">
           <button className="btn btn-ghost btn-sm board-review" onClick={p.onReview}>
-            {canDecide ? t("plan.board.review", { n: lists.waiting.length }) : t("plan.board.preview", { manager })}
+            {t("plan.board.review", { n: lists.waiting.length })}
           </button>
-        )}
-      </div>
-    ),
+        </div>
+      ) : undefined,
   };
   const confirmIdea = mine.find((i) => i.id === confirm?.id && i.status === "approved");
   const confirmTo = confirm?.to ?? "waiting";
@@ -399,7 +384,6 @@ export function ShortlistBoard(p: Props) {
     <section className="client board">
       <header className="client-head">
         <div>
-          <span className="eyebrow">{t("plan.board.eyebrow", { client: p.client.name })}</span>
           <h1>{t("plan.board.title")}</h1>
           <p className="muted">{t("plan.board.intro")}</p>
         </div>
@@ -410,7 +394,6 @@ export function ShortlistBoard(p: Props) {
               {approvedCount} <span className="muted">{t("plan.board.ofTarget", { target: p.client.monthlyTarget })}</span>
             </span>
             <span className="small muted">{t("plan.board.approvedThisMonth")}</span>
-            <span className="small muted">{t("plan.board.postedThisMonth", { n: postedCount })}</span>
           </div>
         </div>
       </header>
@@ -441,6 +424,27 @@ export function ShortlistBoard(p: Props) {
               </PlanColumn>
             ))}
           </div>
+          {linkOpen && (
+            <ReviewLinkDialog
+              manager={manager}
+              url={shownLink}
+              error={linkError}
+              copied={copied}
+              onCopy={copyLink}
+              onTurnOff={turnOff}
+              onClose={() => setLinkOpen(false)}
+            />
+          )}
+          {toDelete && (
+            <ConfirmDelete
+              name={nameOf(p.ideas.find((i) => i.id === toDelete))}
+              onCancel={() => setToDelete(null)}
+              onConfirm={() => {
+                remove(toDelete);
+                setToDelete(null);
+              }}
+            />
+          )}
           {confirmIdea && (
             <div className="plan-bar pb-confirm" role="alertdialog" aria-label={t("plan.board.confirmAria")}>
               <span className="pb-confirm-text">
@@ -478,6 +482,7 @@ export function ShortlistBoard(p: Props) {
                     idea={dragging}
                     video={dragVideo}
                     format={formatOf(dragging)}
+                    videoNo={p.videoNoById?.get(dragging.videoId)}
                     cutSentBack={signalsById[dragging.id]?.cutSentBack}
                   />
                 </div>

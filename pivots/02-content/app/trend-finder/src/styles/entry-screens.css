@@ -1,0 +1,300 @@
+/* Entry screens in the "Broadsheet" look: Log in, All clients Home and Add client only.
+   Design: docs/design-review/remake-review/ui-sets/set-a-broadsheet.html (login, agency and addclient screens).
+   A visual layer only: it changes looks, never content. Every rule is scoped to one of these screens
+   (.rk-auth, .overview, .add-client), and the sidebar only changes while one of the two app screens is open,
+   so every other screen looks exactly as before. Remake tokens only (theme-remake.css, landing-remake.css).
+   Look: Newsreader headings at regular weight, Geist Mono labels in caps, thin rules instead of boxes,
+   underlined fields, a ruled table and pill buttons. No new motion; hover follows interactive.css. */
+
+/* The strong rule: ink on light, the strong hairline on dark */
+:root[data-ui="altitude"] { --es-rule: var(--ink); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-ui="altitude"] { --es-rule: var(--line-strong); }
+}
+:root[data-theme="dark"][data-ui="altitude"] { --es-rule: var(--line-strong); }
+
+/* ================= Log in (LoginScreen.tsx, light page only like the landing) ================= */
+/* Split screen: the navy dotted panel on the left, the form on white on the right */
+.rk.rk-auth { position: relative; --es-pad: 56px; }
+.rk-auth .rk-nav {
+  position: absolute; inset: 0 0 auto 0; z-index: 3; background: transparent; border-bottom: 0;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.rk-auth .rk-nav > .rk-wrap { max-width: none; padding-inline: var(--es-pad) 40px; }
+.rk-auth .rk-nav-in { height: 88px; }
+.rk-auth .rk-logo-btn { color: var(--on-navy); --hover-text: var(--on-navy); }
+.rk-auth .rk-nav-actions .rk-btn-ghost { font-size: 14px; }
+
+.rk-auth .rk-auth-wrap {
+  max-width: none; margin: 0; padding: 0; min-height: 100vh;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.rk-auth .rk-auth-panel {
+  border-radius: 0; min-height: 100vh; padding: 88px var(--es-pad) 48px;
+  display: grid; grid-template-rows: 1fr auto 1fr; justify-items: start; align-items: center; text-align: left; gap: 24px;
+}
+.rk-auth .rk-auth-panel.rk-dots::before { display: none; }
+:root .rk-auth .rk-auth-panel h1 {
+  grid-row: 2; max-width: 12em; font-size: clamp(40px, 4.2vw, 56px); line-height: 1.05; letter-spacing: -0.025em; text-wrap: balance;
+}
+.rk-auth .rk-auth-lede {
+  grid-row: 3; align-self: end; max-width: 46ch;
+  font: 500 10.5px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--on-navy-muted);
+}
+
+/* The form: no card, set straight on the page, vertically centred */
+.rk-auth .rk-auth-card {
+  margin: 0; max-width: none; border: 0; border-radius: 0; box-shadow: none; background: transparent;
+  padding: 96px clamp(24px, 7vw, 96px) 64px;
+  display: flex; flex-wrap: wrap; align-content: center; align-items: center; gap: 22px 18px;
+}
+.rk-auth .rk-auth-card > * { flex: 1 1 100%; min-width: 0; }
+.rk-auth .rk-auth-card > :is(.rk-btn, .rk-auth-text) { flex: 0 1 auto; }
+.rk-auth .rk-auth-card > .field-error { margin: 0; color: var(--no); font-size: 14px; }
+
+/* Labels: small mono caps. Fields: underlined, not boxed */
+.rk-auth .rk-field { gap: 6px; }
+.rk-auth .rk-field-label { font-size: 10.5px; letter-spacing: 0.08em; }
+:root[data-ui="altitude"] .rk-auth .rk-input {
+  height: 40px; padding: 0 2px; border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0;
+  background: transparent; font-size: 15px;
+}
+:root[data-ui="altitude"] .rk-auth .rk-input:focus { border-bottom-color: var(--blue); box-shadow: 0 1px 0 var(--blue); outline: none; }
+
+/* Log in as: underline tabs (Staff, Client), each keeping its line of explanation */
+.rk-auth .rk-choices { display: flex; flex-wrap: wrap; gap: 0 28px; border-bottom: 1px solid var(--line); }
+.rk-auth .rk-choice {
+  flex: 1 1 0; max-width: 15rem; min-width: 0; gap: 2px; padding: 10px 0 12px; margin-bottom: -1px;
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none;
+}
+.rk-auth .rk-choice strong { font-size: 14px; font-weight: 500; color: var(--ink-muted); }
+.rk-auth .rk-choice span { font-size: 12.5px; }
+.rk-auth .rk-choice:has(input:checked) { border-color: var(--blue); background: none; box-shadow: none; }
+.rk-auth .rk-choice:has(input:checked) strong { color: var(--ink); }
+.rk-auth .rk-choice:has(input:checked)::after { content: none; }
+
+.rk-auth .rk-choice:has(input:focus-visible) { outline-offset: 3px; }
+
+/* Buttons: pills that hug their text; "New here?" sits beside Log in */
+.rk-auth .rk-auth-card .rk-btn-big { min-height: 44px; padding: 0 22px; font-size: 15px; }
+.rk-auth .rk-auth-card .rk-btn-block { width: auto; }
+.rk-auth .rk-auth-card .rk-auth-text { font-size: 13px; }
+.rk-auth .rk-auth-card .rk-auth-text .link-btn { color: var(--ink); }
+
+/* Client login note */
+:root .rk-auth .rk-auth-title { font-size: 28px; line-height: 1.15; letter-spacing: -0.02em; }
+.rk-auth div.rk-auth-card .rk-auth-text { flex-basis: 100%; font-size: 15px; max-width: 46ch; }
+
+@media (max-width: 860px) {
+  .rk.rk-auth { --es-pad: 20px; }
+  .rk-auth .rk-nav > .rk-wrap { padding-inline: var(--es-pad) 8px; }
+  .rk-auth .rk-nav-in { height: 64px; }
+  .rk-auth .rk-nav-actions .rk-btn-ghost { color: var(--on-navy); --hover-text: var(--on-navy); }
+  .rk-auth .rk-auth-wrap { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .rk-auth .rk-auth-panel { min-height: 0; padding: 96px var(--es-pad) 32px; grid-template-rows: auto auto; gap: 28px; }
+  :root .rk-auth .rk-auth-panel h1 { grid-row: 1; font-size: 40px; }
+  .rk-auth .rk-auth-lede { grid-row: 2; }
+  .rk-auth .rk-auth-card { padding: 36px var(--es-pad) 56px; align-content: start; }
+}
+
+/* ================= Shared by All clients Home and Add client ================= */
+:root[data-ui="altitude"] .main:has(> :is(.overview, .add-client)) { padding: 34px clamp(16px, 4vw, 52px) 72px; }
+:root[data-ui="altitude"] :is(.overview .page-head h1, .add-client .page-head h1) {
+  font-size: clamp(34px, 4.2vw, 46px); line-height: 1.05; letter-spacing: -0.025em;
+}
+:root[data-ui="altitude"] :is(.overview .page-head > p.muted, .add-client .page-head > p.muted) {
+  margin: 0; font-size: 16px; line-height: 1.55; color: var(--muted); max-width: 620px;
+}
+:root[data-ui="altitude"] :is(.overview, .add-client) :is(.field-label, thead th) { font-size: 10.5px; letter-spacing: 0.08em; }
+:root[data-ui="altitude"] :is(.overview, .add-client) .field { gap: 6px; }
+/* Underlined fields */
+:root[data-ui="altitude"] :is(.overview, .add-client) :is(input:not([type]), input[type="text"], input[type="number"]) {
+  height: 40px; padding: 0 2px; border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0;
+  background: transparent; font-size: 15px;
+}
+:root[data-ui="altitude"] :is(.overview, .add-client) :is(input:not([type]), input[type="text"], input[type="number"]):focus {
+  border-bottom-color: var(--blue); box-shadow: 0 1px 0 var(--blue); outline: none;
+}
+
+/* ================= All clients Home (OverviewScreen.tsx) ================= */
+/* Header: the big serif title, its deck, "+ Add client" as an outline pill, an ink rule underneath */
+:root[data-ui="altitude"] .overview > .page-head-row {
+  align-items: start; padding-bottom: 22px; border-bottom: 1px solid var(--es-rule);
+}
+:root[data-ui="altitude"] .overview > .page-head-row .page-head { gap: 8px; }
+:root[data-ui="altitude"] .overview > .page-head-row > .btn {
+  min-height: 38px; padding-inline: 18px; font-size: 14px;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line-strong);
+}
+
+/* This month and Needs your approval: no cards, a mono kicker over plain text */
+:root[data-ui="altitude"] .overview .ch-grid { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 32px 40px; }
+:root[data-ui="altitude"] .overview .ch-grid > * { grid-column: auto; }
+:root[data-ui="altitude"] .overview .ch-card { --ch-pad: 0px; padding: 0; gap: 8px; background: none; border: 0; border-radius: 0; overflow: visible; }
+:root[data-ui="altitude"] .overview .ch-card > h2 {
+  margin: 0; padding: 0; background: none; color: var(--muted); text-wrap: pretty;
+  font: 500 10.5px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
+}
+:root[data-ui="altitude"] .overview .ov-waiting > h2 { color: var(--label); }
+:root[data-ui="altitude"] .overview .ch-card-body { gap: 10px; }
+:root[data-ui="altitude"] .overview .ch-month-num { align-items: flex-end; gap: 16px; margin-top: 10px; }
+:root[data-ui="altitude"] .overview .ch-big { font-size: 96px; line-height: 0.9; letter-spacing: -0.04em; }
+:root[data-ui="altitude"] .overview .ch-month-num .muted { font-family: var(--font-serif); font-size: 20px; line-height: 1.25; letter-spacing: -0.01em; padding-bottom: 8px; }
+:root[data-ui="altitude"] .overview .ch-month .ch-bar { height: 14px; border: 1px solid var(--line-strong); border-radius: 0; background: var(--surface); }
+:root[data-ui="altitude"] .overview .ch-month .ch-bar > span { border-radius: 0; background: var(--blue); }
+:root[data-ui="altitude"] .overview .ch-month .ch-line { color: var(--muted); font-size: 14px; max-width: 60ch; }
+:root[data-ui="altitude"] .overview .ov-waiting .ch-rows { gap: 0; }
+:root[data-ui="altitude"] .overview .ov-waiting .ch-row { padding: 8px 0 10px; border-bottom: 1px solid var(--line); }
+:root[data-ui="altitude"] .overview .ov-waiting .ch-row-text > strong { font-family: var(--font-serif); font-weight: 400; font-size: 20px; line-height: 1.25; letter-spacing: -0.01em; }
+:root[data-ui="altitude"] .overview .ov-waiting .ch-row-text > .small { font-size: 12.5px; }
+/* "Open": a small violet mono pill, as the mockup's waiting count */
+:root[data-ui="altitude"] .overview .ov-waiting .ch-row .btn {
+  min-height: 26px; padding: 0 10px; border: 0; border-radius: 999px;
+  background: var(--violet-soft); color: var(--violet); font: 500 12px/1 var(--font-mono);
+}
+
+/* The ledger: ink rule above, mono headings over an ink rule, hairline rows, serif client names */
+:root[data-ui="altitude"] .overview .table-wrap {
+  background: none; border: 0; border-radius: 0; box-shadow: none; padding-top: 22px; border-top: 1px solid var(--es-rule);
+}
+:root[data-ui="altitude"] .overview .client-table th { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--es-rule); vertical-align: bottom; line-height: 16px; }
+:root[data-ui="altitude"] .overview .client-table td { padding: 14px 12px 14px 0; border-bottom: 1px solid var(--line); }
+:root[data-ui="altitude"] .overview .client-table tr:last-child td { border-bottom: 1px solid var(--line); }
+:root[data-ui="altitude"] .overview .client-table :is(th, td):last-child { padding-right: 0; }
+:root[data-ui="altitude"] .overview .client-table .num { text-align: left; }
+:root[data-ui="altitude"] .overview .client-table td:first-child .link-strong { font-family: var(--font-serif); font-weight: 400; font-size: 19px; line-height: 1.25; letter-spacing: -0.01em; }
+:root[data-ui="altitude"] .overview .client-table td:first-child .small { display: block; margin-top: 2px; font-size: 12.5px; white-space: normal; }
+:root[data-ui="altitude"] .overview .client-table .progress { min-width: 0; }
+:root[data-ui="altitude"] .overview .client-table .progress .small,
+:root[data-ui="altitude"] .overview .client-table td.num { font-family: var(--font-mono); font-size: 13px; }
+:root[data-ui="altitude"] .overview .client-table td.num .link-btn { font: inherit; }
+:root[data-ui="altitude"] .overview .client-table .ov-next { min-width: 160px; }
+:root[data-ui="altitude"] .overview .client-table .ov-next .small { white-space: normal; font-size: 12.5px; }
+:root[data-ui="altitude"] .overview .client-table .ov-next .small:first-child { font-size: 13px; color: var(--fg); }
+/* The row's "Home": a plain text link */
+:root[data-ui="altitude"] .overview .client-table td:last-child .btn {
+  min-height: 32px; padding: 0; border: 0; border-radius: 0; background: none; color: var(--fg);
+  font-size: 14px; font-weight: 400; text-decoration: underline 1px transparent; text-underline-offset: 3px;
+}
+
+/* After videos are posted: a mono kicker over an ink rule, then dashed notes */
+:root[data-ui="altitude"] .overview .ch-later-head { padding-top: 16px; border-top: 1px solid var(--es-rule); }
+:root[data-ui="altitude"] .overview .ch-section-title {
+  padding: 0; border-radius: 0; background: none; color: var(--muted);
+  font: 500 10.5px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
+}
+:root[data-ui="altitude"] .overview .ch-later { background: transparent; border-radius: 4px; padding: 18px 20px; }
+:root[data-ui="altitude"] .overview .ch-later h3 { font-size: 20px; letter-spacing: -0.01em; }
+
+/* Agency: no box, an ink rule above, underlined fields */
+:root[data-ui="altitude"] .overview .agency-box {
+  background: none; border: 0; border-top: 1px solid var(--es-rule); border-radius: 0; box-shadow: none; padding: 16px 0 0; max-width: 760px;
+}
+:root[data-ui="altitude"] .overview .agency-box legend h3 { font-size: 20px; letter-spacing: -0.01em; }
+
+@media (hover: hover) {
+  :root[data-ui="altitude"] .overview > .page-head-row > .btn:hover { background-color: var(--hover-tint); border-color: var(--hover-edge); color: var(--hover-text); }
+  :root[data-ui="altitude"] .overview .ov-waiting .ch-row .btn:hover { background-color: color-mix(in srgb, var(--violet) 14%, var(--violet-soft)); }
+  :root[data-ui="altitude"] .overview .client-table td:last-child .btn:hover { color: var(--label); text-decoration-color: currentColor; }
+}
+
+@container (max-width: 760px) {
+  :root[data-ui="altitude"] .overview .ch-grid { grid-template-columns: minmax(0, 1fr); }
+  :root[data-ui="altitude"] .overview .ch-big { font-size: 72px; }
+}
+@media (max-width: 600px) {
+  :root[data-ui="altitude"] .overview > .page-head-row > .btn { width: auto; }
+  :root[data-ui="altitude"] .overview .ch-later { padding: 16px; }
+}
+
+/* ================= Add client (AddClientScreen.tsx) ================= */
+/* Fields in one ruled column on the left; Save and Cancel in a narrow column on the right */
+:root[data-ui="altitude"] .settings.add-client {
+  grid-template-columns: minmax(0, 1.3fr) minmax(240px, 1fr); column-gap: 44px; row-gap: 26px; align-items: start;
+}
+:root[data-ui="altitude"] .add-client > .page-head {
+  grid-column: 1 / -1; gap: 6px; padding-bottom: 22px; border-bottom: 1px solid var(--es-rule);
+}
+:root[data-ui="altitude"] .add-client > .page-head .eyebrow { font-size: 11px; letter-spacing: 0.08em; color: var(--label); }
+:root[data-ui="altitude"] .add-client > .settings-grid { grid-column: 1; grid-template-columns: minmax(0, 1fr); gap: 22px; max-width: none; }
+:root[data-ui="altitude"] .add-client > .cannot { grid-column: 1; }
+:root[data-ui="altitude"] .add-client > .form-actions {
+  grid-column: 2; grid-row: 2; position: sticky; top: 24px;
+  padding-top: 18px; border-top: 1px solid var(--es-rule); gap: 10px;
+}
+:root[data-ui="altitude"] .add-client .field > .small { font-size: 12.5px; }
+/* The client's name in the serif, as the page's subject */
+:root[data-ui="altitude"] .add-client #new-client-name { height: 46px; font-family: var(--font-serif); font-size: 24px; letter-spacing: -0.01em; }
+:root[data-ui="altitude"] .add-client #new-client-target { width: 120px; height: 44px; font-family: var(--font-serif); font-size: 24px; }
+
+/* What they can't do: a label like the others, then pill chips; a ticked one is filled in ink */
+:root[data-ui="altitude"] .add-client .cannot { background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; max-width: none; gap: 8px; }
+:root[data-ui="altitude"] .add-client .cannot legend h3 {
+  margin: 0; font: 500 10.5px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+:root[data-ui="altitude"] .add-client .cannot legend .small { font-size: 12.5px; }
+:root[data-ui="altitude"] .add-client .cannot-list { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+:root[data-ui="altitude"] .add-client .cannot-list .check {
+  position: relative; min-height: 32px; padding: 0 13px; gap: 0; cursor: pointer;
+  border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); font-size: 13px; line-height: 1.2;
+}
+:root[data-ui="altitude"] .add-client .cannot-list .check input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+:root[data-ui="altitude"] .add-client .cannot-list .check:has(input:checked) { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+:root[data-ui="altitude"] .add-client .cannot-list .check:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* Cancel: an outline pill next to the blue Save */
+:root[data-ui="altitude"] .add-client .form-actions .btn { min-height: 38px; padding-inline: 18px; font-size: 14px; }
+:root[data-ui="altitude"] .add-client .form-actions .btn-ghost { background: var(--surface); color: var(--fg); border: 1px solid var(--line-strong); }
+
+@media (hover: hover) {
+  :root[data-ui="altitude"] .add-client .cannot-list .check:hover:not(:has(input:checked)) { border-color: var(--hover-edge); }
+  :root[data-ui="altitude"] .add-client .form-actions .btn-ghost:hover { background-color: var(--hover-tint); border-color: var(--hover-edge); color: var(--hover-text); }
+}
+@media (max-width: 1100px) {
+  :root[data-ui="altitude"] .settings.add-client { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
+  :root[data-ui="altitude"] .add-client > .form-actions { grid-column: 1; grid-row: auto; position: static; }
+}
+
+/* ================= Sidebar, only while All clients Home or Add client is open ================= */
+/* Masthead switcher between ink rules, quiet nav rows with a blue bar on the open page, a mono foot */
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .sidebar { padding: 26px 18px 18px; gap: 14px; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-brand { padding: 0 8px; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .switcher-btn {
+  margin: 8px 0 4px; padding: 12px 8px 14px; gap: 10px;
+  background: transparent; border: 0; border-block: 1px solid var(--es-rule); border-radius: 0; box-shadow: none;
+}
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .switcher-text { gap: 2px; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .switcher-text .switcher-label { font-size: 10.5px; letter-spacing: 0.08em; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .switcher-text strong {
+  font-family: var(--font-serif); font-weight: 400; font-size: 19px; line-height: 1.2; letter-spacing: -0.01em;
+}
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .switcher-btn .avatar { width: 28px; height: 28px; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .switcher-caret { font-size: 12px; color: var(--fg); }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-nav { gap: 1px; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-link {
+  position: relative; padding: 7px 8px; border-radius: 4px; font-size: 14px; font-weight: 400; color: var(--muted);
+}
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-link svg { width: 15px; height: 15px; color: var(--line-strong); }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-on { background: transparent; box-shadow: none; color: var(--fg); font-weight: 500; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-on::before {
+  content: ''; position: absolute; left: -18px; top: 6px; bottom: 6px; width: 2px; background: var(--blue);
+}
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-on svg { color: var(--label); }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-hint { padding: 6px 8px; font-size: 12.5px; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-foot { gap: 10px; font-size: 12.5px; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-foot > .link-btn { padding: 0 8px; font-size: 12.5px; color: var(--muted); }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-foot :is(.sample-pill, .live-pill) {
+  margin: 0 8px; padding: 0; background: transparent; font: 500 10.5px/16px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase;
+}
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-foot .side-link { font-size: 13px; color: var(--fg); }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-user { padding: 12px 0 0; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-user .avatar-user {
+  width: 30px; height: 30px; background: var(--navy); color: var(--on-navy); font: 500 11px var(--font-mono);
+}
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-user-text strong { font-size: 13px; font-weight: 500; }
+:root[data-ui="altitude"] .shell:has(.main > :is(.overview, .add-client)) .side-user-text .small { font-size: 12px; }
+/* Client login, turned off for now: greyed out and not clickable. */
+.rk-auth .rk-choice.is-disabled { opacity: 0.45; cursor: not-allowed; }
+.rk-auth .rk-choice.is-disabled:hover { border-color: transparent; }
+/* "Welcome back to Remake.": the Remake logo itself, in the heading's light blue. */
+.rk-auth .rk-title-logo { color: var(--sky); }
