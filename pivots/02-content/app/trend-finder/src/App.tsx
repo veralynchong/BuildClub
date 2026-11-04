@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgencySettings, ClientEvent, IdeaStatus, Role, SavedIdea } from './types'
+import { approverNote } from './lib/approverNote'
 import { clients as sampleClients, formats, sampleIdeas, videos } from './data/sample'
 import { formatTrend, groupFailures, hasDate, outlierScore, platformList, platformName, stageOrder, viewsPerDay, viewsPerFollower } from './lib/metrics'
 import { defaultAgency, defaultQuery, inTwoWeeks, useResearch, useResearchSlots, useSavedIdeas, useStored } from './state'
@@ -1779,6 +1780,18 @@ export default function App() {
                 live={live}
                 onSave={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
                 onBack={() => setView('plan')}
+                // Send for approval lives on the board: the plan goes to the approver, then back to the (now locked) plan page.
+                onSend={() => {
+                  const note = planIdea.noteToApprover ?? approverNote(planClient, planFormat, 'en')
+                  setIdeas((prev) =>
+                    prev.map((i) =>
+                      i.id === planIdea.id
+                        ? { ...i, status: 'waiting', sentAt: Date.now(), noteToApprover: note, rejectReason: undefined, rejectTags: undefined }
+                        : i,
+                    ),
+                  )
+                  setView('plan')
+                }}
               />
             </Suspense>
           )}

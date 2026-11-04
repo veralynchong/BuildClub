@@ -54,6 +54,8 @@ interface Props {
   // Saves the ordered shots (and where each card sits) into the plan, the same way the plan page saves shots.
   onSave: (patch: { shots: Shot[]; boardLayout: BoardPos[] }) => void
   onBack: () => void
+  // Sends the plan to the approver. Only on a plan that can still be edited.
+  onSend?: () => void
 }
 
 const nodeTypes = { shot: ShotNode }
@@ -91,7 +93,7 @@ interface Message {
   undo?: boolean
 }
 
-function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
+function BoardScreen({ idea, format, client, live, onSave, onBack, onSend }: Props) {
   const editable = boardEditable(idea)
   const [makeId] = useState(() => idMaker('n'))
   const [board, setBoard] = useState(() => boardFromShots(boardShots(idea, format.shotList), idea.boardLayout, makeId))
@@ -300,6 +302,11 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
           {' · '}
           {editable ? t('board.saves') : t('board.locked')}
         </p>
+        {editable && onSend && (
+          <button type="button" className="btn btn-primary board-send" disabled={shots.length === 0} onClick={onSend}>
+            {t('plan.common.sendForApproval')}
+          </button>
+        )}
       </header>
 
       <div className="board-layout">
