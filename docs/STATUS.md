@@ -2,6 +2,8 @@
 
 ## 目前狀態，2026-11-05 Sydney
 
+本輪同步稽核後續位於 `docs/agent-audit-followup`，沿用 PR51 的安全離線驗證入口，未合併任何 BuildClub PR。已補 Apify 額度重置後重新確認限制的規則；歷史 auto-merge／小額免問不轉成現行授權。`canvas-p1` 仍是舊分支，其 STATUS 與會讀 dotenv 的 verify 不代表此基準；接續開發請使用本 worktree，先核對分支與交接。
+
 目前產品為 Remake／影片畫布。工作倉庫 `veralynchong/BuildClub` 的 `origin/main` 在 `e442b3a` 整合 PR49，GitHub 確認 PR49 MERGED。PR51 `fix/offline-verification-context` 向 `main` 開啟，P0 已在 `b0d65b0` 提交推送。PR50 `docs/agents-md-for-codex` 仍 OPEN，此次沿用其規則，未合併或關閉它。
 
 - 最後驗證，2026-11-05：`bash bin/verify.sh full` 四步 PASS，backend `984 passed, 2 skipped`，frontend unit tests PASS，`verify: GREEN`。舊入口會匯入 `server.py` 並無條件載入 app `.env`，依本次限制未執行舊完整驗證。

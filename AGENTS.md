@@ -44,6 +44,7 @@ BuildClub 專案規則，供 Codex 與 Claude Code 共用。只適用本專案�
 - 每次付費前說明帳號／key 名稱、用途、估價與硬上限，取得該次明確同意，完成後回報花費。一般「繼續」不代表同意花費。
 - 不讀、印出、複製 `.env`、`auth.json`、`api-keys.fish` 或秘密環境值，不自行載入 key 檔案。
 - 沿用 PR50 的 Apify 提醒：免費額度接近用完，每月 26 日 Sydney 11:00 重置，操作前仍須確認餘額。開發／除錯用 sample、cached data 或 `--demo-data`；live search 僅供核准後的真實測試或 demo。歷史估價為一次搜尋 2–3 runs、每 run 約 US$0.13，執行前重新估價。
+- 額度重置後，重新查可用額度並向使用者確認原本的節流限制是否仍適用；不得把歷史餘額或小額免問記憶當成本次付費授權。
 - fal.ai 為小額預付帳戶，每次 cap 要小，現有 server cap 為 image 0.12、video 0.20；完成後回報餘額。Storyboard 用 fal Seedream 4.5。
 - Gemini 只允許免費層；使用者明確表示 billing 已開啟前，不使用或測試。
 
