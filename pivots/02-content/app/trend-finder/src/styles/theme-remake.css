@@ -459,3 +459,5 @@
   --flag-overdue: var(--no);
   --flag-overdue-soft: var(--no-soft);
 }
+/* The wordmark inside a line of text: as tall as the text's capitals, sitting on the baseline. */
+.remake-logo-text { height: 0.82em; aspect-ratio: 706 / 151; vertical-align: -0.06em; }
