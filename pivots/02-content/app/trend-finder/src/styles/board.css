@@ -114,3 +114,4 @@
   .board-canvas { height: 68dvh; min-height: 360px; }
   .board-minimap { display: none; }
 }
+.board-head .board-send { justify-self: start; margin-top: var(--space-sm); }

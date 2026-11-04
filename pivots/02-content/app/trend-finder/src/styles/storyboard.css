@@ -142,3 +142,30 @@
   .hook-option .btn { justify-self: start; min-height: 44px; }
 }
 .plan-more > summary { cursor: pointer; font-size: var(--text-lg); font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+
+/* Suggested hooks wrap like the shot cards, so "+ Add a hook" sits as the next card. */
+.hook-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+.hook-add-slot { display: grid; min-width: 0; }
+.hook-add-slot .hook-add { min-height: 100%; }
+.hook-add-form { gap: var(--space-sm); }
+.hook-add-text {
+  width: 100%; box-sizing: border-box; resize: none; font-family: var(--font-sans); font-size: var(--plan-body-size);
+  line-height: var(--plan-body-lh); padding: var(--space-xs) var(--space-sm); border: 1px solid var(--line-strong); border-radius: var(--radius-xs);
+}
+.hook-add-actions { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+.hook-own-tag { background: var(--surface-2); color: var(--ink); }
+
+/* Hooks and shots share one card size: the same columns (four across on a wide panel) and the same minimum height,
+   so "+ Add a hook" and "+ Add a shot" line up with the cards beside them. Phone-width panels keep their own layout. */
+@container plan-panel (min-width: 621px) {
+  .plan-panel :is(.hook-list, .shot-frames) { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); }
+  .plan-panel :is(.hook-option, .shot-frame, .hook-add, .shot-frame-add) { min-height: 196px; }
+}
+@container plan-panel (max-width: 620px) {
+  /* Narrow panel: hooks and shots use the same columns (two, then one on a phone). */
+  .plan-panel :is(.hook-list, .shot-frames) { grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+}
+/* Shot text starts on the same line as "Shot n" and the hook text; the field's padding sits outside that line. */
+.plan-panel .shot-frame-text { width: calc(100% + 2 * var(--space-sm)); margin: 0 calc(-1 * var(--space-sm)); }
+/* The emotion tag always sits on its own row under "Hook n", so the tags and the hook lines start at the same height in every card. */
+.plan-panel .hook-head { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: var(--space-xs); }

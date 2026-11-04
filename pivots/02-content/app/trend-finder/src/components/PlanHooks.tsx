@@ -43,6 +43,18 @@ export function PlanHooks({ ideaId, saved, video, format, client, shots, editabl
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [problem, setProblem] = useState('')
+  // "+ Add a hook": the user's own first line, typed into the fourth card.
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+  const sameText = (a: string, b: string) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ')
+  // A picked line that isn't one of the suggestions is the user's own: it gets a card of its own.
+  const own = current && !ideas.some((h) => sameText(h.text, current)) ? current : ''
+  const addOwn = () => {
+    if (!draft.trim()) return
+    pick(draft)
+    setDraft('')
+    setAdding(false)
+  }
 
   // Always the newest shots, so an answer that arrives late merges into what is on screen now.
   const latest = useRef(shots)
@@ -84,8 +96,7 @@ export function PlanHooks({ ideaId, saved, video, format, client, shots, editabl
       <header className="plan-sec-head">
         <h2 id="hook-ideas-title">{t('plan.hooks.ideasTitle', { client: client.name })}</h2>
       </header>
-      {!editable && <p className="plan-sec-hint">{t('plan.hooks.ideasHintLocked')}</p>}
-      {editable ? (
+      {editable || ideas.length > 0 ? (
         <>
           <ul className="hook-list">
             {ideas.map((h, i) => {
@@ -99,6 +110,10 @@ export function PlanHooks({ ideaId, saved, video, format, client, shots, editabl
                     <EmotionTag emotion={hookEmotion(h)} />
                   </div>
                   <span className="hook-option-text">{h.text}</span>
+                  {/* Waiting or approved: the same cards, locked. The picked one is outlined and says so; no buttons. */}
+                  {!editable ? (
+                    picked && <span className="btn btn-sm btn-primary hook-picked-tag">{t('plan.hooks.picked')}</span>
+                  ) : (
                   <button
                     type="button"
                     className={`btn btn-sm ${picked ? 'btn-primary' : 'btn-ghost'}`}
@@ -108,12 +123,60 @@ export function PlanHooks({ ideaId, saved, video, format, client, shots, editabl
                   >
                     {picked ? t('plan.hooks.picked') : t('plan.hooks.use')}
                   </button>
+                  )}
                 </li>
               )
             })}
+            {own && (
+              <li className="hook-option is-picked">
+                <div className="hook-head">
+                  <span className="hook-option-no" aria-hidden="true">
+                    {t('plan.hooks.no', { n: ideas.length + 1 })}
+                  </span>
+                  <span className="hook-emo hook-own-tag">{t('plan.hooks.ownTag')}</span>
+                </div>
+                <span className="hook-option-text">{own}</span>
+                <span className="btn btn-sm btn-primary hook-picked-tag">{t('plan.hooks.picked')}</span>
+              </li>
+            )}
+            {editable &&
+              (adding ? (
+                <li className="hook-option hook-add-form">
+                  <span className="hook-option-no">{t('plan.hooks.no', { n: ideas.length + (own ? 2 : 1) })}</span>
+                  <textarea
+                    className="hook-add-text"
+                    rows={3}
+                    autoFocus
+                    aria-label={t('plan.hooks.addLabel')}
+                    placeholder={t('plan.hooks.addPlaceholder')}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addOwn()
+                      }
+                      if (e.key === 'Escape') setAdding(false)
+                    }}
+                  />
+                  <div className="hook-add-actions">
+                    <button type="button" className="btn btn-primary btn-sm" disabled={!draft.trim()} onClick={addOwn}>
+                      {t('plan.hooks.use')}
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>
+                      {t('plan.common.cancel')}
+                    </button>
+                  </div>
+                </li>
+              ) : (
+                <li className="hook-add-slot" role="none">
+                  <button type="button" className="shot-frame-add hook-add" onClick={() => setAdding(true)}>
+                    {t('plan.hooks.add')}
+                  </button>
+                </li>
+              ))}
           </ul>
-          {ideas.some((h) => h.source === 'sample') && <p className="plan-sec-note">{t('plan.hooks.sampleNote')}</p>}
-          {video.live && shots.length > 0 && (
+          {editable && video.live && shots.length > 0 && (
             <div className="hook-actions">
               <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => void writeMore()}>
                 {busy ? t('plan.hooks.writing') : t('plan.hooks.writeMore')}

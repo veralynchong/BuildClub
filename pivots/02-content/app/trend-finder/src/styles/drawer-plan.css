@@ -349,3 +349,17 @@
 .cut-output { display: grid; gap: var(--space-xs); justify-items: start; margin-top: var(--space-sm); }
 .cut-output video { display: block; object-fit: cover; max-width: 100%; width: 270px; aspect-ratio: 9 / 16; background: var(--surface-2); border-radius: var(--radius-sm); }
 .cut-output-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }
+
+/* Plan page: the two section titles and the Hook n / Shot n labels are bold. */
+.plan-sec-head :is(#hook-ideas-title, #plan-shots-title) { font-weight: 600; }
+.hook-option .hook-option-no,
+.shot-frame .shot-no { font-weight: 600; }
+
+/* Shot cards: the field sits inside the card's padding (no negative margins), with a clear gap under "Shot n",
+   and the ✕ has its own corner so it never covers the label or the field. */
+.shot-frame { gap: var(--space-sm); padding: var(--space-xl); padding-top: var(--space-base); }
+.shot-frame .shot-no { min-height: 30px; display: flex; align-items: center; padding-right: 36px; }
+.shot-frame-text { width: 100%; margin: 0; min-height: calc(2lh + 2 * var(--space-xs)); }
+.shot-frame-x { top: var(--space-xs); right: var(--space-xs); width: 30px; height: 30px; }
+/* Locked plans: the picked hook keeps its "Picked" pill, as a label (not a button). */
+.hook-option .hook-picked-tag { justify-self: start; align-self: end; cursor: default; pointer-events: none; }
