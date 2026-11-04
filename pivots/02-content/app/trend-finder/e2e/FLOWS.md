@@ -95,6 +95,22 @@
   - The manager sees "… approved this video · <when>" (or "sent this back", with the reason).
 - Layer: explore
 
+## Freeform replacement acceptance (2026-11-05)
+
+These checks supersede the old requirement to seed an approved plan before entering Canvas. Existing F1–F4 remain historical regression scenarios for preserved plan data; they do not prove the new empty-canvas flow.
+
+- Scope: 1440 × 900 desktop, English and zh-Hant UI. All provider runs are mock. Block non-loopback HTTP/WebSocket requests in the test browser, use a clean backend environment and temporary database, and never read local credentials.
+- Fresh entry: create a client if needed, open Canvas and create a workspace without a video, plan, shot list or approval. Assert zero nodes and edges from the persisted document as well as the visible scene. Reload and reopen the workspace; it stays empty.
+- Build and persist: add Prompt, Image, Video, Upload, Voiceover and editing/output nodes through visible controls. Edit text inline. Move nodes and change viewport; reload and check values, positions and connections. Previously saved plan canvases and media remain accessible through the replacement entry.
+- Typed connections: connect Prompt→Image and Image→Video. Drag an output to empty canvas and choose a compatible node; it arrives connected. Reject incompatible media, self-links and cycles, with readable feedback. Change upstream text/result and verify downstream is marked stale without automatic reruns.
+- Actual input propagation: run mock image/video and inspect the persisted job inputs. The prompt and selected start frame must equal upstream outputs. A visible edge alone is insufficient evidence. Run `#fail`, inspect the error and retry successfully.
+- Upload and voice: upload a local image/video/audio fixture; show the real returned local asset. Connect prompt to mock voiceover, then route that audio into the composition. Verify the selected audio is included in the exported result, not merely displayed on a card.
+- Assistant: apply the existing assistant's mock plan to the current freeform canvas, retain unrelated nodes, and inspect its actual nodes/edges. Never call a real LLM.
+- Compose and export: use generated video and an uploaded video in the editor, change order/trim, add connected voiceover and export a real MP4. Use ffprobe to check resolution, duration and audio stream; inspect a frame and audible audio evidence. Reload preserves composition and output. No dummy completed-export indicator.
+- Approval: create the client's review link through UI, send the exported video, open the review link in a separate signed-out context, play and approve/send back. Staff sees the decision. Changed/stale output cannot bypass the re-export/send-back checks.
+- Recovery: stale concurrent saves get 409 without silently overwriting; failed requests leave recoverable edits; no approved fake plan is created to bypass legacy guards. Unauthenticated routes retain protection.
+- Cleanup: close only test-owned contexts in `finally`, stop owned backend/render processes, release the test slot. Keep screenshots and command evidence in the task report. External provider correctness and pricing remain explicitly NOT RUN for the user's morning test.
+
 ## Known gaps (do not report again as new)
 - The review page is English only.
 - Voiceover "Record" needs a microphone; the test machine has none that works.

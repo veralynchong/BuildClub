@@ -35,3 +35,19 @@
 離線 gate：repo root `bash bin/verify.sh full`。Frontend：app 目錄 `npm run build`、`npm run lint`。行為回歸先觀察失敗再實作；mock 本機 E2E 必須驗證空白入口、持久化、連線傳值、素材→剪輯→輸出→送審，不能只檢查 DOM 按鈕。測試瀏覽器在 finally 關閉自有 context，停止自有 backend。擷取 1440 截圖與影片 ffprobe 證據；不做 mobile。
 
 交付可審閱 PR 至 `veralynchong/BuildClub` 的 `main`，列出實際通過、未通過及明早真實測試項。未通過不標完成。保留工作樹供使用者檢查，不刪除其他 worktrees。
+
+## 固定實作契約（T1 來源探索，2026-11-05）
+
+獨立 workspaces table 保存 id/client_id/title/created_at/updated_at，id 由伺服器產生 `ws_` + UUID，client 必須存在且建立後不可改歸屬。canvases/generations/edit_projects/renders/cut_reviews 的既有 idea_id 欄位保持相容，視作 resource id；不新增偽 ideas、不搬動歷史素材。新畫布真正 nodes=[]、edges=[]，不可隱式插入 kit/shot/timeline。
+
+- `POST /api/workspaces {clientId,title?}` → 201 `{workspace,version:1,doc:{nodes:[],edges:[],viewport:{x:0,y:0,zoom:1}},generations:[],takes:[]}`。
+- `GET /api/workspaces?clientId=...` → `{workspaces:[{id,kind:"workspace",clientId,title,createdAt,updatedAt}]}`；不自動建立。
+- `GET /api/workspaces/{id}` → `{workspace,version,doc,generations,takes:[]}`；純讀，不自動補節點。
+- `PUT /api/workspaces/{id} {version,doc,title?}` → `{workspace,version,doc}`；CAS，過期409，無效422，未知404；版本 strict int，座標/viewport finite，zoom>0。
+- 原 handler 同時註冊 `/api/workspaces/{idea_id}/gen...`、`/edit...`、`/cut...`、`/agent/plan` aliases；使用顯式 scope resolver 分辨 workspace 與 legacy-plan。舊 plan 路由的 approved guard 保留，新 workspace 可編輯；不能只刪舊 gate。
+- `storyboard` 仍是圖片生成 node 的內部 kind；新增 `voice`、`editor`，media 新增 `audio`。Upload image/video 保存為 generation，audio 保存為 voice source；圖片/影片用 `data.selected`，audio 用 `data.voiceId`。editor 消費 selected video generations 與連入 voice sources，不假造 shot/take。
+- workspace 單節點生成 body 加 `canvasVersion`；後端從持久化 graph 計算 prompt/start frame/references，不能只信任 caller。quote/confirm 與 budget/refund 保留，mock 可 US$0 執行；付費每次重新確認。
+- workspace 助手 `{promptNodeId,canvasVersion}` → `{source,promptNodeId,canvasVersion,storyboard:{prompt,model},video:{prompt,model,duration},planUsd}`。預覽後 Apply 新建圖片/影片並接線；保留無關 nodes，來源 demo 明示；不自動生成。
+- token review 從 workspace 的 client_id 和 title 解析，不依賴 ideas/library；不能讓其他客戶 token 看見 workspace 影片。保留失效連結、舊成片版本、退回後重匯出與並發判斷。
+
+T3 backend writer 唯一擁有 backend/（含新增 workspaces.py 與 backend tests）；T4 frontend writer 唯一擁有 src/、unit/ 及 UI 樣式，不改 backend/、package manifests、root docs 或 e2e/。Lead 擁有 docs、e2e、整合與最終驗證。兩 writer 自同一已固定契約 commit 分出獨立工作區，依契約平行實作；接口變更先通知 lead，不能各自猜測。

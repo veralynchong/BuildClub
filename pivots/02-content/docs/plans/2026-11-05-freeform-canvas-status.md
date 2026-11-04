@@ -9,8 +9,8 @@ Goal active；使用者已核准無人值守 Multi Agent 實作、commit、push�
 | Task | 狀態 | Owner／證據 |
 |---|---|---|
 | T0 | 完成 | Lead：新分支、本機三份計畫文件、安全離線驗證保護；起始 gate GREEN：984 passed, 2 skipped，frontend PASS |
-| T1 | 待分派 | 唯讀架構探索；固定契約後才開始 writer |
-| T2 | 待分派 | 唯讀全站接線盤點 |
+| T1 | 執行中 | Orca task_9671d805b114／ctx_3b4ed7ce46f5；唯讀，固定契約後才開始 writer |
+| T2 | 完成 | task_5209fcd0805d／ctx_b9df19f20eb6；來源07d3d93，唯讀，測試 NOT RUN |
 | T3–T7 | 待前置完成 | 依 Tasks 順序執行 |
 
 ## 已核對
@@ -20,9 +20,28 @@ Goal active；使用者已核准無人值守 Multi Agent 實作、commit、push�
 - 2026-11-05：Playwright MCP `browser_tabs action=list` 呼叫成功，未開產品 tab；後續測試仍需獨立環境與 browser owner。
 - ignored 依賴 symlink 指向 canvas-p1 既有 backend/.venv 及 node_modules，未安裝、不得刪來源。
 
+- 2026-11-05：整合基線 07d3d93，`npm run build` exit 0（僅既有 bundle size 提醒），`npm run lint` exit 0。尚未修改產品程式。
+
 ## 全站接線盤點
 
-待 T2 提供具體 UI→API→storage/provider 證據。已知歷史提示不是目前驗收：成效分析有 LaterSection；publishers 預設 fake；模型與助手不能因為 mock 通過就稱真實驗收。
+T2 來源 07d3d93，完整訊息 msg_ea7f2a8dcca4。分類依來源，不推測 runtime keys；所有本輪 live tests NOT RUN。
+
+| 功能 | 追查證據（app 根目錄相對路徑） | 結論／本輪處理 |
+|---|---|---|
+| 搜尋／參考素材拆解 | App.tsx runLiveSearch/runLinkSearch/runImageSearch → lib/live.ts → server.py /api/search,/like,/like-image,/analyze → cache/Apify/Anthropic | 真實實作與 mock 分支並存；本輪禁止外部測試，不能稱全部可用 |
+| Research rows/slots | App.tsx → state.ts useResearch/useResearchSlots → useStored/localStorage | 本機持久化，沒有跨機 API；列後續，不擴成平台 |
+| Plans/shot board | App saveIdeas → lib/live.ts → server.py PUT /ideas → SQLite store | 真實後端已存在，保留 |
+| Board AI rewrite/insert | lib/boardAssist.ts:51/75 → 無對應後端 route → sample fallback | 有接線缺口；不作新版助手範本，不誤稱真 AI |
+| Board media | lib/boardMedia.ts:26 → object URL/deviceOnly | 分頁暫存，非真正上傳；本輪新 Canvas 必須持久化 image/video/audio |
+| 舊 Canvas | App.tsx:1734/1745 → canvas/api.ts → canvas.py GET/PUT | 強制 approved plan/shots，直接阻擋空白自由畫布；T3/T4 替換 |
+| 生成/助手/Kit | canvas api → generations.py/agent.py/kit.py → queue/provider/files | 已有實作，但助手依賴 shot；T3/T4 改 workspace 契約。歷史直接 FalAdapter smoke 不等於新版 UI 真驗收 |
+| 配音 | VoiceTool → editor/api.ts → editing.py voice/tts/from-gen → media/voices | 已有 editor 管線；需 Canvas audio port/node 與輸出連接 |
+| 剪輯/輸出 | EditorPanel → editor/api.ts → editing.py/renders.py → Remotion/ffmpeg | 真實本機引擎可重用；本輪重新驗證 workspace source 至 MP4 |
+| 送審 | ExportBar → cut/share API → renders.py/share.py/cut_review.py → cut_reviews | 有 token/version/revocation guards，需支援 workspace/client，保留隔離 |
+| 社群發布 | PublishPanel → publish.ts → publishing.py → publishers.py fake/Ayrshare | 預設模擬；真發布/公開媒體 hosting 非本輪 |
+| 首頁成效 | ClientHome/Overview LaterSection；現有 decisionStats/production summary | 流程統計有資料；post-performance 是明示佔位，非已完成 analytics |
+| auth/settings | auth.ts → server/auth/google_auth；save clients → SQLite；preferences local | 本機 auth 存在；register UI 呼叫 login、client login coming soon、OAuth未驗；本輪保留登入保護，不擴大帳戶系統 |
+
 
 ## 下一步
 
