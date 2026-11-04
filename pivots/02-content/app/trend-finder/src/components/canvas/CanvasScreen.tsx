@@ -15,6 +15,7 @@ import { createCanvasSession, draftStore, reconcileGenerations, selectGeneration
 import { genRequest, markStale, priceOf, selectedGen } from '../../lib/canvas/graph'
 import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
 import { apiBase } from '../../lib/canvas/resource'
+import { toolbarPosition } from '../../lib/canvas/placement'
 import { applyPromptPlan, connectedPrompt, generationOrder, createNode, duplicateNode, editorEdges, removeEditorSource, type PromptPlan } from '../../lib/canvas/freeform'
 import { ff, usd, seconds } from '../../lib/strings/freeform'
 import { t } from '../../lib/i18n'
@@ -107,7 +108,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   const abort = useRef(new AbortController())
   const drag = useRef<string | null>(null)
   const flowBox = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition, fitView } = useReactFlow()
+  const { screenToFlowPosition, fitView, getNode } = useReactFlow()
   const edit = useEditProject(resource, readOnly)
   const sources = useSources(resource, JSON.stringify(gens.map((g) => [g.id, g.status])))
   const timeline = useTimelineActions({ freeform: resource.kind === 'workspace', edit, sources, shots, doc, gens, takes, readOnly: readOnly || stale, onPlaced: () => {}, notify: (key) => setNote(t(key)) })
@@ -308,7 +309,8 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   const add = (kind: NodeKind, at?: { x: number; y: number }, from?: string) => {
     if (readOnly || stale || quote) return
     const rect = flowBox.current?.getBoundingClientRect()
-    const center = at ?? screenToFlowPosition({ x: (rect?.left ?? 0) + (rect?.width ?? 900) / 2 - 160, y: (rect?.top ?? 0) + 160 })
+    const preferred = screenToFlowPosition({ x: (rect?.left ?? 0) + (rect?.width ?? 900) / 2 - 160, y: (rect?.top ?? 0) + 160 })
+    const center = toolbarPosition(session.doc().nodes.map((n) => ({ position: n.position, measured: getNode(n.id)?.measured })), preferred, at)
     const next = createNode(session.doc(), kind, center, from ? session.doc().nodes.find((n) => n.id === from)?.shotId : undefined)
     const n = kind === 'editor' ? next.nodes.find((n) => n.type === 'editor')! : next.nodes[next.nodes.length - 1]!
     change(next); setSelected([n.id]); setMenu(null)
