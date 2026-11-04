@@ -697,7 +697,12 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         os.replace(source, final)
         return vid, final
 
-    def finish_upload(idea_id: str, part: Path, ext: str):
+    def discard_voice(path):
+        # These paths belong to the new voice id allocated by this request, never its source.
+        for owned in (path, path.with_name(f'{path.stem}.words.json'), path.with_suffix('.gen')):
+            owned.unlink(missing_ok=True)
+
+    def finish_upload(idea_id: str, part: Path, ext: str, node_id=None, gen_id=None):
         try:
             info = cutting.probe(part)
             if info.get("hasAudio") and not info["duration"] > 0:
@@ -724,34 +729,60 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         if isinstance(stored, JSONResponse):
             part.unlink(missing_ok=True)
             return stored
-        return voice_response(idea_id, stored[0], stored[1], info["duration"])
+        try:
+            out = voice_response(idea_id, stored[0], stored[1], info["duration"])
+            return attach_voice(idea_id, node_id, out, stored[1], gen_id) if node_id is not None else out
+        except BaseException:
+            discard_voice(stored[1])
+            raise
 
-    def voice_node(idea_id, node_id):
-        with db() as conn:
-            if workspaces.workspace(conn, idea_id) is None:
-                return None
-            _, doc = workspaces.graph(conn, idea_id)
+    def voice_node(idea_id, node_id, conn=None):
+        if conn is None:
+            with db() as connection:
+                return voice_node(idea_id, node_id, connection)
+        if workspaces.workspace(conn, idea_id) is None:
+            return None
+        _, doc = workspaces.graph(conn, idea_id)
         if not any(n['id'] == node_id and (n['type'] == 'voice' or
                    (n['type'] == 'upload' and workspaces.media(n) == 'audio')) for n in doc['nodes']):
             return error(422, 'Send the node, the model and a prompt.')
         return None
 
-    def attach_voice(idea_id, node_id, out, gen_id=None):
-        if not isinstance(out, dict):
-            return out
-        with db() as conn:
-            if workspaces.workspace(conn, idea_id) is None:
-                return out
-            if gen_id is None:
-                path = voice_file(media_dir(), idea_id, out['id'])
-                folder = generations.gen_folder(media_dir(), idea_id)
-                folder.mkdir(parents=True, exist_ok=True)
-                name = 'voice-' + out['id'] + path.suffix
-                shutil.copyfile(path, folder / name)
-                gen = generations.insert_done(conn, idea_id, node_id, 'voice', 'upload', file=name)
-                gen_id = gen['id']
-            conn.execute('INSERT INTO workspace_voices VALUES (?,?,?,?)', (idea_id, out['id'], node_id, gen_id))
-        return {**out, 'voiceId': out['id'], 'nodeId': node_id, 'genId': gen_id}
+    def attach_voice(idea_id, node_id, out, path, gen_id=None):
+        copied, committed = None, False
+        try:
+            with db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                if workspaces.workspace(conn, idea_id) is None:
+                    if idea_id.startswith('ws_'):
+                        return error(404, "That plan doesn't exist.")
+                    committed = True  # legacy voice imports keep their existing response and markers
+                    return out
+                bad = voice_node(idea_id, node_id, conn)
+                if bad:
+                    return bad
+                if gen_id is not None:
+                    row = conn.execute(f'SELECT {generations.COLUMNS} FROM generations WHERE id=? AND idea_id=?',
+                                       (gen_id, idea_id)).fetchone()
+                    if row is None or row[2] != node_id or row[3] != 'voice' or row[7] != 'done' or \
+                            workspaces.generation_stale(conn, idea_id, generations.to_json(row), workspaces.stored_load(conn)):
+                        return error(409, renders.EDIT_STALE)
+                    path.with_suffix('.gen').write_text(gen_id)
+                else:
+                    folder = generations.gen_folder(media_dir(), idea_id)
+                    folder.mkdir(parents=True, exist_ok=True)
+                    copied = folder / ('voice-' + out['id'] + path.suffix)
+                    shutil.copyfile(path, copied)
+                    gen = generations.insert_done(conn, idea_id, node_id, 'voice', 'upload', file=copied.name)
+                    gen_id = gen['id']
+                conn.execute('INSERT INTO workspace_voices VALUES (?,?,?,?)', (idea_id, out['id'], node_id, gen_id))
+            committed = True
+            return {**out, 'voiceId': out['id'], 'nodeId': node_id, 'genId': gen_id}
+        finally:
+            if not committed:
+                discard_voice(path)
+                if copied is not None:
+                    copied.unlink(missing_ok=True)
 
     @router.put("/api/ideas/{idea_id}/edit/voice")
     async def put_voice(idea_id: str, request: Request, source: str = "", nodeId: str = ""):
@@ -785,8 +816,7 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             if size > MAX_VOICE_BYTES:
                 part.unlink(missing_ok=True)
                 return error(413, VOICE_TOO_BIG)
-            out = await run_in_threadpool(finish_upload, idea_id, part, ext)
-            return attach_voice(idea_id, nodeId, out)
+            return await run_in_threadpool(finish_upload, idea_id, part, ext, nodeId)
         except BaseException:
             part.unlink(missing_ok=True)
             raise
@@ -864,9 +894,10 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         if bad:
             return bad
         with db() as conn:
-            if workspaces.workspace(conn, idea_id):
+            independent = workspaces.workspace(conn, idea_id) is not None
+            if independent:
                 grow = conn.execute(f'SELECT {generations.COLUMNS} FROM generations WHERE id=? AND idea_id=?', (gen_id, idea_id)).fetchone()
-                if grow[2] != node_id or workspaces.generation_stale(conn, idea_id, generations.to_json(grow), load):
+                if grow is None or grow[2] != node_id or workspaces.generation_stale(conn, idea_id, generations.to_json(grow), load):
                     return error(409, renders.EDIT_STALE)
         gen = generations.gen_folder(media_dir(), idea_id)
         source = gen / row[2] if gen is not None and row[1] == "done" and row[2] else None
@@ -874,10 +905,9 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             return error(409, "That voiceover isn't ready yet.")
         if not source.is_file():
             return error(404, "That voiceover's file is gone.")
-        out = await run_in_threadpool(import_generated, idea_id, source, gen_id)
-        return attach_voice(idea_id, node_id, out, gen_id)
+        return await run_in_threadpool(import_generated, idea_id, source, gen_id, node_id if independent else None)
 
-    def import_generated(idea_id: str, source: Path, gen_id: str):
+    def import_generated(idea_id: str, source: Path, gen_id: str, node_id=None):
         folder = voice_folder(media_dir(), idea_id)
         if folder is None:
             return error(404, "That plan doesn't exist.")
@@ -896,9 +926,10 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
                 shutil.copyfile(source, part)
             except OSError:
                 return error(404, "That voiceover's file is gone.")
-            out = finish_upload(idea_id, part, ext)  # the same checks as an upload
-            if isinstance(out, dict):  # remember which job this file came from, so the job is not offered again
-                (folder / f"{out['id']}.gen").write_text(gen_id)
+            out = finish_upload(idea_id, part, ext, node_id, gen_id)  # includes transactional workspace attach
+            if isinstance(out, dict):
+                if node_id is None:  # legacy imports record their marker here; workspace attach did so atomically
+                    (folder / f"{out['id']}.gen").write_text(gen_id)
                 done = True
             return out
         finally:
