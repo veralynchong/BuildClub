@@ -10,6 +10,13 @@ const project = {fps:30,width:1080,height:1920,clips:Array.from({length:100},(_,
 const job = path.join(work,'timeout-job.json')
 fs.writeFileSync(job,JSON.stringify({input:{project,urls:{'generation:a':'a.mp4'},lines:{},musicUrl:null,voice:[],brand:{font:'Noto Sans TC',color:'#22c55e',logoUrl:null},fontUrl:''},mediaDir:media,out:path.join(work,'timeout.mp4'),cacheDir:path.join(process.env.REMOTION_APP_DIR,'.remotion-bundle')}))
 const child = spawn(process.execPath,[path.join(process.env.REMOTION_APP_DIR,'render/render-reel.mjs'),job],{detached:true,stdio:'ignore'})
-fs.writeFileSync(path.join(process.env.FREEFORM_EVIDENCE_DIR,'detached-render-pid.json'),JSON.stringify({pid:child.pid}))
+const audit = path.join(work,'launch-audit.jsonl')
+const record = setInterval(() => {
+  if (!fs.existsSync(audit)) return
+  const launch = fs.readFileSync(audit,'utf8').trim().split('\n').map(JSON.parse).find(row => row.pid === child.pid)
+  if (!launch) return
+  fs.writeFileSync(path.join(process.env.FREEFORM_EVIDENCE_DIR,'detached-render-pid.json'),JSON.stringify(launch))
+  clearInterval(record)
+},10)
 console.log('START detached real renderer',child.pid)
 setInterval(()=>{},1000)
