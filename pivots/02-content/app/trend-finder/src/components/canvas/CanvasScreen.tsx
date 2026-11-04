@@ -3,12 +3,17 @@ import { Background, MiniMap, ReactFlow, ReactFlowProvider, applyNodeChanges, us
 import '@xyflow/react/dist/style.css'
 import type { CanvasContext as CanvasResource } from '../../lib/canvas/resource'
 import type { CanvasDoc, CanvasNode, CanvasState, GenModel, Generation, NodeData, NodeKind, Budget } from '../../lib/canvas/types'
-import { getCanvas, getModels, getBudget, putCanvas, StaleCanvas, quoteNode, startGen, pollGen, uploadMedia } from '../../lib/canvas/api'
+import { getCanvas, getKit, getModels, getBudget, putCanvas, StaleCanvas, quoteNode, startGen, pollGen, uploadMedia } from '../../lib/canvas/api'
+import type { Kit, Shot } from '../../types'
+import { syncKit, kitTargets } from '../../lib/canvas/kit'
+import { legacyGenerationRequest, legacyInputsMatch, applyLegacyFrames } from '../../lib/canvas/legacy'
+import { replaceUploadedMedia } from '../../lib/canvas/mediaReplacement'
+import { KitPanel } from './KitPanel'
 import { createCanvasSession, draftStore, reconcileGenerations, selectGeneration, rememberGeneration } from '../../lib/canvas/session'
 import { genRequest, markStale, priceOf, selectedGen } from '../../lib/canvas/graph'
 import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
 import { apiBase } from '../../lib/canvas/resource'
-import { applyPromptPlan, connectedPrompt, generationOrder, createNode, editorEdges, removeEditorSource, type PromptPlan } from '../../lib/canvas/freeform'
+import { applyPromptPlan, connectedPrompt, generationOrder, createNode, duplicateNode, editorEdges, removeEditorSource, type PromptPlan } from '../../lib/canvas/freeform'
 import { ff, usd, seconds } from '../../lib/strings/freeform'
 import { t } from '../../lib/i18n'
 import { serverText } from '../../lib/serverText'
@@ -25,6 +30,7 @@ import { chooseTake, listTakes, uploadTake, type Take } from '../../lib/takes'
 import { createShareLink } from '../../lib/share'
 
 interface Props {
+  onShotsChange?: (shots: Shot[]) => void
   context: CanvasResource
   clientName: string
   onBack: () => void
@@ -50,13 +56,16 @@ const freeformNodeTypes = { freeform: FreeformNode }
 const kinds: NodeKind[] = ['prompt', 'upload', 'storyboard', 'video', 'voice', 'editor']
 const glyphs = ['T', '↑', '▧', '▷', '♫', '▤']
 type Dock = 'inspect' | 'history' | 'assistant' | null
-function Board({ context, initial, clientName, onBack, openEditor = false, fullscreen, onFullscreen, reload }: Props & { initial: CanvasState; reload: () => void }) {
+function Board({ context, onShotsChange, initial, clientName, onBack, openEditor = false, fullscreen, onFullscreen, reload }: Props & { initial: CanvasState; reload: () => void }) {
   const { resource, shots, readOnly, clientId, title } = context
   const [doc, setDoc] = useState(initial.doc)
   const [takes, setTakes] = useState<Take[]>(initial.takes)
   const [gens, setGens] = useState(initial.generations)
   const [models, setModels] = useState<GenModel[]>([])
   const [budget, setBudget] = useState<Budget | null>(null)
+  const [kit, setKit] = useState<Kit | null>(null)
+  const [kitFailed, setKitFailed] = useState(false)
+  const [replacing, setReplacing] = useState(false)
   const [voices, setVoices] = useState<VoiceInfo[]>([])
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const runQueue = useRef<string[]>([])
@@ -97,8 +106,8 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
   const sources = useSources(resource, JSON.stringify(gens.map((g) => [g.id, g.status])))
   const timeline = useTimelineActions({ freeform: resource.kind === 'workspace', edit, sources, shots, doc, gens, takes, readOnly: readOnly || stale, onPlaced: () => {}, notify: (key) => setNote(t(key)) })
   const change = useCallback((next: CanvasDoc) => {
-    if (!readOnly) session.change(next)
-  }, [readOnly, session])
+    if (!readOnly && !recoveryOpen) session.change(next)
+  }, [readOnly, session, recoveryOpen])
   const flush = useCallback(() => readOnly || !mounted.current ? Promise.resolve(false) : session.flush(), [session, readOnly])
   useEffect(() => { if (doc === session.saved() || readOnly || recoveryOpen) return; const timer = setTimeout(() => void flush(), 650); return () => clearTimeout(timer) }, [doc, flush, readOnly, session, recoveryOpen])
   useEffect(() => { mounted.current = true; abort.current = new AbortController(); return () => { mounted.current = false; abort.current.abort(); session.keepDraft() } }, [session])
@@ -107,11 +116,34 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
     Promise.all([getModels(), getBudget(), getVoices(resource)]).then(([m, b, v]) => { if (!cancelled) { setModels(m); setBudget(b); setVoices(v) } }, (e) => !cancelled && setNote(e.message))
     return () => { cancelled = true }
   }, [resource])
+  const applyKit = (next: Kit) => {
+    setKit(next); setKitFailed(false)
+    if (resource.kind === 'legacy-plan') change(syncKit(session.doc(), next, gens).doc)
+  }
+  const syncKitRef = useRef(() => {})
+  syncKitRef.current = () => { if (kit && resource.kind === 'legacy-plan' && !recoveryOpen) change(syncKit(session.doc(), kit, gens).doc) }
+  useEffect(() => { syncKitRef.current() }, [kit, recoveryOpen])
+  const applyKitRef = useRef(applyKit)
+  applyKitRef.current = applyKit
+  useEffect(() => {
+    let cancelled = false
+    getKit(clientId).then((next) => { if (!cancelled) applyKitRef.current(next) }, (e) => { if (!cancelled) { setKitFailed(true); setNote(e.message) } })
+    return () => { cancelled = true }
+  }, [clientId])
+  const writeLegacyFrames = (nextDoc: CanvasDoc, nextGens: Generation[]) => {
+    if (resource.kind !== 'legacy-plan' || readOnly) return
+    const next = applyLegacyFrames(nextDoc, shots, nextGens)
+    if (next !== shots) onShotsChange?.(next)
+  }
+  const frameSync = useRef(() => {})
+  frameSync.current = () => writeLegacyFrames(session.saved(), gens)
+  useEffect(() => { frameSync.current() }, [doc, gens, shots, save])
   const refresh = async () => {
     if (!await flush()) return
     const snapshot = session.doc()
     const s = await getCanvas(resource)
     setGens(s.generations)
+    writeLegacyFrames(s.doc, s.generations)
     // A concurrent local edit must survive an arriving generation. The next server read derives its stale flag.
     if (snapshot === session.doc()) session.acceptServer(s)
     setBudget(await getBudget())
@@ -119,6 +151,7 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
   }
   const selectionIO = (knownVoices = voices) => ({
     current: session.doc, change, flush, voices: knownVoices, generations: gens,
+    matchesInputs: (gen: Generation) => { const model = models.find((m) => m.id === gen.model); return resource.kind === 'legacy-plan' && !!model && legacyInputsMatch(session.doc(), gen, shots, gens, kit, model) },
     importVoice: (genId: string, nodeId: string) => importTts(resource, genId, nodeId),
     onVoice: (v: VoiceInfo) => setVoices((vs) => [...vs.filter((old) => old.id !== v.id), v]),
   })
@@ -164,7 +197,9 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
     const n = session.doc().nodes.find((n) => n.id === id)!
     const model = models.find((m) => m.id === n.data.model)
     if (!model?.available) throw new Error(t('canvas.err.models'))
-    const request = genRequest(session.doc(), id, shots, gens, null, model)
+    const needsKit = resource.kind === 'legacy-plan' && session.doc().edges.some((e) => e.target === id && e.targetHandle === 'in:kit')
+    if (needsKit && (!kit || kitFailed)) throw new Error(ff('kitUnavailable'))
+    const request = resource.kind === 'legacy-plan' ? legacyGenerationRequest(session.doc(), id, shots, gens, kit, model).request : genRequest(session.doc(), id, shots, gens, kit, model)
     if (resource.kind === 'workspace') request.prompt = connectedPrompt(session.doc(), id)
     const signature = JSON.stringify({ version: session.version(), model: n.data.model, request })
     let usd = priceOf(model, n.data.duration)
@@ -228,22 +263,26 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
     await withBusy('edges', async () => {
       const derived = edges.filter((e) => e.id.startsWith('derived:'))
       if (derived.length) {
+        const knownVoices = await getVoices(resource)
+        setVoices(knownVoices)
         let p = edit.current()
         if (!p || !edit.persist) throw new Error(ff('saveFirst'))
-        for (const e of derived) p = removeEditorSource(p, e.source, session.doc(), voices)
+        for (const e of derived) p = removeEditorSource(p, e.source, session.doc(), knownVoices)
         if (!await edit.persist(p)) throw new Error(ff('saveFirst'))
       }
       const ids = new Set(edges.map((e) => e.id))
       let next = session.doc()
       for (const e of edges) next = markStale(next, e.source, gens)
-      change({ ...next, edges: next.edges.filter((e) => !ids.has(e.id)) })
+      change({ ...next, nodes: next.nodes.map((n) => edges.some((e) => e.target === n.id && e.targetHandle === 'in:kit') ? { ...n, data: { ...n.data, kitCut: true } } : n), edges: next.edges.filter((e) => !ids.has(e.id)) })
     })
   }
   const remove = (ids: string[]) => void withBusy('delete', async () => {
     const removable = new Set(ids.filter((id) => session.doc().nodes.find((n) => n.id === id)?.type !== 'shot'))
+    const knownVoices = await getVoices(resource)
+    setVoices(knownVoices)
     let p = edit.current()
     if (p && edit.persist) {
-      for (const id of removable) p = id === 'n_editor' ? { ...p, clips: [], voiceover: [] } : removeEditorSource(p, id, session.doc(), voices)
+      for (const id of removable) p = id === 'n_editor' ? { ...p, clips: [], voiceover: [] } : removeEditorSource(p, id, session.doc(), knownVoices)
       if (!await edit.persist(p)) throw new Error(ff('saveFirst'))
     }
     let next = session.doc()
@@ -255,7 +294,7 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
     if (readOnly || stale || quote) return
     const rect = flowBox.current?.getBoundingClientRect()
     const center = at ?? screenToFlowPosition({ x: (rect?.left ?? 0) + (rect?.width ?? 900) / 2 - 160, y: (rect?.top ?? 0) + 160 })
-    const next = createNode(session.doc(), kind, center)
+    const next = createNode(session.doc(), kind, center, from ? session.doc().nodes.find((n) => n.id === from)?.shotId : undefined)
     const n = kind === 'editor' ? next.nodes.find((n) => n.type === 'editor')! : next.nodes[next.nodes.length - 1]!
     change(next); setSelected([n.id]); setMenu(null)
     if (from) { const opt = compatibleKinds(next, from).find((o) => o.kind === kind); if (opt) void connect({ source: from, sourceHandle: 'out', target: n.id, targetHandle: opt.handle }) }
@@ -270,16 +309,29 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
       const take = await uploadTake(resource.id, index, file)
       setTakes(await listTakes(resource.id)); update(id, { takeId: take.id }); await flush(); return
     }
-    update(id, { media, selected: null, voiceId: undefined, takeId: undefined })
-    if (!await flush()) throw new Error(ff('saveFirst'))
-    if (audio) {
-      const v = await putVoice(resource, file, 'upload', id)
-      update(id, { voiceId: v.id, selected: null, takeId: undefined, media: 'audio' }); setVoices((vs) => [...vs, v])
-    } else {
-      const g = await uploadMedia(resource, id, file)
-      setGens((gs) => [...gs, g]); update(id, { selected: g.id, voiceId: undefined, takeId: undefined, media: g.kind === 'image' ? 'image' : 'video' })
-    }
-    await flush()
+    if (replacing) return
+    setReplacing(true)
+    const previousProject = edit.current()
+    try {
+      if (!previousProject || !edit.persist) throw new Error(ff('saveFirst'))
+      await replaceUploadedMedia(id, media, {
+        current: session.doc, change, restore: session.retain, flush,
+        upload: async () => {
+          if (audio) {
+            const voice = await putVoice(resource, file, 'upload', id)
+            setVoices((vs) => [...vs, { ...voice, nodeId: id }])
+            return { voiceId: voice.id, selected: null }
+          }
+          const gen = await uploadMedia(resource, id, file)
+          setGens((gs) => [...gs, gen])
+          return { selected: gen.id }
+        },
+        removeOldSources: async () => !!edit.persist && await edit.persist(removeEditorSource(previousProject, id, session.doc(), voices)),
+        restoreOldSources: async () => !!edit.persist && await edit.persist(previousProject),
+      })
+      await refresh()
+    } finally { setReplacing(false) }
+
   })
   const ask = async () => withBusy('assistant', async () => {
     const id = selected.find((id) => session.doc().nodes.find((n) => n.id === id)?.type === 'prompt')
@@ -291,8 +343,8 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
     setPlan(body)
   })
   const actions: FreeformActions = {
-    doc, gens, models, shots, voices, takes, pickTake: (id) => void withBusy('take', async () => { setTakes(await chooseTake(resource.id, id)) }), freeform: resource.kind === 'workspace', project: edit.committedProject ?? null, readonly: readOnly || stale || recoveryOpen || reloadAsk || !!quote || !!edit.writing, busy, update, run: (id) => void begin(id), upload, remove,
-    duplicate: (id) => { const n = session.doc().nodes.find((n) => n.id === id)!; const next = createNode(session.doc(), n.type, { x: n.position.x + 60, y: n.position.y + 60 }); const copy = next.nodes[next.nodes.length - 1]!; copy.data = { ...n.data, selected: null, voiceId: undefined, takeId: undefined, awaiting: undefined }; change(next); setSelected([copy.id]) },
+    doc, gens, models, shots, voices, takes, kit, pickTake: (id) => void withBusy('take', async () => { setTakes(await chooseTake(resource.id, id)) }), freeform: resource.kind === 'workspace', project: edit.committedProject ?? null, readonly: readOnly || stale || replacing || recoveryOpen || reloadAsk || !!quote || !!edit.writing, busy, update, run: (id) => void begin(id), upload, remove,
+    duplicate: (id) => { const next = duplicateNode(session.doc(), id); change(next); setSelected([next.nodes[next.nodes.length - 1].id]) },
     inspect: (id) => { setSelected([id]); setDock('inspect') }, openEditor: () => setEditing(true),
     connect: (id) => { const rect = flowBox.current!.getBoundingClientRect(); setMenu({ x: rect.width / 2, y: 150, from: id, at: screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + 150 }) }) },
   }
@@ -319,8 +371,8 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
   }
   const back = async () => { const editResult = await edit.flush(); if ((!readOnly && !await flush()) || editResult === 'failed' || editResult === 'stale') { setNote(ff('saveFirst')); return }; onBack() }
   return <section className="fc-screen">
-    {editing ? <div className="fc-editor"><EditorPanel ideaId={resource} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} doc={doc} gens={gens} takes={takes} readOnly={readOnly || stale} onBack={() => setEditing(false)} onJumpToNode={(id) => { setSelected([id]); setEditing(false) }} /></div> : null}
-    <div className="fc-board" hidden={editing}>
+    {editing && !recoveryOpen && !reloadAsk ? <div className="fc-editor"><EditorPanel ideaId={resource} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} doc={doc} gens={gens} takes={takes} readOnly={readOnly || stale} onBack={() => setEditing(false)} onJumpToNode={(id) => { setSelected([id]); setEditing(false) }} /></div> : null}
+    <div className="fc-board" hidden={editing && !recoveryOpen && !reloadAsk}>
       <header className="fc-top"><button className="fc-back" aria-label={ff('back')} onClick={() => void back()}>‹</button><div className="fc-crumb"><span className="fc-project-dot" />{clientName}<span>›</span><strong>{title}</strong></div><div className="fc-top-actions">
         <button aria-label={ff('reload')} onClick={() => void safeReload()}>↻</button>
         <button className={save === 'failed' ? 'fc-error-button' : 'fc-save'} onClick={() => void flush()}>{ff(save === 'saving' ? 'saving' : save === 'failed' ? 'failedSave' : 'saved')}</button>
@@ -366,8 +418,8 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
           <div className="fc-page">▱ {ff('page')} <span>1</span></div>
         </div>
         {dock && <aside className="fc-dock" aria-label={ff(dock)}><header><h2>{ff(dock)}</h2><button aria-label={ff('close')} onClick={() => setDock(null)}>×</button></header>
-          {dock === 'inspect' && (picked ? <><h3>{ff(picked.type)}</h3>{['prompt', 'storyboard', 'video', 'voice'].includes(picked.type) && <NodeSettings node={picked} actions={actions} />}<h4>{ff('ports')}</h4>{PORTS_LABEL(picked)}{edges.filter((e) => e.target === picked.id).map((e) => <div className="fc-input-wire" key={e.id}><span>{ff(doc.nodes.find((n) => n.id === e.source)!.type)}</span><button disabled={actions.readonly} aria-label={ff('delete')} onClick={() => void removeEdges([e])}>×</button></div>)}{['storyboard', 'video', 'voice'].includes(picked.type) && <button className="fc-primary" disabled={actions.readonly || busy.has(picked.id)} onClick={() => void begin(picked.id)}>▶ {ff('run')}</button>}</> : <p>{ff('noSelection')}</p>)}
-          {dock === 'history' && <><div className="fc-wallet"><h3>{ff('budget')}</h3>{budget && Object.entries(budget).map(([k, b]) => <p key={k}><span>{ff(k as 'image' | 'video' | 'voice')}</span><b>{usd(Math.max(0, b.cap - b.spent))}</b></p>)}</div>{gens.length === 0 && <p>{ff('noHistory')}</p>}{[...gens].reverse().map((g) => <article className="fc-history" key={g.id}>{g.url && g.kind === 'image' && <img src={g.url} alt="" />}<strong>{g.model}</strong><span>{ff(g.status)} · {usd(g.actualUsd ?? g.estUsd)}</span>{g.status === 'done' && <button disabled={actions.readonly} onClick={() => void withBusy(g.nodeId, async () => { if (!await selectGeneration(g, selectionIO())) throw new Error(ff('saveFirst')); setSelected([g.nodeId]); await refresh() })}>{ff('version')}</button>}{g.error && <p>{serverText(g.error)}</p>}</article>)}</>}
+          {dock === 'inspect' && (picked ? <><h3>{ff(picked.type)}</h3>{picked.type === 'kit' && (kit ? <fieldset disabled={actions.readonly} className="fc-kit-management"><KitPanel clientId={clientId} kit={kit} selected={picked.data.kitItems ?? []} onKit={applyKit} onSelected={(ids) => { update(picked.id, { kitItems: ids }); for (const id of kitTargets(session.doc(), picked.id)) change(markStale(session.doc(), id, gens)) }} onClose={() => setDock(null)} /></fieldset> : <p>{ff('kitUnavailable')}</p>)}{['prompt', 'storyboard', 'video', 'voice'].includes(picked.type) && <NodeSettings node={picked} actions={actions} />}{picked.type === 'storyboard' && kit && doc.edges.some((e) => e.target === picked.id && e.targetHandle === 'in:kit') && <div className="fc-kit-picks"><h4>{ff('kit')}</h4>{kit.items.filter((item) => { const source = doc.edges.find((e) => e.target === picked.id && e.targetHandle === 'in:kit')?.source; return doc.nodes.find((n) => n.id === source)?.data.kitItems?.includes(item.id) }).map((item) => <label key={item.id}><input type="checkbox" checked={!picked.data.kitOff?.includes(item.id)} disabled={actions.readonly} onChange={(e) => update(picked.id, { kitOff: e.target.checked ? (picked.data.kitOff ?? []).filter((id) => id !== item.id) : [...(picked.data.kitOff ?? []), item.id] })} />{item.name}</label>)}<p>{legacyGenerationRequest(doc, picked.id, shots, gens, kit, models.find((m) => m.id === picked.data.model) ?? models.find((m) => m.kind === 'image')!).kitPreview}</p></div>}<h4>{ff('ports')}</h4>{PORTS_LABEL(picked)}{edges.filter((e) => e.target === picked.id).map((e) => <div className="fc-input-wire" key={e.id}><span>{ff(doc.nodes.find((n) => n.id === e.source)!.type)}</span><button disabled={actions.readonly} aria-label={ff('delete')} onClick={() => void removeEdges([e])}>×</button></div>)}{['storyboard', 'video', 'voice'].includes(picked.type) && <button className="fc-primary" disabled={actions.readonly || busy.has(picked.id)} onClick={() => void begin(picked.id)}>▶ {ff('run')}</button>}</> : <p>{ff('noSelection')}</p>)}
+          {dock === 'history' && <><div className="fc-wallet"><h3>{ff('budget')}</h3>{budget && Object.entries(budget).map(([k, b]) => <p key={k}><span>{ff(k as 'image' | 'video' | 'voice')}</span><b>{usd(Math.max(0, b.cap - b.spent))}</b></p>)}</div>{gens.length === 0 && <p>{ff('noHistory')}</p>}{[...gens].reverse().map((g) => <article className="fc-history" key={g.id}>{g.url && g.kind === 'image' && <img src={g.url} alt="" />}<strong>{g.model}</strong><span>{ff(g.status)} · {usd(g.actualUsd ?? g.estUsd)}</span>{g.status === 'done' && <button disabled={actions.readonly} onClick={() => void withBusy(g.nodeId, async () => { const knownVoices = await getVoices(resource); setVoices(knownVoices); if (!await selectGeneration(g, selectionIO(knownVoices))) throw new Error(ff('saveFirst')); setSelected([g.nodeId]); await refresh() })}>{ff('version')}</button>}{g.error && <p>{serverText(g.error)}</p>}</article>)}</>}
           {dock === 'assistant' && <><p>{ff('assistantHint')}</p><button className="fc-primary" disabled={actions.readonly || busy.has('assistant') || !picked || picked.type !== 'prompt'} onClick={() => void ask()}>{ff('preview')}</button>{plan && <div className="fc-agent-plan"><span className="fc-demo">{plan.source === 'demo' ? ff('demo') : `${ff('source')}: ${plan.source}`}</span><h3>{ff('storyboard')}</h3><p>{plan.storyboard.prompt}</p><small>{plan.storyboard.model}</small><h3>{ff('video')}</h3><p>{plan.video.prompt}</p><small>{plan.video.model} · {seconds(plan.video.duration)} · {usd(plan.planUsd)}</small><p>{ff('noAuto')}</p><button className="fc-primary" disabled={actions.readonly} onClick={() => { if (session.version() !== plan.canvasVersion || session.doc() !== session.saved()) { setNote(ff('changed')); return }; change(applyPromptPlan(session.doc(), plan)); setPlan(null); setDock(null) }}>{ff('apply')}</button></div>}</>}
         </aside>}
       </div>

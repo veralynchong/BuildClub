@@ -1754,6 +1754,12 @@ export default function App() {
             <Suspense fallback={<p className="muted">{t('canvas.loading')}</p>}>
               <CanvasScreen
                 context={canvasContext}
+                onShotsChange={(shots) => {
+                  if (canvasContext.resource.kind !== 'legacy-plan') return
+                  const id = canvasContext.resource.id
+                  setIdeas((prev) => prev.map((idea) => idea.id === id ? { ...idea, shots } : idea))
+                  setCanvasContext((ctx) => ctx?.resource.id === id ? { ...ctx, shots } : ctx)
+                }}
                 onBack={() => setView('canvasPick')}
                 openEditor={canvasEditor}
                 clientName={clients.find((c) => c.id === canvasContext.clientId)?.name ?? client.name}

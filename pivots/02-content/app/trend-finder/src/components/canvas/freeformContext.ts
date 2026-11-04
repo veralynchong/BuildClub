@@ -2,10 +2,11 @@ import { createContext } from 'react'
 import type { Node } from '@xyflow/react'
 import type { CanvasDoc, CanvasNode, GenModel, Generation, NodeData } from '../../lib/canvas/types'
 import type { Take } from '../../lib/takes'
-import type { Shot } from '../../types'
+import type { Kit, Shot } from '../../types'
 import type { EditProject } from '../../lib/editor/types'
 
 export interface FreeformActions {
+  kit: Kit | null
   freeform: boolean
   doc: CanvasDoc; gens: Generation[]; models: GenModel[]; shots: Shot[]; project: EditProject | null
   takes: Take[]

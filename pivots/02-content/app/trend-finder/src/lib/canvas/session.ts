@@ -1,5 +1,6 @@
 import type { CanvasDoc, CanvasState, Generation } from './types.ts'
 import type { VoiceInfo } from '../editor/api.ts'
+import { ff } from '../strings/freeform.ts'
 import { markStale } from './graph.ts'
 
 export interface CanvasDraft { doc: CanvasDoc; version: number }
@@ -48,6 +49,7 @@ export function createCanvasSession(initial: Pick<CanvasState, 'doc' | 'version'
     flush,
     acceptServer(state: Pick<CanvasState, 'doc' | 'version'>) { doc = saved = state.doc; version = state.version; notify() },
     keepDraft: backup,
+    retain(next: CanvasDoc) { doc = next; backup(); notify() },
     restore() { if (!draft) return; doc = draft.doc; conflict = false; suspended = false; backup(); notify() },
     discard() { draft = null; io.writeDraft(null); doc = saved; conflict = false; save = 'saved'; notify() },
     async prepareReload(keepDraft: boolean): Promise<boolean> {
@@ -84,6 +86,7 @@ interface SelectionIO {
   current: () => CanvasDoc
   change: (doc: CanvasDoc) => void
   flush: () => Promise<boolean>
+  matchesInputs?: (gen: Generation) => boolean
   generations?: Generation[]
   voices: VoiceInfo[]
   importVoice: (genId: string, nodeId: string) => Promise<VoiceInfo>
@@ -98,7 +101,7 @@ export async function selectGeneration(gen: Generation, io: SelectionIO): Promis
   // Re-read after importing: editing while the request was in flight must survive.
   const next = { ...io.current(), nodes: io.current().nodes.map((n) => {
     if (n.id !== gen.nodeId) return n
-    const data = { ...n.data, selected: gen.id, ...(mappedVoice ? { voiceId: mappedVoice.id } : {}) }
+    const data = { ...n.data, ...(io.matchesInputs?.(gen) && !gen.inputs.inputStamp ? { stale: false } : {}), selected: gen.id, ...(mappedVoice ? { voiceId: mappedVoice.id } : {}) }
     if (data.awaiting === gen.id) delete data.awaiting
     return { ...n, data }
   }) }
@@ -107,14 +110,16 @@ export async function selectGeneration(gen: Generation, io: SelectionIO): Promis
 }
 export async function reconcileGenerations(gens: Generation[], io: SelectionIO): Promise<void> {
   for (const n of io.current().nodes) {
-    if (!n.data.awaiting) continue
-    const gen = gens.find((g) => g.id === n.data.awaiting && g.nodeId === n.id)
+    const orphan = !n.data.selected && ['storyboard', 'video', 'voice'].includes(n.type) ? gens.filter((g) => g.nodeId === n.id && g.status === 'done').sort((a, b) => b.createdAt - a.createdAt)[0] : null
+    const awaiting = n.data.awaiting ?? orphan?.id
+    if (!awaiting) continue
+    const gen = gens.find((g) => g.id === awaiting && g.nodeId === n.id)
     if (!gen || ['queued', 'running', 'waiting'].includes(gen.status)) continue
     if (gen.status === 'done') {
-      if (!await selectGeneration(gen, io)) throw new Error('Could not save the recovered generation.')
+      if (!await selectGeneration(gen, io)) throw new Error(ff('saveFirst'))
     } else {
       io.change({ ...io.current(), nodes: io.current().nodes.map((node) => { if (node.id !== n.id) return node; const data = { ...node.data }; delete data.awaiting; return { ...node, data } }) })
-      if (!await io.flush()) throw new Error('Could not save the recovered generation.')
+      if (!await io.flush()) throw new Error(ff('saveFirst'))
     }
   }
 }
