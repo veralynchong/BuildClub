@@ -2,6 +2,8 @@
 import copy
 import time
 
+import pytest
+
 import auth
 import server
 
@@ -545,3 +547,141 @@ def test_upload_rechecks_media_changed_during_stream(client):
     assert refused.status_code == 422
     assert client.get(base + '/gen').json() == []
     assert not list((server.MEDIA_DIR / rid / 'gen').iterdir())
+
+
+def mock_voice_audio(monkeypatch):
+    import cutting
+    import editing
+    monkeypatch.setattr(cutting, 'probe', lambda path: {'duration': 2, 'hasAudio': True, 'width': 0, 'height': 0})
+    monkeypatch.setattr(editing, 'transcribe_voice', lambda path, work: [{'text': 'Hello', 'start': 0, 'end': 1}])
+
+
+def assert_no_new_voice_media(rid, existing_files=None, existing_gens=0):
+    existing_files = existing_files or set()
+    root = server.MEDIA_DIR / rid
+    actual = {str(p.relative_to(root)) for p in root.rglob('*') if p.is_file()}
+    assert actual == existing_files
+    with server.db() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM generations WHERE idea_id=?', (rid,)).fetchone()[0] == existing_gens
+        assert conn.execute('SELECT COUNT(*) FROM workspace_voices WHERE idea_id=?', (rid,)).fetchone()[0] == 0
+
+
+def test_audio_upload_rechecks_deleted_node_after_stream(client, monkeypatch):
+    import json
+    staff(client)
+    mock_voice_audio(monkeypatch)
+    base, doc = setup_graph(client, [node('u', 'upload', media='audio')])
+    rid = base.rsplit('/', 1)[1]
+    def stream():
+        yield b'local audio'
+        doc['nodes'] = []
+        with server.db() as conn:
+            conn.execute('UPDATE canvases SET version=3,doc=? WHERE idea_id=?', (json.dumps(doc), rid))
+    refused = client.put(base + '/edit/voice?source=upload&nodeId=u', content=stream(), headers={'content-type': 'audio/mpeg'})
+    assert refused.status_code == 422
+    assert_no_new_voice_media(rid)
+
+
+def test_audio_upload_rechecks_type_and_media_after_transcription(client, monkeypatch):
+    import editing
+    import json
+    staff(client)
+    mock_voice_audio(monkeypatch)
+    for change in ('media', 'type'):
+        base, doc = setup_graph(client, [node('u', 'upload', media='audio')])
+        rid = base.rsplit('/', 1)[1]
+        def transcribe(path, work):
+            if change == 'media':
+                doc['nodes'][0]['data']['media'] = 'video'
+            else:
+                doc['nodes'][0]['type'] = 'prompt'
+            with server.db() as conn:
+                conn.execute('UPDATE canvases SET version=3,doc=? WHERE idea_id=?', (json.dumps(doc), rid))
+            return [{'text': 'Hello', 'start': 0, 'end': 1}]
+        monkeypatch.setattr(editing, 'transcribe_voice', transcribe)
+        refused = client.put(base + '/edit/voice?source=upload&nodeId=u', content=b'audio', headers={'content-type': 'audio/mpeg'})
+        assert refused.status_code == 422
+        assert_no_new_voice_media(rid)
+
+
+def test_audio_upload_insert_and_mapping_failures_clean_only_new_files(client, monkeypatch):
+    import pytest
+    import sqlite3
+    staff(client)
+    mock_voice_audio(monkeypatch)
+    for table in ('generations', 'workspace_voices'):
+        base, _ = setup_graph(client, [node('u', 'upload', media='audio')])
+        rid = base.rsplit('/', 1)[1]
+        kept = server.MEDIA_DIR / rid / 'edit' / 'voice' / 'existing.mp3'
+        kept.parent.mkdir(parents=True)
+        kept.write_bytes(b'existing audio')
+        with server.db() as conn:
+            conn.execute(f"CREATE TRIGGER fail_voice_insert BEFORE INSERT ON {table} BEGIN SELECT RAISE(ABORT,'injected voice insert failure'); END")
+        with pytest.raises(sqlite3.IntegrityError, match='injected voice insert failure'):
+            client.put(base + '/edit/voice?source=upload&nodeId=u', content=b'audio', headers={'content-type': 'audio/mpeg'})
+        assert_no_new_voice_media(rid, {'edit/voice/existing.mp3'})
+        assert kept.read_bytes() == b'existing audio'
+        with server.db() as conn:
+            conn.execute('DROP TRIGGER fail_voice_insert')
+
+
+@pytest.mark.parametrize('change', ['prompt', 'delete', 'type', 'media', 'source-node', 'mapping', 'success'])
+def test_from_gen_rechecks_stale_source_after_transcription_and_releases_claim(client, monkeypatch, change):
+    import editing
+    import json
+    staff(client)
+    mock_voice_audio(monkeypatch)
+    monkeypatch.setattr(server.gen_jobs, 'submit', lambda gid: None)
+    base, doc = setup_graph(client, [node('p', 'prompt', text='Hello bicycle'), node('v', 'voice', model='mock-voice')], [connect('p', 'v')])
+    rid = base.rsplit('/', 1)[1]
+    body = {'nodeId': 'v', 'canvasVersion': 2}
+    quote = client.post(base + '/edit/voice/tts', json=body).json()
+    gen = client.post(base + '/edit/voice/tts', json={**body, 'confirm': True, 'inputStamp': quote['inputStamp']}).json()
+    folder = server.MEDIA_DIR / rid / 'gen'
+    folder.mkdir(parents=True)
+    original = folder / (gen['id'] + '.mp3')
+    original.write_bytes(b'original generated audio')
+    with server.db() as conn:
+        conn.execute("UPDATE generations SET status='done',file=? WHERE id=?", (original.name, gen['id']))
+    def transcribe(path, work):
+        with server.db() as conn:
+            if change == 'mapping':
+                conn.execute("CREATE TRIGGER fail_voice_mapping BEFORE INSERT ON workspace_voices BEGIN SELECT RAISE(ABORT,'injected mapping failure'); END")
+            elif change == 'source-node':
+                conn.execute("UPDATE generations SET node_id='another-node' WHERE id=?", (gen['id'],))
+            elif change != 'success':
+                if change == 'prompt':
+                    doc['nodes'][0]['data']['text'] = 'Changed while transcribing'
+                elif change == 'delete':
+                    doc['nodes'] = doc['nodes'][:1]
+                elif change == 'type':
+                    doc['nodes'][1]['type'] = 'prompt'
+                else:
+                    doc['nodes'][1]['type'] = 'upload'
+                    doc['nodes'][1]['data']['media'] = 'video'
+                conn.execute('UPDATE canvases SET version=3,doc=? WHERE idea_id=?', (json.dumps(doc), rid))
+        return [{'text': 'Hello', 'start': 0, 'end': 1}]
+    monkeypatch.setattr(editing, 'transcribe_voice', transcribe)
+    url = base + '/edit/voice/from-gen/' + gen['id']
+    if change == 'mapping':
+        import sqlite3
+        with pytest.raises(sqlite3.IntegrityError, match='injected mapping failure'):
+            client.post(url, json={'nodeId': 'v'})
+    else:
+        response = client.post(url, json={'nodeId': 'v'})
+        if change == 'success':
+            assert response.status_code == 200, response.text
+            voice = response.json()
+            assert voice['genId'] == gen['id'] and voice['nodeId'] == 'v' and voice['voiceId'] == voice['id']
+            root = server.MEDIA_DIR / rid
+            kept = {str(p.relative_to(root)) for p in root.rglob('*') if p.is_file()}
+            assert kept == {'gen/' + original.name, 'edit/voice/' + gen['id'] + '.claim',
+                            *('edit/voice/' + voice['id'] + suffix for suffix in ('.mp3', '.words.json', '.gen'))}
+            assert client.post(url, json={'nodeId': 'v'}).status_code == 409
+            assert {str(p.relative_to(root)) for p in root.rglob('*') if p.is_file()} == kept
+            with server.db() as conn:
+                assert conn.execute('SELECT COUNT(*) FROM workspace_voices WHERE idea_id=?', (rid,)).fetchone()[0] == 1
+            return
+        assert response.status_code == (422 if change in ('delete', 'type', 'media') else 409), response.text
+    assert_no_new_voice_media(rid, {'gen/' + original.name}, existing_gens=1)
+    assert original.read_bytes() == b'original generated audio'
