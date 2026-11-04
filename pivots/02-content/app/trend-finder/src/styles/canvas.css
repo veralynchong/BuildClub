@@ -402,6 +402,13 @@
 /* Freeform workspace: one dark scene, with tools and a single shared dock. */
 .fc-screen { --fc-bg:#101010; --fc-panel:#1b1b1b; --fc-line:#333; --fc-fg:#ededed; --fc-muted:#8c8c8c; --fc-blue:#567eff; color:var(--fc-fg); background:var(--fc-bg); height:calc(100dvh - 32px); min-height:650px; border-radius:14px; overflow:hidden; color-scheme:dark; position:relative; font-size:13px; }
 .shell.is-full .fc-screen { height:100dvh; border-radius:0; }
+/* Desktop Canvas fills the space beside app navigation, including its editor. */
+@media (min-width: 861px) {
+  .shell.is-compact .shell-main:has(> .main > .fc-screen) { height:100dvh; min-height:0; }
+  .shell.is-compact .main:has(> .fc-screen) { max-width:none; margin:0; padding:0; min-height:0; display:flex; flex-direction:column; }
+  .shell.is-compact .main > .fc-screen { flex:1; height:auto; min-height:0; width:100%; border-radius:0; }
+  .fc-editor > .cv-ed-full { height:100%; min-height:0; padding:16px; }
+}
 .fc-screen *, .fc-picker * { box-sizing:border-box; }
 .fc-board button, .fc-picker button { font:inherit; cursor:pointer; }
 .fc-board button:disabled, .fc-picker button:disabled { opacity:.35; cursor:default; }
