@@ -823,6 +823,7 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
 
     @router.post("/api/ideas/{idea_id}/edit/voice/tts")
     async def voice_tts(idea_id: str, request: Request):
+        independent = request.url.path.startswith('/api/workspaces/')
         try:
             body = await request.json()
         except ValueError:
@@ -838,7 +839,9 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             return bad
         stamp, version = None, None
         with db() as conn:
-            if workspaces.workspace(conn, idea_id):
+            if independent:
+                if workspaces.workspace(conn, idea_id) is None:
+                    return error(404, "That plan doesn't exist.")
                 try:
                     version, resolved, stamp = workspaces.inputs(conn, idea_id, node_id, load)
                 except ValueError as e:
@@ -877,6 +880,7 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
 
     @router.post("/api/ideas/{idea_id}/edit/voice/from-gen/{gen_id}")
     async def voice_from_gen(idea_id: str, gen_id: str, request: Request, nodeId: str = ""):
+        independent = request.url.path.startswith('/api/workspaces/')
         refused = gate(idea_id)
         if refused:
             return refused
@@ -894,8 +898,9 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         if bad:
             return bad
         with db() as conn:
-            independent = workspaces.workspace(conn, idea_id) is not None
             if independent:
+                if workspaces.workspace(conn, idea_id) is None:
+                    return error(404, "That plan doesn't exist.")
                 grow = conn.execute(f'SELECT {generations.COLUMNS} FROM generations WHERE id=? AND idea_id=?', (gen_id, idea_id)).fetchone()
                 if grow is None or grow[2] != node_id or workspaces.generation_stale(conn, idea_id, generations.to_json(grow), load):
                     return error(409, renders.EDIT_STALE)

@@ -625,7 +625,7 @@ def test_audio_upload_insert_and_mapping_failures_clean_only_new_files(client, m
             conn.execute('DROP TRIGGER fail_voice_insert')
 
 
-@pytest.mark.parametrize('change', ['prompt', 'delete', 'type', 'media', 'source-node', 'mapping', 'success'])
+@pytest.mark.parametrize('change', ['prompt', 'delete', 'type', 'media', 'source-node', 'source-kind', 'source-status', 'mapping', 'success'])
 def test_from_gen_rechecks_stale_source_after_transcription_and_releases_claim(client, monkeypatch, change):
     import editing
     import json
@@ -649,6 +649,10 @@ def test_from_gen_rechecks_stale_source_after_transcription_and_releases_claim(c
                 conn.execute("CREATE TRIGGER fail_voice_mapping BEFORE INSERT ON workspace_voices BEGIN SELECT RAISE(ABORT,'injected mapping failure'); END")
             elif change == 'source-node':
                 conn.execute("UPDATE generations SET node_id='another-node' WHERE id=?", (gen['id'],))
+            elif change == 'source-kind':
+                conn.execute("UPDATE generations SET kind='video' WHERE id=?", (gen['id'],))
+            elif change == 'source-status':
+                conn.execute("UPDATE generations SET status='failed' WHERE id=?", (gen['id'],))
             elif change != 'success':
                 if change == 'prompt':
                     doc['nodes'][0]['data']['text'] = 'Changed while transcribing'
@@ -685,3 +689,101 @@ def test_from_gen_rechecks_stale_source_after_transcription_and_releases_claim(c
         assert response.status_code == (422 if change in ('delete', 'type', 'media') else 409), response.text
     assert_no_new_voice_media(rid, {'gen/' + original.name}, existing_gens=1)
     assert original.read_bytes() == b'original generated audio'
+
+
+def test_from_gen_cannot_downgrade_scope_when_workspace_disappears_during_body_await(client, monkeypatch):
+    from starlette.requests import Request
+    staff(client)
+    mock_voice_audio(monkeypatch)
+    monkeypatch.setattr(server.gen_jobs, 'submit', lambda gid: None)
+    base, _ = setup_graph(client, [node('v', 'voice', prompt='Hello bicycle', model='mock-voice')])
+    rid = base.rsplit('/', 1)[1]
+    body = {'nodeId': 'v', 'canvasVersion': 2}
+    quote = client.post(base + '/edit/voice/tts', json=body).json()
+    gen = client.post(base + '/edit/voice/tts', json={**body, 'confirm': True, 'inputStamp': quote['inputStamp']}).json()
+    folder = server.MEDIA_DIR / rid / 'gen'
+    folder.mkdir(parents=True)
+    source = folder / (gen['id'] + '.mp3')
+    source.write_bytes(b'original generated audio')
+    with server.db() as conn:
+        conn.execute("UPDATE generations SET status='done',file=? WHERE id=?", (source.name, gen['id']))
+    url = base + '/edit/voice/from-gen/' + gen['id']
+    original_json = Request.json
+    removed = False
+    async def body_barrier(request):
+        nonlocal removed
+        if request.url.path == url:
+            # The route dependencies, gate and source SELECT have completed; suspend the
+            # request body boundary with its source intact while another writer removes metadata.
+            with server.db() as conn:
+                conn.execute('DELETE FROM workspaces WHERE id=?', (rid,))
+            removed = True
+        return await original_json(request)
+    monkeypatch.setattr(Request, 'json', body_barrier)
+    refused = client.post(url, json={'nodeId': 'v'})
+    assert removed
+    assert refused.status_code == 404, refused.text
+    assert_no_new_voice_media(rid, {'gen/' + source.name}, existing_gens=1)
+    assert source.read_bytes() == b'original generated audio'
+
+
+@pytest.mark.parametrize('failure', ['begin', 'commit'])
+def test_audio_attach_database_boundary_failure_cleans_new_rows_and_files(client, monkeypatch, failure):
+    import editing
+    import sqlite3
+    staff(client)
+    mock_voice_audio(monkeypatch)
+    base, _ = setup_graph(client, [node('u', 'upload', media='audio')])
+    rid = base.rsplit('/', 1)[1]
+    armed = False
+    original_connect = sqlite3.connect
+    class FailingConnection(sqlite3.Connection):
+        attached = False
+        def execute(self, sql, *args, **kwargs):
+            nonlocal armed
+            if armed and failure == 'begin' and sql == 'BEGIN IMMEDIATE':
+                armed = False
+                raise sqlite3.OperationalError('injected audio BEGIN failure')
+            if armed and sql.startswith('INSERT INTO workspace_voices'):
+                self.attached = True
+            return super().execute(sql, *args, **kwargs)
+        def __exit__(self, exc_type, exc, tb):
+            nonlocal armed
+            if armed and failure == 'commit' and self.attached and exc_type is None:
+                armed = False
+                self.rollback()
+                raise sqlite3.OperationalError('injected audio COMMIT failure')
+            return super().__exit__(exc_type, exc, tb)
+    def transcribe(path, work):
+        nonlocal armed
+        armed = True
+        return [{'text': 'Hello', 'start': 0, 'end': 1}]
+    monkeypatch.setattr(editing, 'transcribe_voice', transcribe)
+    monkeypatch.setattr(sqlite3, 'connect', lambda *args, **kwargs: original_connect(*args, factory=FailingConnection, **kwargs))
+    with pytest.raises(sqlite3.OperationalError, match='injected audio'):
+        client.put(base + '/edit/voice?source=upload&nodeId=u', content=b'audio', headers={'content-type': 'audio/mpeg'})
+    assert not armed
+    assert_no_new_voice_media(rid)
+
+
+def test_workspace_tts_keeps_scope_when_metadata_disappears_after_gate(client, monkeypatch):
+    import workspaces
+    staff(client)
+    submissions = []
+    monkeypatch.setattr(server.gen_jobs, 'submit', submissions.append)
+    base, _ = setup_graph(client, [node('v', 'voice', prompt='Hello bicycle', model='mock-voice')])
+    rid = base.rsplit('/', 1)[1]
+    original = workspaces.resolve
+    def gate_then_remove(db, load, resource_id):
+        found = original(db, load, resource_id)
+        if resource_id == rid:
+            with db() as conn:
+                conn.execute('DELETE FROM workspaces WHERE id=?', (rid,))
+        return found
+    monkeypatch.setattr(workspaces, 'resolve', gate_then_remove)
+    refused = client.post(base + '/edit/voice/tts', json={'nodeId': 'v', 'canvasVersion': 2,
+        'text': 'Hello bicycle', 'model': 'mock-voice', 'confirm': True})
+    assert refused.status_code == 404, refused.text
+    assert submissions == []
+    assert not server.load('spend:' + server.today())
+    assert_no_new_voice_media(rid)
