@@ -9,9 +9,11 @@ Goal active；使用者已核准無人值守 Multi Agent 實作、commit、push�
 | Task | 狀態 | Owner／證據 |
 |---|---|---|
 | T0 | 完成 | Lead：新分支、本機三份計畫文件、安全離線驗證保護；起始 gate GREEN：984 passed, 2 skipped，frontend PASS |
-| T1 | 執行中 | Orca task_9671d805b114／ctx_3b4ed7ce46f5；唯讀，固定契約後才開始 writer |
+| T1 | 完成 | task_9671d805b114／ctx_3b4ed7ce46f5；三份唯讀契約回報，NOT RUN tests，已整合 Plan |
 | T2 | 完成 | task_5209fcd0805d／ctx_b9df19f20eb6；來源07d3d93，唯讀，測試 NOT RUN |
-| T3–T7 | 待前置完成 | 依 Tasks 順序執行 |
+| T3 | 執行中 | task_e0cfdcc6e808／ctx_53453c5ad8cc；freeform-canvas-backend；base a521141；backend唯一writer |
+| T4 | 執行中 | task_e8f98ecfcaeb／ctx_95a4a3a4957b；freeform-canvas-frontend；base a521141；src/unit唯一writer，先視覺再核對API |
+| T5–T7 | 待整合 | 本機E2E／review／交付 |
 
 ## 已核對
 
@@ -45,11 +47,19 @@ T2 來源 07d3d93，完整訊息 msg_ea7f2a8dcca4。分類依來源，不推測 
 
 ## 下一步
 
-1. 提交已通過 T0 離線 gate 的基線與文件：984 passed, 2 skipped in 31.26s；四步 PASS，verify: GREEN。
-2. 分派 T1／T2 唯讀 workers；取得契約與缺口證據。
-3. 更新 Tasks 的確切 API 與檔案歸屬，啟動獨立 writer，review／整合／本機 E2E。
-4. 最終更新本表、根 STATUS 與 handoff，推送並開 PR，留下明早真實測試清單。
+1. 接收 T3 先行CRUD/auth/DTO回報，核對固定契約後轉交T4；任何變更集中由lead整合。
+2. 兩位writer各自驗證提交，lead讀完整base..head、指派唯讀review、修正後整合。
+3. T5使用自有8872後端／8892渲染環境、單一browser owner、外部網路封鎖、暫存DB與真實本機媒體輸出驗收。
+4. 最終更新本表、根STATUS與handoff，推送並開PR，留下明早真實測試清單。
 
 ## 尚未驗證
 
 新版 Canvas 尚未實作；外部模型、配音及真實發布本輪禁止測試。沒有任何新版產品完成聲明。
+
+## 本機測試入口準備
+
+`bin/freeform-e2e.py` 使用清除憑證的環境、暫存backend/DB/media、macOS sandbox只允許loopback，拒讀dotenv/憑證及日常設定。既有依賴與Remotion browser預檢PASS，沒有安裝。test-slot資源 `local:127.0.0.1:8872:buildclub-e2e`。原8871由Desktop/BuildClub的其他session持有（Orca ports證據），未停止或存取；使用允許的8872隔離backend及8892 renderer。
+
+2026-11-05 smoke：PASS sandboxed owned backend, temporary account, 1440 browser and cleanup。證據 `/private/var/folders/pt/707kh2wx67x3vwn5bzsv72zw0000gn/T/freeform-evidence-o4c0w0bn`。這只證明隔離入口，不代表新版產品E2E。首次使用/usr/bin/python3出現xcrun cache拒寫提醒但exit0，改用同一既有Homebrew sys.executable避免系統launcher；待新版整合再次驗證。
+
+2026-11-05：runner使用Homebrew sys.executable後smoke再次PASS且無xcrun提醒；證據 `/private/var/folders/pt/707kh2wx67x3vwn5bzsv72zw0000gn/T/freeform-evidence-lkuan1n7`。新runner納入後root `bash bin/verify.sh full` 四步PASS，984 passed,2 skipped in35.22s，frontend PASS，verify GREEN。T3暫存分支進度回報991 passed,2 skipped（待提交／review，不等於整合驗收）。

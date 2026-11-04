@@ -25,3 +25,5 @@
 明早使用者驗證：真實模型生成與價格、真實配音品質及等待時間、外部服務失敗／權限、實際內容品質。今晚不得執行這些項目。
 
 T1 契約已寫入 Plan 的「固定實作契約」與「串接細節與安全邊界」。T3/T4 可從同一 contract commit 獨立並行，無共用檔案；介面變更必須先通知 lead，T5 僅在兩者整合後執行。
+
+T5入口：`python3 /Users/tommy/.agents/skills/test-slot/scripts/test_slot.py --resource local:127.0.0.1:8872:buildclub-e2e with-command --wait 10 --timeout 950 -- python3 bin/freeform-e2e.py`。後端8872、renderer8892；8871屬他人，禁止接管。`--check-tools`預檢不安裝；`--script`供驗證runner隔離smoke；正式產品測試使用app/e2e/freeform.cjs，待T3/T4整合後完成。

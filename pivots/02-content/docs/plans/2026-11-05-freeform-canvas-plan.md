@@ -67,3 +67,13 @@ editor node 使用 `n_editor`，最多一個，只由使用者新增；空圖不
 voice 保留後端 kind='voice'，畫布媒體='audio'。TTS／upload／from-gen 沿原 editor API 與 body 格式加可選 nodeId，workspace 必須指向合法 voice/upload node，回傳 voiceId 再由連線加入 VoiceSeg；不是上傳就自動放入時間軸。voice file 及 generation/take source 全部驗證同scope，不能跨workspace引用。
 
 client_brand/shot_lines/signature 透過真scope找client，workspace無shot lines；沿既有音訊word timings／手動字幕與brand。review cuts DTO 用 union：舊 `{idea,video,format,cut}` 保留，新 `{workspace:{id,title},cut}` 不回 prompts/doc/private notes。SharedReviewPage 明確分支。token/client/version/active/stale/reject理由/並發保護完整保留。
+
+### 執行與上傳 body 補充（lead決定）
+
+workspace `POST /api/workspaces/{id}/gen`：`{nodeId,canvasVersion,confirm:false}` 純報價200，回既有 Quote `{total,remaining,items}` 加 `{inputStamp,canvasVersion}`。模型/prompt/startFrame/references 以保存doc解析；confirm:true 必帶報價的inputStamp及canvasVersion，重算不符409且不排隊/扣款，成功201 Generation。Mock同樣可quote→confirm且US$0；真付費每次UI確認。legacy `/ideas/gen` 原body/行為保留。
+
+image/video upload：`/api/workspaces/{id}/gen/upload?nodeId=...`，raw body、Content-Type、可附x-filename，回Generation。audio：`/edit/voice?source=upload&nodeId=...` raw body，回原VoiceInfo；不放進image/video upload。TTS沿既有editor quote/confirm response，body加nodeId/canvasVersion。API實際首報由lead核對再接前端。
+
+### Run all執行策略
+
+workspace以拓撲順序逐node quote→confirm→完成→選取並保存→下一node，仍提供Run all。workspace chain endpoint明確422，不使用尚未selected的待完成圖片當成video stamp；legacy chain原樣保留。逐步失敗需顯示原因並允許重試，不假稱全鏈成功。
