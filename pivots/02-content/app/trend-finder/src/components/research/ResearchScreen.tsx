@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Client, Platform } from '../../types'
 import type { LinkInput, ResearchEntry, ResearchSlot, ResearchStatus, SlotSummary } from '../../lib/research'
-import { getActiveLang, t, tp } from '../../lib/i18n'
+import { getActiveLang, t } from '../../lib/i18n'
 import type { Key } from '../../lib/i18n'
 import { compact, platformName } from '../../lib/metrics'
 import { PlatformLogo } from '../PlatformToggles'
@@ -12,7 +12,6 @@ import { NewSlotForm } from './NewSlotForm'
 import type { NewVideo } from './NewSlotForm'
 import {
   DEFAULT_SORT,
-  STATUSES,
   downloadCsv,
   fileSlug,
   firstDir,
@@ -115,8 +114,6 @@ const cross = (
 export function ResearchScreen(p: ResearchScreenProps) {
   const id = useId()
   const [query, setQuery] = useState('')
-  const [platform, setPlatform] = useState<Platform | ''>('')
-  const [status, setStatus] = useState<ResearchStatus | ''>('')
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT)
   const [adding, setAdding] = useState(false)
   const [addingSlot, setAddingSlot] = useState(false)
@@ -139,22 +136,16 @@ export function ResearchScreen(p: ResearchScreenProps) {
 
   const { statusOf, summaryOf } = p
   const rows = useMemo(() => {
-    const kept = p.entries.filter(
-      (e) => matches(e, query) && (!platform || e.platform === platform) && (!status || statusOf(e) === status),
-    )
+    const kept = p.entries.filter((e) => matches(e, query))
     return sortRows(kept, sort, statusOf, lang)
-  }, [p.entries, query, platform, status, sort, statusOf, lang])
+  }, [p.entries, query, sort, statusOf, lang])
 
   const groups = useMemo(() => groupRows(p.slots, p.entries, rows, summaryOf), [p.slots, p.entries, rows, summaryOf])
 
-  // Only platforms that have rows, so the filter never offers an empty choice.
-  const rowPlatforms = useMemo(() => [...new Set(p.entries.map((e) => e.platform))], [p.entries])
-  const filtered = !!(query.trim() || platform || status)
-  const filterKey = `${query.trim()}|${platform}|${status}`
+  const filtered = !!query.trim()
+  const filterKey = query.trim()
   const clearFilters = () => {
     setQuery('')
-    setPlatform('')
-    setStatus('')
   }
 
   // Open / closed groups. Without a search: what this person chose for this client (remembered in the browser),
@@ -604,9 +595,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
     <section className="client research">
       <header className="client-head rs-head">
         <div>
-          <span className="eyebrow">{t('research.eyebrow', { client: p.client.name })}</span>
           <h1>{t('research.title')}</h1>
-          <p className="muted">{t('research.intro')}</p>
         </div>
         <div className="rs-head-actions">
           <button
@@ -710,33 +699,6 @@ export function ResearchScreen(p: ResearchScreenProps) {
                   onChange={(e) => setQuery(e.target.value)}
                 />
               </label>
-              <label className="field">
-                <span className="field-label">{t('research.filter.platform')}</span>
-                <select value={platform} onChange={(e) => setPlatform(e.target.value as Platform | '')}>
-                  <option value="">{t('research.filter.allPlatforms')}</option>
-                  {rowPlatforms.map((pl) => (
-                    <option key={pl} value={pl}>
-                      {platformName[pl]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span className="field-label">{t('research.filter.status')}</span>
-                <select value={status} onChange={(e) => setStatus(e.target.value as ResearchStatus | '')}>
-                  <option value="">{t('research.filter.allStatuses')}</option>
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {statusText(s)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="rs-count small muted" aria-live="polite">
-                {filtered
-                  ? t('research.countFiltered', { shown: rows.length, n: p.entries.length })
-                  : tp('research.count', p.entries.length)}
-              </p>
             </div>
           )}
 
