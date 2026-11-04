@@ -11,8 +11,8 @@
 ## 約束與範圍
 
 - 桌面 1440；英文影片內容；英文與 zh-Hant UI 均保留。
-- 禁止外部 API 測試、付費、安裝依賴、讀取秘密、接管其他 session 的資料庫／browser／服務。
-- 允許本機 API、mock、暫存 SQLite、瀏覽器、既有 ffmpeg／Remotion。真實供應商留給使用者明早測試，不冒充已驗收。
+- 本輪離線交付禁止外部 API 測試、付費、安裝依賴、讀取秘密、接管其他 session 的資料庫／browser／服務；後續真模型測試須逐次報價／cap及明確yes。
+- 允許本機 API、mock、暫存 SQLite、瀏覽器、既有 ffmpeg／Remotion。真實供應商未驗；使用者後續已指定由代理逐次取得費用確認後另測，不冒充本輪已驗收。
 - 不刪既有計畫、素材或歷史生成。依現有儲存與剪輯契約作增量相容改造；不把既有計畫自動當成使用者已審核的影片。
 - 非本輪：3D、手繪、貼圖、多人協作、完整自主建圖 agent、社群真實發布、分析平台。
 - 程式基準 `origin/main`：`e442b3ae80964ee53fda7265df61d18a210f66b3`。整合分支 `feat/freeform-canvas`。不使用 canvas-p1 的舊分支作產品基準。
@@ -77,3 +77,5 @@ image/video upload：`/api/workspaces/{id}/gen/upload?nodeId=...`，raw body、C
 ### Run all執行策略
 
 workspace以拓撲順序逐node quote→confirm→完成→選取並保存→下一node，仍提供Run all。workspace chain endpoint明確422，不使用尚未selected的待完成圖片當成video stamp；legacy chain原樣保留。逐步失敗需顯示原因並允許重試，不假稱全鏈成功。
+
+交付：PR #53 https://github.com/veralynchong/BuildClub/pull/53，未合併。程式／視覺來源2776a19最終獨立ACCEPT，本機13+5+3 UI與真正backend重啟、完整gate/build/lint通過；真provider仍待逐次成本確認。

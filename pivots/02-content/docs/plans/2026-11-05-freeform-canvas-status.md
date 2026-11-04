@@ -14,8 +14,8 @@ Goal active；使用者已核准無人值守 Multi Agent 實作、commit、push�
 | T3 | 完成並接受 | source0b64468已整合；親跑1021+2skip GREEN與真HTTP→MP4→token核准；非外部模型驗收 |
 | T4 | 功能實作完成，最終審查待收尾 | source01a907b三項legacy回歸已review ACCEPT、整合4e92a14並真UI3/3通過；port padding干擾已修、實測13px |
 | T5 | 本機／mock驗收完成，最終審查待接受 | main13/recovery5/legacy-entry3全部PASS；兩次真backend restart保留核准/退回、圖/生成/edit/voice/public JSON與media SHA256；cleanup全部survivors={} |
-| T6 | 最終提交與視覺審查待完成 | 暫定整合3項P2已由ctx_906ad7ad326f接受修復且實測；最新容器/Inspector/Assistant/menu有圖，須固定commit複審 |
-| T7 | 未完成 | local全部checkpoint尚未push、尚未開產品PR，不merge；最終清單與外部待驗須列明 |
+| T6 | 完成 | 固定2776a19最終程式ctx_ad89cb0c8fd6、視覺ctx_abd5e8692759皆ACCEPT，root接受；最後PR/Status文件delta另窄審 |
+| T7 | 交付完成 | PR #53 OPEN，base main/head feat/freeform-canvas；程式及QA已push至2776a19，不merge；最後文件更新完成後同步推送及窄審 |
 
 
 ## 已核對
@@ -48,15 +48,15 @@ T2 來源 07d3d93，完整訊息 msg_ea7f2a8dcca4。分類依來源，不推測 
 | auth/settings | auth.ts → server/auth/google_auth；save clients → SQLite；preferences local | 本機 auth 存在；register UI 呼叫 login、client login coming soon、OAuth未驗；本輪保留登入保護，不擴大帳戶系統 |
 
 
-## 下一步
+## 交付與下一步
 
-1. 對最終程式與證據checkpoint做獨立整合及視覺複審，處理剩餘阻擋。
-2. 審查接受後推送全部提交、開PR到origin/main，不merge；更新PR連結與最後handoff。
-3. 後續真模型品質／等待／費用測試由代理執行前，逐次報價/cap並取得明確yes；本輪未執行。
+本階段已完成離線／本機／mock實作驗收及PR交付。PR：https://github.com/veralynchong/BuildClub/pull/53（OPEN，不合併），base main、head feat/freeform-canvas；使用者及Veralyn可據此審閱外觀與行為。
+後續真模型品質、等待及實際費用由代理執行前，逐次提出模型／帳戶key用途／成本與cap，取得明確yes才呼叫；目前US$0、完全未做真provider測試或真發布。
 
-## 尚未驗證
+## 未驗證與盤點後續
 
-離線程式/HTTP/媒體與21項／組真UI已通過，含真正backend重啟；最終程式/視覺審查、push、PR仍待完成。真實外部provider、真發布、供應商品質／延遲／實際計費未驗證，不能用mock成果替代。
+真實外部provider、真發布、供應商品質／延遲／實際計費未驗證；不能以mock替代。全站非核心缺口見本文件接線表（Research/board本機資料、board助手fallback、發布/成效佔位等），本輪沒有冒稱全站所有服務已驗通。Mobile依使用者桌面範圍waived。
+最後程式來源2776a19完成full與獨立審查；交付後PR/Status更新只改文件，產品與測試harness不變，最後窄delta接受記錄以handoff／審查回報為準。
 
 ## 本機測試入口準備
 
@@ -154,3 +154,40 @@ Integrator檢查點：source01a907b6290fa4db645fed2fe72930c602f11331/baseafd55b5
 最後恢復套件於4e92a14+portpadding工作樹全5組PASS（/tmp/freeform-recovery-hitchecked-final）：已等待viewport穩定/節點量測並記錄elementFromPoint命中真正source/target，legacy音訊確實進editor；非forceclick，非框選。主11與legacy3也已真通過。完成audit另識別Tasks T5「重啟保留」尚只有瀏覽器重開，缺真backendprocessrestart，故T5仍不標Done；新增獨立runner writer補自有tempbackend重啟seam與兩次重啟專項驗證，之後主UI以真MP4/approval狀態再驗重啟，保持sandbox/ownedidentity/cleanup不放寬。
 
 整合紀錄：restart source9504e286/base88c12ca，reviewerctx_5bd86db2e69e ACCEPT且親跑兩次真重啟，lead讀兩檔diff後接受並整合6e65cb1。主UI新增核准/退回各一次重啟，13項全部PASS，oldExit=-15、media SHA256前後一致、public review JSON與state不變。視覺review72b1c75最初兩finding中，header裁切由ctx_5515cfc812d9核對相同blob1e9366e後明確撤回；僅legacy card overlap成立。source9c7a781/base01a由ctx_1b2227b4ed9b ACCEPT（18unit親跑）、lead接受整合f0f97c9；新legacy UI3PASS，card geometry image右緣920.98/video左緣940.86、overlaps=false，既有節點位置不變。f0f97c9親跑full1023passed2skipped in34.26s/frontendPASS/buildlint0；最終獨立程式與視覺審查尚待新checkpoint。
+
+
+## 最終接受紀錄
+
+- Source：2776a19cfb2c6bd5a40b262a5cd8962a12317401；base：e442b3ae80964ee53fda7265df61d18a210f66b3；範圍：完整124檔base..source。
+- 程式reviewer：ctx_ad89cb0c8fd6，ACCEPT，無blocker；親跑30項unit PASS，核對124筆A/M/D、53來源hash、語法及7份zero-survivor audit。
+- 視覺reviewer：ctx_abd5e8692759，ACCEPT固定9張PNG及4份視覺來源hash；舊圖卡片淨間距19.886px且重載不重疊，頂列finding已撤回，其餘先前阻擋皆結案。
+- Integrator：root ACCEPT。已讀完整回報與相關diff，固定HEAD/clean tree吻合；主13、恢復5、legacy3真UI、核准及退回兩次真backend restart與媒體hash不變，收尾full1023passed2skipped in33.08s、frontendPASS，build/lint0。
+- 限制：真provider／費用／延遲與真人素材品質未跑，mobile waived；舊全機staff權限維持既有模型，不宣稱多租戶隔離。
+- 階段結束：本機／mock改版與PR交付完成，停在使用者／Veralyn review及另行逐次付費確認；沒有merge。
+
+## 工作區盤點（不刪除）
+
+已核對git worktree list：47個註冊工作區，其中22個tip已在origin/main且tree乾淨；移除0個。以下可清理項目需使用者另行核准，沒有擅自刪工作區或分支：
+
+- /Users/tommy/orca/workspaces/BuildClub/bg-search — refs/heads/feat/background-search
+- /Users/tommy/orca/workspaces/BuildClub/board-3col — refs/heads/feat/plans-board-three-columns
+- /Users/tommy/orca/workspaces/BuildClub/breakdown-fields — refs/heads/feat/breakdown-hook-emotion
+- /Users/tommy/orca/workspaces/BuildClub/compare-videos — refs/heads/feat/compare-viral-videos
+- /Users/tommy/orca/workspaces/BuildClub/content-types — refs/heads/feat/content-type-filter
+- /Users/tommy/orca/workspaces/BuildClub/demo-35b436b — detached
+- /Users/tommy/orca/workspaces/BuildClub/demo-fe6496 — detached
+- /Users/tommy/orca/workspaces/BuildClub/filter-panel — refs/heads/feat/results-filter-panel
+- /Users/tommy/orca/workspaces/BuildClub/fix-local-covers — refs/heads/fix/local-cover-images
+- /Users/tommy/orca/workspaces/BuildClub/fix-yt-channel-url — refs/heads/fix/youtube-channel-id-url
+- /Users/tommy/orca/workspaces/BuildClub/integrate-1102 — refs/heads/feat/integrate-teammate-ui-1102
+- /Users/tommy/orca/workspaces/BuildClub/integrate-main — refs/heads/chore/integrate-main-shotboard
+- /Users/tommy/orca/workspaces/BuildClub/landing-real-videos — refs/heads/feat/landing-real-tofu-videos
+- /Users/tommy/orca/workspaces/BuildClub/landing-shots — refs/heads/feat/landing-screenshots
+- /Users/tommy/orca/workspaces/BuildClub/logo-to-landing — refs/heads/feat/logo-opens-landing
+- /Users/tommy/orca/workspaces/BuildClub/phase3-plan — refs/heads/docs/phase3-feedback-plan
+- /Users/tommy/orca/workspaces/BuildClub/reanalyse-fix — refs/heads/fix/reanalyse-and-open-plan
+- /Users/tommy/orca/workspaces/BuildClub/research-p3 — refs/heads/docs/research-ig-algo-competitors
+- /Users/tommy/orca/workspaces/BuildClub/shot-framing — refs/heads/feat/shot-framing-script
+- /Users/tommy/orca/workspaces/BuildClub/verify-fe6496 — detached
+- /Users/tommy/orca/workspaces/BuildClub/verify-numbers — refs/heads/feat/verify-video-numbers
+- /Users/tommy/orca/workspaces/BuildClub/w2-grade-subs-backend — refs/heads/feat/w2-grade-subtitles-backend

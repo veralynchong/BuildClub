@@ -4,7 +4,7 @@
 
 使用者已核准：深色Magnific式空白畫布直接取代舊Canvas、六類節點能力與既有助手、全站接線盤點並優先素材→剪輯→輸出→送審；無人值守Multi Agent、commit/push/開PR，不合併，不做外部API測試、不花費、不安裝依賴。計畫／逐項任務／執行狀態位於 `pivots/02-content/docs/plans/2026-11-05-freeform-canvas-{plan,tasks,status}.md`。
 
-整合分支 `feat/freeform-canvas`，base origin/main e442b3a。程式整合至f0f97c9，親跑full GREEN：1023passed2skipped、frontendPASS，build/lint0。本機／mock主13、恢復5、legacy入口3項／組真UI全PASS，含真MP4/可聽配音、審核退回、CAS/Kit/歷史/導航保存、NoShots自動恢復，以及核准/退回後各真正重啟backend並保留圖/生成/剪輯/配音/公開審核JSON與media位元組。視覺header裁切finding已由審查者核對blob撤回；legacy助手卡片重疊已修且量測overlaps=false。source9504restart及9c7placement均獨立ACCEPT。最終程式/視覺checkpoint審查、push與PR仍待完成，不merge；真provider/真發布/品質延遲費用尚未實測，本輪花費US$0。詳細Plan/Tasks/Status及QA在pivots/02-content/docs；以下舊PR不代表本輪。
+本機／mock改版階段已完成，PR #53：https://github.com/veralynchong/BuildClub/pull/53（OPEN，未合併），base main/head feat/freeform-canvas。固定2776a19程式及視覺獨立審查皆ACCEPT，root接受；最後full GREEN：1023passed2skipped、frontendPASS，build/lint0。主13＋恢復5＋legacy入口3項／組真UI全PASS，含真MP4／可聽配音、CAS/Kit/歷史/導航保存、NoShots恢復，以及核准／退回後各真正重啟backend並保留state/public JSON/media SHA256。QA含124筆變更清單、53來源hash、截圖與全部zero-survivor audit；詳見pivots/02-content/docs/plans/2026-11-05-freeform-canvas-status.md。最後PR/Status文件補述不改產品；真provider/真發布/品質/等待/計費完全未測、花費US$0，下一步須逐次報價/cap及yes。工作區已盤點，未刪除任何工作區、分支或既有資料。以下歷史PR不代表本輪。
 
 Read first: `docs/todo.md` (open keys and tasks) and `docs/test-log.md` (every test run; skip a test that already passed at an unchanged commit). Demo branch: `chore/demo-integrate-main-1104`, PR #49 (draft, do not merge yet).
 
