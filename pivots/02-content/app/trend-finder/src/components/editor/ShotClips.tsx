@@ -32,6 +32,12 @@ export function ShotClips({ shots, project, sources, error, gens, takes, full, l
       {error && <ErrorText text={error} />}
       {sources && sources.length === 0 && <p className="muted small">{t('editor.sources.empty')}</p>}
       {full && <p className="muted small">{t('editor.sources.full')}</p>}
+      {shots.length === 0 && <ul className="cv-ed-source-list">
+        {(sources ?? []).map((s) => <li key={s.key}>
+          <span>{clipLabel(s, shots, gens, takes)} · {t('editor.clip.seconds', { sec: Math.round(s.duration * 10) / 10 })}</span>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={locked || timeline.isInTimeline(s)} onClick={() => void timeline.useForShot(s)}>{t(timeline.isInTimeline(s) ? 'canvas.clip.on' : 'canvas.clip.put')}</button>
+        </li>)}
+      </ul>}
       <ol className="cv-ed-shot-list">
         {planned.map((shot, i) => {
           const mine = (sources ?? []).filter((s) => s.shotId === shot.id)

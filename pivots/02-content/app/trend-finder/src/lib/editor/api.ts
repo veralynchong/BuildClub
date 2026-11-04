@@ -1,3 +1,4 @@
+import { apiBase, type ResourceInput } from '../canvas/resource.ts'
 import { t } from '../i18n.ts'
 import { serverText } from '../serverText.ts'
 import type { CutState } from '../cut.ts'
@@ -8,7 +9,7 @@ import type { EditProject, SourceInfo, Word } from './types.ts'
 // Someone saved the edit since it was loaded (or the plan is no longer approved); this copy must be reloaded.
 export class StaleProject extends Error {}
 
-const base = (ideaId: string) => `/api/ideas/${encodeURIComponent(ideaId)}/edit`
+const base = (ideaId: ResourceInput) => `${apiBase(ideaId)}/edit`
 
 async function send<T>(r: Response, fallback: string): Promise<T> {
   if (r.ok) return r.json()
@@ -16,11 +17,11 @@ async function send<T>(r: Response, fallback: string): Promise<T> {
   throw new Error(serverText(body?.error) || fallback)
 }
 
-export async function getProject(ideaId: string): Promise<{ version: number; project: EditProject }> {
+export async function getProject(ideaId: ResourceInput): Promise<{ version: number; project: EditProject }> {
   return send(await fetch(base(ideaId)), t('editor.err.load'))
 }
 
-export async function putProject(ideaId: string, version: number, project: EditProject): Promise<number> {
+export async function putProject(ideaId: ResourceInput, version: number, project: EditProject): Promise<number> {
   const r = await fetch(base(ideaId), {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
@@ -33,11 +34,11 @@ export async function putProject(ideaId: string, version: number, project: EditP
   return (await send<{ version: number }>(r, t('editor.err.save'))).version
 }
 
-export async function getSources(ideaId: string): Promise<SourceInfo[]> {
+export async function getSources(ideaId: ResourceInput): Promise<SourceInfo[]> {
   return (await send<{ sources: SourceInfo[] }>(await fetch(`${base(ideaId)}/sources`), t('editor.err.sources'))).sources
 }
 
-export async function startExport(ideaId: string): Promise<CutState> {
+export async function startExport(ideaId: ResourceInput): Promise<CutState> {
   return send(await fetch(`${base(ideaId)}/export`, { method: 'POST' }), t('editor.err.export'))
 }
 
@@ -71,40 +72,40 @@ export interface VoiceInfo {
   wordsError?: string
 }
 
-export async function getVoices(ideaId: string): Promise<VoiceInfo[]> {
+export async function getVoices(ideaId: ResourceInput): Promise<VoiceInfo[]> {
   return (await send<{ voices: VoiceInfo[] }>(await fetch(`${base(ideaId)}/voice`), t('editor.err.voice'))).voices
 }
 
-export async function putVoice(ideaId: string, file: Blob, source: 'recording' | 'upload'): Promise<VoiceInfo> {
-  const r = await fetch(`${base(ideaId)}/voice?source=${source}`, { method: 'PUT', headers: { 'content-type': file.type }, body: file })
+export async function putVoice(ideaId: ResourceInput, file: Blob, source: 'recording' | 'upload', nodeId?: string): Promise<VoiceInfo> {
+  const r = await fetch(`${base(ideaId)}/voice?source=${source}${nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : ''}`, { method: 'PUT', headers: { 'content-type': file.type }, body: file })
   return send(r, t('editor.err.voice'))
 }
 
-async function tts<T>(ideaId: string, text: string, model: string, confirm: boolean): Promise<T> {
+async function tts<T>(ideaId: ResourceInput, text: string, model: string, confirm: boolean, nodeId?: string, canvasVersion?: number, inputStamp?: string): Promise<T> {
   const r = await fetch(`${base(ideaId)}/voice/tts`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text, model, confirm }),
+    body: JSON.stringify({ text, model, confirm, nodeId, canvasVersion, inputStamp }),
   })
   return send(r, t('editor.err.tts'))
 }
 
 // What the voice would cost and what is left today. Spends nothing.
-export function quoteTts(ideaId: string, text: string, model: string): Promise<{ usd: number; remaining: number }> {
-  return tts(ideaId, text, model, false)
+export function quoteTts(ideaId: ResourceInput, text: string, model: string, nodeId?: string, canvasVersion?: number): Promise<{ usd: number; remaining: number; canvasVersion?: number; inputStamp?: string }> {
+  return tts(ideaId, text, model, false, nodeId, canvasVersion)
 }
 
 // Starts the voice job (spends the estimate). Poll it with pollGen, then importTts.
-export function startTts(ideaId: string, text: string, model: string): Promise<Generation> {
-  return tts(ideaId, text, model, true)
+export function startTts(ideaId: ResourceInput, text: string, model: string, nodeId?: string, canvasVersion?: number, inputStamp?: string): Promise<Generation> {
+  return tts(ideaId, text, model, true, nodeId, canvasVersion, inputStamp)
 }
 
-export async function importTts(ideaId: string, genId: string): Promise<VoiceInfo> {
-  return send(await fetch(`${base(ideaId)}/voice/from-gen/${encodeURIComponent(genId)}`, { method: 'POST' }), t('editor.err.voice'))
+export async function importTts(ideaId: ResourceInput, genId: string, nodeId?: string): Promise<VoiceInfo> {
+  return send(await fetch(`${base(ideaId)}/voice/from-gen/${encodeURIComponent(genId)}${nodeId ? `?nodeId=${encodeURIComponent(nodeId)}` : ''}`, { method: 'POST' }), t('editor.err.voice'))
 }
 
 // The server refuses (409) while the saved project still uses the file: save the removal first.
-export async function deleteVoice(ideaId: string, vid: string): Promise<void> {
+export async function deleteVoice(ideaId: ResourceInput, vid: string): Promise<void> {
   await send(await fetch(`${base(ideaId)}/voice/${encodeURIComponent(vid)}`, { method: 'DELETE' }), t('editor.err.voice'))
 }
 
@@ -114,7 +115,7 @@ export interface PendingVoice {
   status: 'queued' | 'running' | 'done'
 }
 
-export async function getPendingVoices(ideaId: string): Promise<PendingVoice[]> {
+export async function getPendingVoices(ideaId: ResourceInput): Promise<PendingVoice[]> {
   const r = await send<{ pending: PendingVoice[] }>(await fetch(`${base(ideaId)}/voice/pending`), t('editor.err.voice'))
   return r.pending.map((g) => ({ id: g.id, status: g.status }))
 }

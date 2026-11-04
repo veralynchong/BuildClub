@@ -1,3 +1,4 @@
+import { apiBase, type ResourceInput } from './canvas/resource.ts'
 import { t } from './i18n.ts'
 import { serverText } from './serverText.ts'
 import { createShareLink } from './share.ts'
@@ -55,7 +56,7 @@ export function formatDuration(sec: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
 
-const base = (ideaId: string) => `/api/ideas/${encodeURIComponent(ideaId)}/cut`
+const base = (ideaId: ResourceInput) => `${apiBase(ideaId)}/cut`
 
 async function send<T>(r: Response, fallback: string): Promise<T> {
   if (r.ok) return r.json()
@@ -63,12 +64,12 @@ async function send<T>(r: Response, fallback: string): Promise<T> {
   throw new Error(serverText(body?.error) || fallback)
 }
 
-export async function getCut(ideaId: string, shotCount?: number): Promise<CutState> {
+export async function getCut(ideaId: ResourceInput, shotCount?: number): Promise<CutState> {
   const q = shotCount === undefined ? '' : `?shots=${shotCount}`
   return send(await fetch(`${base(ideaId)}${q}`), t('cut.err.load'))
 }
 
-export async function putMusic(ideaId: string, file: File): Promise<CutState> {
+export async function putMusic(ideaId: ResourceInput, file: File): Promise<CutState> {
   const r = await fetch(`${base(ideaId)}/music`, {
     method: 'PUT',
     body: file,
@@ -81,12 +82,12 @@ export async function putMusic(ideaId: string, file: File): Promise<CutState> {
   return send(r, t('cut.err.putMusic'))
 }
 
-export async function deleteMusic(ideaId: string): Promise<CutState> {
+export async function deleteMusic(ideaId: ResourceInput): Promise<CutState> {
   return send(await fetch(`${base(ideaId)}/music`, { method: 'DELETE' }), t('cut.err.deleteMusic'))
 }
 
 // Sends the finished video to the approver. Failures carry the server's reason.
-export async function sendCutForReview(ideaId: string): Promise<CutState> {
+export async function sendCutForReview(ideaId: ResourceInput): Promise<CutState> {
   return send(await fetch(`${base(ideaId)}/review`, { method: 'POST' }), t('cut.err.sendVideo'))
 }
 
@@ -100,9 +101,9 @@ export class NoLinkError extends Error {
 
 // Turns the client's review link on (idempotent: an existing link is kept), then sends the video. A send error passes through.
 export async function sendWithLink(
-  ideaId: string,
+  ideaId: ResourceInput,
   clientId: string,
-  deps: { link?: (clientId: string) => Promise<unknown>; send?: (ideaId: string) => Promise<CutState> } = {},
+  deps: { link?: (clientId: string) => Promise<unknown>; send?: (ideaId: ResourceInput) => Promise<CutState> } = {},
 ): Promise<CutState> {
   const link = deps.link ?? createShareLink
   try {
@@ -139,7 +140,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 // (failed does not throw; its reason is state.error). Aborting the signal stops the polling with no further
 // fetches and resolves with null, so an unmounted component needs no catch. A failed request still rejects.
 export async function pollCut(
-  ideaId: string,
+  ideaId: ResourceInput,
   onState: (state: CutState) => void,
   { signal, intervalMs = 2000 }: { signal?: AbortSignal; intervalMs?: number } = {},
 ): Promise<CutState | null> {

@@ -1,3 +1,4 @@
+import { apiBase, canvasUrl, type ResourceInput, type Workspace } from './resource.ts'
 import type { GenRef } from './kit.ts'
 import { t } from '../i18n.ts'
 import { serverText } from '../serverText.ts'
@@ -22,24 +23,25 @@ export class StaleCanvas extends Error {
 // backend/canvas.py check_doc: the saved copy has shot nodes this one lacks
 const SHOT_DELETE = "Shot nodes can't be deleted."
 
-const base = (ideaId: string) => `/api/ideas/${encodeURIComponent(ideaId)}`
+const base = apiBase
 
 async function send<T>(r: Response, fallback: string): Promise<T> {
   if (r.ok) return r.json()
   const body = await r.json().catch(() => null)
+  if (r.status === 409 && (body?.version !== undefined || body?.error === 'The canvas changed somewhere else. Reload it.')) throw new StaleCanvas(serverText(body?.error) || t('canvas.err.stale'), body?.version ?? 0, body?.doc ?? null)
   throw new Error(serverText(body?.error) || fallback)
 }
 
-export async function getCanvas(ideaId: string): Promise<CanvasState> {
-  const r = await fetch(`${base(ideaId)}/canvas`)
+export async function getCanvas(ideaId: ResourceInput): Promise<CanvasState> {
+  const r = await fetch(canvasUrl(ideaId))
   if (r.ok) return r.json()
   const body = await r.json().catch(() => null)
   if (r.status === 409 && body?.code === 'no-shots') throw new NoShots(serverText(body.error))
   throw new Error(serverText(body?.error) || t('canvas.err.load'))
 }
 
-export async function putCanvas(ideaId: string, version: number, doc: CanvasDoc): Promise<number> {
-  const r = await fetch(`${base(ideaId)}/canvas`, {
+export async function putCanvas(ideaId: ResourceInput, version: number, doc: CanvasDoc): Promise<number> {
+  const r = await fetch(canvasUrl(ideaId), {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ version, doc }),
@@ -59,11 +61,14 @@ export async function getModels(): Promise<GenModel[]> {
   return (await send<{ models: GenModel[] }>(await fetch('/api/gen/models'), t('canvas.err.models'))).models
 }
 
-export async function listGens(ideaId: string): Promise<Generation[]> {
+export async function listGens(ideaId: ResourceInput): Promise<Generation[]> {
   return send(await fetch(`${base(ideaId)}/gen`), t('canvas.err.gens'))
 }
 
 export interface StartGenBody {
+  inputStamp?: string
+  canvasVersion?: number
+  confirm?: boolean
   nodeId: string
   model: string
   prompt: string
@@ -72,7 +77,7 @@ export interface StartGenBody {
   duration?: number
 }
 
-export async function startGen(ideaId: string, body: StartGenBody): Promise<Generation> {
+export async function startGen(ideaId: ResourceInput, body: StartGenBody): Promise<Generation> {
   const r = await fetch(`${base(ideaId)}/gen`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -85,7 +90,7 @@ export async function getBudget(): Promise<Budget> {
   return send(await fetch('/api/gen/budget'), t('canvas.err.budget'))
 }
 
-async function chain<T>(ideaId: string, body: ChainBody, confirm: boolean): Promise<T> {
+async function chain<T>(ideaId: ResourceInput, body: ChainBody, confirm: boolean): Promise<T> {
   const r = await fetch(`${base(ideaId)}/gen/chain`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -95,16 +100,16 @@ async function chain<T>(ideaId: string, body: ChainBody, confirm: boolean): Prom
 }
 
 // The price of a storyboard image plus the video that starts from it, and what is left today. Starts nothing.
-export function quoteChain(ideaId: string, body: ChainBody): Promise<Quote> {
+export function quoteChain(ideaId: ResourceInput, body: ChainBody): Promise<Quote> {
   return chain(ideaId, body, false)
 }
 
 // Starts both: the image now, the video once the image is done. A 429 or 422 throws with the server's sentence.
-export function startChain(ideaId: string, body: ChainBody): Promise<{ image: Generation; video: Generation }> {
+export function startChain(ideaId: ResourceInput, body: ChainBody): Promise<{ image: Generation; video: Generation }> {
   return chain(ideaId, body, true)
 }
 
-async function getGen(ideaId: string, genId: string): Promise<Generation> {
+async function getGen(ideaId: ResourceInput, genId: string): Promise<Generation> {
   return send(await fetch(`${base(ideaId)}/gen/${encodeURIComponent(genId)}`), t('canvas.err.gens'))
 }
 
@@ -125,7 +130,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 // Polls one generation, passing every state to onState, until it is done, failed or unknown (all resolve with that
 // state). Aborting stops the polling and resolves null. A failed request rejects.
 export async function pollGen(
-  ideaId: string,
+  ideaId: ResourceInput,
   genId: string,
   onState: (gen: Generation) => void,
   { signal, intervalMs = 2000 }: { signal?: AbortSignal; intervalMs?: number } = {},
@@ -141,7 +146,7 @@ export async function pollGen(
 }
 
 // An image for an upload node. A file the server would refuse is rejected here, without sending it.
-export async function uploadImage(ideaId: string, nodeId: string, file: File): Promise<Generation> {
+export async function uploadImage(ideaId: ResourceInput, nodeId: string, file: File): Promise<Generation> {
   const bad = imageError(file)
   if (bad) throw new Error(bad)
   const r = await fetch(`${base(ideaId)}/gen/upload?nodeId=${encodeURIComponent(nodeId)}`, {
@@ -185,3 +190,24 @@ export async function deleteKitImage(clientId: string, itemId: string, name: str
 }
 
 export const kitFileUrl = (clientId: string, name: string): string => `${kitBase(clientId)}/files/${encodeURIComponent(name)}`
+
+export async function listWorkspaces(clientId: string): Promise<Workspace[]> {
+  return (await send<{ workspaces: Workspace[] }>(await fetch(`/api/workspaces?clientId=${encodeURIComponent(clientId)}`), t('canvas.err.load'))).workspaces
+}
+export async function createWorkspace(clientId: string, title?: string): Promise<CanvasState & { workspace: Workspace }> {
+  return send(await fetch('/api/workspaces', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clientId, title }) }), t('canvas.err.save'))
+}
+export async function uploadMedia(resource: ResourceInput, nodeId: string, file: File): Promise<Generation> {
+  return send(await fetch(`${base(resource)}/gen/upload?nodeId=${encodeURIComponent(nodeId)}`, { method: 'POST', headers: { 'content-type': file.type, 'x-filename': encodeURIComponent(file.name) }, body: file }), t('canvas.err.upload'))
+}
+
+export interface NodeQuote {
+  total: number
+  remaining: Record<string, number>
+  items: { nodeId: string; model: string; usd: number }[]
+  inputStamp: string
+  canvasVersion: number
+}
+export async function quoteNode(resource: ResourceInput, nodeId: string, canvasVersion: number): Promise<NodeQuote> {
+  return send(await fetch(`${base(resource)}/gen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nodeId, canvasVersion, confirm: false }) }), t('canvas.err.start'))
+}

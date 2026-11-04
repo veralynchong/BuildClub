@@ -1,56 +1,40 @@
+import { useEffect, useState } from 'react'
 import type { Format, SavedIdea, Video } from '../types'
-import { t } from '../lib/i18n'
-import { planProgress } from '../lib/canvasPick'
-import { Thumb } from './Thumb'
-import { dueLabel, planName } from './plans/moves'
+import type { Workspace } from '../lib/canvas/resource'
+import { createWorkspace, listWorkspaces } from '../lib/canvas/api'
+import { ff } from '../lib/strings/freeform'
+import { planName } from './plans/moves'
 
 interface Props {
+  clientId: string
   clientName: string
-  plans: SavedIdea[] // approved plans, in the order to show
+  plans: SavedIdea[]
   videoById: Map<string, Video>
   formatById: Map<string, Format>
   onPick: (ideaId: string) => void
-  onGoPlans: () => void
+  onWorkspace: (workspace: Workspace) => void
 }
-
-// Sidebar "Canvas" with more than one approved plan: pick the plan whose canvas to open.
 export function CanvasPick(p: Props) {
-  return (
-    <section className="client board">
-      <header className="client-head">
-        <div>
-          <span className="eyebrow">{p.clientName}</span>
-          <h1>{t('shell.canvasPick.title')}</h1>
-          <p className="muted">{p.plans.length ? t('shell.canvasPick.intro') : t('shell.canvasPick.empty')}</p>
-        </div>
-      </header>
-      {p.plans.length === 0 ? (
-        <div className="empty">
-          <button type="button" className="btn btn-primary" onClick={p.onGoPlans}>
-            {t('shell.canvasPick.goPlans')}
-          </button>
-        </div>
-      ) : (
-        <ul className="board-list">
-          {p.plans.map((idea) => {
-            const v = p.videoById.get(idea.videoId)
-            if (!v) return null
-            const prog = planProgress(idea, p.formatById.get(v.formatId)?.shotList ?? [])
-            return (
-              <li key={idea.id}>
-                <button type="button" className="board-card" style={{ width: '100%', textAlign: 'left' }} onClick={() => p.onPick(idea.id)}>
-                  <Thumb video={v} />
-                  <div className="board-card-body">
-                    <strong>{planName(v, p.formatById.get(v.formatId))}</strong>
-                    <span className="small">{t('shell.canvasPick.due', { date: dueLabel(idea.dueDate) })}</span>
-                    <span className="small muted">{t('shell.canvasPick.counts', { shots: prog.shots, ready: prog.ready })}</span>
-                  </div>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </section>
-  )
+  const [spaces, setSpaces] = useState<Workspace[]>([])
+  const [title, setTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    listWorkspaces(p.clientId).then((ws) => { if (!cancelled) { setSpaces(ws); setError('') } }, (e) => !cancelled && setError(e.message))
+    return () => { cancelled = true }
+  }, [p.clientId, attempt])
+  const create = async () => {
+    if (busy) return
+    setBusy(true); setError('')
+    try { p.onWorkspace((await createWorkspace(p.clientId, title.trim() || ff('title'))).workspace) }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); setBusy(false) }
+  }
+  return <section className="fc-picker"><header><span>{p.clientName}</span><h1>{ff('spaces')}</h1><p>{ff('intro')}</p></header>
+    <form className="fc-new-workspace" onSubmit={(e) => { e.preventDefault(); void create() }}><label htmlFor="canvas-name">{ff('name')}</label><div><input id="canvas-name" placeholder={ff('title')} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} /><button className="fc-primary" disabled={busy}>＋ {ff('create')}</button></div></form>
+    {error && <p role="alert">{error} <button onClick={() => setAttempt((a) => a + 1)}>{ff('reload')}</button></p>}
+    <div className="fc-workspace-grid">{spaces.map((w) => <button className="fc-workspace" key={w.id} onClick={() => p.onWorkspace(w)}><div>✧</div><strong>{w.title}</strong><small>{new Date(w.updatedAt * (w.updatedAt < 1e12 ? 1000 : 1)).toLocaleDateString()}</small></button>)}</div>
+    {p.plans.length > 0 && <><h2>{ff('existing')}</h2><div className="fc-workspace-grid">{p.plans.map((idea) => { const v = p.videoById.get(idea.videoId); return <button className="fc-workspace is-legacy" key={idea.id} onClick={() => p.onPick(idea.id)}><div>▦</div><strong>{v ? planName(v, p.formatById.get(v.formatId)) : idea.id}</strong><small>{idea.status}</small></button> })}</div></>}
+  </section>
 }

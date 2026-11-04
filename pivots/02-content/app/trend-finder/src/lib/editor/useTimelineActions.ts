@@ -5,7 +5,7 @@ import type { CanvasDoc, Generation } from '../canvas/types.ts'
 import type { Take } from '../takes.ts'
 import type { EditHook } from './useEditProject.ts'
 import type { SourcesHook } from './useSources.ts'
-import { applyNewer, clipStatus, fillByShotOrder, isOnTimeline, newClipId, placeShotClip, repinIfOld, sourceKey, type ClipStatus } from './timeline.ts'
+import { applyNewer, insertClip, clipStatus, fillByShotOrder, isOnTimeline, newClipId, placeShotClip, repinIfOld, sourceKey, type ClipStatus } from './timeline.ts'
 import type { Clip, ClipSource, SourceInfo } from './types.ts'
 
 export interface TimelineActions {
@@ -20,6 +20,7 @@ export interface TimelineActions {
 }
 
 interface Inputs {
+  freeform?: boolean
   edit: EditHook
   sources: SourcesHook
   shots: Shot[]
@@ -55,7 +56,7 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
   const useForShot = useCallback(
     async (src: ClipSource) => {
       const order = ref.current.shots.flatMap((s) => (s.id ? [s.id] : []))
-      if (ref.current.readOnly || !src.shotId || !order.includes(src.shotId)) return false
+      if (ref.current.readOnly || (!ref.current.freeform && (!src.shotId || !order.includes(src.shotId)))) return false
       const before = ref.current.edit.current()
       if (!before) return false
       if (isOnTimeline(before, src)) return true
@@ -68,13 +69,15 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
       const p = edit.current() // after the await: the newest project
       if (!p) return false
       if (isOnTimeline(p, src)) return true
-      const next = placeShotClip(p, src, info.duration, order, newClipId(p))
+      const next = ref.current.freeform ? insertClip(p, src, info.duration, p.clips.length, newClipId(p)) : placeShotClip(p, src, info.duration, order, newClipId(p))
       if (next === p) {
         notify('editor.sources.full')
         return false
       }
-      edit.update(next)
-      onPlaced(src.shotId)
+      if (ref.current.freeform && edit.persist) {
+        if (!await edit.persist(next)) return false
+      } else edit.update(next)
+      onPlaced(src.shotId ?? '')
       return true
     },
     [infoFor],

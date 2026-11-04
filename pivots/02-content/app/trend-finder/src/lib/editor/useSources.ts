@@ -1,3 +1,4 @@
+import { type ResourceInput } from '../canvas/resource.ts'
 import { useCallback, useEffect, useState } from 'react'
 import { t } from '../i18n.ts'
 import { getSources } from './api.ts'
@@ -11,7 +12,7 @@ export interface SourcesHook {
 
 // The plan's footage with lengths (finished videos and takes). It is read again whenever `signature` changes
 // (a version finished, a take came or went) and on demand, since a new file may not be probed yet.
-export function useSources(ideaId: string, signature: string): SourcesHook {
+export function useSources(ideaId: ResourceInput, signature: string): SourcesHook {
   const [sources, setSources] = useState<SourceInfo[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 

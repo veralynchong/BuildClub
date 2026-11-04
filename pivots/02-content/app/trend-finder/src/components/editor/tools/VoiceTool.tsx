@@ -1,4 +1,6 @@
+import { type ResourceInput } from '../../../lib/canvas/resource.ts'
 import { useEffect, useRef, useState } from 'react'
+import { ff } from '../../../lib/strings/freeform'
 import { t } from '../../../lib/i18n'
 import { getModels } from '../../../lib/canvas/api'
 import type { GenModel } from '../../../lib/canvas/types'
@@ -19,7 +21,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 type Source = VoiceSeg['source']
 
 interface Props {
-  ideaId: string
+  ideaId: ResourceInput
   project: EditProject
   current: () => EditProject | null // the newest project, even before React has rendered it
   flush: () => Promise<FlushResult>
@@ -43,6 +45,7 @@ export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVo
   const rec = useRef<{ mr: MediaRecorder; stream: MediaStream } | null>(null)
   const off = readOnly || busy || recording
   const full = project.voiceover.length >= MAX_VOICE
+  const workspace = typeof ideaId !== 'string' && ideaId.kind === 'workspace'
 
   useEffect(
     () => () => {
@@ -121,8 +124,7 @@ export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVo
         onProject(current() && current() !== before ? addVoiceBack(current() as EditProject, before, id) : before)
         throw new Error(t('editor.err.save'))
       }
-      await deleteVoice(ideaId, id)
-      onVoiceGone(id)
+      if (!workspace) { await deleteVoice(ideaId, id); onVoiceGone(id) }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -132,7 +134,7 @@ export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVo
 
   return (
     <div className="cv-ed-tool">
-      <div className="cv-ed-tool-row">
+      {workspace ? <p className="muted small">{ff('canvasVoice')}</p> : <div className="cv-ed-tool-row">
         {recording ? (
           <button type="button" className="btn btn-primary btn-sm" onClick={() => rec.current?.mr.stop()}>{t('editor.voice.stop')}</button>
         ) : (
@@ -153,9 +155,9 @@ export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVo
         </label>
         {recording && <span className="muted small" role="status">{t('editor.voice.recording')}</span>}
         {full && <span className="muted small">{t('editor.voice.full')}</span>}
-      </div>
-      <TtsSection ideaId={ideaId} lineTexts={lineTexts} disabled={off || full} tts={tts} onError={setError} />
-      {pending.map((g) => (
+      </div>}
+      {!workspace && <TtsSection ideaId={ideaId} lineTexts={lineTexts} disabled={off || full} tts={tts} onError={setError} />}
+      {!workspace && pending.map((g) => (
         <div key={g.id} className="cv-ed-tool-row">
           {g.status === 'done' ? (
             <>
@@ -202,7 +204,7 @@ export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVo
 }
 
 interface TtsProps {
-  ideaId: string
+  ideaId: ResourceInput
   lineTexts: string[]
   disabled: boolean
   tts: Props['tts']

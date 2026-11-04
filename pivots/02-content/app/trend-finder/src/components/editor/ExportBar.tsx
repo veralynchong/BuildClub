@@ -1,3 +1,4 @@
+import { type ResourceInput } from '../../lib/canvas/resource.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { t } from '../../lib/i18n'
 import { serverText } from '../../lib/serverText'
@@ -14,7 +15,7 @@ import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import { ErrorText } from '../ErrorText'
 
 interface Props {
-  ideaId: string
+  ideaId: ResourceInput
   clientId: string
   focus?: 'export' | 'send' | null
   edit: EditHook

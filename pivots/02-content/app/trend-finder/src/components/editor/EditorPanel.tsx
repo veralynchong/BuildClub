@@ -1,8 +1,10 @@
+import { apiBase, type ResourceInput } from '../../lib/canvas/resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import type { Shot } from '../../types'
 import { useApp } from '../../lib/appContext'
 import { getCut, type CutState } from '../../lib/cut'
+import { ff } from '../../lib/strings/freeform'
 import { t } from '../../lib/i18n'
 import { serverText } from '../../lib/serverText'
 import type { SourcesHook } from '../../lib/editor/useSources'
@@ -33,7 +35,7 @@ import { ErrorText } from '../ErrorText'
 import { ExportBar } from './ExportBar'
 
 interface Props {
-  ideaId: string
+  ideaId: ResourceInput
   clientId: string
   shots: Shot[]
   edit: EditHook
@@ -109,6 +111,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   // Finished AI voices that were never imported are offered again; a running job is aborted with the drawer, and
   // its result then waits here as a pending one.
   useEffect(() => {
+    if (typeof ideaId !== 'string' && ideaId.kind === 'workspace') return
     let cancelled = false
     getPendingVoices(ideaId).then(
       (list) => {
@@ -205,7 +208,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   )
 
   const brand = useMemo(() => reelBrand(kit, clientId), [kit, clientId])
-  const musicUrl = musicFile ? `/api/ideas/${encodeURIComponent(ideaId)}/cut/music/file?v=${encodeURIComponent(`${musicFile.name}-${musicFile.size}`)}` : null
+  const musicUrl = musicFile ? `${apiBase(ideaId)}/cut/music/file?v=${encodeURIComponent(`${musicFile.name}-${musicFile.size}`)}` : null
   const inputProps = useMemo<ReelInput | null>(
     () => (project ? reelInput({ project, urls, shots: filled, musicUrl, voice: voiceInput, brand }) : null),
     [project, urls, filled, musicUrl, voiceInput, brand],
@@ -247,7 +250,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   }
   const total = totalLength(project)
   const full = total > MAX_TOTAL - 0.2
-  const locked = readOnly || stale
+  const locked = readOnly || stale || !!edit.writing
   const fill = async () => setSkipped(await timeline.fill())
 
   const steps = stepsDone({ project, clientHasLogo: !!kit?.logo, cut })
@@ -355,10 +358,10 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
       <div className="cv-ed-bottom">
         {project.clips.length === 0 && (
           <div className="cv-ed-empty">
-            <p className="muted">{t('editor.empty')}</p>
-            <button type="button" className="btn btn-primary btn-sm" disabled={locked} onClick={() => void fill()}>
+            <p className="muted">{filled.length ? t('editor.empty') : ff('composeHint')}</p>
+            {filled.length > 0 && <button type="button" className="btn btn-primary btn-sm" disabled={locked || filled.length === 0} onClick={() => void fill()}>
               {t('editor.fill')}
-            </button>
+            </button>}
           </div>
         )}
         {skipped.length > 0 && (

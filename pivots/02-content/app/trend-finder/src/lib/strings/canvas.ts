@@ -1,6 +1,13 @@
 // Strings for the "canvas" area. Keys are prefixed `canvas.` so areas never collide.
 // Every key in `en` must also be in `zhHant` (the Record type makes a missing one a compile error).
 export const en = {
+  "canvas.media.voice": "voice",
+  "canvas.media.audio": "audio",
+  "canvas.node.voice": "Voiceover",
+  "canvas.node.editor": "Editor",
+  "canvas.port.clips": "Video clips",
+  "canvas.port.audio": "Audio",
+
   "canvas.media.text": "text",
   "canvas.media.image": "image",
   "canvas.media.video": "video",
@@ -246,6 +253,13 @@ export const en = {
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
+  "canvas.media.voice": "配音",
+  "canvas.media.audio": "音訊",
+  "canvas.node.voice": "配音",
+  "canvas.node.editor": "剪輯器",
+  "canvas.port.clips": "影片片段",
+  "canvas.port.audio": "音訊",
+
   "canvas.media.text": "文字",
   "canvas.media.image": "圖片",
   "canvas.media.video": "影片",

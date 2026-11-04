@@ -49,7 +49,7 @@ export function markStale(doc: CanvasDoc, nodeId: string, gens: Generation[]): C
   return {
     ...doc,
     nodes: doc.nodes.map((n) =>
-      after.has(n.id) && (n.type === 'storyboard' || n.type === 'video') && versionsOf(n.id, gens).some((g) => g.status === 'done')
+      after.has(n.id) && (n.type === 'storyboard' || n.type === 'video' || n.type === 'voice') && versionsOf(n.id, gens).some((g) => g.status === 'done')
         ? { ...n, data: { ...n.data, stale: true } }
         : n,
     ),
@@ -62,7 +62,7 @@ export function staleIds(doc: CanvasDoc, nodeId: string, gens: Generation[], sel
   const ids = new Set(downstream(doc, nodeId))
   if (self) ids.add(nodeId)
   return doc.nodes
-    .filter((n) => ids.has(n.id) && (n.type === 'storyboard' || n.type === 'video') && versionsOf(n.id, gens).some((g) => g.status === 'done'))
+    .filter((n) => ids.has(n.id) && (n.type === 'storyboard' || n.type === 'video' || n.type === 'voice') && versionsOf(n.id, gens).some((g) => g.status === 'done'))
     .map((n) => n.id)
 }
 
