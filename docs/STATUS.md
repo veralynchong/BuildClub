@@ -1,5 +1,25 @@
 # STATUS
 
+## 目前狀態，2026-11-05 Sydney
+
+目前產品為 Remake／影片畫布。工作倉庫 `veralynchong/BuildClub` 的 `origin/main` 在 `e442b3a` 整合 PR49，GitHub 確認 PR49 MERGED。PR51 `fix/offline-verification-context` 向 `main` 開啟，P0 已在 `b0d65b0` 提交推送。PR50 `docs/agents-md-for-codex` 仍 OPEN，此次沿用其規則，未合併或關閉它。
+
+- 最後驗證，2026-11-05：`bash bin/verify.sh full` 四步 PASS，backend `984 passed, 2 skipped`，frontend unit tests PASS，`verify: GREEN`。舊入口會匯入 `server.py` 並無條件載入 app `.env`，依本次限制未執行舊完整驗證。
+- 安全基線問題：Desktop venv 缺 Pillow，改以 ignored symlink 重用 canvas-p1 既有 `.venv` 及 `node_modules`，無安裝依賴。macOS sandbox 拒絕 setuid `/bin/ps`，經核准保留真實程序群組回收測試，身分辨識由 subprocess 邊界單元測試覆蓋；正式 `editing.py` 未改，實際 `ps` 整合未驗證。
+- 驗證入口 `bash bin/verify.sh [fast|full]` 預設 full，兩模式都跑完整套件。環境 allowlist、dotenv skip、macOS OS 網路與敏感路徑禁讀、暫存目錄外禁寫，每步最多 120 秒。成功、失敗及 timeout 清理自有程序群組；timeout／啟動失敗回紅，缺少 OS 隔離紅燈停止。正式 runtime 不變。
+- 保證限於可信任專案測試。預存 hardlink 別名不保證全面阻擋；`setsid`／double-fork 離開自有群組的後代不保證清理。直接／symlink 敏感路徑禁讀、外部 IP／loopback 禁連、子程序繼承禁令與工作樹禁寫有測試；普通子／孫程序在成功、失敗、timeout 下均有清理回歸，無關程序保持存活。
+- 紅燈證據：runner 測試在實作前有 6 項預期失敗，實作後全綠。獨立隔離 fixture 刻意 `assert False`，gate 回 `exit 1 / verify: RED`，fixture 已清除；另測 timeout 到 gate RED 與暫存清理。
+- 產品仍只做 1440 桌面、英文影片內容與 zh-Hant UI。每次付費需另行報價、硬上限與使用者該次核准；本次離線驗證無付費、外部服務呼叫或 browser。
+- P1 四份文件已完成並通過獨立唯讀 review：共用規則與 Claude import、Remake 現況、歷史脈絡及協作分工均已對齊；由 coordinator 整合 PR51 並維護共享 handoff。
+- Codex hook 的文件內容誤判已修正：只在所有 patch 路徑通過保護後，略過將文件內容當 shell 指令檢查；實際敏感路徑與 shell 保護保留。設定 repo commit `7504fcb`、PR80（依賴 PR78）待審，十四項 lifecycle 測試及完整驗證 5/5 通過，兩份本機 adapter 已套用相同修正。
+- 下一步：審閱 PR51；P0／P1 已完成，不代表產品 browser E2E 或完整寫入型 Flow 已驗收。合併須使用者對該 PR 明確說 merge。產品 QA、使用者實測見 `docs/todo.md`，不沿用舊 8805 環境假設。
+
+完整專案規則見 `AGENTS.md`：lead 規劃／分派／審查／整合，writer 各有 worktree／分支／檔案範圍，reviewer 只讀；一位 browser owner、每個共用環境一位 owner。小任務單人，通常一位 writer 加一位 reviewer，不建 Flow queue 或安裝 plugin。
+
+## 歷史紀錄，以下狀態與下一步不再代表目前分支
+
+下方保留當時的測試與決策。舊 PR「未合併」、8805 環境與 phase 2 下一步都需重查 git／GitHub，不可直接沿用。歷史測試不能取代現在提交前的完整離線 gate；目前入口見上節及 `PROJECT_CONTEXT.md`。
+
 Read first: `docs/todo.md` (open keys and tasks) and `docs/test-log.md` (every test run; skip a test that already passed at an unchanged commit). Demo branch: `chore/demo-integrate-main-1104`, PR #49 (draft, do not merge yet).
 
 Current (2026-11-04 AEDT): canvas product polish A-D is done and stacked as PRs #46 (B), #47 (C), #48 (D, on `feat/canvas-polish-d-agent`); none is merged. A whole-branch review and one fix wave followed: a price dialog now locks the side panels and Confirm re-quotes, asking again if anything changed. Final checks with mock models only: unit 466/466, backend pytest 969 passed, `polish-a-shell` 18/18, `polish-b-nodes` 76/76, `polish-c-timeline` 50/50, `polish-d-agent` 54/54 (each on a fresh isolated backend at 1440x900), `bash bin/verify.sh` GREEN, build OK, eslint 0 errors, tsc exit 0 (2026-11-04). Open: real model wait times are unverified (the agent route ran its sample plan, no Claude call; no real image or video model ran); line and node fine-tuning waits for the user test; polish-a and polish-b must not share one backend (B fails 4 checks after A, from leftover state), so run each on a fresh backend. Decision log entry of 3 Nov updated from "nothing built yet".
