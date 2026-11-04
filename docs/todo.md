@@ -10,7 +10,7 @@ AI sessions: read this at the start; remind the user of any open item in "Tommy 
 - [x] `FAL_KEY` in `.env` (2026-11-04, confirmed by the paid smoke test in `docs/test-log.md`)
 
 ## Before Demo Night (Sat 2026-11-07)
-- [ ] Teammate reviews PR #49 (demo integration branch) tonight, 2026-11-04; merge only when Tommy says "merge"
+- [x] PR #49 merged to main after the teammate's design merge and E2E (2026-11-04, Tommy said merge)
 - [x] fal smoke test, Seedream + Hailuo, ~US$0.23 (2026-11-04)
 - [ ] Fix P1 issues in `pivots/02-content/docs/demo-qa/issues.md` (Research→Plans demo row, Plans status after send, table overflow, title casing; board vs canvas entry needs a call with the teammate)
 - [ ] Generate the demo footage with real models (quote first, cap ~US$2-4, needs Tommy's OK)
