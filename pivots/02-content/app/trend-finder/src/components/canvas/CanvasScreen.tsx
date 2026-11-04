@@ -77,7 +77,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   const nextRun = useRef<() => void>(() => {})
   const [selected, setSelected] = useState<string[]>([])
   const [dock, setDock] = useState<Dock>(null)
-  const [menu, setMenu] = useState<{ x: number; y: number; from?: string; at: { x: number; y: number } } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; from?: string; at?: { x: number; y: number } } | null>(null)
   const [search, setSearch] = useState('')
   const [pan, setPan] = useState(false)
   const [editing, setEditing] = useState(openEditor && initial.doc.nodes.some((n) => n.type === 'editor'))
@@ -443,7 +443,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
           </ReactFlow>
           {doc.nodes.length === 0 && <div className="fc-empty"><div className="fc-empty-mark">✧</div><h1>{ff('emptyTitle')}</h1><p>{ff('emptyBody')}</p><button className="fc-primary" onClick={() => add('prompt')}>＋ {ff('prompt')}</button><span>{ff('navigation')}</span></div>}
           <nav className="fc-rail" aria-label={ff('add')}>
-            <button title={ff('add')} aria-label={ff('add')} disabled={actions.readonly} onClick={() => { setSearch(''); setMenu(menu ? null : { x: 70, y: 100, at: screenToFlowPosition({ x: flowBox.current!.getBoundingClientRect().left + 320, y: flowBox.current!.getBoundingClientRect().top + 180 }) }) }}>＋</button><hr />
+            <button title={ff('add')} aria-label={ff('add')} disabled={actions.readonly} onClick={() => { setSearch(''); setMenu(menu ? null : { x: 70, y: 100 }) }}>＋</button><hr />
             <button title={ff('select')} aria-label={ff('select')} className={!pan ? 'is-active' : ''} onClick={() => setPan(false)}>↖</button><button title={ff('pan')} aria-label={ff('pan')} className={pan ? 'is-active' : ''} onClick={() => setPan(true)}>✥</button><hr />
             {kinds.map((k, i) => <button key={k} title={ff(k)} aria-label={ff(k)} disabled={actions.readonly || (k === 'editor' && doc.nodes.some((n) => n.type === 'editor'))} onClick={() => add(k)}>{glyphs[i]}</button>)}
           </nav>
