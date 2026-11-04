@@ -4,7 +4,7 @@
 
 ## 目前
 
-Goal active；使用者已核准無人值守 Multi Agent 實作、commit、push、開 PR，不合併。禁止外部 API 測試、花費與新增依賴。整合 worktree `/Users/tommy/orca/workspaces/BuildClub/freeform-canvas`，分支 `feat/freeform-canvas`，產品基準 `e442b3ae80964ee53fda7265df61d18a210f66b3`。
+本輪離線Goal已達成交付條件；使用者已核准無人值守 Multi Agent 實作、commit、push、開 PR，不合併。禁止外部 API 測試、花費與新增依賴。整合 worktree `/Users/tommy/orca/workspaces/BuildClub/freeform-canvas`，分支 `feat/freeform-canvas`，產品基準 `e442b3ae80964ee53fda7265df61d18a210f66b3`。
 
 | Task | 狀態 | Owner／證據 |
 |---|---|---|
@@ -12,10 +12,10 @@ Goal active；使用者已核准無人值守 Multi Agent 實作、commit、push�
 | T1 | 完成 | task_9671d805b114／ctx_3b4ed7ce46f5；三份唯讀契約回報，NOT RUN tests，已整合 Plan |
 | T2 | 完成 | task_5209fcd0805d／ctx_b9df19f20eb6；來源07d3d93，唯讀，測試 NOT RUN |
 | T3 | 完成並接受 | source0b64468已整合；親跑1021+2skip GREEN與真HTTP→MP4→token核准；非外部模型驗收 |
-| T4 | 功能實作完成，最終審查待收尾 | source01a907b三項legacy回歸已review ACCEPT、整合4e92a14並真UI3/3通過；port padding干擾已修、實測13px |
-| T5 | 本機／mock驗收完成，最終審查待接受 | main13/recovery5/legacy-entry3全部PASS；兩次真backend restart保留核准/退回、圖/生成/edit/voice/public JSON與media SHA256；cleanup全部survivors={} |
-| T6 | 完成 | 固定2776a19最終程式ctx_ad89cb0c8fd6、視覺ctx_abd5e8692759皆ACCEPT，root接受；最後PR/Status文件delta另窄審 |
-| T7 | 交付完成 | PR #53 OPEN，base main/head feat/freeform-canvas；程式及QA已push至2776a19，不merge；最後文件更新完成後同步推送及窄審 |
+| T4 | 完成 | source01a907b三項legacy回歸已review ACCEPT、整合4e92a14並真UI3/3通過；port padding干擾已修、實測13px |
+| T5 | 完成 | main13/recovery5/legacy-entry3全部PASS；兩次真backend restart保留核准/退回、圖/生成/edit/voice/public JSON與media SHA256；cleanup全部survivors={} |
+| T6 | 完成 | 固定2776a19最終程式ctx_ad89cb0c8fd6、視覺ctx_abd5e8692759皆ACCEPT，root接受；PR/Status文件delta亦已獨立ACCEPT |
+| T7 | 交付完成 | PR #53 OPEN，base main/head feat/freeform-canvas；程式及QA已push，最後文件delta已審查並同步；不merge |
 
 
 ## 已核對
@@ -191,3 +191,5 @@ Integrator檢查點：source01a907b6290fa4db645fed2fe72930c602f11331/baseafd55b5
 - /Users/tommy/orca/workspaces/BuildClub/verify-fe6496 — detached
 - /Users/tommy/orca/workspaces/BuildClub/verify-numbers — refs/heads/feat/verify-video-numbers
 - /Users/tommy/orca/workspaces/BuildClub/w2-grade-subs-backend — refs/heads/feat/w2-grade-subtitles-backend
+
+文件收尾接受：source4ed7eb589da23d3f9c5e3492303004fe4eb9c3f2/base2776a19，ctx_07e4e22418d7獨立ACCEPT五份文件，124清單/53hash不變。其後本文件Goal與任務行的完成文字由root逐行審查、同步為正式接受現況；產品/bin/harness/E2E/QA差異為零，未新增驗測或擴大provider完成聲明。最終精確文件SHA與遠端確認見本機handoff。
