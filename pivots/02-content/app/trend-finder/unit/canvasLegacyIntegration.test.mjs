@@ -27,11 +27,12 @@ const legacyPlan = { source: 'demo', shotId: 's1', storyboard: { model: 'mock-im
 const promptPlan = { source: 'demo', storyboard: legacyPlan.storyboard, video: legacyPlan.video, planUsd: 0, promptNodeId: 'p', canvasVersion: 7 }
 const doc = { nodes: [node('shot', 'shot', 's1'), node('p', 'prompt', undefined, { text: 'workspace text' }), node('legacyPrompt', 'prompt', 's1', { text: 'separate prompt' }), node('sb', 'storyboard', 's1', { selected: 'old', primary: true }), node('vid', 'video', 's1', { selected: 'old-video' }), node('kit', 'kit')], edges: [] }
 const tick = () => new Promise((resolve) => setImmediate(resolve))
-function assistant(kind, pickedId = 'shot', flush = async () => true) {
-  let current = structuredClone(doc), preview, note, version = 7
+function assistant(kind, pickedId = 'shot', flush = async () => true, initialDoc = doc, measured = {}) {
+  let current = structuredClone(initialDoc), preview, note, version = 7
   const scope = {
     resource: { kind, id: 'legacy / id' }, selected: [pickedId], picked: current.nodes.find((n) => n.id === pickedId), shots: [{ id: 's1', line: 'original shot line' }],
     session: { doc: () => current, saved: () => current, version: () => version }, flush,
+    getNode: (id) => ({ measured: measured[id] }),
     withBusy: async (_, run) => run(), askAgent, apiBase, fetch: (...args) => globalThis.fetch(...args),
     setPlan: (p) => { preview = p }, serverText: (s) => s, ff: (s) => s, t: (s) => s,
   }
@@ -161,4 +162,33 @@ test('actual no-shots retry is bounded, cancelled on leave, and never retries un
   const late = loading('legacy-plan', () => new Promise((r) => { resolve = r }))
   late.cleanup(); resolve({ doc }); await tick()
   assert.deepEqual(late.states, [null])
+})
+
+
+test('actual legacy apply places missing cards with measured or modern widths and never moves existing nodes', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => legacyPlan }))
+  for (const missing of ['video', 'storyboard', 'both']) {
+    for (const measuredWidth of [undefined, 350, 512]) {
+      const initial = {
+        nodes: [node('shot', 'shot', 's1'), node('kit', 'kit'),
+          ...(missing === 'video' ? [{ ...node('sb', 'storyboard', 's1', { selected: 'old', primary: true }), position: { x: 731, y: 284 } }] : []),
+          ...(missing === 'storyboard' ? [{ ...node('vid', 'video', 's1', { selected: 'old-video' }), position: { x: 1150, y: 430 } }] : [])],
+        edges: [],
+      }
+      const measured = Object.fromEntries(initial.nodes.map((n) => [n.id, measuredWidth === undefined ? undefined : { width: measuredWidth, height: 640 }]))
+      const app = assistant('legacy-plan', 'shot', async () => true, initial, measured)
+      await app.ask(); app.apply()
+      const next = app.doc()
+      for (const old of initial.nodes) assert.deepEqual(next.nodes.find((n) => n.id === old.id).position, old.position)
+      const added = next.nodes.filter((n) => !initial.nodes.some((old) => old.id === n.id))
+      assert.equal(added.length, missing === 'both' ? 2 : 1)
+      const existingCards = initial.nodes.filter((n) => n.shotId === 's1' && n.type !== 'shot')
+      const first = added[0]
+      if (existingCards.length) assert.ok(first.position.x >= Math.max(...existingCards.map((n) => n.position.x + (measuredWidth ?? 350))) + 40, `${missing}, width ${measuredWidth}: existing card collision`)
+      if (added.length === 2) assert.ok(added[1].position.x >= first.position.x + 350 + 40, 'new storyboard also needs the modern fallback before placing the video')
+      const sb = next.nodes.find((n) => n.type === 'storyboard'), vid = next.nodes.find((n) => n.type === 'video')
+      assert.ok(next.edges.some((e) => e.source === sb.id && e.target === vid.id && e.targetHandle === 'in:start'))
+      assert.ok(next.edges.some((e) => e.source === 'kit' && e.target === sb.id && e.targetHandle === 'in:kit'))
+    }
+  }
 })

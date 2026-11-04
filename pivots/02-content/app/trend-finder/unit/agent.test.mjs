@@ -82,3 +82,21 @@ test('applyAgentPlan marks an existing video changed when it gains a start line'
   assert.ok(r.doc.edges.some((e) => e.target === 'n_vid_s1' && e.targetHandle === 'in:start'))
   assert.deepEqual(r.changed, ['n_vid_s1'])
 })
+
+
+test('applyAgentPlan sizes new storyboards before placing the video without mutating caller measurements', () => {
+  const fallback = { w: 350, h: 600 }
+  const sizes = new Map(empty.nodes.map((n) => [n.id, { w: 350, h: 600 }]))
+  const before = structuredClone(sizes)
+  const both = applyAgentPlan(empty, 's1', plan, models, sizes, fallback)
+  const sb = both.doc.nodes.find((n) => n.id === both.storyboardId)
+  const vid = both.doc.nodes.find((n) => n.id === both.videoId)
+  assert.ok(vid.position.x >= sb.position.x + fallback.w + 40)
+  assert.deepEqual(sizes, before)
+  for (const old of empty.nodes) assert.deepEqual(both.doc.nodes.find((n) => n.id === old.id).position, old.position)
+  const onlyVideoMissing = { ...empty, nodes: [...empty.nodes, { ...node('wide', 'storyboard', 's1'), position: { x: 333, y: 99 } }] }
+  sizes.set('wide', { w: 525, h: 700 })
+  const one = applyAgentPlan(onlyVideoMissing, 's1', plan, models, sizes, fallback)
+  assert.deepEqual(one.doc.nodes.find((n) => n.id === 'wide').position, { x: 333, y: 99 })
+  assert.ok(one.doc.nodes.find((n) => n.id === one.videoId).position.x >= 333 + 525 + 40)
+})
