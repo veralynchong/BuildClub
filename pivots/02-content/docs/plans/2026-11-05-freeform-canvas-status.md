@@ -82,3 +82,31 @@ T2 來源 07d3d93，完整訊息 msg_ea7f2a8dcca4。分類依來源，不推測 
 前端完整review source1fee4f4（ctx_c3c1eefe71bd）REJECT：7項blocking（離開期間生成完成恢復；voice history→voiceId；換voice後隱形舊軌；CAS草稿遺失；upload改媒體保留不相容線；legacy footage shotId複製；legacy kit refs/操作被省略）。已交原writer逐項回歸修正。frameImage writeback/client切換/port翻譯也納入。不是已驗收前端。
 
 Backend續修已以真正跨process barrier重現confirm競態與upload mismatch；進度1001/1003passes，尚未final。slow_editor fixture teardown只release未等待RenderJobs._run完成，已定位為既有跨fixture背景job風險，writer用deterministic證據修tests，不擅改runtime migration。
+
+## 最新複審（2026-11-05）
+
+Backend eeb7cad（1005pass2skip、乾淨）由ctx_0f76b84fb4a9複審：ports/image-video upload/原子confirm/slow_editor fixture均ACCEPT；整體REJECT，因audio upload另一條完成路徑未重驗node/transaction。已交原backend terminal用新任務續修editing.py＋test_workspaces（同scope/audio、stream刪改、insert失敗零row/檔），最終未接受。
+
+Runner5a27180由ctx_d5d7096c544a複審：特定loopback/Unix限制與暫存app/cache ACCEPT；cleanup仍REJECT（PPID最後快照後spawn並reparent可漏）。已分派獨立writer ctx_a93f386a06a5/task_e09dc0267f78，worktree freeform-test-lifecycle from5a27180，唯一寫bin/freeform-e2e.py、render/render-reel.mjs與對應e2e isolation/timeout/lifecycle。要求原子launcher registry/stop握手與確定性最後快照後spawn回歸，不僅縮短poll。期間該worker獨占8872/8892/8893/8894與自有headless測試browser；lead不競用。
+
+Frontend原writer修正任務ctx_a76d7cc54369/task_9a97c9d84e3a仍執行；第一組保存session/完成恢復/voice映射/CAS已加5項實際狀態序列回歸，legacy/media/kit第二組待後續回報。全部仍需新SHA複審與整合E2E。
+
+T5正式`e2e/freeform.cjs`已由lead草擬並通過node --check，涵蓋UI空白建立、prompt/image/video/voice/upload/editor拖線、保存重開、來源實際inputs、MP4ffprobe/連入voice可聽、另一context審批及零fake ideas；尚未執行，待清理入口驗收及產品整合。測試只fixture clients，不seedplan/shots/library。
+
+Backend音訊修正ce95559固定（僅editing.py+test_workspaces）：先RED4failed1005pass2skip，最後GREEN1015pass2skip/frontendPASS。新增from-gen刪node/改type/media/source-node/mapping失敗/成功重複匯入檢查；已啟動精確兩檔獨立複審，待接受，不以writerGREEN取代review。
+
+音訊ce95559複審ctx_d27df6f3dfbe確認一般attach交易與清理有效，但整體仍REJECT：canonical workspace在gate後body await中metadata消失會被voice_node=None降級legacy、略過attach；已交原writer最小固定scope種別與消失/鎖/commit故障回歸。這是防止scope降級，不新增刪除workspace功能。
+
+清理writer最新回報：最後snapshot barrier先紅後綠、微秒birth身分不誤殺、未被poll發現的reparent群組可收割，isolation+UI Chromium+真MP4及timeout12sec exit124 survivors={}皆PASS，full984pass2skip；待固定commit與review，不以進度訊息當最終接受。
+
+Frontend七項修正f047c382＋9322db47已提交（最終9322db47，原base1fee4f4）；原版7/7具體RED，修後14流程回歸＋551unit、build/lint綠；full仍僅已知backend翻譯相依stale紅。獨立複審ctx_1b24f13a44d7/task_4b4dc638d62d進行中，尚未接受。
+
+T5 lifecycle8fb8da0提交（worktree freeform-test-lifecycle）：四檔限定、flock launch/stopping＋kernel微秒birth；full984pass2skipGREEN、isolation37pid與timeout26pid全消失、四埠釋放。複審ctx_67e46be8f005/task_54e3aa6d19d8進行中。延遲的8872舊訊息觸發ctx_2b570eb699de follow-up，lead已告知不需新實作/重跑、保持固定source；沒有新writer或接管埠。
+
+Backend防scope降級修正任務ctx_dfe8e8c427ed/task_208f5dacd655執行中，只editing.py/tests/test_workspaces.py，固定route種別及await邊界scope消失回歸，另測音訊BEGIN/commit故障與source kind/status。
+
+## 已接受並整合的測試基礎
+
+Source8fb8da0，base5a27180，scope為bin runner與isolation/timeout/lifecycle四檔。Reviewer ctx_67e46be8f005 verdict ACCEPT（完整報告/tmp/freeform-t5-report.txt）；lead已讀diff及證據，Integrator ACCEPT：可信macOS wrapper的登記/停止互斥與kernel birth/group收割，未回退loopback/Unix及temp/cache隔離。小增量4619f1只改缺cache時wx probe目錄，lead已讀3行差異並接受，writer cold-cache isolation/GREEN證據保留。
+
+整合cherry-pick為e776c2b＋3d40f79，rootfull gate親跑GREEN：984passed2skipped in36.17s、frontendPASS。產品backend/frontend尚未接受，不把runner接受延伸成產品完成。
