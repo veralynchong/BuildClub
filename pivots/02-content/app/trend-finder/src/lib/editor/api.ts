@@ -65,6 +65,8 @@ export async function deleteLogo(clientId: string): Promise<Brand> {
 
 // ---- voiceover files (backend/editing.py): recorded, uploaded or spoken by an AI voice ----
 export interface VoiceInfo {
+  nodeId?: string
+  genId?: string
   id: string
   url: string
   duration: number

@@ -1,5 +1,6 @@
 import type { CanvasDoc, CanvasEdge, CanvasNode, NodeKind } from './types.ts'
 import type { EditProject } from '../editor/types.ts'
+import type { VoiceInfo } from '../editor/api.ts'
 import { addNode } from './graph.ts'
 
 export function createNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: number }): CanvasDoc {
@@ -13,7 +14,7 @@ export function createNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: n
   return next
 }
 
-export function editorEdges(doc: CanvasDoc, project: EditProject | null): CanvasEdge[] {
+export function editorEdges(doc: CanvasDoc, project: EditProject | null, voices: VoiceInfo[] = []): CanvasEdge[] {
   if (!project || !doc.nodes.some((n) => n.id === 'n_editor')) return []
   const found = new Map<string, CanvasEdge>()
   const add = (n: CanvasNode, handle: string) => found.set(n.id, { id: `derived:${n.id}`, source: n.id, sourceHandle: 'out', target: 'n_editor', targetHandle: handle })
@@ -22,17 +23,20 @@ export function editorEdges(doc: CanvasDoc, project: EditProject | null): Canvas
     if (node) add(node, 'in:clips')
   }
   for (const voice of project.voiceover) {
-    const node = doc.nodes.find((n) => n.data.voiceId === voice.id)
+    const owner = voices.find((v) => v.id === voice.id)?.nodeId
+    const node = doc.nodes.find((n) => n.id === owner || n.data.voiceId === voice.id)
     if (node) add(node, 'in:audio')
   }
   return [...found.values()]
 }
 
-export function removeEditorSource(project: EditProject, nodeId: string, doc: CanvasDoc): EditProject {
+export function removeEditorSource(project: EditProject, nodeId: string, doc: CanvasDoc, voices: VoiceInfo[] = []): EditProject {
   const n = doc.nodes.find((n) => n.id === nodeId)
+  const voiceIds = new Set(voices.filter((v) => v.nodeId === nodeId).map((v) => v.id))
+  if (n?.data.voiceId) voiceIds.add(n.data.voiceId)
   return { ...project,
     clips: project.clips.filter((c) => c.source.nodeId !== nodeId && !(c.source.kind === 'generation' && c.source.id === n?.data.selected) && !(c.source.kind === 'take' && c.source.id === n?.data.takeId)),
-    voiceover: project.voiceover.filter((v) => v.id !== n?.data.voiceId),
+    voiceover: project.voiceover.filter((v) => !voiceIds.has(v.id)),
   }
 }
 
