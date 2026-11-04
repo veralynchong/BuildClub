@@ -17,7 +17,7 @@ import storyboard
 import workspaces
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, StrictInt, StringConstraints
 
 AGENT_USD = 0.01  # one small call, capped by AGENT_MAX_TOKENS
 AGENT_MAX_TOKENS = 1500
@@ -29,7 +29,7 @@ Prompt = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, m
 class AgentRequest(BaseModel):
     shotId: Optional[str] = None
     promptNodeId: Optional[str] = None
-    canvasVersion: Optional[int] = None
+    canvasVersion: Optional[StrictInt] = None
 
 
 class AgentOut(BaseModel):
@@ -139,8 +139,8 @@ def make_router(load: Callable[[str], object], budget: Callable[[str, float], Op
             prompt = next((n for n in doc['nodes'] if n['id'] == body.promptNodeId and n['type'] == 'prompt'), None)
             if prompt is None:
                 return error(422, 'Send the node, the model and a prompt.')
-            text = prompt['data'].get('prompt', prompt['data'].get('text', ''))
-            if not generations.voice_text_ok(text) and (not isinstance(text, str) or not text.strip() or len(text) > generations.MAX_PROMPT):
+            text = workspaces.prompt_text(doc, prompt['id'])
+            if not text.strip() or len(text) > generations.MAX_PROMPT:
                 return error(422, 'This model needs a prompt.')
             shots, shot = [], {'line': text}
         else:
