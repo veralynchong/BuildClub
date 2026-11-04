@@ -72,6 +72,7 @@ import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
 import { CanvasPick } from './components/CanvasPick'
 import type { CanvasContext as CanvasResource, Workspace as CanvasWorkspace } from './lib/canvas/resource'
+import { hasMissingLegacyPlan } from './lib/canvas/resource'
 import { readFullscreen, writeFullscreen } from './lib/canvas/shell'
 import { planName } from './components/plans/moves'
 import { AddClientScreen } from './components/AddClientScreen'
@@ -1386,8 +1387,8 @@ export default function App() {
     setView(v)
   }
 
-  // A plan view without its plan (e.g. after switching sample/live data) would be blank: show Plans instead.
-  const planMissing = (view === 'plan' || view === 'canvas' || view === 'board') && !(planIdea && planVideo && planFormat && planClient)
+  // Legacy plan views need their plan; standalone workspaces can open without one.
+  const planMissing = hasMissingLegacyPlan(view, canvasContext?.resource, !!(planIdea && planVideo && planFormat && planClient))
   useEffect(() => {
     if (planMissing) setViewRaw('shortlist')
   }, [planMissing])
