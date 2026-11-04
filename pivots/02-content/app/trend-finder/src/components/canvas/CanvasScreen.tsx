@@ -396,7 +396,12 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     if (!plan) return
     if (session.version() !== plan.canvasVersion || session.doc() !== session.saved()) { setNote(ff('changed')); return }
     if ('shotId' in plan) {
-      const made = applyAgentPlan(session.doc(), plan.shotId, plan, models)
+      const fallback = { w: 350, h: 600 }
+      const sizes = new Map(session.doc().nodes.map((n) => {
+        const measured = getNode(n.id)?.measured
+        return [n.id, { w: measured?.width ?? fallback.w, h: measured?.height ?? fallback.h }]
+      }))
+      const made = applyAgentPlan(session.doc(), plan.shotId, plan, models, sizes, fallback)
       const stale = new Set(made.changed.flatMap((id) => staleIds(made.doc, id, gens, true)))
       change({ ...made.doc, nodes: made.doc.nodes.map((n) => stale.has(n.id) ? { ...n, data: { ...n.data, stale: true } } : n) })
     } else change(applyPromptPlan(session.doc(), plan))

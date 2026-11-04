@@ -47,18 +47,22 @@ export function applyAgentPlan(
   plan: AgentPlan,
   models: GenModel[],
   sizes?: Map<string, { w: number; h: number }>,
+  newNodeSize?: { w: number; h: number },
 ): { doc: CanvasDoc; storyboardId: string; videoId: string; changed: string[] } {
   if (!shotNodeOf(doc, shotId)) throw new Error(`Shot ${shotId} has no node.`)
   const inFrame = (d: CanvasDoc, type: CanvasNode['type']) => d.nodes.filter((n) => n.type === type && n.shotId === shotId)
   const origin = { x: 0, y: 0 }
+  const placementSizes = newNodeSize ? new Map(sizes) : sizes
   let next = doc
 
   const sbs = inFrame(next, 'storyboard')
   let sb = sbs.find((n) => n.data.primary) ?? sbs[sbs.length - 1]
   const sbNew = !sb
   if (!sb) {
-    next = addNode(next, 'storyboard', origin, shotId, sizes)
+    next = addNode(next, 'storyboard', origin, shotId, placementSizes)
     sb = next.nodes[next.nodes.length - 1]
+    // This card has not mounted yet, but the following video must reserve its full width.
+    if (newNodeSize) placementSizes!.set(sb.id, newNodeSize)
   }
 
   const vids = inFrame(next, 'video')
@@ -66,7 +70,7 @@ export function applyAgentPlan(
   let vid = vids.find((n) => n.id === startId) ?? vids[vids.length - 1]
   const vidNew = !vid
   if (!vid) {
-    next = addNode(next, 'video', origin, shotId, sizes)
+    next = addNode(next, 'video', origin, shotId, placementSizes)
     vid = next.nodes[next.nodes.length - 1]
   }
 
