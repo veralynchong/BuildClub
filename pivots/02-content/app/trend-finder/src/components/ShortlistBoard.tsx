@@ -328,6 +328,11 @@ export function ShortlistBoard(p: Props) {
           cutSentBack={signalsById[idea.id]?.cutSentBack}
           actions={
             <>
+              {idea.status === "approved" && (
+                <button className="btn btn-primary btn-sm" onClick={() => p.onMakeVideo(idea.id)}>
+                  {t("canvas.makeVideo")}
+                </button>
+              )}
               {idea.status === "waiting" && (
                 <button className="link-btn" onClick={() => withdraw(idea)}>
                   {t("plan.board.takeBack")}

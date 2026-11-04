@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Client, Format, SavedIdea, Shot, Video } from '../types'
 import { useApp, useManagerName } from '../lib/appContext'
 import { byFollowers, compact, scoreBase, platformName } from '../lib/metrics'
@@ -10,6 +10,9 @@ import { FromScript } from './FromScript'
 import { PlanHooks } from './PlanHooks'
 import { looksLikeInterview } from '../lib/shots'
 import { lastSentBack } from '../lib/memory'
+import { ShotChecklist } from './ShotChecklist'
+import { CutPanel } from './CutPanel'
+import { PublishPanel } from './publish/PublishPanel'
 import { newShotId } from '../lib/storyboard'
 import { t } from '../lib/i18n'
 
@@ -33,13 +36,21 @@ interface Props {
 }
 
 export function PlanScreen(p: Props) {
-  const { idea, video, format, client, onChange, onBack, onFindMore, onGoApprovals, onDecide } = p
+  const { idea, video, format, client, onChange, onBack, onFindMore, onGoApprovals, onDecide, onOpenCanvas } = p
   // The person who approves plans, from the agency settings. Only a signed-in manager decides here;
   // a team member's plan is decided by the manager (in the app or on the review link).
   const APPROVER = useManagerName()
   const canDecide = useApp().role === 'manager'
   // Last removed shot, so an accidental ✕ can be undone.
   const [removed, setRemoved] = useState<{ shot: Shot; index: number } | null>(null)
+  // Counts every report from the checklist (a take added, removed or re-chosen), for the video panel's stale check.
+  const [takesRevision, setTakesRevision] = useState(0)
+  useEffect(() => {
+    setTakesRevision(0)
+  }, [idea.id])
+  const onTakesProgress = useCallback(() => {
+    setTakesRevision((r) => r + 1)
+  }, [])
   // Index of a shot just added with "+ Add a shot", so only that row plays its enter animation.
   const [addedAt, setAddedAt] = useState<number | null>(null)
   // Deciding on a waiting plan: approve with changes or send back both need a comment.
@@ -236,6 +247,15 @@ export function PlanScreen(p: Props) {
             )}
           </section>
 
+          {/* Production: once the plan is approved, footage takes, the video (made on the canvas) and publishing. */}
+          {idea.status === 'approved' && (
+            <>
+              <ShotChecklist key={idea.id} ideaId={idea.id} status={idea.status} shots={shots} onProgress={onTakesProgress} />
+              <CutPanel key={`cut-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} takesRevision={takesRevision} onOpenCanvas={onOpenCanvas} />
+              <PublishPanel key={`pub-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} />
+            </>
+          )}
+
           {idea.status === 'rejected' && (
             <section className="block">
               <h3>{t('plan.screen.feedbackOf', { approver: APPROVER })}</h3>
@@ -324,9 +344,14 @@ export function PlanScreen(p: Props) {
         )}
 
         {idea.status === 'approved' && (
-          <span className="plan-bar-text" role="status">
-            {t('plan.screen.bar.approvedDue', { due: dueLabel(idea.dueDate).text })}
-          </span>
+          <>
+            <span className="plan-bar-text" role="status">
+              {t('plan.screen.bar.approvedDue', { due: dueLabel(idea.dueDate).text })}
+            </span>
+            <button type="button" className="btn btn-primary" onClick={() => onOpenCanvas()}>
+              {t('canvas.open')}
+            </button>
+          </>
         )}
 
         {idea.status === 'rejected' && (
