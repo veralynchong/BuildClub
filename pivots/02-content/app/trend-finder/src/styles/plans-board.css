@@ -45,6 +45,17 @@
 :root[data-ui="altitude"] .plans-card-handle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :root[data-ui="altitude"] .plans-card .board-card-actions { flex-wrap: wrap; justify-content: flex-start; }
 :root[data-ui="altitude"] .plans-card .board-card-actions .link-btn { margin-left: auto; }
+:root[data-ui="altitude"] .plans-card { position: relative; }
+/* Leave room for the bin so a long title never runs under it. */
+:root[data-ui="altitude"] .plans-card .board-card-body { padding-right: 28px; }
+:root[data-ui="altitude"] .plans-card-discard {
+  position: absolute; top: 8px; right: 8px; display: grid; place-items: center;
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+:root[data-ui="altitude"] .plans-card-discard:hover { background: var(--surface-2); color: var(--ink); }
+:root[data-ui="altitude"] .plans-card-discard:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 :root[data-ui="altitude"] .plans-notice {
   grid-column: 1 / -1; margin: 0; padding: 6px 8px; border-radius: var(--radius-xs);
@@ -68,3 +79,32 @@
   border-color: var(--line);
   backdrop-filter: blur(2px);
 }
+
+/* Pop-ups on the Plans board: the delete confirmation and the review link. */
+.plan-modal {
+  border: 0; padding: 0; background: transparent; max-width: calc(100vw - 32px); width: 440px;
+}
+.plan-modal::backdrop { background: color-mix(in srgb, var(--navy, #060a47) 45%, transparent); }
+.plan-modal-box {
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-float); padding: var(--space-3xl);
+}
+.plan-modal-box h2 { margin: 0 0 var(--space-sm); font-family: var(--font-serif); font-weight: 500; font-size: 26px; line-height: 1.15; letter-spacing: -0.01em; }
+.plan-modal-box > p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.plan-modal-box .plan-modal-field { margin-top: var(--space-xl); }
+.plan-modal-box .plan-modal-field input { width: 100%; font-family: var(--font-mono); font-size: 13px; }
+.plan-modal-box .error { margin-top: var(--space-sm); }
+.plan-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-3xl); flex-wrap: wrap; }
+.plan-modal-actions .plan-modal-off { margin-right: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .plan-modal[open] .plan-modal-box { animation: plan-modal-in 0.16s ease-out; }
+  @keyframes plan-modal-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+}
+
+/* Get review link sits under each card in Waiting for approval, full width. */
+:root[data-ui="altitude"] .plans-card .board-card-actions .board-card-link { flex-basis: 100%; margin-top: var(--space-2xs); }
+/* Column titles (Still planning, Waiting for approval, Approved, ready to film) are bold; the count stays light. */
+:root[data-ui="altitude"] .plans-col-head h2 { font-weight: 600; }
+:root[data-ui="altitude"] .plans-col-head h2 .plans-count { font-weight: 400; }
+/* Which of the client's videos (1 to 12) the plan is for: a mono label above the title, like "VIDEO 2" on Research. */
+.plans-card-videono { font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 16px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--label); }

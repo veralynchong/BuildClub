@@ -903,6 +903,12 @@ export default function App() {
   // This client's Research rows, and the videos they hold.
   const myResearch = research.filter((e) => e.clientId === client.id)
   const inResearch = new Set(myResearch.map((e) => e.videoId))
+  // Which of the client's videos (1 to 12) each Research video is filed under, for the Plans cards.
+  const videoNoById = new Map<string, number>()
+  for (const e of myResearch) {
+    const slot = e.slotId ? researchSlots.find((s) => s.id === e.slotId && s.clientId === client.id) : undefined
+    if (slot) videoNoById.set(e.videoId, slot.number)
+  }
 
   // Saving or planning a real video asks the API for its AI breakdown (about a minute the first time).
   // It replaces the placeholder shot list and "why it works".
@@ -1688,6 +1694,7 @@ export default function App() {
               onFindMore={() => setView('search')}
               onReview={() => openReview('shortlist')}
               inResearch={inResearch}
+              videoNoById={videoNoById}
               onOpenResearch={() => setView('research')}
               focus={boardFocus}
               onFocusDone={clearBoardFocus}
