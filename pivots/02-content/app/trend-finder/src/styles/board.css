@@ -115,3 +115,56 @@
   .board-minimap { display: none; }
 }
 .board-head .board-send { justify-self: start; margin-top: var(--space-sm); }
+
+/* Founder pick, 4 Nov 2026: the board is a full-width navy page with the plan stage's dot pattern. The side tools
+   ("Change the board") are closed by default and open as a drawer from the button in the header. */
+.main:has(> .board-screen),
+:root[data-ui="altitude"] .main:has(> .board-screen) { max-width: none; padding: 0; }
+.board-screen {
+  position: relative; min-height: 100dvh; align-content: start; grid-template-rows: auto auto minmax(0, 1fr) auto;
+  padding: var(--space-3xl) max(var(--space-3xl), 3vw) var(--space-xl);
+  background-color: var(--navy-deep); color: var(--on-navy);
+  background-image: radial-gradient(circle at 1px 1px, var(--navy-dot) 1px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+.board-screen > .link-btn { color: var(--on-navy-muted); text-decoration-color: var(--navy-dot); }
+.board-screen :focus-visible { outline-color: var(--sky); }
+.board-head h1 { color: var(--on-navy); }
+.board-head p { color: var(--on-navy-muted); }
+.board-head-actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-sm); }
+.board-head .board-send { margin-top: 0; }
+.board-screen .board-status { color: var(--on-navy-muted); }
+.board-screen .board-status .link-btn { color: var(--sky); }
+
+/* The canvas fills the rest of the screen and sits on the same navy, so the board reads as one surface. */
+.board-layout { display: block; min-height: 0; }
+.board-canvas {
+  height: max(420px, calc(100dvh - 260px)); background: transparent; border-color: var(--navy-dot);
+  --xy-background-color: transparent;
+  --xy-background-pattern-dots-color: var(--navy-dot);
+  --xy-edge-stroke: var(--on-navy-muted);
+  --xy-minimap-background-color: var(--navy);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--navy-deep) 60%, transparent);
+  --xy-minimap-node-background-color: var(--on-navy-muted);
+  --xy-attribution-background-color: transparent;
+}
+.board-canvas .react-flow__attribution a { color: var(--on-navy-muted); }
+.board-minimap { border-color: var(--navy-dot); }
+
+/* The drawer: on the right, over the board, with the same tools as before. */
+.board-tools {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(360px, 100%); overflow-y: auto;
+  display: grid; align-content: start; gap: var(--space-lg); padding: var(--space-xl);
+  background: var(--surface); color: var(--fg); border-left: 1px solid var(--line); box-shadow: var(--shadow-lg);
+}
+.board-tools[hidden] { display: none; }
+.board-tools-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.board-tools-head h2 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+.board-tools-close { width: 36px; height: 36px; padding: 0; border-radius: var(--radius-pill); background: transparent; border: 1px solid var(--line); color: var(--fg); cursor: pointer; }
+.board-tools > .btn { justify-self: start; }
+.board-tools-toggle[aria-expanded="true"] { background: var(--accent-soft); }
+
+@media (max-width: 720px) {
+  .board-screen { padding: var(--space-xl) var(--space-base); }
+  .board-canvas { height: 68dvh; }
+}
