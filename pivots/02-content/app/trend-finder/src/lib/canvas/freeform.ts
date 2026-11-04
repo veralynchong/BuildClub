@@ -1,6 +1,7 @@
 import type { CanvasDoc, CanvasEdge, CanvasNode, NodeKind } from './types.ts'
 import type { EditProject } from '../editor/types.ts'
 import type { VoiceInfo } from '../editor/api.ts'
+import { mergeVoiceOwnership } from './voices.ts'
 import { addNode } from './graph.ts'
 
 export function createNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: number }, shotId?: string): CanvasDoc {
@@ -23,8 +24,8 @@ export function editorEdges(doc: CanvasDoc, project: EditProject | null, voices:
     if (node) add(node, 'in:clips')
   }
   for (const voice of project.voiceover) {
-    const owner = voices.find((v) => v.id === voice.id)?.nodeId
-    const node = doc.nodes.find((n) => n.id === owner || n.data.voiceId === voice.id)
+    const owner = mergeVoiceOwnership(doc, voices).find((v) => v.id === voice.id)?.nodeId
+    const node = doc.nodes.find((n) => n.id === owner || n.data.voiceId === voice.id || n.data.voiceIds?.includes(voice.id) || Object.values(n.data.voiceSources ?? {}).includes(voice.id))
     if (node) add(node, 'in:audio')
   }
   return [...found.values()]
@@ -34,6 +35,8 @@ export function removeEditorSource(project: EditProject, nodeId: string, doc: Ca
   const n = doc.nodes.find((n) => n.id === nodeId)
   const voiceIds = new Set(voices.filter((v) => v.nodeId === nodeId).map((v) => v.id))
   if (n?.data.voiceId) voiceIds.add(n.data.voiceId)
+  for (const id of n?.data.voiceIds ?? []) voiceIds.add(id)
+  for (const id of Object.values(n?.data.voiceSources ?? {})) voiceIds.add(id)
   return { ...project,
     clips: project.clips.filter((c) => c.source.nodeId !== nodeId && !(c.source.kind === 'generation' && c.source.id === n?.data.selected) && !(c.source.kind === 'take' && c.source.id === n?.data.takeId)),
     voiceover: project.voiceover.filter((v) => !voiceIds.has(v.id)),
@@ -95,6 +98,6 @@ export function duplicateNode(doc: CanvasDoc, nodeId: string): CanvasDoc {
   const original = doc.nodes.find((n) => n.id === nodeId)!
   const next = createNode(doc, original.type, { x: original.position.x + 60, y: original.position.y + 60 }, original.shotId)
   const copy = next.nodes[next.nodes.length - 1]
-  copy.data = { ...original.data, selected: null, voiceId: undefined, takeId: undefined, awaiting: undefined }
+  copy.data = { ...original.data, selected: null, voiceId: undefined, voiceIds: undefined, voiceSources: undefined, takeId: undefined, awaiting: undefined }
   return next
 }
