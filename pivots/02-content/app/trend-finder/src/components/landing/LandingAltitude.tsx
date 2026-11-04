@@ -1,6 +1,7 @@
 import { PlatformLogo, type LogoPlatform } from '../PlatformToggles'
 import { Logo } from '../Logo'
 import { playerUrl } from '../../lib/tiktokPlayer.ts'
+import { usePrefersReducedMotion } from '../../lib/motion'
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
 
 // Public landing page, built to the conversion flow in docs/landing-page-flow.md (sections 0–10)
@@ -147,18 +148,47 @@ function PickBadge({ pick, best }: { pick: Pick; best: boolean }) {
 // opener: the card that opened the preview, so focus can go back to it (Safari doesn't focus buttons on click).
 type Preview = { client: ClientKey; index: number; opener: HTMLElement }
 
-const DEMO_PLATFORMS: { id: LogoPlatform; name: string }[] = [
-  { id: 'instagram', name: 'Instagram' },
-  { id: 'youtube', name: 'YouTube' },
+// off: shown but not clickable for now.
+const DEMO_PLATFORMS: { id: LogoPlatform; name: string; off?: boolean }[] = [
   { id: 'tiktok', name: 'TikTok' },
-  { id: 'x', name: 'X' },
-  { id: 'reddit', name: 'Reddit' },
+  { id: 'instagram', name: 'Instagram' },
+  { id: 'youtube', name: 'YouTube', off: true },
+  { id: 'x', name: 'X', off: true },
+  { id: 'reddit', name: 'Reddit', off: true },
 ]
+
+// What the demo search field types out: one phrase, deleted, then the next. All tofu, to match the picks below.
+const DEMO_QUERIES = ['tofu', 'crispy tofu recipes', 'tofu taste test', 'quick tofu dinners']
+
+// Types each phrase letter by letter, holds it, deletes it, then types the next. Reduced motion shows the first, still.
+function useTypedQuery(phrases: string[]) {
+  const reduced = usePrefersReducedMotion()
+  const [i, setI] = useState(0)
+  const [len, setLen] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+  const full = phrases[i]
+  useEffect(() => {
+    if (reduced) return
+    const done = !deleting && len === full.length
+    const empty = deleting && len === 0
+    const delay = done ? 1800 : empty ? 350 : deleting ? 35 : 90
+    const t = window.setTimeout(() => {
+      if (done) setDeleting(true)
+      else if (empty) {
+        setDeleting(false)
+        setI((n) => (n + 1) % phrases.length)
+      } else setLen((n) => n + (deleting ? -1 : 1))
+    }, delay)
+    return () => window.clearTimeout(t)
+  }, [len, deleting, full, reduced, phrases.length])
+  return reduced ? { text: phrases[0], typing: false } : { text: full.slice(0, len), typing: true }
+}
 
 function MiniDemo({ onPreview }: { onPreview: (p: Preview) => void }) {
   const client: ClientKey = 'evergreen'
   const c = PICKS[client]
   const [platform, setPlatform] = useState<LogoPlatform>('tiktok')
+  const query = useTypedQuery(DEMO_QUERIES)
   // Which pick's video is playing in its hover card. Set after a short pause so scrolling past loads nothing; mouse only.
   const [hover, setHover] = useState<string | null>(null)
   const hoverTimer = useRef<number | undefined>(undefined)
@@ -186,6 +216,7 @@ function MiniDemo({ onPreview }: { onPreview: (p: Preview) => void }) {
               type="button"
               className={platform === pl.id ? 'is-on' : undefined}
               aria-pressed={platform === pl.id}
+              disabled={pl.off}
               onClick={() => setPlatform(pl.id)}
             >
               <PlatformLogo platform={pl.id} size={22} />
@@ -196,7 +227,10 @@ function MiniDemo({ onPreview }: { onPreview: (p: Preview) => void }) {
         <div className="rk-demo-top">
           <div className="rk-demo-search">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
-            <span>tofu</span>
+            <span aria-hidden="true">
+              {query.text}
+              {query.typing && <i className="rk-demo-caret" />}
+            </span>
           </div>
           <span className="rk-demo-client">{c.name}</span>
         </div>
@@ -593,7 +627,7 @@ export function LandingAltitude({ onLogIn, onDemo }: { onLogIn: () => void; onDe
         <div className="rk-wrap">
           <div className="rk-panel rk-dots rk-hero-panel">
             <span className="rk-announce"><span className="rk-badge rk-badge-new">New</span> Instagram search is coming soon</span>
-            <h1>Know what each client should <em>film</em> this week.</h1>
+            <h1>Find contents worth <em>Remaking</em>.</h1>
             <p className="rk-lede">
               Remake finds the TikToks worth copying for each client, plans the shots, and gets your manager’s OK before you film.
               Made for agencies with 5 to 20 clients.
@@ -605,22 +639,10 @@ export function LandingAltitude({ onLogIn, onDemo }: { onLogIn: () => void; onDe
                 Watch the tour (under a minute)
               </a>
             </div>
-            <p className="rk-note">No sign-up. A sample agency is ready to go.</p>
           </div>
           <MiniDemo onPreview={setPreview} />
         </div>
       </header>
-
-      {/* 2 · Proof under the CTA. No logos until we have permission to use them. */}
-      <section className="rk-proof-wrap" aria-label="Who it’s for">
-        <div className="rk-wrap">
-          <ul className="rk-proof">
-            <li><strong>Built with social agencies in Sydney</strong></li>
-            <li>Ranks videos by <strong>views ÷ followers</strong>, the check agencies already do by hand</li>
-            <li>Quote from an agency goes here <span className="rk-pending">(waiting for their OK)</span></li>
-          </ul>
-        </div>
-      </section>
 
       {/* Tour video: target of "Watch the tour" */}
       <section id="tour" className="rk-tour" aria-label="Product tour, under a minute">
