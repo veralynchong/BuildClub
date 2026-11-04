@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remake UI Sets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --canvas: #ffffff; --alt: #f5f5f7; --ink: #1a1a22; --muted: #5d5f6e; --line: #e8e8ee; --line2: #c9cad6;
+  --navy: #060a47; --dot: #2a3170; --on-navy: #f4f5ff; --on-navy-m: #a9b0e0; --sky: #7ab8ff; --blue: #1a33f2; --blue-soft: #e9ecff; --mustard: #f2b705;
+  --serif: 'Newsreader', Georgia, serif; --sans: 'Inter', system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--canvas); color: var(--ink); font: 400 15px/1.55 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 400; letter-spacing: -.02em; margin: 0; }
+p { margin: 0; }
+a { color: var(--blue); }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+.hero { background: var(--navy); color: var(--on-navy); background-image: radial-gradient(circle at 1px 1px, var(--dot) 1.2px, transparent 1.6px); background-size: 24px 24px; padding: 48px 0 40px; }
+.kick { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--sky); }
+.hero h1 { font-size: clamp(44px, 6vw, 80px); line-height: 1; margin: 12px 0 16px; }
+.hero h1 em { color: var(--sky); }
+.hero p.lede { color: var(--on-navy-m); font-size: 17px; max-width: 760px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 18px; font: 400 12.5px var(--mono); color: var(--on-navy-m); }
+.sets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: -24px; position: relative; }
+.set { background: #fff; border-radius: 14px; box-shadow: 0 0 0 1px var(--line), 0 20px 40px -16px rgb(6 10 71 / .25); padding: 22px; display: flex; flex-direction: column; gap: 10px; transition: transform .35s var(--ease), box-shadow .35s var(--ease); }
+.set:hover { transform: translateY(-4px); box-shadow: 0 0 0 1px var(--line2), 0 30px 50px -16px rgb(6 10 71 / .3); }
+.set .tag { font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.set h2 { font-size: 34px; line-height: 1; }
+.set h2 em { color: var(--blue); }
+.set p { color: var(--muted); font-size: 14.5px; }
+.set .swatch { height: 70px; border-radius: 10px; position: relative; overflow: hidden; }
+.sw-a { background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+.sw-a::before { content: "Broadsheet"; position: absolute; left: 14px; top: 10px; font: 400 30px var(--serif); letter-spacing: -.02em; }
+.sw-a::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 16px; border-top: 1px solid var(--ink); box-shadow: 0 6px 0 -5px var(--line2); }
+.sw-b { background: #070b24; background-image: radial-gradient(circle at 1px 1px, #1d2357 1px, transparent 1.4px); background-size: 12px 12px; }
+.sw-b::before { content: "⌘K  Search or jump to…"; position: absolute; left: 14px; top: 18px; right: 14px; height: 32px; border: 1px solid #353d78; border-radius: 6px; background: #0e1336; font: 400 12px/30px var(--mono); color: #9da2c4; padding-left: 10px; }
+.sw-c { background: var(--navy); }
+.sw-c::before { content: ""; position: absolute; inset: 12px 14px; background-image: radial-gradient(circle, var(--mustard) 3px, transparent 3.5px); background-size: 12px 12px; clip-path: polygon(0 100%, 0 70%, 12% 60%, 24% 66%, 36% 40%, 48% 50%, 60% 26%, 72% 34%, 84% 8%, 100% 0, 100% 100%); }
+.set .go { margin-top: auto; display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; background: var(--blue); color: #fff; text-decoration: none; padding: 10px 18px; border-radius: 99px; font-weight: 500; font-size: 14px; transition: background .2s; }
+.set .go:hover { background: #1426c4; }
+.set .go span { transition: transform .25s var(--ease); }
+.set .go:hover span { transform: translateX(3px); }
+.set ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
+section.block { padding: 56px 0 8px; }
+section.block > .wrap > h2 { font-size: 40px; line-height: 1.05; }
+section.block > .wrap > h2 em { color: var(--blue); }
+.sub { color: var(--muted); max-width: 760px; margin-top: 8px; }
+.picker { display: flex; flex-wrap: wrap; gap: 6px; margin: 20px 0 14px; }
+.picker button { font: 500 12.5px var(--sans); border: 1px solid var(--line2); background: #fff; padding: 6px 12px; border-radius: 99px; cursor: pointer; color: var(--ink); transition: all .2s; }
+.picker button:hover { border-color: var(--ink); }
+.picker button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.picker button span { font-family: var(--mono); color: var(--blue); margin-right: 5px; }
+.picker button.on span { color: var(--mustard); }
+.tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 99px; padding: 2px; }
+.seg button { border: 0; background: none; padding: 5px 12px; border-radius: 99px; font: 500 12.5px var(--sans); cursor: pointer; color: var(--muted); }
+.seg button.on { background: var(--ink); color: #fff; }
+.trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.trio.stack { grid-template-columns: 1fr; }
+.trio figure { margin: 0; }
+.trio figcaption { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-size: 13px; }
+.trio figcaption b { font-family: var(--serif); font-weight: 400; font-size: 20px; }
+.trio .fr { position: relative; width: 100%; aspect-ratio: 1280 / 800; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px var(--line2), 0 14px 30px -14px rgb(6 10 71 / .3); background: var(--alt); }
+.trio iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+table.cmp { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 18px; }
+table.cmp th { text-align: left; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 10px 12px 10px 0; border-bottom: 1px solid var(--ink); position: sticky; top: 0; background: #fff; }
+table.cmp td { padding: 11px 14px 11px 0; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--muted); }
+table.cmp td:first-child { color: var(--ink); width: 170px; }
+table.cmp td:first-child b { display: block; font-family: var(--serif); font-weight: 400; font-size: 17px; }
+table.cmp td:first-child span { font: 400 11px var(--mono); color: var(--blue); }
+table.cmp td a { font-size: 12px; white-space: nowrap; }
+table.cmp tr:hover td { background: var(--alt); }
+td.win { color: var(--ink) !important; background: linear-gradient(90deg, var(--blue-soft), transparent 70%); }
+.tblwrap { overflow-x: auto; }
+.rec { background: var(--alt); border-radius: 18px; padding: 32px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; margin-top: 18px; }
+.rec h3 { font-size: 30px; line-height: 1.1; }
+.rec h3 em { color: var(--blue); }
+.rec ol, .rec ul { margin: 12px 0 0; padding-left: 20px; }
+.rec li { margin-bottom: 8px; }
+.flag { border-left: 3px solid var(--mustard); padding: 4px 0 4px 14px; margin-top: 14px; font-size: 14px; }
+.flag b { font-weight: 600; }
+.scores { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 10px; }
+.scores td, .scores th { padding: 7px 8px; border-bottom: 1px solid var(--line2); text-align: left; }
+.scores th { font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.dots { letter-spacing: 2px; color: var(--blue); font-family: var(--mono); }
+.dots i { color: var(--line2); font-style: normal; }
+footer { border-top: 1px solid var(--line); margin-top: 56px; padding: 24px 0 60px; color: var(--muted); font-size: 13px; }
+@media (max-width: 900px) { .sets, .trio, .rec { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="kick">Remake · design review · 4 Nov 2026</p>
+    <h1>Three ways Remake <em>could look</em>, end to end.</h1>
+    <p class="lede">Three full UI directions for the whole product, from the landing page to publishing. All three keep the Remake core: navy and blue, the navy dot grid, Newsreader headings, Inter for reading, Geist Mono for labels. They differ in layout, density, motion, data visualisation and interaction. Every screen uses Evergreen Foods sample content, and the animations and interactions work.</p>
+    <div class="meta"><span>22 screens × 3 sets</span><span>Mockups only, not built into the app</span><span>Respects reduced motion</span><span>Read from: app code (src/components, styles, lib/strings), the live app at :5192, docs/app-flow.md, copy-guide.md, design-review/*</span></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="sets">
+    <article class="set"><span class="tag">Set A · editorial and calm</span><div class="swatch sw-a"></div><h2><em>Broadsheet</em></h2>
+      <p>Remake set like a quality newspaper. Each page has one lead story, ledgers instead of card piles, hairline rules instead of boxes, mono datelines and big Newsreader headlines. Navy "night edition" bands carry the dot grid. Motion is slow and quiet: a 550 ms cross-fade with a small rise, lines that rise in order, rules and sparklines that draw themselves, saves that stamp in. It reads well, it is the closest to today's Altitude, and it fits the copy guide's "sentences, not tags".</p>
+      <a class="go" href="set-a-broadsheet.html">Open Broadsheet <span>→</span></a></article>
+    <article class="set"><span class="tag">Set B · studio and tool-dense</span><div class="swatch sw-b"></div><h2><em>Control Room</em></h2>
+      <p>Remake as a dark production console for the team that lives in it all day. An icon rail, a ⌘K command bar on every screen, panes with an inspector, sortable tables, a followers-vs-views scatter, a real node editor with typed ports, a multi-track timeline and keyboard triage for approvals (A, C, S). Motion is fast and mechanical, 150 to 250 ms: screens slide sideways, data flows along node links, loaders sweep the dot grid. Most power per pixel, but furthest from today's light app.</p>
+      <a class="go" href="set-b-control-room.html">Open Control Room <span>→</span></a></article>
+    <article class="set"><span class="tag">Set C · bold and kinetic</span><div class="swatch sw-c"></div><h2><em>Signal</em></h2>
+      <p>Remake as a brand you can feel. The dot grid comes alive: on Best to copy, 267 dots light up, one for each time the video beat its account's usual views. Targets fill as dot rings, columns of dots rise. Giant Newsreader with a mustard highlighter on the key word, top pill navigation, colour-blocked cards, wipe transitions, spring easing, magnetic buttons, tilting covers and a review deck you swipe. The most memorable; the least dense.</p>
+      <a class="go" href="set-c-signal.html">Open Signal <span>→</span></a></article>
+  </div>
+</div>
+
+<section class="block" id="compare">
+  <div class="wrap">
+    <h2>Same screen, <em>three ways</em></h2>
+    <p class="sub">Pick a screen; all three frames switch to it with their own transition. The frames are live: click around inside them.</p>
+    <div class="picker" id="picker"></div>
+    <div class="tools"><span>Layout</span><span class="seg" id="lay"><button class="on" data-l="trio">Side by side</button><button data-l="stack">Stacked, larger</button></span></div>
+    <div class="trio" id="trio">
+      <figure><figcaption><b>A · Broadsheet</b><a href="set-a-broadsheet.html" data-set="set-a-broadsheet.html">Open full set →</a></figcaption><div class="fr"><iframe title="Broadsheet" loading="lazy" data-src="set-a-broadsheet.html"></iframe></div></figure>
+      <figure><figcaption><b>B · Control Room</b><a href="set-b-control-room.html" data-set="set-b-control-room.html">Open full set →</a></figcaption><div class="fr"><iframe title="Control Room" loading="lazy" data-src="set-b-control-room.html"></iframe></div></figure>
+      <figure><figcaption><b>C · Signal</b><a href="set-c-signal.html" data-set="set-c-signal.html">Open full set →</a></figcaption><div class="fr"><iframe title="Signal" loading="lazy" data-src="set-c-signal.html"></iframe></div></figure>
+    </div>
+  </div>
+</section>
+
+<section class="block">
+  <div class="wrap">
+    <h2>Page by page</h2>
+    <p class="sub">What each set does with each screen. The shaded cell is the version I would ship for that screen.</p>
+    <div class="tblwrap"><table class="cmp"><thead><tr><th>Screen</th><th>A · Broadsheet</th><th>B · Control Room</th><th>C · Signal</th></tr></thead><tbody id="rows"></tbody></table></div>
+  </div>
+</section>
+
+<section class="block" id="rec">
+  <div class="wrap">
+    <h2>My <em>recommendation</em></h2>
+    <div class="rec">
+      <div>
+        <h3>Build the product on <em>Broadsheet</em>. Borrow Signal's dot-matrix for the money moments, and Control Room's tools for the make-it screens.</h3>
+        <ol>
+          <li><b>Broadsheet for the everyday screens</b> (Home, Find ideas, Results, Research, Plans, Plan, Review, Brief, Settings). It is calm enough to use all day, it reads at the grade 5 to 7 level the copy guide asks for, and it is the shortest step from today's Altitude tokens: same light canvas, same pills, just better rhythm and rules.</li>
+          <li><b>Signal for the landing page and three moments</b>: the dot-matrix "views compared with usual" on Best to copy (it explains the ranking rule without a × score), the target dot ring on Home, and the swipe deck for Review on a phone. Keep the spring motion for those moments only.</li>
+          <li><b>Control Room for Canvas and Edit</b>, and its ⌘K command bar everywhere. Node editors and timelines are tool screens; typed ports, a minimap, cost check before "Run the whole shot" and a dark surface are what video people expect there.</li>
+        </ol>
+      </div>
+      <div>
+        <table class="scores"><thead><tr><th></th><th>A</th><th>B</th><th>C</th></tr></thead><tbody>
+          <tr><td>Clear for a first-time agency owner</td><td class="dots">●●●●●</td><td class="dots">●●<i>●●●</i></td><td class="dots">●●●●<i>●</i></td></tr>
+          <tr><td>Speed for the daily team</td><td class="dots">●●●<i>●●</i></td><td class="dots">●●●●●</td><td class="dots">●●<i>●●●</i></td></tr>
+          <tr><td>Brand memorability</td><td class="dots">●●●<i>●●</i></td><td class="dots">●●●<i>●●</i></td><td class="dots">●●●●●</td></tr>
+          <tr><td>Fit with today's Altitude tokens</td><td class="dots">●●●●●</td><td class="dots">●●<i>●●●</i></td><td class="dots">●●●<i>●●</i></td></tr>
+          <tr><td>Effort to build</td><td class="dots">●●●●<i>●</i> low</td><td class="dots">●●<i>●●●</i> high</td><td class="dots">●●●<i>●●</i> medium</td></tr>
+        </tbody></table>
+        <p class="flag"><b>Conflicts to decide before building anything.</b> Set C swaps the sidebar for a top pill bar, which changes the navigation in <code>docs/app-flow.md</code> (sidebar with Home, Find ideas, Research, Compare, Plans, Canvas, Channel, Brief). Set B is dark by default, while today the app follows the system theme and opens light. Set B also uses many status pills, which the copy guide asks us to avoid ("use sentences, not tags"). The recommendation above keeps the sidebar and the light default.</p>
+        <p class="flag"><b>Not verified in the live app.</b> Canvas would not load in the running app at :5192 ("Couldn't load the canvas."), so Canvas, Edit and Publish are designed from the strings in <code>lib/strings/canvas.ts</code>, <code>editor.ts</code> and <code>cut.ts</code> and the canvas plans in <code>docs/plans/</code>. All numbers are sample data.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer><div class="wrap">Files sit next to this page: set-a-broadsheet.html, set-b-control-room.html, set-c-signal.html. Each one is self-contained (inline CSS and JS, Google Fonts only) and works inside an iframe. Add <code>?only=results</code> (or any screen id) to a set's address to see one screen full-window.</div></footer>
+
+<script>
+(function () {
+  const S = [
+    ['landing', 'Landing page', 'Newspaper front page: a 74 px headline, a bordered "one search: tofu" box with an Evergreen/MYST toggle, problem columns with drop caps, a navy How-it-works band.', 'Dark console: headline beside a live ranking feed that scrolls, a ticker of searches, five steps as a connected pipeline.', 'The landing-page brief\'s idea, built: a drifting wall of video covers where a few winners glow with their number. Mustard CTA that leans toward the pointer.', 2],
+    ['login', 'Log in', 'Navy dot panel with a serif pull quote; ruled form with Staff and Client tabs.', 'One centred console card; ↵ to log in; "you\'ll land on Evergreen Foods".', 'Dot columns rising on navy; big rounded inputs; pill switch for Staff and Client.', 0],
+    ['agency', 'All clients: Home', 'A ledger: one big figure with 30 tick boxes, a "Needs your approval" list, then a ruled table with sparklines.', 'Four KPI tiles, a sortable client table with progress bars, an approval queue with a Review-all shortcut.', 'A scoreboard: one card per client with a dot ring for the target and a pulsing "waiting" badge.', 0],
+    ['addclient', 'Add client', 'Numbered questions on underlined fields, a masthead preview that updates as you type.', 'Dense form beside "what Remake will do with this", with checks.', 'A three-step wizard: one big question per step, progress pills, live preview.', 2],
+    ['home', 'Client Home', 'Lead story ("What should Evergreen film next?"), tick-box target, inline Approve that stamps.', 'Dashboard of panes: target ring, idea bar, activity log, waiting table.', 'Navy hero with a giant 5 of 12 and rising dot columns, mustard "waiting" card.', 0],
+    ['find', 'Find ideas', 'Navy hero with a typing search box, then "Where to start" as a two-column table of contents.', 'Query builder with toggles for platform, date and followers; start points as a table with spread dots.', 'One huge search pill, a ticker of what is catching on, a sideways rail of colour-blocked start cards.', 0],
+    ['searching', 'Searching', 'Steps tick off in a ruled list, a progress rule fills, shimmer placeholders.', 'Timestamped log lines, per-platform progress, a light sweeping a scan grid.', 'Full navy: the dot field pings, each step is struck through, a counter rolls to 48.', 2],
+    ['results', 'Results', 'Lead story for Best to copy with a followers-to-views line; six tiles; save tray slides up.', 'Facets, followers-vs-views scatter (hover a dot), dense table, and an inspector that updates on click.', '267 dots light up, one per "usual"; heart-to-save tiles that tilt; floating saved pill.', 2],
+    ['breakdown', 'Why it worked', 'Right drawer with a four-cell stat grid and numbered reasons placed on the 13-second line.', 'Wide drawer with tabs and a waveform with markers for each reason.', 'A sheet that springs up from the bottom; reasons are cards you scroll sideways.', 1],
+    ['research', 'Research', 'Rows that open smoothly, with a strip of covers; pick one to star it.', 'A real spreadsheet grouped by video slot; type straight into Notes.', 'Shelves with big V1 to V6 numbers and fanned covers that spread on hover.', 1],
+    ['compare', 'Compare videos', 'An editorial table; beat strips grow; shared cells highlighted.', 'Beats on one shared clock, like an editing timeline; checks for what they share.', 'Three columns with a mustard band wiping across what they share.', 1],
+    ['plans', 'Plans', 'Ruled columns like a ledger; cards drag between them.', 'Kanban with shot-progress segments, bulk "Send 2", drag with a glow.', 'Rounded columns that swell when you drag over; cards land with a spring.', 0],
+    ['plan', 'Start planning', 'Hooks as a ruled list with emotion tags, shot list as a table, fixed bottom bar.', 'Three panes: reference player with beat markers, hooks and shots, and a Checks pane that catches a client-memory conflict.', 'Four big hook cards that flip to navy when picked; shots as a filmstrip.', 1],
+    ['board', 'Planning board', 'Contact-sheet plates on a faint dot grid, joined by thin lines.', 'A proper node editor: typed ports, + on each link, minimap, toolbar.', 'Rounded shot cards on a wavy path; dotted links flow forward.', 1],
+    ['review', 'Review', 'Stacked sheets; the decision stamps and the sheet slides away; All done offers Next client.', 'Queue, plan, context with client memory; press A, C or S.', 'A swipe deck: drag right to approve, left to send back; approvals burst.', 2],
+    ['canvas', 'Canvas', 'Calm graph of white nodes on dots; Generate shows a progress rule.', 'Dark node editor, coloured ports and links, cost check before "Run the whole shot", progress ring.', 'Playful rounded nodes, fanned storyboard versions, shimmering progress bar.', 1],
+    ['editor', 'Edit', 'Quiet preview and a ruled timeline with a red playhead.', 'Multi-track timeline (video, text, audio), inspector, keyboard hints.', 'Big preview, pill clips, bouncing playhead, Export morphs into a progress bar.', 1],
+    ['publish', 'Publish and results', 'Platform rows, five serif counters, a bar against the last three tofu videos.', 'Pipeline status lights and a 48-hour views chart you can hover.', 'A countdown to going live, spring switches, giant counters.', 0],
+    ['channel', 'Channel', 'Format shares as ruled bars, weekly views as columns.', 'Format donut, posting heat map, bars, best videos.', 'A 100-square waffle for formats, dot columns for weekly views.', 1],
+    ['brief', 'Brief', 'Ruled fields beside a timeline of Annie\'s decisions in serif italic.', 'Key-value table beside a memory log you can filter.', 'Card fields beside big quote cards coloured by decision.', 0],
+    ['settings', 'Settings', 'Three theme cards and a language select.', 'Preferences table plus a keyboard-shortcut sheet.', 'Big theme cards that lift on hover.', 0],
+    ['portal', 'Shared review link', 'A one-page newspaper for the client: target, three stories.', 'Read-only console page: ring and status table.', 'Navy header with a giant 5 and dot target; tilting covers.', 2],
+  ];
+  const picker = document.getElementById('picker'), rows = document.getElementById('rows');
+  picker.innerHTML = S.map((s, i) => `<button type="button" data-id="${s[0]}" class="${s[0] === 'results' ? 'on' : ''}"><span>${String(i + 1).padStart(2, '0')}</span>${s[1]}</button>`).join('');
+  const files = ['set-a-broadsheet.html', 'set-b-control-room.html', 'set-c-signal.html'];
+  rows.innerHTML = S.map((s, i) => `<tr><td><span>${String(i + 1).padStart(2, '0')}</span><b>${s[1]}</b></td>${[2, 3, 4].map((c, j) => `<td class="${s[5] === j ? 'win' : ''}">${s[c]}<br><a href="${files[j]}#f-${s[0]}">See it →</a></td>`).join('')}</tr>`).join('');
+  const frames = [...document.querySelectorAll('#trio iframe')];
+  let cur = 'results', loaded = false;
+  const load = () => { if (loaded) return; loaded = true; frames.forEach((f) => (f.src = f.dataset.src + '?only=' + cur)); };
+  const io = new IntersectionObserver((e) => { if (e.some((x) => x.isIntersecting)) { load(); io.disconnect(); } }, { rootMargin: '200px' });
+  io.observe(document.getElementById('trio'));
+  picker.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    cur = b.dataset.id;
+    picker.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    if (!loaded) return load();
+    frames.forEach((f) => { try { f.contentWindow.postMessage({ rmGo: cur }, '*'); } catch (err) { f.src = f.dataset.src + '?only=' + cur; } });
+    document.querySelectorAll('#trio figcaption a').forEach((a) => (a.href = a.dataset.set + '#f-' + cur));
+  });
+  document.getElementById('lay').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    document.querySelectorAll('#lay button').forEach((x) => x.classList.toggle('on', x === b));
+    document.getElementById('trio').classList.toggle('stack', b.dataset.l === 'stack');
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find ideas directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+/* Remake tokens (from theme-remake.css / tokens.css). Palette only: navy, blue, sky, mustard, beige, ink, white, greys. */
+:root{
+  --canvas:#ffffff; --canvas-alt:#f5f5f7; --beige:#f6f1e7;
+  --ink:#1a1a22; --ink-muted:#5d5f6e; --muted:#6e6e73;
+  --navy:#060a47; --navy-deep:#070b24; --navy-dot:#2a3170;
+  --on-navy:#f4f5ff; --on-navy-muted:#a9b0e0; --sky:#7ab8ff;
+  --blue:#1a33f2; --blue-hover:#1426c4; --blue-soft:#e9ecff;
+  --mustard:#f2b705; --on-mustard:#060a47;
+  --line:#e8e8ee; --line-strong:#c9cad6; --surface-3:#e8e8ee;
+  --font-serif:'Newsreader',Georgia,serif; --font-sans:'Inter',system-ui,sans-serif; --font-mono:'Geist Mono',ui-monospace,Menlo,monospace;
+  --radius-sm:8px; --radius:12px; --radius-lg:20px;
+  --shadow-card:0 1px 2px rgb(10 12 40 / .04),0 8px 24px rgb(10 12 40 / .06);
+  --focus-ring:0 0 0 3px var(--blue-soft);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--canvas);color:var(--ink);font:15px/1.5 var(--font-sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.mono{font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;font-size:11px}
+
+/* ---------- Mockup bar ---------- */
+.mbar{position:sticky;top:0;z-index:50;background:var(--navy-deep);color:var(--on-navy);font-size:12px}
+.mbar-row{display:flex;align-items:center;gap:12px;padding:8px 16px;flex-wrap:wrap}
+.mbar-row + .mbar-row{border-top:1px solid #1c2154;padding-top:6px;padding-bottom:8px}
+.mbar-title{font-family:var(--font-mono);letter-spacing:.06em;text-transform:uppercase;font-size:11px;flex:1;min-width:200px}
+.mbar-title b{color:var(--mustard);font-weight:500}
+.seg{display:inline-flex;background:#141a5c;border-radius:999px;padding:2px}
+.seg button{border:0;background:transparent;color:var(--on-navy-muted);padding:4px 12px;border-radius:999px;font-size:12px}
+.seg button[aria-pressed="true"]{background:var(--on-navy);color:var(--navy)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs button{border:1px solid #2a3170;background:transparent;color:var(--on-navy);padding:4px 12px;border-radius:6px;font-size:12px}
+.tabs button[aria-selected="true"]{background:var(--blue);border-color:var(--blue)}
+.idea{color:var(--on-navy-muted);flex:1;min-width:220px}
+
+/* ---------- App shell ---------- */
+.shell{background:linear-gradient(90deg,#fff 239px,var(--line) 239px,var(--line) 240px,transparent 240px);display:grid;grid-template-columns:240px minmax(0,1fr);min-height:calc(100vh - 70px)}
+.side{align-self:start;border-right:1px solid var(--line);background:#fff;padding:20px 14px;display:flex;flex-direction:column;gap:14px;position:sticky;top:70px;height:calc(100vh - 70px)}
+.brand{font-family:var(--font-serif);font-size:24px;font-weight:500;letter-spacing:-.02em;color:var(--navy);padding:0 8px}
+.brand i{color:var(--blue)}
+.client{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff;text-align:left;width:100%}
+.av{width:30px;height:30px;border-radius:8px;background:var(--navy);color:#fff;display:grid;place-items:center;font:500 11px var(--font-mono);flex:none}
+.client small{display:block;font:10px var(--font-mono);letter-spacing:.08em;color:var(--muted)}
+.client span{font-weight:500;font-size:13px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;color:var(--ink-muted);text-decoration:none;font-size:14px}
+.nav a:hover{background:var(--canvas-alt)}
+.nav a.on{background:var(--blue-soft);color:var(--blue);font-weight:500}
+.nav .badge{margin-left:auto;font:500 11px var(--font-mono);background:var(--canvas-alt);color:var(--ink);border-radius:999px;padding:1px 7px}
+.nav hr{border:0;border-top:1px solid var(--line);margin:8px 4px;width:calc(100% - 8px)}
+.nav svg{width:16px;height:16px;flex:none}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--ink-muted)}
+.side-foot a{color:var(--ink-muted);text-decoration:none;padding:0 10px}
+.pill-sample{align-self:flex-start;margin-left:10px;font:500 10px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;background:var(--mustard);color:var(--on-mustard);padding:3px 8px;border-radius:999px}
+.me{display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding:12px 6px 0}
+.me .av{background:var(--blue-soft);color:var(--blue);border-radius:50%}
+.me b{display:block;font-weight:500;color:var(--ink);font-size:13px}
+.main{background-color:var(--canvas);background-image:radial-gradient(#dcdde6 1px,transparent 1.2px);background-size:22px 22px;min-width:0;padding:40px 48px 64px}
+.page{max-width:1120px;margin:0 auto}
+.dir{display:none}.dir.on{display:block}
+body.first .returning{display:none!important}
+
+/* ---------- Shared components ---------- */
+.title{font-family:var(--font-serif);font-weight:400;letter-spacing:-.025em;line-height:1.02;margin:0}
+.title em{font-style:italic;color:var(--blue)}
+.sub{color:var(--ink-muted);max-width:600px;margin:16px auto 0;font-size:16px}
+.search{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow-card);text-align:left}
+.son{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.son .mono{color:var(--ink-muted);margin-right:2px}
+.plat{position:relative;width:40px;height:40px;border-radius:50%;border:1px solid var(--line-strong);background:#fff;display:grid;place-items:center;padding:0;color:#9a9cab}
+.plat svg{width:18px;height:18px}
+.plat[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff;box-shadow:0 0 0 3px var(--blue-soft)}
+.plat[aria-pressed="true"]::after{content:"";position:absolute;right:-3px;bottom:-3px;width:16px;height:16px;border-radius:50%;background:var(--blue) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.2l2.2 2.2 4.8-4.8' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;border:2px solid #fff}
+.helper{color:var(--ink-muted);font-size:13px;margin-left:6px}
+.qrow{display:flex;gap:10px;margin-top:16px}
+.field{flex:1;min-width:0;display:flex;align-items:center;border:1.5px solid var(--line-strong);border-radius:12px;background:#fff;padding:0 6px 0 16px;height:52px}
+.field:focus-within{border-color:var(--blue);box-shadow:var(--focus-ring)}
+.field input{flex:1;min-width:0;border:0;outline:0;font:16px var(--font-sans);background:transparent;color:var(--ink)}
+.field input::placeholder{color:#7b7d8c}
+.mic{width:40px;height:40px;border:0;background:transparent;border-radius:8px;display:grid;place-items:center;color:var(--ink-muted)}
+.mic:hover{background:var(--canvas-alt)}
+.go{border:0;background:var(--blue);color:#fff;border-radius:12px;padding:0 22px;height:52px;font-weight:500;white-space:nowrap}
+.go:disabled{background:#c9cad6;color:#fff;cursor:not-allowed}
+.go:not(:disabled):hover{background:var(--blue-hover)}
+.progress{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--ink-muted);flex-wrap:wrap}
+.progress b{color:var(--ink);font-weight:600}
+.bar{width:140px;height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.bar i{display:block;height:100%;width:8.33%;background:var(--blue);border-radius:99px}
+.foot{color:var(--ink-muted);font-size:14px;margin-top:40px}
+.label{color:var(--blue)}
+.newpill{display:inline-block;font:500 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;background:var(--mustard);color:var(--on-mustard);padding:2px 6px;border-radius:4px;margin-right:6px;vertical-align:1px}
+.open{color:var(--blue);text-decoration:none;font-weight:500;white-space:nowrap;border-radius:6px;padding:4px 2px}
+.open:hover{text-decoration:underline}
+.more{display:inline-flex;align-items:center;gap:6px;border:0;background:none;color:var(--blue);padding:4px 0;font-weight:500;margin-top:14px}
+.logos{display:inline-flex;gap:4px;vertical-align:middle}
+.logos span{width:20px;height:20px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center}
+.logos svg{width:11px;height:11px}
+.ticks{position:absolute;inset:10px;pointer-events:none}
+.ticks i{position:absolute;width:9px;height:9px;border-color:rgb(255 255 255 / .75);border-style:solid;border-width:0}
+.ticks i:nth-child(1){left:0;top:0;border-left-width:1.5px;border-top-width:1.5px}
+.ticks i:nth-child(2){right:0;top:0;border-right-width:1.5px;border-top-width:1.5px}
+.ticks i:nth-child(3){left:0;bottom:0;border-left-width:1.5px;border-bottom-width:1.5px}
+.ticks i:nth-child(4){right:0;bottom:0;border-right-width:1.5px;border-bottom-width:1.5px}
+.extra.hidden{display:none}
+
+/* ---------- Direction A: Grid band ---------- */
+.a-band{position:relative;margin:-40px -48px 0;padding:72px 48px 56px;background-color:#fff;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:76px 76px;background-position:center -1px;border-bottom:1px solid var(--line)}
+.a-col{position:relative;max-width:820px;margin:0 auto;background:#fff;border-left:1px solid var(--line);border-right:1px solid var(--line);padding:24px 48px 40px;text-align:center}
+.sq{position:absolute;width:7px;height:7px;background:var(--blue)}
+.sq.tl{left:-4px;top:-4px}.sq.tr{right:-4px;top:-4px}.sq.bl{left:-4px;bottom:-4px}.sq.br{right:-4px;bottom:-4px}
+.a-col .title{font-size:64px;color:var(--navy)}
+.a-col .search{margin-top:32px}
+.a-progress{justify-content:center;margin-top:20px}
+.a-body{max-width:1024px;margin:0 auto;padding-top:48px}
+.a-labelrow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;color:var(--ink-muted)}
+.a-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-bottom:1px solid var(--line);padding:14px 0 16px}
+.a-head h2{font-family:var(--font-serif);font-weight:400;font-size:34px;margin:0;letter-spacing:-.02em}
+.a-head p{margin:6px 0 0;color:var(--ink-muted);max-width:560px;font-size:14px}
+.a-cols{display:grid;grid-template-columns:44px 60px minmax(0,1fr) 190px 110px 70px;gap:16px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+.a-row{display:grid;grid-template-columns:44px 60px minmax(0,1fr) 190px 110px 70px;gap:16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--line)}
+.a-row .num{font:13px var(--font-mono);color:var(--muted)}
+.tile{width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--navy) 0%,var(--blue) 100%);display:grid;place-items:center;color:#fff;position:relative;overflow:hidden}
+.tile::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgb(255 255 255 / .12) 1px,transparent 1px),linear-gradient(90deg,rgb(255 255 255 / .12) 1px,transparent 1px);background-size:10px 10px}
+.tile svg{width:22px;height:22px;position:relative}
+.a-row .q{font-size:17px;font-weight:500;color:var(--ink)}
+.a-row .meta{color:var(--muted);font-size:13px;margin-top:2px}
+.a-row .since,.a-row .saved{font-size:14px;color:var(--ink)}
+.a-row .open{justify-self:end}
+.cap{display:none}
+
+/* ---------- Direction B: Navy + guide cards ---------- */
+.b-hero{position:relative;background:var(--navy);border-radius:28px;padding:72px 48px 56px;text-align:center;overflow:hidden;
+  background-image:linear-gradient(rgb(122 184 255 / .09) 1px,transparent 1px),linear-gradient(90deg,rgb(122 184 255 / .09) 1px,transparent 1px);background-size:64px 64px;background-position:center center}
+.b-hero::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 60% 70% at 50% 45%,transparent 30%,var(--navy) 100%);pointer-events:none}
+.b-hero > *{position:relative;z-index:1}
+.b-hero > .ticks{position:absolute;inset:20px;z-index:1}
+.b-hero .title{font-size:72px;color:#fff}
+.b-hero .title em{color:var(--sky)}
+.b-hero .sub{color:var(--on-navy-muted)}
+.b-hero .search{max-width:860px;margin:36px auto 0;border:0}
+.b-strip{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-top:24px}
+.b-body{margin-top:48px}
+.b-labelrow{display:flex;justify-content:space-between;color:var(--ink-muted)}
+.b-head{margin:12px 0 24px}
+.b-head h2{font-family:var(--font-serif);font-weight:400;font-size:36px;margin:0;letter-spacing:-.02em}
+.b-head p{margin:6px 0 0;color:var(--ink-muted);max-width:620px;font-size:14px}
+.b-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column}
+.cover{position:relative;aspect-ratio:2.6/1;border-radius:8px;overflow:hidden;display:grid;place-items:center;color:#fff;
+  background:linear-gradient(120deg,var(--navy) 0%,#0f1a9e 55%,var(--blue) 100%)}
+.cover.v2{background:linear-gradient(120deg,#0f1a9e 0%,var(--blue) 70%,#4a78f5 100%)}
+.cover::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgb(255 255 255 / .13) 1px,transparent 1px),linear-gradient(90deg,rgb(255 255 255 / .13) 1px,transparent 1px);background-size:30px 30px}
+.cover .q{position:relative;font-family:var(--font-serif);font-size:44px;line-height:1.05;letter-spacing:-.02em;text-align:center;padding:0 28px}
+.cover .q em{color:var(--sky)}
+.card-body{padding:16px 8px 6px;display:flex;flex-direction:column;gap:10px;flex:1}
+.card-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tag{font:500 11px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line-strong);border-radius:999px;padding:3px 10px;color:var(--ink)}
+.card h3{font-family:var(--font-serif);font-weight:400;font-size:24px;margin:0;letter-spacing:-.01em}
+.card .meta{color:var(--muted);font-size:14px}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:14px}
+.card dt{font:10.5px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+.card dd{margin:0}
+.card-foot{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
+
+/* ---------- Direction C: Grid band + navy console + month tracker ---------- */
+.c-band{position:relative;margin:-40px -48px 0;padding:56px 48px 48px;background-color:var(--beige);
+  background-image:linear-gradient(rgb(6 10 71 / .07) 1px,transparent 1px),linear-gradient(90deg,rgb(6 10 71 / .07) 1px,transparent 1px);background-size:76px 76px;border-bottom:1px solid #e6dfcf}
+.c-wrap{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:stretch}
+.c-left{position:relative;background:#fff;border:1px solid #e6dfcf;padding:36px 40px 36px}
+.c-left .title{font-size:58px;color:var(--navy)}
+.c-left .sub{margin:14px 0 0;max-width:560px}
+.c-console{margin-top:28px;background:var(--navy);border-radius:16px;padding:20px;color:var(--on-navy);position:relative;overflow:hidden;
+  background-image:linear-gradient(rgb(122 184 255 / .08) 1px,transparent 1px),linear-gradient(90deg,rgb(122 184 255 / .08) 1px,transparent 1px);background-size:28px 28px}
+.c-console .son .mono{color:var(--on-navy-muted)}
+.c-console .helper{color:var(--on-navy-muted)}
+.c-console .plat{background:transparent;border-color:#3a418a;color:#8a91c8}
+.c-console .plat[aria-pressed="true"]{background:#fff;color:var(--navy);border-color:#fff;box-shadow:0 0 0 3px rgb(122 184 255 / .35)}
+.c-console .plat[aria-pressed="true"]::after{border-color:var(--navy)}
+.c-console .field{border-color:#fff}
+.c-console .go:disabled{background:#2a3170;color:var(--on-navy-muted)}
+.c-console .go{background:var(--mustard);color:var(--on-mustard)}
+.c-console .go:not(:disabled):hover{background:#ffc928}
+.c-month{position:relative;background:#fff;border:1px solid #e6dfcf;padding:28px 24px;display:flex;flex-direction:column;gap:14px}
+.c-month .big{font-family:var(--font-serif);font-size:64px;line-height:1;color:var(--navy);letter-spacing:-.03em}
+.c-month .big small{font-size:28px;color:var(--muted)}
+.slots{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.slots i{aspect-ratio:1;border-radius:6px;border:1px solid var(--line-strong);background:#fff;display:grid;place-items:center;font:500 10px var(--font-mono);font-style:normal;color:var(--muted)}
+.slots i.ok{background:var(--navy);border-color:var(--navy);color:#fff}
+.c-month p{margin:0;font-size:14px;color:var(--ink-muted)}
+.c-month .progress{margin-top:auto}
+.c-body{max-width:1080px;margin:0 auto;padding-top:44px;display:grid;grid-template-columns:300px minmax(0,1fr);gap:40px}
+.c-intro h2{font-family:var(--font-serif);font-weight:400;font-size:34px;margin:10px 0 0;letter-spacing:-.02em}
+.c-intro p{color:var(--ink-muted);font-size:14px;margin:10px 0 0}
+.c-intro .count{margin-top:16px;color:var(--ink)}
+.c-head{display:grid;grid-template-columns:36px minmax(0,1fr) 210px 80px 64px;gap:14px;padding:0 0 10px;border-bottom:1px solid var(--ink);color:var(--muted)}
+.c-row{display:grid;grid-template-columns:36px minmax(0,1fr) 210px 80px 64px;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
+.c-row .num{font:13px var(--font-mono);color:var(--muted)}
+.c-q{display:flex;gap:14px;align-items:center;min-width:0}
+.ptile{flex:none;width:46px;height:46px;border-radius:11px;background:linear-gradient(135deg,var(--navy),var(--blue));display:grid;grid-template-columns:1fr 1fr;place-items:center;padding:7px;gap:2px;color:#fff}
+.ptile svg{width:13px;height:13px}
+.ptile.one{grid-template-columns:1fr}
+.ptile.one svg{width:18px;height:18px}
+.c-q b{font-family:var(--font-serif);font-weight:400;font-size:21px;display:block;line-height:1.15;letter-spacing:-.01em}
+.c-q span{color:var(--muted);font-size:13px}
+.c-row .open{justify-self:end}
+
+/* ---------- Phone ---------- */
+@media (max-width:820px){
+  .shell{grid-template-columns:minmax(0,1fr);background:none}
+  .side{min-width:0}
+  .side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px 16px;gap:10px;border-right:0;border-bottom:1px solid var(--line)}
+  .brand{font-size:20px;padding:0}
+  .client{width:auto;margin-left:auto;padding:5px 8px}
+  .client .av{width:24px;height:24px}
+  .nav{flex-direction:row;overflow-x:auto;width:100%;gap:4px;scrollbar-width:none}
+  .nav a{white-space:nowrap;padding:6px 10px}
+  .nav hr,.side-foot{display:none}
+  .main{padding:24px 16px 48px}
+  .title{font-size:40px!important}
+  .sub{font-size:15px}
+  .qrow{flex-direction:column}
+  .go{width:100%}
+  .helper{margin-left:0;width:100%}
+  .search,.c-console{padding:12px!important}
+  .a-col{padding-left:12px!important;padding-right:12px!important}
+  .field{padding:0 2px 0 12px}
+  .field input{font-size:14px}
+  .mic{width:32px}
+  .plat{width:36px;height:36px}
+  .son{gap:8px}
+  .a-band,.c-band{margin:-24px -16px 0;padding:32px 16px}
+  .a-col{padding:20px 16px 28px}
+  .a-head{flex-direction:column;align-items:flex-start}
+  .a-cols,.c-head{display:none}
+  .a-row{grid-template-columns:52px minmax(0,1fr);gap:4px 14px}
+  .a-row .num{display:none}
+  .a-row .tile{grid-row:span 3}
+  .a-row .since,.a-row .saved{font-size:13px}
+  .a-row .open{justify-self:start}
+  .cap{display:inline;font:10px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:6px}
+  .b-hero{padding:40px 16px 20px;border-radius:20px}
+  .b-hero .ticks{inset:10px}
+  .b-grid{grid-template-columns:1fr}
+  .cover .q{font-size:34px}
+  .c-wrap{grid-template-columns:1fr}
+  .c-left{padding:24px 16px}
+  .c-console{padding:16px}
+  .c-body{grid-template-columns:1fr;gap:20px}
+  .c-row{grid-template-columns:minmax(0,1fr) auto;gap:6px 12px}
+  .c-row .num{display:none}
+  .c-q{grid-column:1 / -1}
+  .c-row .since{grid-column:1 / -1;font-size:13px}
+  .c-row .saved{font-size:13px}
+}
+</style>
+</head>
+<body>
+
+<header class="mbar">
+  <div class="mbar-row">
+    <div class="mbar-title">Find ideas · Direction <b id="dirName">A: Grid band</b> · Mockup, not built</div>
+    <div class="seg" role="group" aria-label="Visit state">
+      <button type="button" data-state="first" aria-pressed="false">First visit</button>
+      <button type="button" data-state="returning" aria-pressed="true">Returning</button>
+    </div>
+  </div>
+  <div class="mbar-row">
+    <div class="tabs" role="tablist" aria-label="Directions">
+      <button type="button" role="tab" data-dir="A" aria-selected="true">Direction A</button>
+      <button type="button" role="tab" data-dir="B" aria-selected="false">Direction B</button>
+      <button type="button" role="tab" data-dir="C" aria-selected="false">Direction C</button>
+    </div>
+    <div class="idea" id="idea"></div>
+  </div>
+</header>
+
+<div class="shell">
+  <aside class="side" aria-label="App navigation">
+    <div class="brand">Re<i>make</i></div>
+    <button class="client" type="button"><span class="av">EF</span><span><small>CLIENT</small>Evergreen Foods</span></button>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 7 8 2.5 13.5 7v6.5h-11z"/></svg>Home</a>
+      <a href="#" class="on" aria-current="page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>Find ideas</a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M5 6h6M5 9h4"/></svg>Research<span class="badge">14</span></a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="3" width="11" height="10.5" rx="2"/><path d="M2.5 6.5h11M5.5 1.5v3M10.5 1.5v3"/></svg>Plans<span class="badge">1</span></a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M2.5 9.5 6 6l3 3 2-2 2.5 2.5"/></svg>Canvas</a>
+      <hr>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="3.5" width="11" height="9" rx="2"/><path d="m7 6.5 2.5 1.5L7 9.5z"/></svg>Channel</a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2.5h5.5L12 5v8.5H4z"/><path d="M6 8h4M6 10.5h4"/></svg>Brief</a>
+    </nav>
+    <div class="side-foot">
+      <a href="#">How we calculate this</a>
+      <span class="pill-sample">Sample data</span>
+      <a href="#">Settings</a>
+      <div class="me"><span class="av">TM</span><span><b>Team member</b>Sample Social Co.</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+  <div class="page">
+
+  <!-- =================== DIRECTION A: GRID BAND =================== -->
+  <section class="dir on" data-dir="A" aria-label="Direction A">
+    <div class="a-band">
+      <div class="a-col">
+        <i class="sq tl"></i><i class="sq tr"></i><i class="sq bl"></i><i class="sq br"></i>
+        <h1 class="title">What should Evergreen Foods <em>film</em> next?</h1>
+        <p class="sub">Search TikTok for a topic. We show first the videos that got far more views than their account usually gets, so you can copy what is already working.</p>
+        <div class="search" data-search></div>
+        <div class="progress a-progress"><span><b>1 of 12</b> videos approved for Evergreen Foods this month</span><span class="bar"><i></i></span></div>
+      </div>
+    </div>
+
+    <div class="a-body returning">
+      <div class="a-labelrow"><span class="mono label">01. Recent searches</span><span class="mono">4 searches</span><!-- real data today reads "1 SEARCH" --></div>
+      <div class="a-head">
+        <div><h2>Your searches</h2><p>Searches run for Evergreen Foods in this browser. Open one to see its videos again: anything that wasn't there last time is marked New.</p></div>
+      </div>
+      <div class="a-cols mono" aria-hidden="true"><span>No.</span><span></span><span>Search</span><span>Since last look</span><span>Saved</span><span></span></div>
+      <div data-rows="A"></div>
+      <button class="more" type="button" data-more>Show 1 more <span aria-hidden="true">↓</span></button>
+    </div>
+    <p class="foot" style="max-width:1024px;margin-left:auto;margin-right:auto">This demo only has sample videos about tofu for now.</p>
+  </section>
+
+  <!-- =================== DIRECTION B: NAVY + GUIDE CARDS =================== -->
+  <section class="dir" data-dir="B" aria-label="Direction B">
+    <div class="b-hero">
+      <div class="ticks" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <h1 class="title">What should Evergreen<br>Foods <em>film</em> next?</h1>
+      <p class="sub">Search TikTok for a topic. We show first the videos that got far more views than their account usually gets, so you can copy what is already working.</p>
+      <div class="search" data-search></div>
+    </div>
+    <div class="b-strip">
+      <div class="progress"><span><b>1 of 12</b> videos approved for Evergreen Foods this month</span><span class="bar"><i></i></span></div>
+    </div>
+
+    <div class="b-body returning">
+      <div class="b-labelrow"><span class="mono label">01. Recent searches</span><span class="mono">4 searches</span><!-- real data today reads "1 SEARCH" --></div>
+      <div class="b-head"><h2>Your searches</h2><p>Searches run for Evergreen Foods in this browser. Open one to see its videos again: anything that wasn't there last time is marked New.</p></div>
+      <div class="b-grid" data-rows="B"></div>
+    </div>
+    <p class="foot">This demo only has sample videos about tofu for now.</p>
+  </section>
+
+  <!-- =================== DIRECTION C: GRID BAND + NAVY CONSOLE + MONTH TRACKER =================== -->
+  <section class="dir" data-dir="C" aria-label="Direction C">
+    <div class="c-band">
+      <div class="c-wrap">
+        <div class="c-left">
+          <i class="sq tl"></i><i class="sq tr"></i><i class="sq bl"></i><i class="sq br"></i>
+          <span class="mono label">Find ideas · Evergreen Foods</span>
+          <h1 class="title" style="margin-top:12px">What should Evergreen Foods <em>film</em> next?</h1>
+          <p class="sub">Search TikTok for a topic. We show first the videos that got far more views than their account usually gets, so you can copy what is already working.</p>
+          <div class="c-console" data-search data-dark></div>
+        </div>
+        <aside class="c-month" aria-label="This month">
+          <i class="sq tl"></i><i class="sq tr"></i><i class="sq bl"></i><i class="sq br"></i>
+          <span class="mono" style="color:var(--muted)">This month</span>
+          <div class="big">1<small> / 12</small></div>
+          <div class="slots" aria-hidden="true"><i class="ok">01</i><i>02</i><i>03</i><i>04</i><i>05</i><i>06</i><i>07</i><i>08</i><i>09</i><i>10</i><i>11</i><i>12</i></div>
+          <p>11 videos still need an idea. Each search you run here can fill one.</p>
+          <div class="progress"><span><b>1 of 12</b> videos approved for Evergreen Foods this month</span><span class="bar"><i></i></span></div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="c-body returning">
+      <div class="c-intro">
+        <span class="mono label">01. Recent searches</span>
+        <h2>Your searches</h2>
+        <p>Searches run for Evergreen Foods in this browser. Open one to see its videos again: anything that wasn't there last time is marked New.</p>
+        <div class="mono count">4 searches</div><!-- real data today reads "1 SEARCH" -->
+      </div>
+      <div>
+        <div class="c-head mono" aria-hidden="true"><span>No.</span><span>Search</span><span>Since last look</span><span>Saved</span><span></span></div>
+        <div data-rows="C"></div>
+      </div>
+    </div>
+    <p class="foot" style="max-width:1080px;margin-left:auto;margin-right:auto">This demo only has sample videos about tofu for now.</p>
+  </section>
+
+  </div>
+  </main>
+</div>
+
+<script>
+const ICO = {
+  tiktok:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 3c.3 2.3 1.8 3.8 4 4v3c-1.5 0-2.8-.4-4-1.2V15a5.5 5.5 0 1 1-5.5-5.5c.3 0 .7 0 1 .1v3.1a2.5 2.5 0 1 0 1.5 2.3V3z"/></svg>',
+  instagram:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r=".8" fill="currentColor" stroke="none"/></svg>',
+  youtube:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.6 7.2a2.7 2.7 0 0 0-1.9-1.9C18 4.8 12 4.8 12 4.8s-6 0-7.7.5a2.7 2.7 0 0 0-1.9 1.9C2 8.9 2 12 2 12s0 3.1.4 4.8a2.7 2.7 0 0 0 1.9 1.9c1.7.5 7.7.5 7.7.5s6 0 7.7-.5a2.7 2.7 0 0 0 1.9-1.9c.4-1.7.4-4.8.4-4.8s0-3.1-.4-4.8zM10 15.1V8.9l5.2 3.1z"/></svg>',
+  reddit:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11.5a2 2 0 0 0-3.4-1.4c-1.3-.9-3-1.4-4.8-1.5l.9-3.9 2.8.6a1.4 1.4 0 1 0 .2-1l-3.3-.7-1.1 5c-1.8.1-3.5.6-4.8 1.5A2 2 0 1 0 4.4 13a3.7 3.7 0 0 0 0 .6c0 3 3.4 5.4 7.6 5.4s7.6-2.4 7.6-5.4v-.6a2 2 0 0 0 .4-1.5zM8.5 13a1.3 1.3 0 1 1 1.3 1.3A1.3 1.3 0 0 1 8.5 13zm6.9 3.3a4.8 4.8 0 0 1-3.4 1 4.8 4.8 0 0 1-3.4-1 .5.5 0 0 1 .7-.7 4 4 0 0 0 2.7.8 4 4 0 0 0 2.7-.8.5.5 0 0 1 .7.7zm-.2-2a1.3 1.3 0 1 1 1.3-1.3 1.3 1.3 0 0 1-1.3 1.3z"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.8 3h3.1l-6.8 7.7L22 21h-6.2l-4.9-6.4L5.3 21H2.2l7.2-8.3L2 3h6.3l4.4 5.9zm-1.1 16.2h1.7L7.4 4.7H5.6z"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>',
+  mic:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>'
+};
+const NAMES = {tiktok:'TikTok',instagram:'Instagram',youtube:'YouTube',reddit:'Reddit',x:'X'};
+
+/* Search card (identical content in every direction) */
+function searchCard(){
+  const plats = ['tiktok','instagram','youtube','reddit','x'];
+  return `<div class="son"><span class="mono">Search on</span>${plats.map(p=>`<button type="button" class="plat" data-p="${p}" aria-label="${NAMES[p]}" aria-pressed="${p==='tiktok'||p==='instagram'}">${ICO[p]}</button>`).join('')}<span class="helper" data-helper>TikTok and Instagram · each platform is a separate search</span></div>
+  <div class="qrow"><label class="field"><span class="sr" hidden>Topic</span><input type="text" placeholder="e.g. tofu, a question, or a TikTok link" aria-label="Topic, question or TikTok link"><button class="mic" type="button" aria-label="Search by voice">${ICO.mic}</button></label><button class="go" type="button" disabled>Find trending videos</button></div>`;
+}
+document.querySelectorAll('[data-search]').forEach(el=>{
+  el.insertAdjacentHTML('beforeend', searchCard());
+  const helper = el.querySelector('[data-helper]');
+  el.querySelectorAll('.plat').forEach(b=>b.addEventListener('click',()=>{
+    b.setAttribute('aria-pressed', b.getAttribute('aria-pressed')!=='true');
+    const on=[...el.querySelectorAll('.plat[aria-pressed="true"]')].map(x=>NAMES[x.dataset.p]);
+    helper.textContent = on.length ? (on.length===1?on[0]+' only':on.slice(0,-1).join(', ')+' and '+on.at(-1)+' · each platform is a separate search') : 'Pick at least one platform';
+  }));
+  const inp=el.querySelector('input'), go=el.querySelector('.go');
+  inp.addEventListener('input',()=>{go.disabled=!inp.value.trim()});
+});
+
+/* Recent searches. Row 01 is the real row from the app.
+   EXTRA SAMPLE ROWS: rows 02, 03 and 04 are made up for this mockup, to show how a longer list looks. */
+const ROWS = [
+  {n:'01', q:'tofu', p:['tiktok','instagram'], videos:25, since:'First run today', isNew:false, saved:'10 saved'},
+  /* extra sample row */ {n:'02', q:'crispy tofu recipes', p:['tiktok'], videos:18, since:'3 new since Mon', isNew:true, saved:'4 saved'},
+  /* extra sample row */ {n:'03', q:'tofu taste test', p:['tiktok','instagram'], videos:31, since:'Nothing new since 30 Oct', isNew:false, saved:'2 saved'},
+  /* extra sample row */ {n:'04', q:'high-protein tofu meal', p:['instagram'], videos:12, since:'5 new since 28 Oct', isNew:true, saved:'0 saved', extra:true}
+];
+const platText = r => r.p.map(p=>NAMES[p]).join(', ');
+const sinceHTML = r => (r.isNew?'<span class="newpill">New</span>':'')+r.since;
+const logos = r => `<span class="logos" aria-label="${platText(r)}">${r.p.map(p=>`<span>${ICO[p]}</span>`).join('')}</span>`;
+
+document.querySelector('[data-rows="A"]').innerHTML = ROWS.map(r=>`
+  <div class="a-row${r.extra?' extra hidden':''}">
+    <span class="num">${r.n}</span>
+    <span class="tile" aria-hidden="true">${ICO.search}</span>
+    <div><div class="q">${r.q}</div><div class="meta">${platText(r)} · ${r.videos} videos</div></div>
+    <span class="since"><span class="cap">Since last look</span>${sinceHTML(r)}</span>
+    <span class="saved"><span class="cap">Saved</span>${r.saved}</span>
+    <a class="open" href="#">Open →</a>
+  </div>`).join('');
+
+document.querySelector('[data-rows="B"]').innerHTML = ROWS.map((r,i)=>`
+  <article class="card">
+    <div class="cover${i%2?' v2':''}"><div class="ticks" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div class="q">${r.q}</div></div>
+    <div class="card-body">
+      <div class="card-top"><span class="tag">No. ${r.n}</span>${logos(r)}</div>
+      <div class="meta">${platText(r)}${r.isNew?' · <span class="newpill">New</span>':''}</div>
+      <div class="card-foot"><span class="meta">${r.videos} videos · ${r.saved} · ${r.since}</span><a class="open" href="#">Open →</a></div>
+    </div>
+  </article>`).join('');
+
+document.querySelector('[data-rows="C"]').innerHTML = ROWS.map(r=>`
+  <div class="c-row">
+    <span class="num">${r.n}</span>
+    <div class="c-q"><span class="ptile${r.p.length===1?' one':''}" aria-hidden="true">${r.p.map(p=>ICO[p]).join('')}</span><div style="min-width:0"><b>${r.q}</b><span>${platText(r)} · ${r.videos} videos</span></div></div>
+    <span class="since"><span class="cap">Since last look</span>${sinceHTML(r)}</span>
+    <span class="saved">${r.saved}</span>
+    <a class="open" href="#">Open →</a>
+  </div>`).join('');
+
+document.querySelector('[data-more]').addEventListener('click',e=>{
+  document.querySelectorAll('.a-row.extra').forEach(x=>x.classList.toggle('hidden'));
+  const open=!document.querySelector('.a-row.extra.hidden');
+  e.currentTarget.innerHTML = open?'Show less <span aria-hidden="true">↑</span>':'Show 1 more <span aria-hidden="true">↓</span>';
+});
+
+/* Tabs + state */
+const IDEAS = {
+  A:['A: Grid band','The navy hero becomes a light grid band with blue corner squares; recent searches become hairline rows with gradient icon tiles.'],
+  B:['B: Navy + guide cards','Keeps the navy hero with faint grid lines and corner ticks; each recent search is a guide-style card with the query set large on a grid cover.'],
+  C:['C: Console + month tracker','A beige grid band holds a white title panel with a navy search console, and the month’s 1 of 12 is lifted into a 12-square tracker beside it; searches sit in an editorial list.']
+};
+function setDir(d){
+  document.querySelectorAll('.dir').forEach(s=>s.classList.toggle('on',s.dataset.dir===d));
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.dir===d));
+  document.getElementById('dirName').textContent=IDEAS[d][0];
+  document.getElementById('idea').textContent=IDEAS[d][1];
+}
+function setState(s){
+  document.body.classList.toggle('first',s==='first');
+  document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.state===s));
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>setDir(b.dataset.dir)));
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>setState(b.dataset.state)));
+const qs=new URLSearchParams(location.search);
+setDir(qs.get('dir')||'A'); setState(qs.get('state')||'returning');
+</script>
+</body>
+</html>

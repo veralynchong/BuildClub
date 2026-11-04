@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remake Pixel Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Silkscreen&family=Pixelify+Sans:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=Jersey+10&family=Tiny5&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700&display=swap" rel="stylesheet">
+<style>
+:root { --n: #060a47; --b: #1a33f2; --m: #f2b705; --e: #f6f1e7; --bk: #000; --w: #fff;
+  --ui: 'Geist', system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--e); color: var(--n); font: 400 15px/1.55 var(--ui); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+h1, h2, h3, p { margin: 0; }
+a { color: var(--b); }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 0 24px; }
+.hero { background: var(--n); color: var(--w); padding: 44px 0 64px; position: relative; overflow: hidden; }
+.hero .kick { font: 500 13px var(--mono); }
+.hero h1 { font: 600 clamp(40px, 5.6vw, 76px)/1 var(--ui); letter-spacing: -.035em; margin: 14px 0 16px; max-width: 980px; }
+.hero h1 em { font-style: normal; color: var(--m); }
+.hero p { max-width: 820px; font-size: 16.5px; }
+.hero .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 18px; font: 400 13px var(--mono); }
+.hero canvas { position: absolute; right: 24px; bottom: 18px; width: 300px; height: 120px; image-rendering: pixelated; }
+.ref { margin-top: 18px; padding: 10px 14px; background: var(--w); color: var(--n); font-size: 14px; max-width: 820px; box-shadow: inset 6px 0 0 var(--m); padding-left: 20px; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: -34px; position: relative; }
+.cc { background: var(--w); padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 0 1px var(--n); min-width: 0; }
+.cc .lvl { display: flex; align-items: center; gap: 10px; font: 500 13px var(--mono); }
+.lvl i { width: 12px; height: 12px; background: var(--b); display: inline-block; } .lvl i.o { background: var(--w); box-shadow: inset 0 0 0 2px var(--n); }
+.lvl span { display: inline-flex; gap: 3px; }
+.cc h2 { font-size: 44px; line-height: 1; }
+.cc.a h2 { font: 600 46px/1 var(--ui); letter-spacing: -.03em; }
+.cc.b h2 { font: 700 48px/1 'Pixelify Sans', monospace; font-variant-ligatures: none; }
+.cc.c h2 { font: 400 64px/.85 'Jersey 10', monospace; }
+.sw { height: 120px; position: relative; overflow: hidden; }
+.sw img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; display: block; }
+.cc .big { font-weight: 600; font-size: 16px; }
+.cc dl { display: grid; grid-template-columns: 92px 1fr; gap: 6px 12px; margin: 0; font-size: 13.5px; }
+.cc dt { font-weight: 600; } .cc dd { margin: 0; }
+.go { margin-top: auto; align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; background: var(--b); color: var(--w); text-decoration: none; padding: 10px 18px; font-weight: 500; }
+.go:hover { background: var(--n); }
+.go:focus-visible, button:focus-visible { outline: 3px solid var(--m); outline-offset: 2px; }
+section.blk { padding: 56px 0 8px; }
+section.blk h2 { font: 600 36px/1.1 var(--ui); letter-spacing: -.025em; }
+.sub { max-width: 820px; margin-top: 8px; }
+.picker { display: flex; flex-wrap: wrap; gap: 4px; margin: 18px 0 12px; }
+.picker button { font: 500 13px var(--ui); border: 0; background: var(--w); padding: 6px 10px; cursor: pointer; color: var(--n); box-shadow: inset 0 0 0 1px var(--n); }
+.picker button span { font-family: var(--mono); color: var(--b); margin-right: 5px; }
+.picker button.on { background: var(--n); color: var(--w); } .picker button.on span { color: var(--m); }
+.tools { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.seg { display: inline-flex; box-shadow: inset 0 0 0 1px var(--n); }
+.seg button { border: 0; background: none; padding: 6px 12px; font: 500 13px var(--ui); cursor: pointer; color: var(--n); }
+.seg button.on { background: var(--n); color: var(--w); }
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.trio.stack { grid-template-columns: 1fr; }
+.trio figure { margin: 0; min-width: 0; }
+.trio figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.trio figcaption b { font-size: 17px; }
+.fr { position: relative; width: 100%; aspect-ratio: 1280 / 800; overflow: hidden; box-shadow: 0 0 0 1px var(--n); background: var(--w); }
+.fr iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.tblw { overflow-x: auto; margin-top: 16px; }
+table.cmp { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--w); }
+table.cmp th { text-align: left; font: 600 13px var(--ui); padding: 10px 12px; border-bottom: 2px solid var(--n); position: sticky; top: 0; background: var(--w); }
+table.cmp td { padding: 10px 12px; border-bottom: 1px solid var(--e); vertical-align: top; }
+table.cmp td:first-child { width: 150px; font-weight: 600; }
+table.cmp td:first-child span { display: block; font: 400 11px var(--mono); color: var(--b); }
+table.cmp td a { font-size: 12px; white-space: nowrap; }
+td.win { box-shadow: inset 4px 0 0 var(--m); background: var(--e); }
+.rec { background: var(--w); padding: 30px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 34px; margin-top: 16px; box-shadow: 0 0 0 1px var(--n); }
+.rec h3 { font: 600 26px/1.15 var(--ui); letter-spacing: -.02em; }
+.rec ol, .rec ul { padding-left: 20px; margin: 12px 0 0; } .rec li { margin-bottom: 8px; }
+.flag { box-shadow: inset 4px 0 0 var(--m); padding: 6px 0 6px 16px; margin-top: 14px; font-size: 14px; }
+.scores { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.scores td, .scores th { padding: 7px 6px; border-bottom: 1px solid var(--e); text-align: left; }
+.scores th { font-weight: 600; }
+.px5 { display: inline-flex; gap: 2px; } .px5 i { width: 9px; height: 9px; background: var(--b); } .px5 i.o { background: var(--w); box-shadow: inset 0 0 0 1px var(--n); }
+.pal { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.pal div { background: var(--w); box-shadow: 0 0 0 1px var(--n); }
+.pal i { display: block; height: 64px; }
+.pal p { padding: 8px 10px; font-size: 13px; } .pal p b { display: block; } .pal code { font: 400 12px var(--mono); }
+table.ct { border-collapse: collapse; margin-top: 16px; font-size: 14px; background: var(--w); width: 100%; }
+table.ct td, table.ct th { padding: 8px 12px; border-bottom: 1px solid var(--e); text-align: left; }
+.chip { display: inline-block; padding: 2px 10px; font-weight: 600; }
+footer { margin-top: 56px; padding: 24px 0 60px; font-size: 13px; border-top: 1px solid var(--n); }
+@media (max-width: 960px) { .cards, .trio, .rec { grid-template-columns: 1fr; } .pal { grid-template-columns: repeat(3, 1fr); } .hero canvas { display: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="kick">Remake · design review, round 2 · 4 Nov 2026</p>
+    <h1>Three pixel directions, from a <em>hint</em> to a whole language.</h1>
+    <p>A fresh start, not a reskin of Broadsheet, Control Room or Signal. Each concept takes pixels at a different strength, and in each one the pixels stand for something Remake actually does: count videos, show how far a video beat its usual views, or render a plan as it moves forward. All 22 screens are covered in every concept, with the content, fields and actions from the app (<code>lib/strings</code> and the live app at :5192). Only six colours are used: navy, electric blue, mustard, beige, black and white.</p>
+    <div class="meta"><span>3 concepts × 22 screens</span><span>Mockups, not built into the app</span><span>Animations and interactions work; reduced motion respected</span><span>Sample data: Evergreen Foods</span></div>
+    <p class="ref"><b>The reference image didn't come through</b>, so I haven't seen it. I read "pixel-inspired, with a very light beige" as: square geometry, bitmap type used with restraint, ordered dithering instead of tints, and beige #f6f1e7 as the paper colour. If the reference points somewhere else (for example a specific game, poster or brand), send it and I'll adjust the closest concept.</p>
+    <canvas id="heroPx" width="75" height="30" aria-hidden="true"></canvas>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="cards">
+    <article class="cc a"><p class="lvl"><span><i></i><i class="o"></i><i class="o"></i></span>A · subtle</p><div class="sw"><img id="swA" alt=""></div><h2>Unit</h2>
+      <p class="big">One pixel, one thing that counts.</p>
+      <p>A clean, modern Geist interface on white and beige. A pixel only appears when Remake is counting something real: one square per video the client pays for this month, per second of a shot, per account posting a trend, per "usual" view count (Best to copy draws 267 of them). Mustard marks the one thing waiting for you. Motion is a 12-frames-per-second "frame step", like scrubbing a video.</p>
+      <dl><dt>Type</dt><dd>Geist for everything you read, Geist Mono for numbers and handles, Silkscreen only on small counts. Geist keeps it calm and current; the bitmap face is a seasoning.</dd><dt>Palette</dt><dd>White screens, beige panels and sidebar, navy text, blue for done and for primary actions, mustard only for "needs you", black almost unused.</dd></dl>
+      <a class="go" href="concept-a-unit.html">Open Unit →</a></article>
+    <article class="cc b"><p class="lvl"><span><i></i><i></i><i class="o"></i></span>B · moderate</p><div class="sw"><img id="swB" alt=""></div><h2>Dither</h2>
+      <p class="big">A print shop for video ideas.</p>
+      <p>Pixel type for headings, buttons and navigation, pixel-art covers and a pixel kitchen on the landing page, buttons that press down 3 pixels. No tints exist: every shade is an ordered dither of two palette colours. Dither density means one thing everywhere: <b>heat</b>, or how far a video beat its usual views, on a 16-step scale shared by cover borders, the search contact sheet and Best to copy. Video slots are film frames; the month is a reel. Screens change with a Bayer-order dissolve.</p>
+      <dl><dt>Type</dt><dd>Pixelify Sans (headings, buttons, nav) with Atkinson Hyperlegible (reading) and its Mono (numbers). Pixelify brings the character; Atkinson was designed for legibility, which matters with a grade 5 to 7 copy guide.</dd><dt>Palette</dt><dd>Beige paper, white cards with black 2 px borders and hard navy shadows, blue for actions and heat, mustard dither for "waiting for you", navy for headings.</dd></dl>
+      <a class="go" href="concept-b-dither.html">Open Dither →</a></article>
+    <article class="cc c"><p class="lvl"><span><i></i><i></i><i></i></span>C · expressive</p><div class="sw"><img id="swC" alt=""></div><h2>Render</h2>
+      <p class="big">Copy, then rebuild: resolution is progress.</p>
+      <p>Remake rebuilds a video that already worked, so every plan is a frame that renders as it moves on: idea 3 × 5 pixels, hook picked 4 × 8, shot list sent 6 × 11, approved 9 × 16, filmed 18 × 32. Home shows the month as 12 frames at their resolutions; Plans cards carry a five-step render bar. "267 times usual" is a tower of stacked pixels, an approval collapses into one mustard pixel that flies into the month, headline words assemble from scattered pixels, and links on the planning board are stepped pixel lines.</p>
+      <dl><dt>Type</dt><dd>Jersey 10 (display), Tiny5 (data labels), Bricolage Grotesque (reading). Jersey's big visible pixels carry the identity at size; Bricolage has enough warmth to read well on navy.</dd><dt>Palette</dt><dd>Navy ground with a blue pixel grid, mustard for lit pixels and primary actions, white text; tables, forms and review cards switch to beige paper with navy text.</dd></dl>
+      <a class="go" href="concept-c-render.html">Open Render →</a></article>
+  </div>
+</div>
+
+<section class="blk" id="compare"><div class="wrap">
+  <h2>Same screen, three ways</h2>
+  <p class="sub">Pick a screen and all three frames switch to it, each with its own transition (frame step, dither dissolve, render sweep). The frames are live: click around inside them.</p>
+  <div class="picker" id="picker"></div>
+  <div class="tools"><span>Layout</span><span class="seg" id="lay"><button class="on" data-l="trio" type="button">Side by side</button><button data-l="stack" type="button">Stacked, larger</button></span></div>
+  <div class="trio" id="trio">
+    <figure><figcaption><b>A · Unit</b><a href="concept-a-unit.html" data-set="concept-a-unit.html">Open full set →</a></figcaption><div class="fr"><iframe title="Unit" loading="lazy" data-src="concept-a-unit.html"></iframe></div></figure>
+    <figure><figcaption><b>B · Dither</b><a href="concept-b-dither.html" data-set="concept-b-dither.html">Open full set →</a></figcaption><div class="fr"><iframe title="Dither" loading="lazy" data-src="concept-b-dither.html"></iframe></div></figure>
+    <figure><figcaption><b>C · Render</b><a href="concept-c-render.html" data-set="concept-c-render.html">Open full set →</a></figcaption><div class="fr"><iframe title="Render" loading="lazy" data-src="concept-c-render.html"></iframe></div></figure>
+  </div>
+</div></section>
+
+<section class="blk"><div class="wrap">
+  <h2>Page by page</h2>
+  <p class="sub">What each concept does with each screen. The marked cell is the version I would ship for that screen.</p>
+  <div class="tblw"><table class="cmp"><thead><tr><th>Screen</th><th>A · Unit</th><th>B · Dither</th><th>C · Render</th></tr></thead><tbody id="rows"></tbody></table></div>
+</div></section>
+
+<section class="blk" id="palette"><div class="wrap">
+  <h2>Palette and contrast</h2>
+  <p class="sub">Six colours, no opacities or tints that would make a new hue. B and C get "in-between" shades only by dithering two of these colours pixel by pixel, and text never sits on a dither except B's 60 px display highlight.</p>
+  <div class="pal">
+    <div><i style="background:#060a47"></i><p><b>Navy</b><code>#060a47</code> existing --navy</p></div>
+    <div><i style="background:#1a33f2"></i><p><b>Electric blue</b><code>#1a33f2</code> existing --blue</p></div>
+    <div><i style="background:#f2b705"></i><p><b>Mustard</b><code>#f2b705</code> from Set C, Signal</p></div>
+    <div><i style="background:#f6f1e7"></i><p><b>Beige</b><code>#f6f1e7</code> new, very light</p></div>
+    <div><i style="background:#000"></i><p><b>Black</b><code>#000000</code> borders in B</p></div>
+    <div><i style="background:#fff;box-shadow:inset 0 0 0 1px #060a47"></i><p><b>White</b><code>#ffffff</code></p></div>
+  </div>
+  <table class="ct"><thead><tr><th>Pair used for text</th><th>Ratio</th><th>WCAG</th><th>Where</th></tr></thead><tbody>
+    <tr><td><span class="chip" style="background:#fff;color:#060a47;box-shadow:inset 0 0 0 1px #060a47">Navy on white</span></td><td>18.4 : 1</td><td>AAA</td><td>A body text, B cards, C paper cards</td></tr>
+    <tr><td><span class="chip" style="background:#f6f1e7;color:#060a47">Navy on beige</span></td><td>16.3 : 1</td><td>AAA</td><td>A panels and sidebar, C tables and forms</td></tr>
+    <tr><td><span class="chip" style="background:#f6f1e7;color:#000">Black on beige</span></td><td>18.7 : 1</td><td>AAA</td><td>B body text</td></tr>
+    <tr><td><span class="chip" style="background:#060a47;color:#fff">White on navy</span></td><td>18.4 : 1</td><td>AAA</td><td>C body text, toasts, trays</td></tr>
+    <tr><td><span class="chip" style="background:#060a47;color:#f2b705">Mustard on navy</span></td><td>10.1 : 1</td><td>AAA</td><td>C links, numbers and labels</td></tr>
+    <tr><td><span class="chip" style="background:#f2b705;color:#060a47">Navy on mustard</span></td><td>10.1 : 1</td><td>AAA</td><td>C primary buttons, banners</td></tr>
+    <tr><td><span class="chip" style="background:#1a33f2;color:#fff">White on blue</span></td><td>7.5 : 1</td><td>AAA</td><td>A and B primary buttons</td></tr>
+    <tr><td><span class="chip" style="background:#fff;color:#1a33f2;box-shadow:inset 0 0 0 1px #060a47">Blue on white</span> <span class="chip" style="background:#f6f1e7;color:#1a33f2">on beige</span></td><td>7.5 and 6.7 : 1</td><td>AA</td><td>Links in A and B</td></tr>
+    <tr><td>Never for text</td><td>Mustard on white 1.8, blue on navy 2.5, blue on mustard 3.8</td><td>Fail</td><td>Used only as fills, squares and borders. Mustard squares on white get a navy outline and always have a text label beside them.</td></tr>
+  </tbody></table>
+</div></section>
+
+<section class="blk" id="rec"><div class="wrap">
+  <h2>My recommendation</h2>
+  <div class="rec">
+    <div>
+      <h3>Build the product on Dither, and borrow Render's one big idea: plans that render sharper as they move forward.</h3>
+      <ol>
+        <li><b>Dither as the system.</b> It is the only one of the three where the pixels are part of every component (buttons, type, covers, borders, states) and still read as a polished tool. It stays light like today's app, Atkinson keeps long text easy to read, and "heat" gives the main ranking rule (views compared with usual) one visual meaning across Results, Research, Searching and Landing without a × score.</li>
+        <li><b>Render's resolution metaphor on Plans and Home.</b> A plan's frame going from 3 × 5 to 18 × 32 is the most original idea in this round and the most specific to Remake (copy, then rebuild). It drops into Dither's film frames easily, so the November reel would show real progress instead of three states.</li>
+        <li><b>Render for the landing page and the approval moment.</b> The assembling headline, the feed with three sharp winners and the approval pixel flying into the month are marketing-grade; keep them for the landing page and the review swipe.</li>
+        <li><b>Unit as the fallback</b> if Dither tests as too loud with agency owners: it keeps the same counting logic and costs least to build from today's tokens.</li>
+      </ol>
+    </div>
+    <div>
+      <table class="scores"><thead><tr><th></th><th>A</th><th>B</th><th>C</th></tr></thead><tbody id="scores"></tbody></table>
+      <p class="flag"><b>Decide before building.</b> Render is dark by default; today the app follows the system theme and opens light. Render would need a light variant or a change to that decision in <code>docs/decision-log.md</code>. All three keep the sidebar navigation from the current app.</p>
+      <p class="flag"><b>Chinese (繁體中文).</b> Pixelify Sans, Jersey 10, Tiny5 and Silkscreen have no Traditional Chinese glyphs, so in the zh-Hant setting headings fall back to a system font. Dither and Render would need a CJK fallback plan (for example DotGothic16 for Japanese kanji overlap, or keep CJK in a plain face).</p>
+      <p class="flag"><b>Not verified in the live app.</b> Canvas still shows "Couldn't load the canvas." at :5192, so Canvas, Edit and Publish are designed from <code>lib/strings/canvas.ts</code>, <code>editor.ts</code> and <code>cut.ts</code>. All numbers are sample data. Decorative eyebrows and "01." numbering were dropped, per the content audit.</p>
+    </div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">Files next to this page: concept-a-unit.html, concept-b-dither.html, concept-c-render.html. Each is self-contained (inline CSS and JS, Google Fonts only) and works inside an iframe. Add <code>?only=results</code> (or any screen id) to a concept's address to see one screen full-window. Previous round: <a href="../ui-sets/index.html">ui-sets</a>.</div></footer>
+
+<script>
+(function () {
+  'use strict';
+  const C = { n: '#060a47', b: '#1a33f2', m: '#f2b705', e: '#f6f1e7', k: '#000', w: '#fff' };
+  const BAY = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function paint(cv, w, h, fn) { cv.width = w; cv.height = h; const x = cv.getContext('2d'); const px = (a, b, c) => { x.fillStyle = C[c]; x.fillRect(a, b, 1, 1); }; fn(px, w, h); return cv; }
+  /* Swatches: A a row of 12 month squares, B a heat ramp, C a frame at rising resolutions */
+  const mk = (id, w, h, fn) => { const cv = paint(document.createElement('canvas'), w, h, fn); document.getElementById(id).src = cv.toDataURL(); };
+  mk('swA', 64, 24, (px, w, h) => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, 'e'); for (let i = 0; i < 12; i++) { const c = i < 5 ? 'b' : i < 7 ? 'm' : 'w'; for (let y = 9; y < 14; y++) for (let x = 0; x < 4; x++) px(2 + i * 5 + x, y, c); } });
+  mk('swB', 64, 24, (px, w, h) => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, BAY[y % 4][x % 4] < Math.floor((x / w) * 17) ? 'b' : 'w'); for (let x = 0; x < w; x++) { px(x, 0, 'k'); px(x, h - 1, 'k'); } });
+  mk('swC', 64, 24, (px, w, h) => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, (x % 4 === 1 && y % 4 === 1) ? 'b' : 'n'); [8, 4, 2, 1].forEach((s, i) => { const ox = 4 + i * 15, oy = 3; for (let y = 0; y < 18; y++) for (let x = 0; x < 10; x++) { const sx = Math.floor(x / s) * s, sy = Math.floor(y / s) * s; const v = ((sx * 7 + sy * 13) % 5); px(ox + x, oy + y, v === 0 ? 'm' : v === 1 ? 'w' : 'b'); } }); });
+  /* Hero: a strip of 75 x 30 pixels that dissolves in Bayer order, then a few light up */
+  const hc = document.getElementById('heroPx'); const hx = hc.getContext('2d'); let t = 0;
+  const frame = () => { for (let y = 0; y < 30; y++) for (let x = 0; x < 75; x++) { const on = BAY[y % 4][x % 4] < (t % 40) / 2.4; hx.fillStyle = (x * 31 + y * 17) % 97 === 0 && t > 20 ? C.m : on ? C.b : C.n; hx.fillRect(x, y, 1, 1); } t++; if (!reduce) setTimeout(() => requestAnimationFrame(frame), 90); };
+  frame();
+
+  const S = [
+    ['landing', 'Landing page', 'Calm Geist page; a scan strip of 40 videos stops on the 3 that beat usual; how-it-works steps carry 1 to 5 squares.', 'Pixel kitchen hero (120 × 72 at 4×) with a "what your team would film" card and heat swatches.', 'The word "film" assembles from pixels; a feed of low-res frames where 3 render sharp with their number.', 2],
+    ['login', 'Log in', 'Beige panel previews the 12 squares you land on.', 'Navy panel dissolving into a navy/blue dither.', 'Blue dot-grid panel, giant pixel headline.', 0],
+    ['agency', 'All clients: Home', '30 squares for the agency month; a table with one square row per client.', 'Same, with film-frame units and dithered table headers.', 'Lit-pixel rows on paper tables; blinking blue for waiting.', 0],
+    ['addclient', 'Add client', 'One form; the target stepper redraws the month squares.', 'Same form with film frames.', 'Beige paper form on navy.', 0],
+    ['home', 'Client Home', 'Squares fill the month; Approve flips mustard to blue.', 'The November reel: 12 film frames, approved ones carry their cover.', '12 frames at their render resolution, from 3 × 5 to 18 × 32.', 2],
+    ['find', 'Find ideas', 'Search box on beige, start cards that invert on hover.', 'Search window with a title bar, start cards press down like keys.', 'Huge Jersey headline, start cards light a mustard edge.', 1],
+    ['searching', 'Searching', 'Frames resolve from 3 × 5 blocks to sharp, one by one.', 'Contact sheet of 48 frames printing in Bayer order, dithered by heat.', 'Query assembles from pixels; the lead video renders in six passes.', 2],
+    ['results', 'Results', '267-pixel proof block beside Best to copy.', 'Heat ladder and heat borders on every cover.', 'A tower of 267 stacked pixels; mustard tray.', 1],
+    ['breakdown', 'Why it worked', 'Drawer with a 13-square, one-per-second strip.', 'Same, dithered scrim.', 'Paper drawer on navy with a mustard edge.', 0],
+    ['research', 'Research', 'Ruled slots with pixel slot badges.', 'Heat borders show the strongest reference per slot.', 'Jersey slot titles on paper tables.', 1],
+    ['compare', 'Compare videos', 'Shared beats as squares, one per second.', 'Beats as dithered blocks.', 'Beats as lit pixel strips.', 0],
+    ['plans', 'Plans', 'Beige columns, mustard bite on sent-back cards.', 'Drawers with hard shadows.', 'Each card shows the remake at its plan\'s resolution with a 5-step render bar.', 2],
+    ['plan', 'Start planning', 'Shot list drawn as 15 one-second squares.', 'Picked hook gets a mustard dither band.', 'Hooks in Jersey; picking one moves the frame to 4 × 8.', 0],
+    ['board', 'Planning board', 'White nodes on a beige grid.', 'Storyboard panels with title bars.', 'Stepped pixel links on the 8 px grid, marching.', 2],
+    ['review', 'Review', 'Stack with the month squares beside it.', 'A bitmap stamp prints APPROVED before the card leaves.', 'The card collapses into one pixel that flies into the month.', 2],
+    ['canvas', 'Canvas', 'Generate resolves in three steps.', 'Generate prints in 16 dither steps.', 'Generate renders in seven passes.', 1],
+    ['editor', 'Edit', 'Export fills 15 squares.', 'Film-frame timeline.', 'Lit timeline on navy.', 0],
+    ['publish', 'Publish and results', 'Earlier videos as square rows, one per 2k views.', 'Dithered rows.', 'Pixel rows on navy.', 0],
+    ['channel', 'Channel', '50 squares, one per video, by format.', '50 frames in four dither textures.', '50 lit cells by format.', 1],
+    ['brief', 'Brief', 'Form and a square-marked memory timeline.', 'Dithered decision markers.', 'Memory quotes in Jersey.', 0],
+    ['settings', 'Settings', 'Three theme cards.', 'Cards that press down.', 'Outlined cards on navy.', 0],
+    ['portal', 'Shared review link', 'Clean white page with follow-ups.', 'Paper page, navy header.', 'Beige page: the manager reads it on a phone.', 0],
+  ];
+  const files = ['concept-a-unit.html', 'concept-b-dither.html', 'concept-c-render.html'];
+  const picker = document.getElementById('picker');
+  picker.innerHTML = S.map((s, i) => `<button type="button" data-id="${s[0]}" class="${s[0] === 'results' ? 'on' : ''}"><span>${String(i + 1).padStart(2, '0')}</span>${s[1]}</button>`).join('');
+  document.getElementById('rows').innerHTML = S.map((s, i) => `<tr><td><span>${String(i + 1).padStart(2, '0')}</span>${s[1]}</td>${[2, 3, 4].map((c, j) => `<td class="${s[5] === j ? 'win' : ''}">${s[c]}<br><a href="${files[j]}#f-${s[0]}">See it →</a></td>`).join('')}</tr>`).join('');
+  const sc = [['Clear for a first-time agency owner', 5, 4, 3], ['Readable all day', 5, 4, 3], ['Pixels carry meaning', 3, 4, 5], ['Memorable brand', 2, 4, 5], ['Fit with today\'s light app', 5, 4, 2], ['Effort to build (5 = least)', 5, 3, 2]];
+  const dots = (n) => `<span class="px5" aria-label="${n} of 5">${[0, 1, 2, 3, 4].map((i) => `<i class="${i < n ? '' : 'o'}"></i>`).join('')}</span>`;
+  document.getElementById('scores').innerHTML = sc.map((r) => `<tr><td>${r[0]}</td><td>${dots(r[1])}</td><td>${dots(r[2])}</td><td>${dots(r[3])}</td></tr>`).join('');
+
+  const frames = [...document.querySelectorAll('#trio iframe')];
+  let cur = 'results', loaded = false;
+  const load = () => { if (loaded) return; loaded = true; frames.forEach((f) => (f.src = f.dataset.src + '?only=' + cur)); };
+  const io = new IntersectionObserver((e) => { if (e.some((x) => x.isIntersecting)) { load(); io.disconnect(); } }, { rootMargin: '200px' });
+  io.observe(document.getElementById('trio'));
+  picker.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    cur = b.dataset.id; picker.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    if (!loaded) return load();
+    frames.forEach((f) => { try { f.contentWindow.postMessage({ rmGo: cur }, '*'); } catch (err) { f.src = f.dataset.src + '?only=' + cur; } });
+    document.querySelectorAll('#trio figcaption a').forEach((a) => (a.href = a.dataset.set + '#f-' + cur));
+  });
+  document.getElementById('lay').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    document.querySelectorAll('#lay button').forEach((x) => x.classList.toggle('on', x === b));
+    document.getElementById('trio').classList.toggle('stack', b.dataset.l === 'stack');
+  });
+})();
+</script>
+</body>
+</html>

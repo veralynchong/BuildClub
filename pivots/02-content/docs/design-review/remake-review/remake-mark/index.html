@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Remake mark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,600&family=Tiny5&display=swap" rel="stylesheet">
+<style>
+/* Palette only: navy, blue, mustard, beige, black, white. Same tokens as Concept C, Render. */
+:root{--n:#060a47;--b:#1a33f2;--m:#f2b705;--e:#f6f1e7;--k:#000;--w:#fff;
+  --ui:'Bricolage Grotesque',system-ui,sans-serif;--pix:'Tiny5',monospace;
+  --gridbg:linear-gradient(var(--w) 1px,transparent 1px) 0 0/40px 40px,linear-gradient(90deg,var(--w) 1px,transparent 1px) 0 0/40px 40px}
+*{box-sizing:border-box}
+html{background:var(--e)}
+body{margin:0;background:var(--gridbg),var(--e);color:var(--n);font:400 15.5px/1.55 var(--ui);overflow-x:hidden}
+.wrap{max-width:1120px;margin:0 auto;padding:44px 40px 80px}
+.meta{font:300 11.5px/1.4 var(--ui);letter-spacing:.14em;text-transform:uppercase;margin:0}
+h1{font:500 72px/.95 var(--ui);letter-spacing:-.06em;margin:14px 0 16px}
+h2{font:500 40px/1 var(--ui);letter-spacing:-.05em;margin:10px 0 12px}
+.lede{font-size:17px;line-height:1.5;max-width:640px;margin:0}
+.lede b{font-weight:600}
+.num{font:400 22px/1 var(--pix);color:var(--b)}
+
+section.mk{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:48px;align-items:center;padding:48px 0;border-top:1px solid var(--n)}
+section.mk:first-of-type{margin-top:36px}
+section.ref .num{color:var(--n)}
+.tag{display:inline-block;margin-left:8px;padding:2px 10px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--n);font:400 11.5px/1.5 var(--ui);letter-spacing:.08em;text-transform:uppercase;vertical-align:middle}
+.tag.rec{background:var(--m);box-shadow:none;color:var(--k)}
+.why{margin:0 0 20px;max-width:480px}
+.idea{font-weight:600;margin:0 0 8px}
+
+/* The hero stage, as in Concept C: crosshair marks and two black squares around the tile shape */
+.hv{position:relative;width:100%;max-width:440px}
+.hv.k{animation:kin .55s cubic-bezier(.2,.8,.2,1) both .12s}
+@keyframes kin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.xh{position:absolute;width:24px;height:24px}.xh path{stroke:var(--n);stroke-width:1.2;fill:none}
+.hv .xh.a{left:0;top:0}.hv .xh.b{right:0;bottom:30%}
+.bsq{position:absolute;width:14px;height:14px;background:var(--k)}
+.hv .bsq.a{right:30px;top:30px}.hv .bsq.b{left:40px;bottom:26%;width:8px;height:8px}
+.tri{width:100%;height:auto;aspect-ratio:440/460;display:block;image-rendering:pixelated}
+
+.icons{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;margin:0 0 22px}
+.icons figure{margin:0;display:grid;justify-items:center;gap:6px}
+.icons figcaption{font:300 11px/1.2 var(--ui);letter-spacing:.12em;text-transform:uppercase}
+.icons canvas{display:block;image-rendering:pixelated}
+
+.btn{appearance:none;border:0;cursor:pointer;border-radius:999px;font:500 14px var(--ui);height:40px;padding:0 20px;background:transparent;color:var(--n);box-shadow:inset 0 0 0 1.5px var(--n);transition:background .2s,color .2s}
+.btn:hover{background:var(--n);color:var(--w)}
+.btn:focus-visible{outline:2px solid var(--b);outline-offset:3px}
+
+.recbox{margin-top:8px;padding:40px 0 0;border-top:1px solid var(--n)}
+.lineup{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:24px 0}
+.lineup div{display:grid;justify-items:center;gap:10px;padding:20px 8px;background:var(--e);box-shadow:inset 0 0 0 1px var(--n)}
+.lineup div.on{box-shadow:inset 0 0 0 2px var(--b)}
+.lineup .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;justify-content:center}
+.lineup b{font:600 14px var(--ui)}
+.lineup small{font:300 12px var(--ui)}
+.recbox ol{padding-left:20px;max-width:720px}
+.recbox li{margin:0 0 8px}
+.foot{margin-top:28px;font-size:13px;max-width:720px}
+
+@media (max-width:820px){
+  .wrap{padding:28px 16px 60px}
+  h1{font-size:46px}
+  h2{font-size:32px}
+  section.mk{grid-template-columns:minmax(0,1fr);gap:24px;padding:32px 0}
+  .hv{margin:0 auto}
+  .lineup{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion:reduce){.hv.k{animation:none}.btn{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="meta">Remake · brand mark proposal · 4 Nov 2026</p>
+  <h1>One animation, three new marks.</h1>
+  <p class="lede">The Render hero animation is kept exactly as it is: <b>each tile is one video Remake read</b>. They fly in from scattered positions, settle into a shape, and three of them turn mustard, the videos far above their usual views. Only the shape the tiles form changes. The current play mark comes first as the reference.</p>
+
+  <section class="mk ref" id="ref" aria-labelledby="h-ref">
+    <div class="hv k"><svg class="xh a" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><svg class="xh b" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><i class="bsq a"></i><i class="bsq b"></i>
+      <canvas class="tri" data-shape="play" width="440" height="460" role="img" aria-label="The current mark: a play triangle made of small video frames; three are mustard"></canvas></div>
+    <div>
+      <span class="num">00</span><span class="tag">Reference, today</span>
+      <h2 id="h-ref">Play mark</h2>
+      <p class="why">The current hero, from the Daisy Chain idea. It says "video" clearly, but every video app owns a play triangle. It says what Remake looks at, not what Remake does.</p>
+      <div class="icons" data-icons="play"></div>
+      <button class="btn" data-replay="ref">↻ Replay</button>
+    </div>
+  </section>
+
+  <section class="mk" id="loop" aria-labelledby="h-loop">
+    <div class="hv k"><svg class="xh a" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><svg class="xh b" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><i class="bsq a"></i><i class="bsq b"></i>
+      <canvas class="tri" data-shape="loop" width="440" height="460" role="img" aria-label="A clockwise loop arrow made of small video frames; three are mustard"></canvas></div>
+    <div>
+      <span class="num">01</span><span class="tag rec">Recommended</span>
+      <h2 id="h-loop">The Loop</h2>
+      <p class="idea">A video goes round once and comes back as a new one.</p>
+      <p class="why">"Re" is a turn: an arrow that comes back to where it started, rebuilt. It also grows straight out of the pixel ring already in the Render logo and the client's month ring, so the mark, the logo and the main progress UI become one family.</p>
+      <div class="icons" data-icons="loop"></div>
+      <button class="btn" data-replay="loop">↻ Replay</button>
+    </div>
+  </section>
+
+  <section class="mk" id="frames" aria-labelledby="h-frames">
+    <div class="hv k"><svg class="xh a" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><svg class="xh b" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><i class="bsq a"></i><i class="bsq b"></i>
+      <canvas class="tri" data-shape="frames" width="440" height="460" role="img" aria-label="Two overlapping upright video frames made of small video tiles: an outlined original behind a solid remake with a play cut-out; three tiles are mustard"></canvas></div>
+    <div>
+      <span class="num">02</span><span class="tag">Proposal</span>
+      <h2 id="h-frames">Original + Remake</h2>
+      <p class="idea">Two vertical frames: the trend you found, and the one you'll film.</p>
+      <p class="why">The outlined frame behind is the original video, only read. The solid frame in front is the client's version, planned and filled in. Both are 9:16, the shape of every short video, so it says "short-form" without a platform logo.</p>
+      <div class="icons" data-icons="frames"></div>
+      <button class="btn" data-replay="frames">↻ Replay</button>
+    </div>
+  </section>
+
+  <section class="mk" id="mono" aria-labelledby="h-mono">
+    <div class="hv k"><svg class="xh a" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><svg class="xh b" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><i class="bsq a"></i><i class="bsq b"></i>
+      <canvas class="tri" data-shape="mono" width="440" height="460" role="img" aria-label="A capital R made of small video frames; the hole in its bowl is a play triangle; three tiles are mustard"></canvas></div>
+    <div>
+      <span class="num">03</span><span class="tag">Proposal</span>
+      <h2 id="h-mono">R-play monogram</h2>
+      <p class="idea">A capital R whose counter is a play button.</p>
+      <p class="why">It keeps what works in today's play mark (it reads as video) but makes it ours: the R is for Remake, and the play triangle is the hole in its bowl rather than a shape standing alone. The R reads first; the play is the second look. The most "ownable" of the three as an app icon.</p>
+      <div class="icons" data-icons="mono"></div>
+      <button class="btn" data-replay="mono">↻ Replay</button>
+    </div>
+  </section>
+
+  <div class="recbox" aria-labelledby="h-rec">
+    <p class="meta">Recommendation</p>
+    <h2 id="h-rec">Go with The Loop.</h2>
+    <div class="lineup" id="lineup"></div>
+    <ol>
+      <li><b>It says the verb, not the medium.</b> Play and frames say "video". The loop says "make it again", which is the product: many videos read, one plan made.</li>
+      <li><b>It joins what already exists.</b> The Render logo is a 7 × 7 pixel ring with one mustard segment, and the client's month is a ring that closes. The Loop is that ring with an arrowhead, so logo, hero and progress UI share one shape.</li>
+      <li><b>It survives small.</b> A thick ring and one arrowhead still read at 32px. The R-play needs 64px for its cut-out to show, and Original + Remake turns into two blocks at 32px.</li>
+    </ol>
+    <p>Runner-up: <b>R-play monogram</b>, if the founders want a letter they can own on an app store and in a social avatar. Avoid the frames for the icon; they work better as an illustration inside the product.</p>
+    <p class="foot">How this was made: the tile engine is copied from Concept C's <code>thumbs()</code> (16px grid, 14px and 10px tiles with a little person glyph, 60 loose 4–8px squares, three mustard hits, 1.8s cubic ease-out from random positions, same seed). Only the shape test changed. With reduced motion turned on, each mark is drawn in its final state.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const K = { n: '#060a47', b: '#1a33f2', m: '#f2b705', e: '#f6f1e7', k: '#000000', w: '#ffffff' };
+  const mq = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+  const reduce = () => mq.matches;
+
+  /* ---------- Shapes: inside(u, v) on a 0..1 square ---------- */
+  const inTri = (u, v) => { // the original play mark, exactly as in Concept C
+    const xL = 0.12, xR = 0.92; if (u < xL || u > xR) return 0;
+    const half = 0.46 * (1 - (u - xL) / (xR - xL)); const dv = Math.abs(v - 0.5);
+    return dv < half ? 1 : dv < half + 0.06 ? 0.4 : 0;
+  };
+  const triHit = (px, py, a, b, c) => {
+    const s = (p, q, r) => (p[0] - r[0]) * (q[1] - r[1]) - (q[0] - r[0]) * (p[1] - r[1]);
+    const P = [px, py], d1 = s(P, a, b), d2 = s(P, b, c), d3 = s(P, c, a);
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  };
+  const segDist = (px, py, ax, ay, bx, by) => {
+    const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+  };
+
+  // 01 Loop: a thick clockwise ring with a gap at the top and an arrowhead on the end of the arc
+  const LOOP = (() => {
+    const cx = 0.5, cy = 0.55, Ro = 0.38, Ri = 0.22, Rm = (Ro + Ri) / 2;
+    const a0 = 40 * Math.PI / 180, a1 = 338 * Math.PI / 180; // arc runs clockwise from a0 to a1 (0 = top)
+    const P = (a, r) => [cx + r * Math.sin(a), cy - r * Math.cos(a)];
+    const base = P(a1, Rm), tg = [Math.cos(a1), Math.sin(a1)], nm = [Math.sin(a1), -Math.cos(a1)];
+    const hw = 0.2, len = 0.24;
+    const A = [base[0] + nm[0] * hw, base[1] + nm[1] * hw], B = [base[0] - nm[0] * hw, base[1] - nm[1] * hw], T = [base[0] + tg[0] * len, base[1] + tg[1] * len];
+    return (u, v) => {
+      const dx = u - cx, dy = v - cy, d = Math.hypot(dx, dy);
+      let a = Math.atan2(dx, -dy); if (a < 0) a += Math.PI * 2;
+      if (d <= Ro && d >= Ri && a >= a0 && a <= a1) return true;
+      return triHit(u, v, A, B, T);
+    };
+  })();
+
+  // 02 Original + Remake: an outlined frame behind, a solid frame in front with a play cut-out
+  const FRAMES = (() => {
+    const back = [0.08, 0.05, 0.56, 0.79], front = [0.4, 0.2, 0.9, 0.95], th = 0.075, sep = 0.05;
+    const inR = (u, v, r, g = 0) => u >= r[0] - g && u <= r[2] + g && v >= r[1] - g && v <= r[3] + g;
+    const pcx = (front[0] + front[2]) / 2, pcy = (front[1] + front[3]) / 2;
+    const pA = [pcx - 0.08, pcy - 0.11], pB = [pcx - 0.08, pcy + 0.11], pT = [pcx + 0.11, pcy];
+    return (u, v) => {
+      if (inR(u, v, front)) return !triHit(u, v, pA, pB, pT);
+      if (inR(u, v, front, sep)) return false;
+      return inR(u, v, back) && !inR(u, v, [back[0] + th, back[1] + th, back[2] - th, back[3] - th]);
+    };
+  })();
+
+  // 03 R-play: a solid stem, a round bowl joining back to the stem, a diagonal leg with clear space from the stem.
+  // The counter (the hole in the bowl) is a play triangle.
+  const MONO_PARTS = (() => {
+    const X0 = 0.12, X1 = 0.38, Y0 = 0.05, Y1 = 0.95, BB = 0.54, BX = 0.58;
+    const inD = (u, v) => { // bowl: a rectangle with a half-ellipse on the right
+      if (v < Y0 || v > BB || u < X0) return false; if (u <= BX) return true;
+      return ((u - BX) / 0.3) ** 2 + ((v - (Y0 + BB) / 2) / ((BB - Y0) / 2)) ** 2 <= 1;
+    };
+    const counter = (u, v) => triHit(u, v, [X1, 0.17], [X1, 0.42], [0.72, 0.295]);
+    const L = [0.6, 0.48, 0.8, Y1 - 0.06], LW = 0.12;
+    const leg = (u, v) => v <= Y1 && v >= 0.45 && segDist(u, v, L[0], L[1], L[2], L[3]) < LW;
+    const fill = (u, v) => (u >= X0 && u <= X1 && v >= Y0 && v <= Y1) || (inD(u, v) && !counter(u, v)) || leg(u, v);
+    // keep the counter and the gap between stem and leg clean: no ragged edge tiles there
+    const legLeft = (v) => L[0] + (v - L[1]) * (L[2] - L[0]) / (L[3] - L[1]) - LW * 1.7;
+    const hole = (u, v) => counter(u, v) || (v > BB && v < Y1 && u > X1 && u < legLeft(v));
+    return { fill, hole };
+  })();
+  const MONO = MONO_PARTS.fill;
+
+  // Same ragged edge as the play mark: a thin band just outside the shape fills sparsely
+  const banded = (fn) => (u, v) => {
+    if (fn(u, v)) return 1;
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; if (fn(u + Math.cos(a) * 0.05, v + Math.sin(a) * 0.05)) return 0.4; }
+    return 0;
+  };
+  const SHAPES = { play: inTri, loop: banded(LOOP), frames: banded(FRAMES), mono: (u, v) => (MONO(u, v) ? 1 : MONO_PARTS.hole(u, v) ? 0 : banded(MONO)(u, v)) };
+  const SOLID = { play: (u, v) => inTri(u, v) === 1, loop: LOOP, frames: FRAMES, mono: MONO };
+
+  /* ---------- The tile engine, copied from Concept C thumbs(); only the shape test is swapped ---------- */
+  let seed = 1; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const runs = new WeakMap();
+  function thumbs(cv) {
+    const kind = cv.dataset.shape, W = cv.width, Hh = cv.height, x = cv.getContext('2d');
+    const T = 16, cols = Math.floor(W / T), rows = Math.floor(Hh / T), tiles = [];
+    const shape = SHAPES[kind], inS = (c, r) => shape((c + 0.5) / cols, (r + 0.5) / rows);
+    seed = 11;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const k = inS(c, r); if (k && rnd() < (k === 1 ? 0.93 : 0.35)) tiles.push({ c, r, bg: [K.n, K.b, K.n, K.e, K.k][Math.floor(rnd() * 5)], fg: [K.w, K.m, K.e, K.b][Math.floor(rnd() * 4)], sx: rnd() * W, sy: rnd() * Hh, t: rnd() * 0.7, hit: false, s: rnd() < 0.18 ? 10 : 14 }); }
+    // the scatter: loose tiles drifting off the edge, smaller, like the frame breaking apart
+    for (let i = 0; i < 60; i++) { const c = Math.floor(rnd() * cols), r = Math.floor(rnd() * rows); if (!inS(c, r)) tiles.push({ c, r, bg: rnd() < 0.5 ? K.n : K.k, fg: null, sx: rnd() * W, sy: rnd() * Hh, t: rnd() * 0.9, hit: false, s: [4, 6, 8][Math.floor(rnd() * 3)], loose: true }); }
+    const core = tiles.filter((t) => !t.loose); [0.15, 0.48, 0.81].forEach((f) => { const t = core[Math.floor(f * core.length)]; if (t) t.hit = true; });
+    const paint = (p) => {
+      x.clearRect(0, 0, W, Hh);
+      tiles.forEach((t) => {
+        const q = Math.max(0, Math.min(1, (p - t.t) / 0.3)), e = 1 - Math.pow(1 - q, 3);
+        if (q <= 0) return;
+        const tx = t.c * T + (T - t.s) / 2, ty = t.r * T + (T - t.s) / 2;
+        const X = Math.round(t.sx + (tx - t.sx) * e), Y = Math.round(t.sy + (ty - t.sy) * e);
+        x.fillStyle = t.hit && q >= 1 ? K.m : t.bg; x.fillRect(X, Y, t.s, t.s);
+        if (t.fg && t.s >= 10) { x.fillStyle = t.hit && q >= 1 ? K.k : t.fg; x.fillRect(X + 3, Y + t.s - 6, t.s - 6, 2); x.fillRect(X + (t.s >> 1) - 1, Y + 3, 3, 3); }
+      });
+    };
+    const run = {}; runs.set(cv, run);
+    if (reduce()) { cv.dataset.done = '1'; return paint(2); }
+    const dur = 1800, t0 = performance.now();
+    const tick = (t) => {
+      if (runs.get(cv) !== run) return; // a replay started
+      const p = Math.min(1.3, (t - t0) / dur * 1.3); paint(p);
+      if (p < 1.3) requestAnimationFrame(tick); else cv.dataset.done = '1';
+    };
+    cv.dataset.done = '';
+    requestAnimationFrame(tick);
+  }
+
+  /* ---------- Icons: the same shape sampled on a coarse pixel grid ---------- */
+  function icon(kind, size, dark) {
+    const dpr = Math.min(2, window.devicePixelRatio || 1), N = size >= 64 ? 16 : 11, S = Math.round(size * dpr);
+    const cv = document.createElement('canvas'); cv.width = S; cv.height = S; cv.style.width = cv.style.height = size + 'px';
+    cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', `${kind} mark at ${size} pixels${dark ? ', dark' : ''}`);
+    const x = cv.getContext('2d'), rad = S * 0.22;
+    x.fillStyle = dark ? K.n : K.e; x.beginPath();
+    if (x.roundRect) x.roundRect(0, 0, S, S, rad); else x.rect(0, 0, S, S);
+    x.fill();
+    if (!dark) { x.strokeStyle = K.n; x.lineWidth = Math.max(1, dpr); x.beginPath(); if (x.roundRect) x.roundRect(x.lineWidth / 2, x.lineWidth / 2, S - x.lineWidth, S - x.lineWidth, rad); else x.rect(0, 0, S, S); x.stroke(); }
+    const pad = S * 0.14, cell = (S - pad * 2) / N, gap = size >= 64 ? Math.max(1, dpr) : 0, cells = [];
+    const fn = SOLID[kind];
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (fn((c + 0.5) / N, (r + 0.5) / N)) cells.push([c, r]);
+    seed = 7;
+    const hits = new Set((size >= 64 ? [0.15, 0.48, 0.81] : [0.48]).map((f) => Math.floor(f * cells.length)));
+    cells.forEach(([c, r], i) => {
+      const v = rnd();
+      x.fillStyle = hits.has(i) ? K.m : dark ? (size >= 64 && v < 0.3 ? K.b : K.e) : (size >= 64 && v < 0.3 ? K.b : K.n);
+      x.fillRect(Math.round(pad + c * cell), Math.round(pad + r * cell), Math.ceil(cell - gap), Math.ceil(cell - gap));
+    });
+    return cv;
+  }
+  const fig = (cv, cap) => { const f = document.createElement('figure'); f.appendChild(cv); const c = document.createElement('figcaption'); c.textContent = cap; f.appendChild(c); return f; };
+  document.querySelectorAll('[data-icons]').forEach((box) => {
+    const k = box.dataset.icons;
+    box.append(fig(icon(k, 32), '32px'), fig(icon(k, 64), '64px'), fig(icon(k, 64, true), '64px, dark'));
+  });
+  const names = { play: ['Play mark', 'today'], loop: ['The Loop', 'recommended'], frames: ['Original + Remake', 'proposal 02'], mono: ['R-play', 'runner-up'] };
+  const lineup = document.getElementById('lineup');
+  Object.keys(names).forEach((k) => {
+    const d = document.createElement('div'); if (k === 'loop') d.className = 'on';
+    const row = document.createElement('span'); row.className = 'row'; row.append(icon(k, 32), icon(k, 64), icon(k, 64, true));
+    const b = document.createElement('b'); b.textContent = names[k][0]; const s = document.createElement('small'); s.textContent = names[k][1];
+    d.append(row, b, s); lineup.appendChild(d);
+  });
+
+  /* ---------- Play each mark when it scrolls into view; Replay restarts it ---------- */
+  const canv = [...document.querySelectorAll('canvas[data-shape]')];
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); thumbs(e.target); } }), { threshold: 0.25 });
+    canv.forEach((c) => io.observe(c));
+  } else canv.forEach(thumbs);
+  document.querySelectorAll('[data-replay]').forEach((b) => b.addEventListener('click', () => {
+    const cv = document.querySelector(`#${b.dataset.replay} canvas[data-shape]`); if (cv) thumbs(cv);
+  }));
+  if (mq.addEventListener) mq.addEventListener('change', () => canv.forEach(thumbs));
+})();
+</script>
+</body>
+</html>

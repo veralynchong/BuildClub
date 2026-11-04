@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minchia Backend Status</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0f1440; --blue: #1a33f2; --blue-soft: #e9ecff;
+    --ink: #1a1a22; --ink-muted: #5d5f6e; --line: #e3e5ee; --bg: #fafbff; --card: #ffffff;
+    --ok: #127a43; --ok-soft: #e6f5ec; --warn: #9a5b00; --warn-soft: #fff4e0; --bad: #b42318; --bad-soft: #fdecea;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 Inter, system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { background: var(--navy); color: #fff; border-radius: 20px; padding: 28px 24px; margin-bottom: 28px; }
+  header .eyebrow { font: 12px/1 "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: #aab3ff; }
+  h1, h2 { font-family: Newsreader, Georgia, serif; font-weight: 400; }
+  h1 { font-size: 36px; line-height: 1.15; margin: 10px 0 8px; }
+  h2 { font-size: 24px; margin: 32px 0 10px; color: var(--navy); }
+  header p { margin: 0; color: #d6dafc; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .ok { background: var(--ok-soft); color: var(--ok); }
+  .warn { background: var(--warn-soft); color: var(--warn); }
+  .bad { background: var(--bad-soft); color: var(--bad); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 500; color: var(--ink-muted); width: 34%; }
+  tr:last-child td, tr:last-child th { border-bottom: 0; }
+  code, pre { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
+  code { background: var(--blue-soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  pre { background: var(--navy); color: #e8ebff; padding: 14px 16px; border-radius: 12px; overflow-x: auto; white-space: pre; }
+  ol, ul { padding-left: 22px; } li { margin: 6px 0; }
+  a { color: var(--blue); }
+  .muted { color: var(--ink-muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Remake review · Backend · 4 Nov 2026</div>
+    <h1>Minchia's backend, running locally</h1>
+    <p><span class="pill ok">Running</span> &nbsp;at <a style="color:#fff" href="http://127.0.0.1:8797">http://127.0.0.1:8797</a> (localhost:8797 also answers)</p>
+  </header>
+
+  <h2>Status</h2>
+  <div class="card">
+    <table>
+      <tr><th>Server</th><td><span class="pill ok">Running</span> uvicorn, PID 88173, listening on 127.0.0.1:8797</td></tr>
+      <tr><th>Health</th><td><code>/api/health</code> → <code>{"live":true, ..., "demo":true}</code></td></tr>
+      <tr><th>Sign-in</th><td>The demo account from Minchia's instructions (created by the script's <code>--user</code> flag)</td></tr>
+      <tr><th>Temp copy</th><td><code>/var/folders/q5/.../T/tmp.832Vf4fN3b</code> (removed on stop; server log at <code>server.log</code> inside it)</td></tr>
+      <tr><th>Spending</th><td>None possible: no <code>.env</code>, dummy Apify token, every daily budget set to 0. AI breakdown calls return 429.</td></tr>
+    </table>
+  </div>
+
+  <h2>What was set up, and where</h2>
+  <div class="card">
+    <table>
+      <tr><th>Worktree</th><td><code>/Users/veralynlavignechong/Developer/projects/buildclub-minchia-backend</code></td></tr>
+      <tr><th>Branch / commit</th><td><code>origin/chore/integrate-main-shotboard</code>, detached at <code>ad0482e</code> "merge: origin/main (planning flow, shot board) into the canvas stack"</td></tr>
+      <tr><th>Python venv</th><td><code>pivots/02-content/app/trend-finder/backend/.venv</code> (gitignored)</td></tr>
+      <tr><th>Frontend build</th><td><code>pivots/02-content/app/trend-finder/dist</code> (gitignored)</td></tr>
+      <tr><th>Main checkout</th><td>Untouched. Still on <code>feature/remake-flow</code> with its uncommitted work. The only change there is the new worktree entry.</td></tr>
+      <tr><th>Worktree git status</th><td>Clean. No tracked files edited, nothing committed or pushed.</td></tr>
+    </table>
+  </div>
+
+  <h2>Versions</h2>
+  <div class="card">
+    <table>
+      <tr><th>Python</th><td>3.15.1</td></tr>
+      <tr><th>Node / npm</th><td>v24.19.0 / 11.17.0</td></tr>
+      <tr><th>Python packages</th><td>fastapi 0.162.0, uvicorn 0.54.0, anthropic 2.4.0, Pillow 13.0.0</td></tr>
+      <tr><th>ffmpeg</th><td>9.0.1 (Homebrew, <code>/opt/homebrew/bin/ffmpeg</code>)</td></tr>
+    </table>
+  </div>
+
+  <h2>Steps run</h2>
+  <ol>
+    <li><code>git fetch origin</code> in the main checkout.</li>
+    <li><code>git worktree add ../buildclub-minchia-backend origin/chore/integrate-main-shotboard</code> <span class="muted">(deviation: instead of <code>git checkout</code>, so the main checkout's uncommitted work stays put)</span></li>
+    <li>Read <code>bin/isolated-backend.sh</code> in full first. It only writes to a <code>mktemp</code> folder and only deletes that folder. With <code>--demo-data</code> it reads (copies from) <code>backend/jobs</code> in sibling worktrees, but never writes to them.</li>
+    <li><code>python3 -m venv backend/.venv</code> and <code>pip install -r backend/requirements.txt</code>: OK.</li>
+    <li><code>npm install</code>: OK. npm warned that install scripts for esbuild and fsevents were not run (allow-scripts policy), but <code>npm run build</code> still worked (built in about 1 second).</li>
+    <li>Ran the server command exactly as given, with <code>TF_VENV</code>, in the background. Output: "demo data: 0 breakdowns, 7 pinned searches", then "Added test@example.com".</li>
+    <li>Walkthrough in Chrome at <code>http://127.0.0.1:8797</code> <span class="muted">(deviation: 127.0.0.1 rather than localhost, because browser cookies are shared across ports on the same host and other Remake instances run on localhost:5192)</span></li>
+  </ol>
+
+  <h2>Walkthrough results</h2>
+  <div class="card">
+    <table>
+      <tr><th>Landing page, Log in</th><td><span class="pill ok">Works</span> Signed in. Client dashboard shows Evergreen Foods (0 of 12) and MYST Nightclub Sydney (0 of 8).</td></tr>
+      <tr><th>Pick Evergreen Foods</th><td><span class="pill ok">Works</span> Opens Find ideas.</td></tr>
+      <tr><th>Research</th><td><span class="pill ok">Works</span> 14 seeded rows across 12 video slots.</td></tr>
+      <tr><th>Make a plan from a seeded row</th><td><span class="pill bad">Broken</span> Setting a seeded row (e.g. @quick.plates.sample) to "★ Picked" shows the toast "sent to Plans, in Still planning". The plan is saved on the server, but Plans still shows "Still planning · 0", even after a reload.</td></tr>
+      <tr><th>Workaround</th><td><span class="pill warn">Works</span> Research → Add from link (a dummy TikTok URL) → set that row to "★ Picked". This plan does show up in Plans.</td></tr>
+      <tr><th>Send for approval</th><td><span class="pill ok">Works</span> The button is disabled until the shot list has at least one shot. After adding one, it moved to "Waiting for approval".</td></tr>
+      <tr><th>Approve</th><td><span class="pill ok">Works</span> Moved to Approved. The banner says "Annie approved this", even though the signed-in user is E2E Tester.</td></tr>
+      <tr><th>Open the canvas</th><td><span class="pill ok">Works</span> The Canvas shows a Shot 1 node wired into a Storyboard node (Mock Image model, Generate is free). "Add" and "Open editor" are there.</td></tr>
+      <tr><th>Sidebar Canvas item</th><td><span class="pill ok">Works</span> Opens the same canvas.</td></tr>
+      <tr><th>Console / server errors</th><td>No console errors. The server only logged expected 429s on <code>/api/analyze</code> (zero budget).</td></tr>
+    </table>
+  </div>
+  <p class="muted">Not tested: Open editor, Generate on the storyboard node, and export.</p>
+
+  <h2>How to stop and restart</h2>
+  <p>Stop: press Ctrl-C in the terminal that runs it, or <code>kill 88173</code> (the uvicorn PID). The script then deletes its temp copy. Every restart begins with a fresh database, so the demo account is created again and earlier plans are gone.</p>
+  <pre>cd /Users/veralynlavignechong/Developer/projects/buildclub-minchia-backend
+TF_VENV="$PWD/pivots/02-content/app/trend-finder/backend/.venv" bash bin/isolated-backend.sh 8797 --demo-data --user test@example.com:&lt;password&gt;</pre>
+  <p class="muted">If the frontend code changes, run <code>npm run build</code> in <code>pivots/02-content/app/trend-finder</code> before you restart.</p>
+
+  <h2>ffmpeg</h2>
+  <p><span class="pill ok">Installed</span> ffmpeg 9.0.1 is already on this Mac through Homebrew, so the editor's export should have what it needs. Export itself was not tested.</p>
+
+  <h2>Open issues for Minchia</h2>
+  <ol>
+    <li><strong>Plans made from seeded Research rows are hidden in this setup.</strong> The script sets <code>APIFY_TOKEN=dummy</code>, so <code>/api/health</code> returns <code>live: true</code> and the app runs in live mode. Then <code>shownIdeas</code> (<code>src/App.tsx:863</code>) drops every plan whose video is not live. The seeded Evergreen rows are sample videos (for example <code>y2</code> in <code>src/data/sample.ts</code>). So the walkthrough in note 2 ("make a plan from a row") stops at an empty Plans board. Only <code>link-</code> videos get through the filter. Two possible fixes: make demo mode not count as live, or let demo or sample plans through the filter.</li>
+    <li><strong>The toast says something that isn't true.</strong> "Sent to Plans, in Still planning" shows up even when the plan won't appear on Plans.</li>
+    <li><strong>Approver name is hard-coded.</strong> "Annie approved this" shows even though the reviewer is the signed-in E2E Tester.</li>
+    <li><strong>Demo data has no breakdowns.</strong> <code>--demo-data</code> found 0 breakdowns, because no worktree on this Mac has a <code>backend/jobs</code> folder. The search fallback path is still the hard-coded <code>/Users/tommy/...</code>. Pinned searches (7) did load.</li>
+    <li><strong>The default <code>TF_VENV</code> points at Minchia's machine</strong> (<code>/Users/tommy/Desktop/BuildClub/...</code>). It would be better to default to the checkout's own <code>backend/.venv</code>.</li>
+    <li><strong>npm allow-scripts warning.</strong> The esbuild and fsevents install scripts didn't run. The build still worked, but they may need <code>npm approve-scripts</code> on other machines.</li>
+  </ol>
+</main>
+</body>
+</html>

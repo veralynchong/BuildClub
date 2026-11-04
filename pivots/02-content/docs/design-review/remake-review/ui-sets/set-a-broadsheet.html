@@ -1,0 +1,1315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remake: Broadsheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&display=swap" rel="stylesheet">
+<style>
+/* Shared scaffolding for the UI set pages (frames, scaling, video covers, toast, drag). Each set styles on top. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+input, textarea, select { font: inherit; color: inherit; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-weight: 400; }
+
+/* A screen is designed at 1280 x 800 and scaled to fit its frame */
+.viewport { position: relative; width: 100%; overflow: hidden; isolation: isolate; }
+.screen { position: absolute; left: var(--ox, 0px); top: var(--oy, 0px); width: 1280px; height: 800px; transform: scale(var(--k, 1)); transform-origin: 0 0; overflow: hidden; isolation: isolate; }
+.frame { scroll-margin-top: 72px; }
+body.only { overflow: hidden; }
+body.only .only-vp { position: fixed; inset: 0; height: 100vh; }
+
+/* Sample video cover: navy, brand dots, a soft glow and a simple drawn subject */
+.cover { position: relative; overflow: hidden; aspect-ratio: 9 / 16; background-color: #060a47; container-type: inline-size;
+  background-image: radial-gradient(circle at 1px 1px, #2a3170 1px, transparent 1.5px); background-size: 12px 12px; }
+.cover::before { content: ""; position: absolute; inset: -20%; background: radial-gradient(circle at 50% 58%, var(--g, #1a33f2) 0, transparent 55%); opacity: 0.55; }
+.cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgb(7 11 36 / 0.85), transparent 45%); }
+.cv-art { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1; display: block; }
+.cv-cube { width: 40%; aspect-ratio: 1; border-radius: 12%; background: linear-gradient(155deg, #fffaf0, #e6dcc0); transform: translate(-50%, -50%) rotate(-9deg);
+  box-shadow: inset -0.5cqw -1cqw 0 rgb(0 0 0 / 0.08), 0 4cqw 8cqw rgb(0 0 0 / 0.45); }
+.cv-pan { width: 66%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, #23285a 0 58%, #14183d 60%); box-shadow: 0 0 0 2.4cqw #2b3170, 0 5cqw 10cqw rgb(0 0 0 / 0.5); }
+.cv-pan::before, .cv-pan::after { content: ""; position: absolute; width: 22%; aspect-ratio: 1; border-radius: 14%; background: linear-gradient(150deg, #ffe7a8, #e0a83a); left: 28%; top: 30%;
+  box-shadow: 26cqw 4cqw 0 -0.5cqw #f0c867, 8cqw 22cqw 0 0 #e9b54d, 30cqw 24cqw 0 -1cqw #f5d58a; }
+.cv-pan::after { width: 30%; height: 7%; border-radius: 99px; background: #14183d; left: 96%; top: 47%; box-shadow: none; }
+.cv-slice { width: 48%; aspect-ratio: 1 / 0.8; clip-path: polygon(0 100%, 50% 0, 100% 100%); background: linear-gradient(to bottom, #fff8e6 0 70%, #c98b3a 70%); filter: drop-shadow(0 3cqw 4cqw rgb(0 0 0 / 0.4)); }
+.cv-mic { width: 30%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #e8e9f5, #8d92b8); top: 40%; }
+.cv-mic::after { content: ""; position: absolute; left: 42%; top: 92%; width: 16%; height: 120%; border-radius: 99px; background: #c9cad6; }
+.cv-plat, .cv-len { position: absolute; z-index: 2; top: 5%; font: 500 max(9px, 6cqw)/1 'Geist Mono', ui-monospace, monospace; color: #f4f5ff; }
+.cv-plat { left: 6%; } .cv-len { right: 6%; }
+.cv-cap { position: absolute; z-index: 2; left: 7%; right: 7%; bottom: 6%; font: 600 max(9px, 8.5cqw)/1.15 'Inter', system-ui, sans-serif; color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / 0.6); }
+
+/* Toast (styled further per set) */
+.toast { position: absolute; left: 50%; bottom: 28px; z-index: 80; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2); white-space: nowrap; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* Drag and drop */
+[data-card] { touch-action: none; cursor: grab; user-select: none; }
+[data-card].is-dragging { opacity: 0.35; }
+.dnd-ghost { position: absolute !important; z-index: 90; pointer-events: none; cursor: grabbing; transform: rotate(-2.5deg) scale(1.03); box-shadow: 0 24px 48px rgb(7 11 36 / 0.28); margin: 0 !important; }
+[data-graph] { position: relative; }
+[data-graph] > svg.links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+[data-node] { position: absolute; touch-action: none; cursor: grab; user-select: none; }
+[data-node].is-dragging { cursor: grabbing; z-index: 5; }
+[data-swipe] { touch-action: none; cursor: grab; }
+[data-swipe].is-swiping { transition: none !important; cursor: grabbing; }
+
+/* Loading boxes */
+[data-loadbox] .when-loading, [data-loadbox] .when-done { display: none; }
+[data-loadbox].is-loading .when-loading { display: revert; }
+[data-loadbox].is-done .when-done { display: revert; }
+[data-loadbox].is-loading .when-idle, [data-loadbox].is-done .when-idle { display: none; }
+
+/* Tabs / panels */
+[data-panel] { display: none; } [data-panel].is-on { display: block; }
+
+/* Timeline playhead (CSS only) */
+[data-playbox] .playhead { left: 0; }
+[data-playbox].is-playing .playhead { animation: rm-playhead var(--dur, 15s) linear infinite; }
+@keyframes rm-playhead { from { left: var(--ph0, 0%); } to { left: var(--ph1, 100%); } }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+:root {
+  --canvas: #ffffff; --alt: #f5f5f7; --ink: #1a1a22; --muted: #5d5f6e; --line: #e8e8ee; --line2: #c9cad6;
+  --navy: #060a47; --navy-deep: #070b24; --dot: #2a3170; --on-navy: #f4f5ff; --on-navy-m: #a9b0e0; --sky: #7ab8ff;
+  --blue: #1a33f2; --blue-h: #1426c4; --blue-soft: #e9ecff; --violet: #7b1fe0; --mustard: #f2b705;
+  --early: #1a7a44; --early-soft: #e5f4ea; --rising: #8a5a06; --rising-soft: #fbf3e1; --no: #b42318; --no-soft: #fdeceb;
+  --serif: 'Newsreader', Georgia, serif; --sans: 'Inter', system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --emo-curiosity-bg: #e3f2f0; --emo-curiosity-fg: #1d5c57; --emo-surprise-bg: #fdecd9; --emo-surprise-fg: #84470d;
+  --emo-relief-bg: #e8f0e2; --emo-relief-fg: #3d5a2c; --emo-insider-bg: #f1e8f3; --emo-insider-fg: #6a2f72;
+}
+body { background: var(--alt); color: var(--ink); font-family: var(--sans); }
+
+/* ---------- Page chrome (outside the frames) ---------- */
+.pg-head { max-width: 1280px; margin: 0 auto; padding: 40px 24px 20px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; border-bottom: 1px solid var(--line2); }
+.pg-kicker { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--blue); margin-bottom: 10px; }
+.pg-head h1 { font-family: var(--serif); font-size: clamp(44px, 6vw, 76px); line-height: 1; letter-spacing: -.025em; }
+.pg-head h1 em { color: var(--blue); }
+.pg-deck { font-size: 17px; line-height: 1.55; color: var(--muted); max-width: 680px; margin-top: 14px; }
+.pg-back { font: 500 13px var(--mono); color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line2); padding-bottom: 2px; }
+.pg-back:hover { border-color: var(--blue); color: var(--blue); }
+.pg-rules { max-width: 1280px; margin: 0 auto; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.pg-rules b { display: block; font: 500 11px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); margin-bottom: 4px; }
+#index { position: sticky; top: 0; z-index: 20; background: rgb(245 245 247 / .92); backdrop-filter: blur(8px); border-block: 1px solid var(--line); display: flex; gap: 2px; overflow-x: auto; padding: 8px max(24px, calc((100vw - 1232px) / 2)); scrollbar-width: thin; }
+#index a { flex: none; font: 400 12px var(--sans); color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 6px; white-space: nowrap; }
+#index a span { font-family: var(--mono); color: var(--line2); margin-right: 6px; }
+#index a:hover { color: var(--ink); background: #fff; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+#player { margin: 32px 0 8px; }
+.player-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.pb-label { font: 500 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--blue); margin-right: 6px; }
+.pb-btn { width: 34px; height: 34px; border-radius: 99px; border: 1px solid var(--line2); background: #fff; }
+.pb-btn:hover { border-color: var(--ink); }
+.pb-select { height: 34px; border-radius: 8px; border: 1px solid var(--line2); background: #fff; padding: 0 10px; min-width: 220px; }
+.pb-hint { font-size: 13px; color: var(--muted); }
+.player-vp, .frame .viewport { background: #fff; border: 1px solid var(--line2); border-radius: 6px; box-shadow: 0 1px 2px rgb(10 12 40 / .04), 0 18px 40px rgb(10 12 40 / .07); }
+.frame { margin: 56px 0; }
+.frame-label { display: grid; grid-template-columns: 56px 1fr; column-gap: 12px; align-items: baseline; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--ink); }
+.fl-num { font: 500 13px var(--mono); color: var(--blue); grid-row: span 3; }
+.frame-label h2 { font-family: var(--serif); font-size: 30px; letter-spacing: -.02em; }
+.frame-label p { color: var(--muted); font-size: 14px; }
+.frame-label .fl-note { color: var(--ink); font-size: 13.5px; margin-top: 4px; }
+.frame-label .fl-note::before { content: "Motion and interaction: "; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--blue); }
+.frame.pulse .viewport { animation: pulse 1.2s var(--ease); }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgb(26 51 242 / .45); } 100% { box-shadow: 0 0 0 18px rgb(26 51 242 / 0); } }
+.pg-foot { border-top: 1px solid var(--line2); padding: 28px 24px 60px; max-width: 1280px; margin: 0 auto; color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pg-foot a { color: var(--ink); }
+
+/* ---------- Screen transitions: calm cross-fade with a small rise ---------- */
+.screen.enter { opacity: 0; transform: translateY(10px) scale(var(--k)); }
+.screen.in { opacity: 1; transform: scale(var(--k)); transition: opacity .55s var(--ease), transform .6s var(--ease); }
+.screen.leave { opacity: 0; transition: opacity .35s var(--ease); }
+.screen:not(.in) .rise { opacity: 0; }
+.screen.in .rise { animation: rise .7s var(--ease) both; animation-delay: calc(var(--d, 0) * 70ms + 80ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Inside the screens ---------- */
+.screen { background: var(--canvas); color: var(--ink); font: 400 14px/1.5 var(--sans); }
+.shell { display: grid; grid-template-columns: 228px 1fr; height: 800px; }
+.side { border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 26px 18px 18px; background: #fff; }
+.wordmark { font-family: var(--serif); font-size: 27px; letter-spacing: -.03em; line-height: 1; padding: 0 8px; }
+.wordmark i { color: var(--blue); }
+.mast { margin: 22px 0 18px; padding: 12px 8px 14px; border-block: 1px solid var(--ink); display: grid; gap: 2px; text-align: left; background: none; border-inline: 0; width: 100%; }
+.mast small, .lbl { font: 500 10.5px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.mast strong { font-family: var(--serif); font-weight: 400; font-size: 19px; letter-spacing: -.01em; display: flex; justify-content: space-between; }
+.mast:hover strong span { color: var(--blue); }
+.nav { display: grid; gap: 1px; }
+.nav a { display: grid; grid-template-columns: 24px 1fr auto; align-items: baseline; padding: 7px 8px; color: var(--muted); text-decoration: none; font-size: 14px; border-radius: 4px; position: relative; cursor: pointer; }
+.nav a span:first-child { font: 400 10.5px var(--mono); color: var(--line2); }
+.nav a:hover { color: var(--ink); background: var(--alt); }
+.nav a.on { color: var(--ink); font-weight: 500; }
+.nav a.on::before { content: ""; position: absolute; left: -18px; top: 6px; bottom: 6px; width: 2px; background: var(--blue); }
+.nav a.on span:first-child { color: var(--blue); }
+.nav .ct { font: 400 11px var(--mono); color: var(--muted); }
+.nav hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+.side-foot { margin-top: auto; display: grid; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.sample { font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--rising); }
+.user { display: flex; gap: 10px; align-items: center; border-top: 1px solid var(--line); padding-top: 12px; }
+.av { width: 30px; height: 30px; border-radius: 99px; background: var(--navy); color: var(--on-navy); display: grid; place-items: center; font: 500 11px var(--mono); flex: none; }
+.user b { display: block; color: var(--ink); font-weight: 500; font-size: 13px; }
+.main { overflow: auto; padding: 34px 52px 72px; position: relative; scrollbar-width: thin; }
+.dateline { font: 500 11px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--blue); }
+.h1 { font-family: var(--serif); font-size: 46px; line-height: 1.05; letter-spacing: -.025em; margin: 6px 0 8px; }
+.h1 em, .h2 em, .h3 em { color: var(--blue); }
+.h2 { font-family: var(--serif); font-size: 28px; line-height: 1.15; letter-spacing: -.02em; }
+.h3 { font-family: var(--serif); font-size: 20px; line-height: 1.25; letter-spacing: -.01em; }
+.deck { font-size: 16px; line-height: 1.55; color: var(--muted); max-width: 620px; }
+.rule { border: 0; border-top: 1px solid var(--ink); margin: 22px 0; }
+.rule.thin { border-color: var(--line); }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); }
+.sm { font-size: 12.5px; }
+.row { display: flex; gap: 12px; align-items: center; }
+.between { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 18px; border-radius: 99px; border: 1px solid var(--line2); background: #fff; font-size: 14px; font-weight: 500; white-space: nowrap; transition: background .2s var(--ease), border-color .2s var(--ease), transform .15s var(--ease), color .2s; }
+.btn:hover { border-color: var(--ink); }
+.btn:active { transform: scale(.97); }
+.btn.pri { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btn.pri:hover { background: var(--blue-h); }
+.btn.soft { background: var(--blue-soft); border-color: transparent; color: var(--blue); }
+.btn.soft:hover { background: #dce1ff; }
+.btn.sm { height: 32px; padding: 0 14px; font-size: 13px; }
+.btn.is-saved { background: var(--early-soft); color: var(--early); border-color: transparent; }
+.btn.pop { animation: stamp .45s var(--ease); }
+@keyframes stamp { 0% { transform: scale(1); } 40% { transform: scale(.94); } 100% { transform: scale(1); } }
+.link { color: var(--ink); text-decoration: none; background: linear-gradient(var(--blue), var(--blue)) 0 100% / 0 1px no-repeat; transition: background-size .35s var(--ease), color .2s; cursor: pointer; border: 0; padding: 0 0 1px; font: inherit; }
+.link:hover { background-size: 100% 1px; color: var(--blue); }
+.link .ar { display: inline-block; transition: transform .25s var(--ease); }
+.link:hover .ar { transform: translateX(3px); }
+.kick { font: 500 10.5px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.kick.b { color: var(--blue); }
+.dots { background-color: var(--navy); background-image: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 1.5px); background-size: 24px 24px; color: var(--on-navy); }
+.ticks { display: inline-flex; gap: 3px; }
+.ticks i { width: 14px; height: 18px; border: 1px solid var(--line2); background: #fff; }
+.ticks i.on { background: var(--blue); border-color: var(--blue); }
+.screen.in .ticks i.on { animation: tick .4s var(--ease) both; animation-delay: calc(var(--i) * 60ms + 300ms); }
+@keyframes tick { from { background: #fff; border-color: var(--line2); } }
+.emo { display: inline-block; font: 500 10px/1 var(--mono); letter-spacing: .07em; text-transform: uppercase; padding: 5px 7px; border-radius: 3px; }
+.emo-curiosity { background: var(--emo-curiosity-bg); color: var(--emo-curiosity-fg); } .emo-relief { background: var(--emo-relief-bg); color: var(--emo-relief-fg); }
+.emo-insider { background: var(--emo-insider-bg); color: var(--emo-insider-fg); } .emo-surprise { background: var(--emo-surprise-bg); color: var(--emo-surprise-fg); }
+.toast { top: 22px; bottom: auto; transform: translate(-50%, -12px); background: var(--ink); color: #fff; font-size: 13.5px; padding: 11px 18px; border-radius: 4px; box-shadow: 0 12px 30px rgb(7 11 36 / .25); }
+.toast b { font-weight: 500; color: #c8cfff; }
+.cover { border-radius: 3px; }
+.field { display: grid; gap: 6px; }
+.input { height: 40px; border: 0; border-bottom: 1px solid var(--line2); background: transparent; padding: 0 2px; font-size: 15px; outline: none; transition: border-color .2s; }
+.input:hover { border-color: var(--ink); }
+.input:focus { border-color: var(--blue); box-shadow: 0 1px 0 var(--blue); }
+textarea.input { height: 76px; padding-top: 8px; resize: none; }
+.chip { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 99px; background: #fff; font-size: 13px; transition: border-color .2s, background .2s, color .2s; }
+.chip:hover { border-color: var(--ink); }
+.chip.is-on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.dash { border: 1px dashed var(--line2); border-radius: 4px; padding: 18px 20px; color: var(--muted); }
+
+/* Landing */
+.lp { height: 800px; overflow: auto; scrollbar-width: thin; }
+.lp-nav { display: flex; align-items: center; gap: 28px; padding: 22px 56px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgb(255 255 255 / .94); backdrop-filter: blur(6px); z-index: 3; }
+.lp-nav .wordmark { padding: 0; margin-right: auto; }
+.lp-nav a { font-size: 14px; }
+.lp-hero { display: grid; grid-template-columns: 1.15fr 1fr; gap: 56px; padding: 56px 56px 44px; align-items: start; }
+.lp-hero h1 { font-family: var(--serif); font-size: 74px; line-height: .98; letter-spacing: -.03em; }
+.lp-hero h1 em { color: var(--blue); }
+.lp-sub { font-size: 18px; line-height: 1.55; color: var(--muted); margin: 22px 0 26px; max-width: 520px; }
+.lp-demo { border: 1px solid var(--ink); border-radius: 4px; overflow: hidden; }
+.lp-demo-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--ink); }
+.seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 99px; padding: 2px; }
+.seg button { border: 0; background: none; padding: 5px 12px; border-radius: 99px; font-size: 12.5px; color: var(--muted); transition: background .25s var(--ease), color .2s; }
+.seg button.is-on { background: var(--ink); color: #fff; }
+.lp-pick { display: grid; grid-template-columns: 54px 1fr auto; gap: 14px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .2s; }
+.lp-pick:hover { background: var(--alt); }
+.lp-pick .cover { width: 54px; }
+.lp-pick b { font-family: var(--serif); font-weight: 400; font-size: 17px; display: block; }
+.lp-demo .list-my { display: none; }
+.lp-demo:has(.t-my.is-on) .list-my { display: block; }
+.lp-demo:has(.t-my.is-on) .list-ev { display: none; }
+.screen.in .lp-demo .lp-pick { animation: rise .6s var(--ease) both; }
+.screen.in .lp-demo .lp-pick:nth-child(2) { animation-delay: .1s; } .screen.in .lp-demo .lp-pick:nth-child(3) { animation-delay: .2s; }
+.cant { color: var(--no); font: 500 11px var(--mono); letter-spacing: .04em; }
+.lp-proof { margin: 0 56px; padding: 14px 0; border-block: 1px solid var(--ink); display: flex; gap: 40px; font-size: 13.5px; color: var(--muted); }
+.lp-proof b { color: var(--ink); font-weight: 500; }
+.lp-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 40px 56px; }
+.lp-cols div { padding: 0 24px; border-left: 1px solid var(--line); }
+.lp-cols div:first-child { border: 0; padding-left: 0; }
+.lp-cols h3 { font-family: var(--serif); font-size: 26px; line-height: 1.15; letter-spacing: -.02em; margin-bottom: 10px; }
+.lp-cols h3::first-letter { color: var(--blue); }
+.lp-how { margin: 0 56px 56px; padding: 40px; border-radius: 4px; }
+.lp-how ol { list-style: none; margin: 26px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; counter-reset: s; }
+.lp-how li { counter-increment: s; border-top: 1px solid var(--on-navy-m); padding-top: 12px; font-size: 14px; color: var(--on-navy-m); }
+.lp-how li::before { content: "0" counter(s); display: block; font-family: var(--serif); font-size: 38px; color: var(--on-navy); line-height: 1; margin-bottom: 8px; }
+.lp-how li b { color: var(--on-navy); font-weight: 500; display: block; }
+
+/* Login */
+.login { display: grid; grid-template-columns: 1fr 1fr; height: 800px; }
+.login-l { padding: 56px; display: flex; flex-direction: column; justify-content: space-between; }
+.login-l blockquote { margin: 0; font-family: var(--serif); font-size: 52px; line-height: 1.05; letter-spacing: -.025em; }
+.login-l blockquote em { color: var(--sky); }
+.login-r { padding: 80px 96px; display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+.tabs2 { display: flex; gap: 22px; border-bottom: 1px solid var(--line); }
+.tabs2 button { border: 0; background: none; padding: 10px 0; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .2s, border-color .3s var(--ease); }
+.tabs2 button.is-on { color: var(--ink); border-color: var(--blue); }
+.login .client-note { display: none; }
+.login:has(.t-client.is-on) .client-note { display: block; }
+.login:has(.t-client.is-on) .staff-form { display: none; }
+
+/* Agency + home */
+.big-n { font-family: var(--serif); font-size: 96px; line-height: .9; letter-spacing: -.04em; }
+.ledger { width: 100%; border-collapse: collapse; }
+.ledger th { font: 500 10.5px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--ink); }
+.ledger td .link { white-space: nowrap; }
+.ledger td { padding: 14px 12px 14px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ledger tr:hover td { background: linear-gradient(to right, transparent, var(--alt) 8%, var(--alt) 92%, transparent); }
+.ledger .nm { font-family: var(--serif); font-size: 19px; }
+.ledger .spark { color: var(--blue); }
+.screen.in .spark polyline { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.4s var(--ease) .3s forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.wait-pill { font: 500 12px var(--mono); color: var(--violet); background: #f2e9ff; padding: 4px 9px; border-radius: 99px; border: 0; }
+.wait-pill:hover { background: #e6d6ff; }
+.grid-home { display: grid; grid-template-columns: 1.35fr 1fr; gap: 40px; }
+.story { display: grid; grid-template-columns: 170px 1fr; gap: 24px; }
+.story .cover { width: 170px; }
+.col-r > section { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.item { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 8px 0; }
+.item b { font-weight: 500; }
+.item.is-on .btn { background: var(--early-soft); color: var(--early); border-color: transparent; pointer-events: none; }
+.item.is-on .btn::before { content: "✓ "; }
+
+/* Find */
+.hero { border-radius: 4px; padding: 40px 48px 32px; position: relative; overflow: hidden; }
+.hero h1 { font-family: var(--serif); font-size: 50px; line-height: 1.02; letter-spacing: -.025em; text-align: center; }
+.hero h1 em { color: var(--sky); }
+.hero p { text-align: center; color: var(--on-navy-m); max-width: 560px; margin: 12px auto 0; font-size: 15px; }
+.sbox { margin: 24px auto 0; max-width: 720px; background: #fff; color: var(--ink); border-radius: 6px; padding: 10px; display: flex; gap: 10px; align-items: center; box-shadow: 0 18px 40px rgb(0 0 0 / .3); }
+.sbox .q { flex: 1; font-size: 16px; padding: 0 8px; color: var(--muted); min-height: 24px; }
+.sbox .q::after { content: "|"; color: var(--blue); animation: blink 1s steps(1) infinite; margin-left: 1px; }
+@keyframes blink { 50% { opacity: 0; } }
+.plats { display: flex; gap: 6px; justify-content: center; margin-top: 14px; }
+.plat { width: 30px; height: 30px; border-radius: 99px; border: 1px solid var(--on-navy-m); background: transparent; color: var(--on-navy-m); font-size: 12px; transition: all .25s var(--ease); }
+.plat.is-on { background: var(--on-navy); color: var(--navy); border-color: var(--on-navy); }
+.toc { display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px; }
+.toc a { display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); cursor: pointer; }
+.toc a:hover .h3 { color: var(--blue); }
+.toc a:hover .ar { transform: translateX(4px); }
+.toc .ar { transition: transform .25s var(--ease); color: var(--blue); }
+.toc small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+/* Searching */
+.press { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+.steps { list-style: none; margin: 18px 0 0; padding: 0; }
+.steps li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); color: var(--line2); transition: color .4s; }
+.steps li::before { content: "○"; font-family: var(--mono); }
+.steps li.now { color: var(--ink); } .steps li.now::before { content: "◐"; color: var(--blue); animation: spin 1s linear infinite; display: inline-block; }
+.steps li.done { color: var(--muted); } .steps li.done::before { content: "✓"; color: var(--early); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.progress { height: 2px; background: var(--line); margin-top: 22px; position: relative; overflow: hidden; }
+.progress i { position: absolute; inset: 0 100% 0 0; background: var(--blue); }
+.screen.in .progress i { animation: fill 3.8s linear forwards; }
+@keyframes fill { to { right: 0; } }
+.skel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.skel div { aspect-ratio: 9 / 16; border-radius: 3px; background: linear-gradient(100deg, var(--alt) 30%, #fff 50%, var(--alt) 70%) 0 0 / 300% 100%; animation: shimmer 2.4s ease-in-out infinite; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+[data-steps].is-complete ~ .ready { opacity: 1; transform: none; }
+.ready { opacity: 0; transform: translateY(8px); transition: all .6s var(--ease); }
+
+/* Results */
+.qbar { display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--ink); padding-bottom: 14px; }
+.qbar .q { font-family: var(--serif); font-size: 26px; flex: 1; }
+.lead { display: grid; grid-template-columns: 210px 1fr 230px; gap: 32px; padding: 22px 0; border-bottom: 1px solid var(--line); }
+.lead .cover { width: 210px; }
+.lead blockquote { margin: 6px 0 10px; font-family: var(--serif); font-size: 34px; line-height: 1.1; letter-spacing: -.02em; }
+.ratio { position: relative; height: 54px; margin: 14px 0 8px; }
+.ratio .ax { position: absolute; left: 0; right: 0; top: 26px; border-top: 1px solid var(--line2); }
+.ratio .pt { position: absolute; top: 20px; width: 12px; height: 12px; border-radius: 99px; transform: translateX(-50%); }
+.ratio .pt.f { background: #fff; border: 2px solid var(--muted); }
+.ratio .pt.v { background: var(--blue); }
+.ratio .span { position: absolute; top: 25px; height: 3px; background: var(--blue); left: 0; width: 0; }
+.screen.in .ratio .span { animation: grow 1.2s var(--ease) .4s forwards; }
+@keyframes grow { to { width: var(--w); } }
+.ratio small { position: absolute; top: 0; transform: translateX(-50%); font: 400 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; margin-top: 16px; }
+.tile .cover { transition: transform .35s var(--ease), box-shadow .35s var(--ease); }
+.tile:hover .cover { transform: translateY(-3px); box-shadow: 0 12px 22px rgb(7 11 36 / .18); }
+.tile b { display: block; font-family: var(--serif); font-weight: 400; font-size: 15px; line-height: 1.2; margin: 8px 0 2px; }
+.fv { font: 400 11.5px var(--mono); color: var(--muted); }
+.fv b { font: inherit; color: var(--ink); display: inline; margin: 0; }
+.tray { position: absolute; left: 280px; right: 52px; bottom: -70px; background: var(--ink); color: #fff; border-radius: 4px; padding: 12px 18px; display: flex; align-items: center; gap: 14px; transition: bottom .5s var(--ease); z-index: 5; }
+.tray.is-on { bottom: 18px; }
+.tray .btn { margin-left: auto; }
+.bump { animation: bump .5s var(--ease); display: inline-block; }
+@keyframes bump { 40% { transform: scale(1.4); color: var(--sky); } }
+
+/* Drawer */
+.scrim { position: absolute; inset: 0; background: rgb(7 11 36 / .35); opacity: 0; pointer-events: none; transition: opacity .4s var(--ease); z-index: 6; }
+.drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 540px; background: #fff; z-index: 7; transform: translateX(100%); transition: transform .55s var(--ease); overflow: auto; padding: 30px 36px 40px; box-shadow: -20px 0 50px rgb(7 11 36 / .15); scrollbar-width: thin; }
+.wrapd.is-open .drawer { transform: none; } .wrapd.is-open .scrim { opacity: 1; pointer-events: auto; }
+.stat4 { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--ink); }
+.stat4 div { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.stat4 div:nth-child(odd) { padding-right: 16px; border-right: 1px solid var(--line); } .stat4 div:nth-child(even) { padding-left: 16px; }
+.stat4 strong { display: block; font-family: var(--serif); font-weight: 400; font-size: 30px; line-height: 1.1; }
+.annot { position: relative; margin: 14px 0 6px; height: 6px; background: var(--alt); border-radius: 99px; }
+.annot i { position: absolute; top: -4px; width: 14px; height: 14px; border-radius: 99px; background: #fff; border: 2px solid var(--blue); transform: translateX(-50%); font: 500 8px/10px var(--mono); text-align: center; color: var(--blue); font-style: normal; }
+.why { counter-reset: w; list-style: none; padding: 0; margin: 10px 0 0; }
+.why li { counter-increment: w; display: grid; grid-template-columns: 26px 1fr; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.why li::before { content: counter(w); font: 500 11px var(--mono); color: var(--blue); padding-top: 2px; }
+.why b { display: block; font-weight: 500; }
+
+/* Research */
+.slot { border-bottom: 1px solid var(--line); }
+.slot-h { display: grid; grid-template-columns: 70px 1fr 160px 100px 20px; gap: 16px; align-items: baseline; padding: 14px 0; cursor: pointer; width: 100%; border: 0; background: none; text-align: left; }
+.slot-h:hover .h3 { color: var(--blue); }
+.slot-h .chev { transition: transform .35s var(--ease); color: var(--muted); }
+.slot.is-on .chev { transform: rotate(90deg); }
+.slot-b { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .45s var(--ease); }
+.slot.is-on .slot-b { grid-template-rows: 1fr; }
+.slot-b > div { overflow: hidden; }
+.refs { display: flex; gap: 16px; padding: 4px 0 20px 86px; }
+.ref { width: 112px; border: 0; background: none; padding: 0; text-align: left; position: relative; }
+.ref .cover { width: 112px; outline: 2px solid transparent; outline-offset: 3px; transition: outline-color .25s; }
+.ref.is-on .cover { outline-color: var(--blue); }
+.ref .pk { position: absolute; top: 6px; left: 6px; z-index: 3; background: var(--mustard); color: var(--navy); font: 500 10px var(--mono); padding: 3px 6px; border-radius: 3px; opacity: 0; transform: scale(.6); transition: all .3s var(--ease); }
+.ref.is-on .pk { opacity: 1; transform: none; }
+.ref small { display: block; margin-top: 8px; font-size: 12.5px; line-height: 1.3; }
+
+/* Compare */
+.cmp { display: grid; grid-template-columns: 170px repeat(3, 1fr); }
+.cmp > div { padding: 12px 16px 12px 0; border-bottom: 1px solid var(--line); }
+.cmp .rh { font: 500 10.5px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding-top: 14px; }
+.beats { display: flex; height: 20px; gap: 2px; }
+.beats i { display: block; height: 100%; border-radius: 2px; transform-origin: left; }
+.screen.in .beats i { animation: beat .7s var(--ease) both; }
+.screen.in .beats i:nth-child(2) { animation-delay: .1s; } .screen.in .beats i:nth-child(3) { animation-delay: .2s; } .screen.in .beats i:nth-child(4) { animation-delay: .3s; }
+@keyframes beat { from { transform: scaleX(0); } }
+.b-hook { background: var(--blue); } .b-setup { background: var(--sky); } .b-proof { background: var(--violet); } .b-cta { background: var(--mustard); }
+.shared { background: var(--blue-soft); }
+
+/* Plans board */
+.board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 18px; border-top: 1px solid var(--ink); min-height: 520px; }
+.bcol { padding: 12px 14px 20px; border-left: 1px solid var(--line); transition: background .25s; }
+.bcol:first-child { border-left: 0; padding-left: 0; }
+.bcol.is-over { background: var(--blue-soft); }
+.bcol h3 { font-family: var(--serif); font-size: 18px; display: flex; justify-content: space-between; margin-bottom: 12px; }
+.bcol h3 span { font: 400 12px var(--mono); color: var(--muted); }
+.bcol [data-colbody] { display: grid; gap: 10px; min-height: 120px; }
+.pcard { background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 10px; display: grid; grid-template-columns: 44px 1fr; gap: 10px; transition: border-color .2s, box-shadow .25s; }
+.pcard:hover { border-color: var(--line2); box-shadow: 0 6px 16px rgb(7 11 36 / .07); }
+.pcard .cover { width: 44px; }
+.pcard b { font-family: var(--serif); font-weight: 400; font-size: 15px; line-height: 1.2; display: block; }
+.pcard small { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
+.pcard.landed { animation: land .5s var(--ease); }
+@keyframes land { 0% { background: var(--blue-soft); } 100% { background: #fff; } }
+.col-back b { color: var(--no); }
+
+/* Plan */
+.plan { display: grid; grid-template-columns: 300px 1fr; gap: 44px; }
+.plan .cover { width: 300px; }
+.hooks { display: grid; gap: 0; border-top: 1px solid var(--ink); }
+.hook { display: grid; grid-template-columns: 30px 1fr auto; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); transition: background .3s; }
+.hook .h3 { font-size: 19px; }
+.hook.is-on { background: linear-gradient(to right, var(--blue-soft), transparent); }
+.hook.is-on .btn { background: var(--blue); color: #fff; border-color: var(--blue); }
+.shots { border-top: 1px solid var(--ink); }
+.shot { display: grid; grid-template-columns: 30px 70px 1fr 1fr; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.bar { position: absolute; left: 228px; right: 0; bottom: 0; padding: 12px 52px; background: rgb(255 255 255 / .94); border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; align-items: center; backdrop-filter: blur(6px); }
+
+/* Graph screens */
+.graphwrap { position: relative; height: 560px; border: 1px solid var(--line); border-radius: 4px; background-color: #fff; background-image: radial-gradient(circle at 1px 1px, #d9dbe6 1px, transparent 1.4px); background-size: 20px 20px; overflow: hidden; }
+.graphwrap svg path { stroke: var(--ink); stroke-width: 1.2; fill: none; }
+.graphwrap svg path.dash { stroke-dasharray: 4 4; stroke: var(--muted); }
+.screen.in .graphwrap svg path { stroke-dasharray: 600; stroke-dashoffset: 600; animation: draw2 1.2s var(--ease) .3s forwards; }
+.screen.in .graphwrap svg path.dash { stroke-dasharray: 4 4; stroke-dashoffset: 0; animation: none; }
+@keyframes draw2 { to { stroke-dashoffset: 0; } }
+.plate { width: 132px; background: #fff; border: 1px solid var(--ink); border-radius: 3px; padding: 8px; transition: box-shadow .25s; }
+.plate:hover, .plate.is-dragging { box-shadow: 0 14px 30px rgb(7 11 36 / .15); }
+.plate .frame9 { aspect-ratio: 9 / 11; background: var(--alt); border-radius: 2px; position: relative; overflow: hidden; display: grid; place-items: center; font-family: var(--serif); font-size: 44px; color: var(--line2); }
+.plate .frame9 .cv-art { transform: translate(-50%, -50%) scale(.9); }
+.plate b { display: block; font-family: var(--serif); font-weight: 400; font-size: 15px; margin-top: 8px; }
+.plate small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.node { width: 210px; background: #fff; border: 1px solid var(--line2); border-radius: 4px; padding: 12px; font-size: 12.5px; transition: box-shadow .25s, border-color .2s; }
+.node:hover { border-color: var(--ink); }
+.node.is-dragging { box-shadow: 0 16px 36px rgb(7 11 36 / .16); }
+.node .kick { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.port { position: absolute; width: 9px; height: 9px; border-radius: 99px; background: #fff; border: 1.5px solid var(--ink); top: calc(50% - 4.5px); }
+.port.o { right: -5px; } .port.i { left: -5px; }
+.gen .when-loading .bar2 { height: 3px; background: var(--alt); margin: 8px 0; position: relative; overflow: hidden; }
+.gen .when-loading .bar2 i { position: absolute; inset: 0; background: var(--blue); animation: fill2 2.2s linear forwards; right: 100%; }
+@keyframes fill2 { to { right: 0; } }
+.savest { font: 500 11px var(--mono); color: var(--muted); transition: color .3s; }
+.savest.is-saving { color: var(--rising); } .savest.is-saved { color: var(--early); }
+
+/* Review */
+.stack { position: relative; height: 430px; }
+.stack-card { position: absolute; inset: 0 60px 0 0; background: #fff; border: 1px solid var(--ink); border-radius: 3px; padding: 30px 36px; transition: transform .6s var(--ease), opacity .5s var(--ease); }
+.stack-card:nth-last-child(2) { transform: translate(10px, 10px); } .stack-card:nth-last-child(3) { transform: translate(20px, 20px); }
+.stack-card.gone { opacity: 0; pointer-events: none; }
+.stack-card.go-right { transform: translateX(120px) rotate(2deg); }
+.stack-card.go-left { transform: translateX(-120px) rotate(-2deg); }
+.stack-card.go-up { transform: translateY(-60px); }
+.stamp { position: absolute; top: 26px; right: 30px; font: 500 13px var(--mono); letter-spacing: .1em; text-transform: uppercase; border: 2px solid; padding: 6px 10px; transform: rotate(-6deg); opacity: 0; }
+.go-right .stamp.ok, .go-up .stamp.ch { opacity: 1; color: var(--blue); }
+.go-left .stamp.no { opacity: 1; color: var(--no); }
+.done { display: none; text-align: left; padding: 60px 0; }
+.stack.is-empty .done { display: block; animation: rise .7s var(--ease); }
+
+/* Editor */
+.ed { display: grid; grid-template-columns: 1fr 260px; gap: 28px; }
+.prev { display: grid; place-items: center; background: var(--alt); border-radius: 4px; height: 400px; }
+.prev .cover { height: 370px; }
+.tl { margin-top: 18px; border-top: 1px solid var(--ink); padding-top: 10px; position: relative; }
+.ruler { display: flex; justify-content: space-between; font: 400 10.5px var(--mono); color: var(--muted); margin: 0 0 6px 70px; }
+.track { display: grid; grid-template-columns: 70px 1fr; align-items: center; margin-bottom: 6px; }
+.clips { display: flex; gap: 3px; height: 44px; position: relative; }
+.clip { border-radius: 3px; color: #fff; font: 500 11px var(--mono); padding: 6px 8px; transition: filter .2s, transform .2s; cursor: pointer; }
+.clip:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.music { height: 26px; border-radius: 3px; background: repeating-linear-gradient(90deg, #c9cad6 0 2px, transparent 2px 5px); opacity: .8; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--no); margin-left: 70px; }
+.playhead::before { content: ""; position: absolute; top: -4px; left: -5px; border: 6px solid transparent; border-top-color: var(--no); }
+[data-playbox] { --ph1: calc(100% - 70px); }
+
+/* Publish, channel, brief, settings */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; }
+.prow { display: grid; grid-template-columns: 110px 1fr auto; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.status { font: 500 11px var(--mono); letter-spacing: .04em; padding: 4px 8px; border-radius: 3px; }
+.s-q { background: var(--blue-soft); color: var(--blue); } .s-d { background: var(--alt); color: var(--muted); } .s-p { background: var(--early-soft); color: var(--early); }
+.metric { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--ink); }
+.metric div { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--line); }
+.metric strong { display: block; font-family: var(--serif); font-weight: 400; font-size: 30px; }
+.cmpbar { display: grid; gap: 8px; margin-top: 14px; }
+.cmpbar div { display: grid; grid-template-columns: 170px 1fr 60px; gap: 10px; align-items: center; font-size: 13px; }
+.cmpbar i { display: block; height: 10px; background: var(--blue); width: 0; }
+.screen.in .cmpbar i { animation: grow 1.1s var(--ease) .3s forwards; }
+.cmpbar div:last-child i { background: var(--line2); }
+.fmt { display: grid; gap: 0; border-top: 1px solid var(--ink); }
+.fmt div { display: grid; grid-template-columns: 1fr 200px 44px; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.fmt i { display: block; height: 8px; background: var(--blue); width: 0; border-radius: 0 2px 2px 0; }
+.screen.in .fmt i { animation: grow 1s var(--ease) both; }
+.cols { display: flex; align-items: flex-end; gap: 6px; height: 120px; border-bottom: 1px solid var(--ink); }
+.cols i { flex: 1; background: var(--blue-soft); border-top: 2px solid var(--blue); height: 0; transition: background .2s; }
+.cols i:hover { background: #cfd6ff; }
+.screen.in .cols i { animation: up .8s var(--ease) both; animation-delay: calc(var(--i) * 50ms); }
+@keyframes up { from { height: 0; } to { height: var(--h); } }
+.mem { list-style: none; padding: 0; margin: 0; border-left: 1px solid var(--ink); }
+.mem li { position: relative; padding: 0 0 22px 22px; }
+.mem li::before { content: ""; position: absolute; left: -5px; top: 6px; width: 9px; height: 9px; border-radius: 99px; background: var(--blue); }
+.mem li.back::before { background: var(--no); } .mem li.changes::before { background: var(--mustard); }
+.mem q { display: block; font-family: var(--serif); font-style: italic; font-size: 20px; line-height: 1.3; margin: 4px 0; }
+.theme-card { border: 1px solid var(--line2); border-radius: 4px; padding: 10px; background: #fff; text-align: left; transition: border-color .2s, box-shadow .25s; }
+.theme-card.is-on { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.theme-card .mini { height: 90px; border-radius: 3px; margin-bottom: 8px; display: grid; grid-template-columns: 30% 1fr; overflow: hidden; border: 1px solid var(--line); }
+.portal { height: 800px; overflow: auto; padding: 48px 120px; }
+</style>
+</head>
+<body>
+<header class="pg-head">
+  <div>
+    <p class="pg-kicker">Remake · UI set A of 3 · 4 Nov 2026</p>
+    <h1><em>Broadsheet</em>: editorial and calm</h1>
+    <p class="pg-deck">Remake read like a well-set newspaper. Big Newsreader headlines, hairline rules instead of boxes, mono datelines, and navy "night edition" bands with the dot grid. Motion is slow and quiet: lines rise into place, rules draw themselves, saves stamp in.</p>
+  </div>
+  <a class="pg-back" href="index.html">← All three sets</a>
+</header>
+<div class="pg-rules">
+  <div><b>Layout</b>A newspaper grid: ruled columns, one lead story per page, ledgers instead of card piles.</div>
+  <div><b>Type</b>Newsreader carries every heading and big number. Inter reads. Geist Mono labels and datelines.</div>
+  <div><b>Motion</b>550 ms cross-fade with a 10 px rise between screens. Lines rise in sequence; rules and sparklines draw.</div>
+  <div><b>Data</b>Hairlines only: tick-box targets, a followers-to-views line, thin sparklines, proportional beat strips.</div>
+</div>
+<nav id="index" aria-label="Screens"></nav>
+<main class="wrap">
+  <section id="player" data-start="find" aria-label="Click-through prototype"></section>
+  <div id="gallery"></div>
+</main>
+<footer class="pg-foot"><span>Mockups only. Sample data: Evergreen Foods. Not built into the app.</span><span><a href="set-b-control-room.html">Set B: Control Room →</a> · <a href="set-c-signal.html">Set C: Signal →</a></span></footer>
+
+<script>
+/* Remake UI sets: shared engine (sample data, screen frames, scaling, interactions).
+   Inlined into each set file by build.py, so every file stays self-contained. */
+(function () {
+  'use strict';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) document.documentElement.classList.add('rm');
+
+  /* ---------- Sample data: Evergreen Foods (plant-based food brand) ---------- */
+  const D = (window.D = {
+    user: { name: 'Annie Lau', initials: 'AL', agency: 'Sample Social Co.' },
+    team: 'Lin',
+    client: {
+      name: 'Evergreen Foods', short: 'EF', sells: 'Tofu brand sold at Woolworths',
+      audience: 'Busy mums and young professionals', topics: 'tofu, kitchen hacks, high-protein meals',
+      starters: 'crispy tofu, tofu desserts, tofu for kids', target: 12, approved: 5, waiting: 2, back: 1, planning: 2,
+      daysLeft: 26, month: 'November',
+    },
+    clients: [
+      { id: 'ev', name: 'Evergreen Foods', short: 'EF', sells: 'Tofu brand sold at Woolworths', target: 12, approved: 5, waiting: 2, back: 1, next: 'Street blind taste test: "Is it chicken?"', due: 'Nov 8', spark: [0, 1, 1, 2, 3, 4, 5] },
+      { id: 'my', name: 'MYST Nightclub Sydney', short: 'MN', sells: 'Nightclub in Sydney: weekly event promos', target: 8, approved: 2, waiting: 1, back: 0, next: 'Doors-open crowd reveal', due: 'Nov 7', spark: [0, 0, 1, 1, 1, 2, 2] },
+      { id: 'kp', name: 'Kinetic Pilates', short: 'KP', sells: 'Reformer studio, 3 locations', target: 4, approved: 3, waiting: 1, back: 0, next: '60-second core fix', due: 'Nov 6', spark: [0, 1, 1, 2, 2, 3, 3] },
+      { id: 'ho', name: 'Hearth & Oat Bakery', short: 'HO', sells: 'Sourdough bakery in Newtown', target: 6, approved: 0, waiting: 0, back: 0, next: '', due: '', spark: [0, 0, 0, 0, 0, 0, 0] },
+    ],
+    videos: [
+      { id: 'v1', title: 'Crispy tofu in 5 min', acct: '@smallkitchen.sample', fol: '3.1k', views: '2.4M', folN: 3100, viewsN: 2400000, len: '0:13', usual: 267, ago: '9 days ago', spread: 5, glow: '#1a33f2', art: 'pan', plat: 'TikTok' },
+      { id: 'v2', title: 'No-bake tofu cheesecake', acct: '@bake.less.sample', fol: '70k', views: '650k', folN: 70000, viewsN: 650000, len: '0:33', usual: 31, ago: '4 days ago', spread: 3, glow: '#7b1fe0', art: 'slice', plat: 'TikTok' },
+      { id: 'v3', title: 'Is this chicken?', acct: '@streettaste.sample', fol: '88k', views: '3.1M', folN: 88000, viewsN: 3100000, len: '0:21', usual: 44, ago: '12 days ago', spread: 6, glow: '#f2b705', art: 'mic', plat: 'TikTok', hard: 'Needs people willing to be filmed on the street' },
+      { id: 'v4', title: 'No tofu press? Do this', acct: '@kitchen.tricks.sample', fol: '140k', views: '380k', folN: 140000, viewsN: 380000, len: '0:15', usual: 9, ago: '2 days ago', spread: 2, glow: '#7ab8ff', art: 'cube', plat: 'Instagram' },
+      { id: 'v5', title: 'Tofu scramble in 4 min', acct: '@mumsmeals.sample', fol: '9.8k', views: '390k', folN: 9800, viewsN: 390000, len: '0:18', usual: 58, ago: '6 days ago', spread: 4, glow: '#1a33f2', art: 'pan', plat: 'TikTok' },
+      { id: 'v6', title: 'Air-fryer tofu, no oil', acct: '@airfry.daily.sample', fol: '22k', views: '1.1M', folN: 22000, viewsN: 1100000, len: '0:24', usual: 71, ago: '3 days ago', spread: 7, glow: '#7b1fe0', art: 'cube', plat: 'TikTok' },
+      { id: 'v7', title: 'Gym bro tries tofu', acct: '@liftandeat.sample', fol: '210k', views: '870k', folN: 210000, viewsN: 870000, len: '0:29', usual: 6, ago: '11 days ago', spread: 1, glow: '#f2b705', art: 'mic', plat: 'Instagram' },
+      { id: 'v8', title: 'Lunchbox tofu nuggets', acct: '@lunchbox.lab.sample', fol: '5.4k', views: '460k', folN: 5400, viewsN: 460000, len: '0:17', usual: 112, ago: '5 days ago', spread: 3, glow: '#7ab8ff', art: 'slice', plat: 'TikTok' },
+    ],
+    starts: [
+      { group: 'Catching on now', q: 'crispy tofu', why: 'Spreading now: 5 accounts have posted this, and new ones keep coming' },
+      { group: 'Fits busy mums and young professionals', q: 'crispy tofu for busy mums', why: 'Videos like this tend to work for busy mums' },
+      { group: 'Fits busy mums and young professionals', q: 'tofu desserts for busy mums', why: 'Videos like this tend to work for busy mums' },
+      { group: 'More like your saved ideas', q: 'More like "tofu taste tests"', why: 'You approved a plan like this' },
+      { group: 'More like your saved ideas', q: 'More like "tofu hacks"', why: 'You saved a video like this for Evergreen Foods' },
+      { group: 'Other ways in', q: 'Ask a question', why: '"What tofu recipe videos are working right now?"' },
+    ],
+    recent: [{ q: 'crispy tofu', when: 'Yesterday', fresh: 3 }, { q: 'tofu desserts', when: 'Mon', fresh: 0 }, { q: 'high protein lunch', when: '28 Oct', fresh: 5 }],
+    hooks: [
+      { n: 1, emo: 'curiosity', label: 'Curiosity', text: 'Did you know tofu could get this crispy without a press?' },
+      { n: 2, emo: 'relief', label: 'Relief', text: 'Watch this: pressing tofu, start to finish' },
+      { n: 3, emo: 'insider', label: 'FOMO / Insider', text: '3 things nobody tells you about tofu', picked: true },
+      { n: 4, emo: 'surprise', label: 'Surprise', text: 'A $3.50 block of tofu beat my takeaway' },
+    ],
+    shots: [
+      { n: 1, role: 'Hook', t: '0–3s', sec: 3, see: 'Tofu block between two plates, heavy pan on top', says: '3 things nobody tells you about tofu', on: 'No tofu press? Do this' },
+      { n: 2, role: 'Setup', t: '3–7s', sec: 4, see: 'Water squeezed out, close-up', says: 'Ten minutes, two plates, one heavy pan.' },
+      { n: 3, role: 'Proof', t: '7–12s', sec: 5, see: 'Pressed tofu sliced cleanly, hits hot oil', says: 'Listen to that.' },
+      { n: 4, role: 'CTA', t: '12–15s', sec: 3, see: 'Evergreen firm tofu pack on the bench', says: 'Firm tofu, $3.50 at Woolies.', on: 'Save this for dinner' },
+    ],
+    cols: [
+      { id: 'planning', name: 'Still planning' },
+      { id: 'waiting', name: 'Waiting for approval' },
+      { id: 'approved', name: 'Approved, ready to film' },
+      { id: 'back', name: 'Sent back to fix' },
+    ],
+    plans: [
+      { id: 'p1', v: 'v4', title: 'No tofu press? Do this', col: 'planning', note: 'Shots not planned yet', due: 'Nov 21' },
+      { id: 'p2', v: 'v5', title: 'Tofu scramble in 4 min', col: 'planning', note: '2 of 4 shots written', due: 'Nov 24' },
+      { id: 'p3', v: 'v2', title: '3-ingredient tofu dessert', col: 'waiting', note: 'Sent by Lin, 2 hours ago', due: 'Nov 17' },
+      { id: 'p4', v: 'v6', title: 'Air-fryer tofu, no oil', col: 'waiting', note: 'Sent by Lin, yesterday', due: 'Nov 19' },
+      { id: 'p5', v: 'v3', title: 'Street blind taste test: "Is it chicken?"', col: 'approved', note: 'Approved, film by Nov 8', due: 'Nov 8' },
+      { id: 'p6', v: 'v1', title: 'Crispy tofu ASMR, top-down', col: 'approved', note: 'Approved with changes', due: 'Nov 12' },
+      { id: 'p7', v: 'v7', title: 'Gym bro tries tofu', col: 'back', note: 'Your reason: "Not on brand, too much shouting"', due: 'Nov 14' },
+    ],
+    slots: [
+      { n: 1, topic: 'Best tofu recipe', due: '10 Nov', vids: ['v1', 'v5', 'v6'], status: 'Approved, ready to film' },
+      { n: 2, topic: 'Easy tofu dessert', due: '17 Nov', vids: ['v2', 'v8'], status: 'Waiting for approval' },
+      { n: 3, topic: 'Street taste test: chicken or tofu?', due: '24 Nov', vids: ['v3'], status: 'Approved, ready to film' },
+      { n: 4, topic: 'Kitchen hack: pressing tofu', due: '1 Dec', vids: ['v4', 'v6'], status: 'Still planning' },
+      { n: 5, topic: 'High-protein gym meal', due: '8 Dec', vids: ['v7'], status: 'Sent back to fix' },
+      { n: 6, topic: 'Buying guide: which tofu to use', due: '12 Dec', vids: [], status: 'Not planned' },
+    ],
+    memory: [
+      { kind: 'approved', label: 'Approved', plan: 'Street blind taste test', quote: 'Love the reveal. Keep it under 20 seconds.', when: '2 Nov' },
+      { kind: 'changes', label: 'Approved with changes', plan: 'Crispy tofu ASMR, top-down', quote: 'Show the pack in the first 3 seconds.', when: '30 Oct' },
+      { kind: 'back', label: 'Sent back', plan: 'Gym bro tries tofu', quote: 'Not on brand: too much shouting.', when: '28 Oct' },
+      { kind: 'approved', label: 'Approved', plan: 'Lunchbox tofu nuggets', quote: 'Kids eating it is the proof. More of that.', when: '21 Oct' },
+    ],
+    why: [
+      { k: 'How it starts', at: 0, v: 'The first words on screen, "Crispy tofu in 5 min", say exactly what you get, and fast.' },
+      { k: 'First 3 seconds', at: 8, v: 'Tofu hits hot oil straight away. The loud sizzle makes people stop.' },
+      { k: 'Length', at: 40, v: 'Only 13 seconds, so many people watch it twice.' },
+      { k: 'How it is made', at: 62, v: 'One camera from above. No face, no talking, so anyone can film it.' },
+      { k: 'Sound', at: 85, v: 'Just the sizzle and a soft beat. Works with the sound off too.' },
+    ],
+    formats: [
+      { name: 'Overhead 5-minute recipe', share: 42, why: 'Result first, then the steps. No talking.' },
+      { name: 'Taste test reaction', share: 18, why: 'A stranger guesses, the reveal is the payoff.' },
+      { name: 'Kitchen hack reveal', share: 14, why: 'Problem in second 1, fix by second 5.' },
+      { name: 'Ingredient swap', share: 11, why: '"Use this instead of that", with a price.' },
+      { name: 'Everything else', share: 15, why: 'One-offs that did not repeat.' },
+    ],
+    weekly: [180, 240, 150, 320, 290, 410, 380, 520, 470, 690, 610, 880],
+    searchSteps: ['Searching TikTok and Instagram for "crispy tofu"', "Checking each account's usual views", 'Checking what Evergreen Foods can film', 'Ranking 48 videos for Evergreen Foods'],
+  });
+  D.v = (id) => D.videos.find((x) => x.id === id);
+
+  /* ---------- Copy helpers (copy guide: words, not × scores) ---------- */
+  const H = (window.H = {
+    usual: (v) => `${v.usual} times more views than this account usually gets`,
+    spread: (v) =>
+      v.spread >= 5 ? `Spreading now: ${v.spread} accounts have posted this, and new ones keep coming`
+      : v.spread >= 3 ? `Just starting to spread: ${v.spread} accounts posted this in the last 2 weeks`
+      : `Only ${v.spread} account${v.spread > 1 ? 's' : ''} so far. Could be a one-off.`,
+    cover: (v, cls = '', cap = true, style = '') =>
+      `<div class="cover ${cls}" style="--g:${v.glow};${style}"><i class="cv-art cv-${v.art}"></i><span class="cv-plat">${v.plat === 'TikTok' ? '♪' : '◎'}</span><span class="cv-len">${v.len}</span>${cap ? `<span class="cv-cap">${v.title}</span>` : ''}</div>`,
+    spark: (arr, w = 120, h = 32, cls = 'spark') => {
+      const max = Math.max(...arr, 1), step = w / (arr.length - 1);
+      const pts = arr.map((y, i) => `${(i * step).toFixed(1)},${(h - 2 - (y / max) * (h - 4)).toFixed(1)}`).join(' ');
+      return `<svg class="${cls}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" pathLength="1"/></svg>`;
+    },
+    ticks: (n, on, cls = 'ticks') => `<span class="${cls}" aria-label="${on} of ${n}">${Array.from({ length: n }, (_, i) => `<i class="${i < on ? 'on' : ''}" style="--i:${i}"></i>`).join('')}</span>`,
+  });
+
+  const SCREENS = (window.SCREENS = [
+    ['landing', 'Landing page', 'Marketing page. One goal: a click on Try the demo.'],
+    ['login', 'Log in', 'Staff and client tabs. A returning user lands on their last client.'],
+    ['agency', 'All clients: Home', 'The agency view: every client, what is waiting for you.'],
+    ['addclient', 'Add client', 'Name, audience, what they cannot film. Saves straight into Find ideas.'],
+    ['home', 'Client Home', 'How Evergreen Foods is tracking this month, and what needs you.'],
+    ['find', 'Find ideas', 'Search start: where to start, recent searches, saved to Research.'],
+    ['searching', 'Searching (loading)', 'What you see while a search runs. Press Replay to run it again.'],
+    ['results', 'Results', 'Best to copy, all videos, filters, save feedback and the saved tray.'],
+    ['breakdown', 'Why it worked', 'The video breakdown drawer, over the results.'],
+    ['research', 'Research', 'Saved reference videos, grouped by the videos the client pays for.'],
+    ['compare', 'Compare videos', 'What 2 to 5 winning videos have in common.'],
+    ['plans', 'Plans', 'Still planning, waiting, approved, sent back. Drag a plan to move it.'],
+    ['plan', 'Start planning', 'Suggested hooks with emotion tags, then the shot list.'],
+    ['board', 'Planning board', 'The shot list as nodes. Drag shots; links follow.'],
+    ['review', 'Review', 'The manager approves, approves with changes, or sends back.'],
+    ['canvas', 'Canvas', 'Node canvas for an approved plan: prompt, storyboard, generated video.'],
+    ['editor', 'Edit', 'Timeline: order, trim, sound, export.'],
+    ['publish', 'Publish and results', 'Send the cut, schedule the posts, log how it did.'],
+    ['channel', 'Channel', 'Analyse one account: the formats it keeps using.'],
+    ['brief', 'Brief', 'The client profile and client memory.'],
+    ['settings', 'Settings', 'Appearance and language for this browser.'],
+    ['portal', 'Shared review link', 'What the client sees from "Get review link".'],
+  ]);
+
+  /* ---------- Helpers ---------- */
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const scr = (el) => el.closest('.screen');
+  const kOf = (el) => { const s = scr(el); return s ? s.getBoundingClientRect().width / 1280 : 1; };
+  const SET = () => window.SET;
+
+  function toast(el, msg) {
+    const s = scr(el); if (!s || !msg) return;
+    $$('.toast', s).forEach((t) => t.remove());
+    const t = document.createElement('div');
+    t.className = 'toast'; t.setAttribute('role', 'status'); t.innerHTML = msg;
+    s.appendChild(t);
+    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 450); }, 2600);
+  }
+  window.toast = toast;
+
+  function makeScreen(id) {
+    const s = document.createElement('div');
+    s.className = 'screen'; s.dataset.screen = id;
+    s.innerHTML = SET().render(id);
+    return s;
+  }
+  function afterMount(s) {
+    $$('[data-graph]', s).forEach(drawGraph);
+    SET().mount && SET().mount(s.dataset.screen, s);
+  }
+  function enter(s) {
+    s.classList.add('in');
+    runCounts(s); runTyping(s); runSteps(s);
+    SET().enter && SET().enter(s.dataset.screen, s);
+  }
+  window.RM = { toast, enter, afterMount, makeScreen, reduce, drawGraph: (g) => drawGraph(g) };
+
+  /* Count-ups: data-count="2.4" data-suffix="M" */
+  function runCounts(s) {
+    $$('[data-count]', s).forEach((el) => {
+      const raw = el.dataset.count, to = parseFloat(raw), dec = (raw.split('.')[1] || '').length, suf = el.dataset.suffix || '';
+      if (reduce) { el.textContent = to.toFixed(dec) + suf; return; }
+      const t0 = performance.now(), dur = +(el.dataset.dur || 1100);
+      const tick = (t) => {
+        const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+        el.textContent = (to * e).toFixed(dec) + suf;
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+  /* Typing placeholder: data-type="a|b|c" */
+  function runTyping(s) {
+    $$('[data-type]', s).forEach((el) => {
+      const words = el.dataset.type.split('|');
+      if (reduce) { el.textContent = words[0]; return; }
+      let w = 0, i = 0, dir = 1;
+      const step = () => {
+        if (!el.isConnected) return;
+        const word = words[w];
+        i += dir; el.textContent = word.slice(0, i);
+        let wait = dir > 0 ? 70 : 35;
+        if (dir > 0 && i >= word.length) { dir = -1; wait = 1600; }
+        else if (dir < 0 && i <= 0) { dir = 1; w = (w + 1) % words.length; wait = 400; }
+        setTimeout(step, wait);
+      };
+      setTimeout(step, 500);
+    });
+  }
+  /* Steps loader: [data-steps] > [data-step]; container gets .is-complete */
+  function runSteps(s) {
+    $$('[data-steps]', s).forEach((box) => {
+      const items = $$('[data-step]', box);
+      box.classList.remove('is-complete'); items.forEach((x) => x.classList.remove('done', 'now'));
+      if (reduce) { items.forEach((x) => x.classList.add('done')); box.classList.add('is-complete'); return; }
+      const ms = +(box.dataset.ms || 950);
+      items.forEach((x, i) => {
+        setTimeout(() => { if (items[i - 1]) items[i - 1].classList.replace('now', 'done'); x.classList.add('now'); }, i * ms);
+      });
+      setTimeout(() => { items.forEach((x) => { x.classList.remove('now'); x.classList.add('done'); }); box.classList.add('is-complete'); }, items.length * ms);
+    });
+  }
+
+  /* ---------- Graph: [data-graph] with [data-node] boxes and svg.links path[data-link="a>b"] ---------- */
+  function drawGraph(g) {
+    $$('path[data-link]', g).forEach((p) => {
+      const [a, b] = p.dataset.link.split('>');
+      const A = g.querySelector(`[data-node="${a}"]`), B = g.querySelector(`[data-node="${b}"]`);
+      if (!A || !B) return;
+      const fy = +(p.dataset.fy || 0.5), ty = +(p.dataset.ty || 0.5);
+      const x1 = A.offsetLeft + A.offsetWidth, y1 = A.offsetTop + A.offsetHeight * fy;
+      const x2 = B.offsetLeft, y2 = B.offsetTop + B.offsetHeight * ty;
+      const dx = Math.max(40, Math.abs(x2 - x1) / 2);
+      p.setAttribute('d', `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`);
+      const dot = g.querySelector(`[data-mid="${p.dataset.link}"]`);
+      if (dot) { dot.style.left = (x1 + x2) / 2 + 'px'; dot.style.top = (y1 + y2) / 2 + 'px'; }
+    });
+  }
+
+  /* ---------- Pointer interactions: node drag, card drag between columns, swipe cards ---------- */
+  const noDrag = 'button, a, input, textarea, select, label, [data-act], [contenteditable]';
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const node = e.target.closest('[data-node]');
+    if (node && !e.target.closest(noDrag) && node.closest('[data-graph]')) return dragNode(e, node);
+    const card = e.target.closest('[data-card]');
+    if (card && !e.target.closest(noDrag) && card.closest('[data-dnd]')) return dragCard(e, card);
+    const sw = e.target.closest('[data-swipe]');
+    if (sw && !e.target.closest(noDrag)) return swipe(e, sw);
+  });
+
+  function dragNode(e, node) {
+    const g = node.closest('[data-graph]'), k = kOf(node);
+    const sx = e.clientX, sy = e.clientY, ox = node.offsetLeft, oy = node.offsetTop;
+    node.classList.add('is-dragging'); node.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const x = Math.max(0, Math.min(g.clientWidth - node.offsetWidth, ox + (ev.clientX - sx) / k));
+      const y = Math.max(0, Math.min(g.clientHeight - node.offsetHeight, oy + (ev.clientY - sy) / k));
+      node.style.left = x + 'px'; node.style.top = y + 'px'; drawGraph(g);
+    };
+    const up = () => {
+      node.classList.remove('is-dragging');
+      node.removeEventListener('pointermove', move); node.removeEventListener('pointerup', up); node.removeEventListener('pointercancel', up);
+      const st = scr(g) && scr(g).querySelector('[data-savestate]');
+      if (st) {
+        st.classList.add('is-saving'); st.textContent = st.dataset.saving || 'Saving…';
+        setTimeout(() => { st.classList.remove('is-saving'); st.classList.add('is-saved'); st.textContent = st.dataset.saved || 'Saved'; setTimeout(() => st.classList.remove('is-saved'), 1200); }, 800);
+      }
+    };
+    node.addEventListener('pointermove', move); node.addEventListener('pointerup', up); node.addEventListener('pointercancel', up);
+  }
+
+  function dragCard(e, card) {
+    const s = scr(card), k = kOf(card), board = card.closest('[data-dnd]');
+    const sx = e.clientX, sy = e.clientY;
+    let ghost = null, over = null;
+    const sr = () => s.getBoundingClientRect();
+    const move = (ev) => {
+      if (!ghost) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+        const r = card.getBoundingClientRect(), S = sr();
+        ghost = card.cloneNode(true); ghost.classList.add('dnd-ghost');
+        ghost.style.width = r.width / k + 'px';
+        ghost.dataset.ox = (sx - r.left) / k; ghost.dataset.oy = (sy - r.top) / k;
+        s.appendChild(ghost); card.classList.add('is-dragging');
+      }
+      const S = sr();
+      ghost.style.left = (ev.clientX - S.left) / k - ghost.dataset.ox + 'px';
+      ghost.style.top = (ev.clientY - S.top) / k - ghost.dataset.oy + 'px';
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+      const col = hit && hit.closest('[data-col]');
+      const ok = col && board.contains(col) ? col : null;
+      if (ok !== over) { over && over.classList.remove('is-over'); over = ok; over && over.classList.add('is-over'); }
+    };
+    const up = () => {
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
+      if (!ghost) return;
+      ghost.remove(); card.classList.remove('is-dragging');
+      if (over) {
+        over.classList.remove('is-over');
+        const body = over.querySelector('[data-colbody]') || over;
+        const from = card.closest('[data-col]');
+        if (from !== over) {
+          body.appendChild(card);
+          card.classList.remove('landed'); void card.offsetWidth; card.classList.add('landed');
+          $$('[data-col]', board).forEach((c) => { const n = c.querySelector('[data-colcount]'); if (n) n.textContent = $$('[data-card]', c).length; });
+          toast(card, `Moved to <b>${over.dataset.colname || 'this column'}</b>`);
+          SET().onMove && SET().onMove(card, over);
+        }
+      }
+    };
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+  }
+
+  function swipe(e, el) {
+    const k = kOf(el), sx = e.clientX;
+    el.setPointerCapture(e.pointerId); el.classList.add('is-swiping');
+    let dx = 0;
+    const move = (ev) => { dx = (ev.clientX - sx) / k; el.style.transform = `translateX(${dx}px) rotate(${dx / 22}deg)`; el.dataset.lean = dx > 60 ? 'right' : dx < -60 ? 'left' : ''; };
+    const up = () => {
+      el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up);
+      el.classList.remove('is-swiping'); el.style.transform = ''; el.dataset.lean = '';
+      if (Math.abs(dx) > 140) decide(el, dx > 0 ? 'right' : 'left');
+    };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
+  }
+
+  /* Review stack: [data-stack] > .stack-card; [data-remaining] counts; .is-empty when done */
+  function decide(fromEl, dir, msg) {
+    const st = fromEl.closest('[data-stack]') || scr(fromEl).querySelector('[data-stack]');
+    if (!st) return;
+    const live = $$('.stack-card:not(.gone)', st), top = live[live.length - 1];
+    if (!top) return;
+    top.classList.add('gone', 'go-' + dir);
+    setTimeout(() => top.remove(), reduce ? 0 : 650);
+    const left = $$('.stack-card:not(.gone)', st).length;
+    $$('[data-remaining]', scr(st)).forEach((x) => (x.textContent = left));
+    const words = { right: 'Approved', up: 'Approved with changes', left: 'Sent back' };
+    toast(st, msg || `${words[dir]}: <b>${top.dataset.title || 'plan'}</b>`);
+    SET().onDecide && SET().onDecide(top, dir, st);
+    if (!left) setTimeout(() => st.classList.add('is-empty'), reduce ? 0 : 450);
+  }
+
+  /* ---------- Click actions ---------- */
+  const acts = {
+    pick(t) {
+      const g = t.closest('[data-pickgroup]'); if (!g) return;
+      $$('[data-pick]', g).forEach((x) => {
+        x.classList.remove('is-on'); x.setAttribute('aria-pressed', 'false');
+        const b = x.matches('[data-off]') ? x : x.querySelector('[data-off]'); if (b) b.textContent = b.dataset.off;
+      });
+      const it = t.closest('[data-pick]') || t;
+      it.classList.add('is-on'); it.setAttribute('aria-pressed', 'true');
+      if (t.dataset.on) t.textContent = t.dataset.on;
+      if (t.dataset.toast) toast(t, t.dataset.toast);
+    },
+    toggle(t) {
+      const x = t.dataset.target ? scr(t).querySelector(t.dataset.target) : t.closest('[data-togglebox]') || t;
+      const on = x.classList.toggle('is-on'); t.setAttribute('aria-pressed', on);
+      if (t.dataset.on) { t.dataset.offtxt = t.dataset.offtxt || t.textContent; t.textContent = on ? t.dataset.on : t.dataset.offtxt; }
+      if (on && t.dataset.toast) toast(t, t.dataset.toast);
+    },
+    save(t) {
+      const s = scr(t);
+      if (t.classList.contains('is-saved')) return toast(t, 'Already saved. Open Research to see it.');
+      t.classList.add('is-saved'); t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop');
+      t.innerHTML = t.dataset.saved || '✓ Saved';
+      $$('[data-counter]', s).forEach((c) => { c.textContent = +c.textContent + 1; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); });
+      const tray = s.querySelector('[data-tray]'); if (tray) tray.classList.add('is-on');
+      toast(t, t.dataset.toast || 'Saved to <b>Research</b> for Evergreen Foods');
+    },
+    toast(t) { toast(t, t.dataset.toast); },
+    open(t) { scr(t).querySelector(t.dataset.target).classList.add('is-open'); },
+    close(t) { scr(t).querySelector(t.dataset.target).classList.remove('is-open'); },
+    load(t) {
+      const box = t.dataset.target ? scr(t).querySelector(t.dataset.target) : t.closest('[data-loadbox]') || t;
+      if (box.classList.contains('is-loading')) return;
+      box.classList.remove('is-done'); box.classList.add('is-loading'); t.setAttribute('aria-busy', 'true');
+      const label = t.textContent; if (t.dataset.busy) t.textContent = t.dataset.busy;
+      setTimeout(() => {
+        box.classList.remove('is-loading'); box.classList.add('is-done'); t.removeAttribute('aria-busy');
+        t.textContent = t.dataset.done || label;
+        if (t.dataset.toast) toast(t, t.dataset.toast);
+        if (box.querySelector('[data-graph]')) $$('[data-graph]', box).forEach(drawGraph);
+      }, reduce ? 200 : +(t.dataset.ms || 1800));
+    },
+    play(t) { const p = t.closest('[data-playbox]'); const on = p.classList.toggle('is-playing'); t.setAttribute('aria-label', on ? 'Pause' : 'Play'); if (t.dataset.on) { t.dataset.offtxt = t.dataset.offtxt || t.textContent; t.textContent = on ? t.dataset.on : t.dataset.offtxt; } },
+    decide(t) { decide(t, t.dataset.dir, t.dataset.toast); },
+    reset(t) {
+      const s = scr(t); const fresh = makeScreen(s.dataset.screen);
+      s.innerHTML = fresh.innerHTML; afterMount(s); s.classList.remove('in'); void s.offsetWidth; enter(s);
+    },
+    step(t) {
+      const box = t.closest('[data-stepper]'), v = box.querySelector('[data-stepval]');
+      v.textContent = Math.max(1, Math.min(60, +v.textContent + +t.dataset.delta));
+    },
+    tab(t) {
+      const g = t.closest('[data-tabs]'); $$('[data-tab]', g).forEach((x) => x.classList.toggle('is-on', x === t));
+      const s = scr(t); $$(`[data-panel^="${g.dataset.tabs}:"]`, s).forEach((p) => p.classList.toggle('is-on', p.dataset.panel === `${g.dataset.tabs}:${t.dataset.tab}`));
+    },
+  };
+  window.ACTS = acts;
+
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-go], [data-act]');
+    if (!t || !scr(t)) return;
+    if (t.tagName === 'A') e.preventDefault();
+    if (t.dataset.act) {
+      const fn = (SET().acts && SET().acts[t.dataset.act]) || acts[t.dataset.act];
+      if (fn) fn(t, e);
+    }
+    if (t.dataset.go) go(t, t.dataset.go);
+  });
+  document.addEventListener('input', (e) => {
+    const t = e.target.closest('[data-mirror]'); if (!t) return;
+    $$(t.dataset.mirror, scr(t)).forEach((el) => (el.textContent = t.value || el.dataset.empty || ''));
+  });
+
+  /* ---------- Navigation between screens ---------- */
+  function go(fromEl, id) {
+    const host = fromEl.closest('[data-host]');
+    if (host) return host._go(id);
+    const f = document.getElementById('f-' + id);
+    if (!f) return;
+    f.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    f.classList.remove('pulse'); void f.offsetWidth; f.classList.add('pulse');
+  }
+
+  /* A host = a viewport where screens swap in place with the set's transition (player, ?only= embeds) */
+  function makeHost(vp, startId, onChange) {
+    vp.dataset.host = '1';
+    let cur = null;
+    vp._go = (id) => {
+      if (id === cur) return;
+      const old = vp.querySelector('.screen:not(.leave)');
+      const s = makeScreen(id);
+      if (old) s.classList.add('enter');
+      vp.appendChild(s); afterMount(s);
+      requestAnimationFrame(() => requestAnimationFrame(() => enter(s)));
+      const ms = reduce ? 0 : SET().tms || 520;
+      if (old) { old.classList.add('leave'); setTimeout(() => old.remove(), ms); }
+      setTimeout(() => s.classList.remove('enter'), ms);
+      cur = id; onChange && onChange(id);
+    };
+    vp._go(startId);
+    return vp;
+  }
+
+  function fit(vp, mode) {
+    const w = vp.clientWidth;
+    if (mode === 'contain') {
+      const h = vp.clientHeight, k = Math.min(w / 1280, h / 800);
+      vp.style.setProperty('--k', k);
+      vp.style.setProperty('--ox', (w - 1280 * k) / 2 + 'px');
+      vp.style.setProperty('--oy', (h - 800 * k) / 2 + 'px');
+    } else {
+      const k = w / 1280; vp.style.setProperty('--k', k); vp.style.height = 800 * k + 'px';
+    }
+  }
+
+  /* ---------- Page build ---------- */
+  function build() {
+    const params = new URLSearchParams(location.search);
+    const only = params.get('only');
+    if (only) {
+      document.body.classList.add('only');
+      document.body.innerHTML = '<div class="viewport only-vp"></div>';
+      const vp = document.querySelector('.only-vp');
+      new ResizeObserver(() => fit(vp, 'contain')).observe(vp); fit(vp, 'contain');
+      makeHost(vp, SCREENS.some((s) => s[0] === only) ? only : 'home');
+      window.addEventListener('message', (e) => { if (e.data && e.data.rmGo) vp._go(e.data.rmGo); });
+      return;
+    }
+    const idx = document.getElementById('index');
+    if (idx) idx.innerHTML = SCREENS.map((s, i) => `<a href="#f-${s[0]}"><span>${String(i + 1).padStart(2, '0')}</span>${s[1]}</a>`).join('');
+
+    const player = document.getElementById('player');
+    if (player) {
+      player.innerHTML = `<div class="player-bar"><span class="pb-label">Click through it</span>
+        <button type="button" class="pb-btn" data-pp="-1" aria-label="Previous screen">←</button>
+        <select class="pb-select" aria-label="Screen">${SCREENS.map((s, i) => `<option value="${s[0]}">${String(i + 1).padStart(2, '0')} · ${s[1]}</option>`).join('')}</select>
+        <button type="button" class="pb-btn" data-pp="1" aria-label="Next screen">→</button>
+        <span class="pb-hint">Navigation, buttons and cards work inside the frame, and screens change with this set's transition.</span></div>
+        <div class="viewport player-vp"></div>`;
+      const vp = player.querySelector('.player-vp'), sel = player.querySelector('select');
+      new ResizeObserver(() => fit(vp)).observe(vp); fit(vp);
+      makeHost(vp, player.dataset.start || 'find', (id) => (sel.value = id));
+      sel.addEventListener('change', () => vp._go(sel.value));
+      player.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-pp]'); if (!b) return;
+        const i = SCREENS.findIndex((s) => s[0] === sel.value);
+        vp._go(SCREENS[(i + +b.dataset.pp + SCREENS.length) % SCREENS.length][0]);
+      });
+    }
+
+    const gal = document.getElementById('gallery');
+    const io = new IntersectionObserver((ents) => ents.forEach((en) => {
+      if (en.isIntersecting) { const s = en.target.querySelector('.screen'); if (s && !s.classList.contains('in')) enter(s); io.unobserve(en.target); }
+    }), { threshold: 0.25 });
+    SCREENS.forEach((sc, i) => {
+      const f = document.createElement('section');
+      f.className = 'frame'; f.id = 'f-' + sc[0];
+      f.innerHTML = `<header class="frame-label"><span class="fl-num">${String(i + 1).padStart(2, '0')}</span><h2>${sc[1]}</h2><p>${sc[2]}</p>${(SET().notes && SET().notes[sc[0]]) ? `<p class="fl-note">${SET().notes[sc[0]]}</p>` : ''}</header><div class="viewport"></div>`;
+      gal.appendChild(f);
+      const vp = f.querySelector('.viewport');
+      const s = makeScreen(sc[0]); vp.appendChild(s);
+      new ResizeObserver(() => fit(vp)).observe(vp); fit(vp);
+      afterMount(s); io.observe(f);
+    });
+    SET().page && SET().page();
+    if (location.hash) { const t = document.querySelector(location.hash.replace(/[^#\w-]/g, '')); if (t) setTimeout(() => t.scrollIntoView({ block: 'start' }), 60); }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build); else build();
+})();
+
+</script>
+<script>
+(function () {
+  const C = D.client, V = D.v;
+  const today = 'Wednesday 4 November';
+  const NAV = [['home', 'Home'], ['find', 'Find ideas'], ['research', 'Research', 14], ['compare', 'Compare videos'], ['plans', 'Plans', 3], ['canvas', 'Canvas'], null, ['channel', 'Channel'], ['brief', 'Brief']];
+  const side = (on, all) => `<aside class="side">
+    <div class="wordmark">Remake<i>.</i></div>
+    <button class="mast" data-go="agency"><small>${all ? 'Sample Social Co.' : 'Client'}</small><strong>${all ? 'All clients' : C.name}<span>▾</span></strong></button>
+    <nav class="nav">${(all ? [['agency', 'Home'], ['compare', 'Compare videos'], ['channel', 'Channel']] : NAV).map((n, i) => n ? `<a class="${n[0] === on ? 'on' : ''}" data-go="${n[0]}"><span>${String(i + 1).padStart(2, '0')}</span>${n[1]}${n[2] ? `<span class="ct" ${n[0] === 'research' ? 'data-counter' : ''}>${n[2]}</span>` : '<span></span>'}</a>` : '<hr>').join('')}</nav>
+    <div class="side-foot"><span class="sample">● Sample data</span><a class="link" data-go="settings">Settings</a>
+      <div class="user"><span class="av">AL</span><span><b>Annie Lau</b>Manager · Sample Social Co.</span></div></div>
+  </aside>`;
+  const shell = (on, body, opts = {}) => `<div class="shell">${side(on, opts.all)}<div class="main">${body}</div>${opts.after || ''}</div>`;
+  const head = (dl, h, deck, right = '') => `<div class="between rise" style="--d:0"><div><p class="dateline">${dl}</p><h1 class="h1">${h}</h1>${deck ? `<p class="deck">${deck}</p>` : ''}</div>${right}</div><hr class="rule rise" style="--d:1">`;
+  const fv = (v) => `<span class="fv"><b>${v.fol}</b> followers → <b>${v.views}</b> views</span>`;
+  const tile = (v, i) => `<div class="tile rise" style="--d:${i + 3}">${H.cover(v)}<b>${v.title}</b>${fv(v)}<div class="row" style="margin-top:8px"><button class="btn sm soft" data-act="save" data-saved="✓ Saved" data-toast="Saved to <b>Research</b>, Video ${(i % 4) + 1}">+ Save</button></div></div>`;
+  const RS = { p3: ['Silken tofu, cream cheese and biscuits on the bench', 'Blend, pour, chill. Time-lapse.', 'The slice lifted out, close-up', 'Pack and price on screen'], p4: ['Cubes tumble into the air-fryer basket', 'Shake halfway, sound up', 'The crunch, close-up', 'Pack on the bench: "No oil needed"'] };
+  const RH = { p3: '"You only need 3 ingredients for this?"', p4: '"No oil. Still this crunchy."' };
+  const pct = (v) => (Math.log10(v) - 3) / 4 * 100; // 1k .. 10M on a log line
+
+  const R = {
+    landing: () => `<div class="lp">
+      <nav class="lp-nav"><span class="wordmark">Remake<i>.</i></span><a class="link">How it works</a><a class="link">FAQ</a><a class="link" data-go="login">Log in</a><button class="btn pri" data-go="home">Try the demo</button></nav>
+      <section class="lp-hero">
+        <div class="rise" style="--d:1"><p class="dateline">For social agencies with 5 to 20 clients</p>
+          <h1 style="margin-top:14px">Know what each client should <em>film</em> this week.</h1>
+          <p class="lp-sub">Remake finds the trending videos worth copying for each client, plans the shots, and gets your manager's OK.</p>
+          <div class="row"><button class="btn pri" data-go="home">Try the demo</button><span class="muted sm">No sign-up. A sample agency is ready to go.</span></div></div>
+        <div class="lp-demo rise" style="--d:3">
+          <div class="lp-demo-head"><span class="kick">One search: "tofu"</span><span class="seg" data-pickgroup><button class="t-ev is-on" data-pick data-act="pick">Evergreen Foods</button><button class="t-my" data-pick data-act="pick">MYST Nightclub</button></span></div>
+          <div class="list-ev">${['v1', 'v6', 'v8'].map((id) => { const v = V(id); return `<div class="lp-pick" data-go="results">${H.cover(v, '', false)}<div><b>${v.title}</b><span class="muted sm">${v.usual} times its usual views</span></div><span class="link">Open →</span></div>`; }).join('')}</div>
+          <div class="list-my">${['v3', 'v7', 'v2'].map((id, i) => { const v = V(id); return `<div class="lp-pick">${H.cover(v, '', false)}<div><b>${v.title}</b>${i === 2 ? '<span class="cant">Can\'t film: no kitchen</span>' : `<span class="muted sm">${v.usual} times its usual views</span>`}</div><span class="link">Open →</span></div>`; }).join('')}</div>
+        </div>
+      </section>
+      <div class="lp-proof"><span><b>Built with social agencies in Sydney</b></span><span>Ranks videos by <b>views ÷ followers</b>, the check agencies already do by hand</span></div>
+      <section class="lp-cols"><div><h3>Ten clients. Ideas in ten chats.</h3><p class="muted">Every client has a thread, a doc and a folder of screenshots. None of them agree.</p></div><div><h3>Hours of scrolling for one video.</h3><p class="muted">Finding one video worth copying takes a morning. Most of it is scrolling past big accounts.</p></div><div><h3>Approvals lost in DMs.</h3><p class="muted">"Did Annie say yes to the tofu one?" Nobody can find the answer, so nobody films.</p></div></section>
+      <section class="lp-how dots"><p class="kick" style="color:var(--sky)">How it works</p><h2 class="h2" style="color:var(--on-navy);margin-top:6px">From one search to an approved shot list, in five steps.</h2>
+        <ol><li><b>Client profile</b>Who they sell to, what they can't film.</li><li><b>Search</b>Videos that beat their account's usual views.</li><li><b>Save</b>File the best ones under this month's videos.</li><li><b>Shot list</b>How it starts, then every shot.</li><li><b>Manager approves</b>Approve, approve with changes, or send back.</li></ol></section>
+    </div>`,
+
+    login: () => `<div class="login">
+      <div class="login-l dots"><span class="wordmark" style="color:var(--on-navy)">Remake<i style="color:var(--sky)">.</i></span>
+        <blockquote class="rise" style="--d:1">Your plans, <em>approved</em> before lunch.</blockquote>
+        <p class="kick" style="color:var(--on-navy-m)">Sample Social Co. · 4 clients · ${today}</p></div>
+      <div class="login-r">
+        <div class="rise" style="--d:2"><p class="dateline">Log in</p><h1 class="h1">Welcome back to Remake</h1></div>
+        <div class="tabs2" data-pickgroup><button class="is-on" data-pick data-act="pick">Staff</button><button class="t-client" data-pick data-act="pick">Client</button></div>
+        <div class="staff-form" style="display:grid;gap:18px">
+          <label class="field"><span class="lbl">Work email</span><input class="input" placeholder="you@agency.com"></label>
+          <label class="field"><span class="lbl">Password</span><input class="input" type="password" placeholder="••••••••"></label>
+          <label class="field"><span class="lbl">Role</span><select class="input"><option>Manager (approves)</option><option>Team member</option></select></label>
+          <div class="row"><button class="btn pri" data-go="find">Log in</button><span class="muted sm">or start with the <a class="link" data-go="agency">sample agency</a></span></div>
+        </div>
+        <div class="client-note dash"><p class="h3" style="color:var(--ink)">Client logins are coming soon.</p><p style="margin-top:6px">Your agency will send you an invite to see your plans and how the month is going.</p></div>
+      </div></div>`,
+
+    agency: () => shell('agency', `${head(`Sample Social Co. · ${today}`, 'Where every <em>client</em> stands', 'This month\'s video targets and what is waiting for you, across 4 clients.', '<button class="btn" data-go="addclient">+ Add client</button>')}
+      <div class="grid-home">
+        <section class="rise" style="--d:2"><p class="kick">Videos approved this month, all clients</p>
+          <div class="row" style="align-items:flex-end;gap:16px;margin:8px 0 10px"><span class="big-n" data-count="10">10</span><span class="h3 muted" style="padding-bottom:10px">of 30 approved</span></div>
+          ${H.ticks(30, 10)}<p class="muted" style="margin-top:12px">20 more needed, 26 days left in November. 4 more are waiting for you to approve.</p></section>
+        <section class="rise" style="--d:3"><p class="kick b">Needs your approval</p>
+          ${D.clients.filter((c) => c.waiting).map((c) => `<div class="item" style="border-bottom:1px solid var(--line)"><span><b class="h3">${c.name}</b><br><span class="muted sm">${c.waiting} plan${c.waiting > 1 ? 's' : ''} to approve</span></span><button class="wait-pill" data-go="review">${c.waiting} waiting →</button></div>`).join('')}</section>
+      </div>
+      <hr class="rule">
+      <table class="ledger rise" style="--d:4"><thead><tr><th>Client</th><th>Approved this month</th><th>Trend</th><th>Waiting for you</th><th>Sent back</th><th>Next to film</th><th></th></tr></thead><tbody>
+      ${D.clients.map((c) => `<tr><td><a class="nm link" data-go="find">${c.name}</a><br><span class="muted sm">${c.sells}</span></td><td><span class="mono">${c.approved} of ${c.target}</span></td><td>${H.spark(c.spark, 90, 26)}</td><td class="mono">${c.waiting}</td><td class="mono">${c.back}</td><td class="sm">${c.next ? `${c.next}<br><span class="muted">due ${c.due}</span>` : '<span class="muted">Nothing approved yet</span>'}</td><td><a class="link" data-go="home">Home <span class="ar">→</span></a></td></tr>`).join('')}
+      </tbody></table>
+      <div class="dash" style="margin-top:24px"><b style="color:var(--ink);font-weight:500">After videos are posted.</b> How each client's posted videos did. Would need: access to each client's TikTok stats. No made-up numbers here.</div>`, { all: true }),
+
+    addclient: () => shell('agency', `${head('New client', 'Who are we <em>filming</em> for?', 'Four answers and Remake can suggest searches and check what they can film. Change any of it later in the Brief.')}
+      <div class="two">
+        <div class="rise" style="--d:2;display:grid;gap:22px">
+          <label class="field"><span class="lbl">1 · Client name</span><input class="input" style="font-family:var(--serif);font-size:24px;height:46px" placeholder="e.g. Evergreen Foods" data-mirror=".pv-name"></label>
+          <label class="field"><span class="lbl">2 · What they sell</span><input class="input" placeholder="e.g. Tofu brand sold at Woolworths" data-mirror=".pv-sells"></label>
+          <label class="field"><span class="lbl">3 · Main audience</span><input class="input" placeholder="e.g. Busy mums and young professionals"></label>
+          <div class="field"><span class="lbl">4 · What they can't do</span><div class="row" style="flex-wrap:wrap;gap:8px">${['A kitchen', 'An overhead phone mount', 'People willing to be filmed on the street', 'A blender', 'A confident presenter'].map((x) => `<button class="chip" data-act="toggle">${x}</button>`).join('')}</div></div>
+          <div class="field"><span class="lbl">5 · Videos per month</span><span class="row" data-stepper><button class="btn sm" data-act="step" data-delta="-1">−</button><span class="h2" data-stepval style="min-width:40px;text-align:center">12</span><button class="btn sm" data-act="step" data-delta="1">+</button></span></div>
+        </div>
+        <aside class="rise" style="--d:3"><p class="kick">Preview</p><div style="border-block:1px solid var(--ink);padding:18px 0;margin-top:8px"><p class="kick b">Client</p><p class="h2 pv-name" data-empty="New client">New client</p><p class="muted pv-sells" data-empty="What they sell">What they sell</p></div>
+          <p class="muted sm" style="margin-top:14px">Next: Find ideas opens with starter searches for this client.</p>
+          <div class="row" style="margin-top:22px"><button class="btn" data-go="agency">Cancel</button><button class="btn pri" data-go="find">Save and find ideas</button></div></aside>
+      </div>`, { all: true }),
+
+    home: () => shell('home', `${head(`${C.name} · ${today}`, 'How <em>Evergreen</em> is tracking', 'This month, and what needs you.', '<button class="btn pri" data-go="find">Find ideas for Evergreen Foods</button>')}
+      <div class="grid-home">
+        <section class="rise" style="--d:2"><p class="kick b">What should Evergreen Foods film next?</p>
+          <div class="story" style="margin-top:12px">${H.cover(V('v1'))}<div><h2 class="h2">Crispy tofu ASMR, top-down</h2><p class="muted" style="margin:8px 0 14px">${H.spread(V('v1'))}. The biggest one got 2.4M views.</p>${fv(V('v1'))}
+            <div class="row" style="margin-top:18px"><button class="btn pri" data-act="save" data-saved="✓ Saved to Research">Save to Research</button><a class="link" data-go="breakdown">Why it worked <span class="ar">→</span></a></div>
+            <p class="muted sm" style="margin-top:22px">Not suggested here: 3 kinds of video that already have a plan. <a class="link" data-go="plans">See them in Plans</a></p></div></div>
+          <hr class="rule thin"><p class="kick">Where Evergreen's 10 ideas are</p><p class="h3" style="margin-top:8px">2 saved, shots not planned yet · <span style="color:var(--violet)">2 waiting for you to approve</span> · 5 approved and ready to film · <span style="color:var(--no)">1 sent back to fix</span></p></section>
+        <div class="col-r">
+          <section class="rise" style="--d:3"><p class="kick">Videos approved this month</p><div class="row" style="align-items:flex-end;gap:12px;margin:6px 0 10px"><span class="big-n" style="font-size:72px" data-count="5">5</span><span class="h3 muted" style="padding-bottom:6px">of 12</span></div>${H.ticks(12, 5)}<p class="muted sm" style="margin-top:10px">7 more needed, 26 days left. 2 are waiting for you.</p></section>
+          <section class="rise" style="--d:4"><p class="kick b">Waiting for you to approve</p>${D.plans.filter((p) => p.col === 'waiting').map((p) => `<div class="item" data-togglebox><span><b>${p.title}</b><br><span class="muted sm">Film due ${p.due}</span></span><button class="btn sm" data-act="toggle" data-on="Approved" data-toast="Approved: <b>${p.title}</b>">Approve</button></div>`).join('')}<a class="link sm" data-go="review">Review both, one at a time <span class="ar">→</span></a></section>
+          <section class="rise" style="--d:5"><p class="kick">Approved, ready to film</p><div class="item"><span><b>Street blind taste test: "Is it chicken?"</b><br><span class="muted sm">Approved, due Nov 8</span></span></div></section>
+        </div>
+      </div>`),
+
+    find: () => shell('find', `<section class="hero dots rise" style="--d:0"><p class="kick" style="text-align:center;color:var(--sky)">${C.name} · Find ideas</p><h1 style="margin-top:8px">What should Evergreen Foods <em>film</em> next?</h1>
+        <p>We show first the videos that got far more views than their account usually gets, so you can copy what is already working.</p>
+        <div class="sbox"><span class="q" data-type="crispy tofu|tofu desserts for busy mums|What tofu recipe videos are working right now?|https://www.tiktok.com/@smallkitchen.sample/…"></span><span class="mono sm muted">🎙</span><button class="btn pri" data-go="searching">Find trending videos</button></div>
+        <div class="plats" data-plats>${['♪', '◎', '▶', 'r', '𝕏'].map((p, i) => `<button class="plat ${i < 2 ? 'is-on' : ''}" data-act="toggle" aria-label="Platform">${p}</button>`).join('')}</div></section>
+      <p class="muted sm rise" style="--d:1;margin:14px 0 0"><b class="mono" style="color:var(--ink)">5 of 12</b> videos approved for Evergreen Foods this month</p>
+      <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:44px;margin-top:26px">
+        <section class="rise" style="--d:2"><div class="between"><h2 class="h2">Where to start</h2><span class="muted sm">Pick one, or type your own above.</span></div><hr class="rule" style="margin:12px 0 0">
+          <div class="toc">${D.starts.map((s, i) => `<a data-go="searching"><span class="mono sm" style="color:var(--blue)">${String(i + 1).padStart(2, '0')}</span><span><span class="h3">${s.q}</span><small>${s.why}</small></span><span class="ar">→</span></a>`).join('')}</div></section>
+        <aside class="rise" style="--d:3"><p class="kick">Recent searches</p>${D.recent.map((r) => `<div class="item" style="border-bottom:1px solid var(--line)"><span><a class="link" data-go="results">${r.q}</a><br><span class="muted sm">${r.when}</span></span><span class="mono sm" style="color:${r.fresh ? 'var(--early)' : 'var(--muted)'}">${r.fresh ? r.fresh + ' new' : 'no new'}</span></div>`).join('')}
+          <p class="kick" style="margin-top:22px">Saved to Research</p>${D.slots.slice(0, 4).map((s) => `<div class="item" style="border-bottom:1px solid var(--line)"><span class="sm"><span class="mono" style="color:var(--blue)">V${s.n}</span> ${s.topic}</span><span class="mono sm muted">${s.vids.length}</span></div>`).join('')}<a class="link sm" data-go="research" style="display:inline-block;margin-top:10px">Open Research <span class="ar">→</span></a></aside>
+      </div>`),
+
+    searching: () => shell('find', `${head(`${C.name} · Searching`, 'Reading the videos for <em>crispy tofu</em>', 'Usually about 20 seconds. You can leave this page; the search keeps going and the sidebar shows when it is done.', '<button class="btn" data-act="reset">↻ Replay</button>')}
+      <div class="press"><div><ol class="steps" data-steps>${D.searchSteps.map((s) => `<li data-step>${s}</li>`).join('')}</ol><div class="progress"><i></i></div>
+        <div class="ready" style="margin-top:22px"><p class="h3">48 videos found. 6 beat their usual views by a lot.</p><button class="btn pri" style="margin-top:12px" data-go="results">See the results</button></div></div>
+        <div><p class="kick">Coming in</p><div class="skel" style="margin-top:12px"><div></div><div></div><div></div><div></div></div></div></div>`),
+
+    results: () => shell('find', `<div class="qbar rise" style="--d:0"><span class="kick b">Searching for</span><span class="q">crispy tofu</span><span class="chip is-on">♪ TikTok</span><span class="chip is-on">◎ Instagram</span><button class="btn sm" data-go="find">New search</button></div>
+      <div class="between rise" style="--d:1;margin-top:12px"><p class="muted">We found <b style="color:var(--ink)">48</b> videos for "crispy tofu". Showing the 7 that beat their usual views the most.</p><span class="row" style="gap:6px"><button class="chip is-on" data-act="toggle">Views: 100k+</button><button class="chip is-on" data-act="toggle">Followers: under 250k</button><button class="chip" data-act="toggle">Easy to film</button></span></div>
+      <section class="lead rise" style="--d:2">${H.cover(V('v1'))}<div><p class="kick b">01 · Best to copy for Evergreen Foods</p><blockquote>"Crispy tofu in 5 min"</blockquote><p class="muted">2.4M views from an account with 3.1k followers. Posted by ${V('v1').acct} 9 days ago.</p>
+          <div class="ratio"><small style="left:${pct(3100)}%">3.1k followers</small><small style="left:${pct(2400000)}%">2.4M views</small><span class="ax"></span><span class="span" style="left:${pct(3100)}%;--w:${pct(2400000) - pct(3100)}%"></span><span class="pt f" style="left:${pct(3100)}%"></span><span class="pt v" style="left:${pct(2400000)}%"></span></div>
+          <p class="sm">${H.usual(V('v1'))}.</p></div>
+        <div><p class="kick">Catching on?</p><p class="sm" style="margin:4px 0 14px">${H.spread(V('v1'))}.</p><p class="kick">Can Evergreen film it?</p><p class="sm" style="margin:4px 0 16px">Easy. Needs a kitchen and an overhead phone mount.</p>
+          <div style="display:grid;gap:8px"><button class="btn pri" data-act="save" data-saved="✓ Saved for Evergreen Foods">Save for Evergreen Foods</button><button class="btn" data-go="breakdown">See why it worked</button></div></div></section>
+      <div class="between rise" style="--d:3;margin-top:20px"><h2 class="h3">02 · All videos</h2><span class="muted sm">Ranked by views compared with each account's usual</span></div>
+      <div class="tiles">${['v8', 'v6', 'v5', 'v3', 'v2', 'v4'].map((id, i) => tile(V(id), i)).join('')}</div>`,
+      { after: `<div class="tray" data-tray><span><b data-counter>0</b> saved for Evergreen Foods, shots not planned yet</span><button class="btn sm pri" data-go="plans">Plan the shots</button></div>` }),
+
+
+    research: () => shell('research', `${head(`${C.name} · Research`, 'Reference videos worth <em>copying</em>', 'Grouped by the videos Evergreen pays for. Pick the best one in each slot.', '<span class="row"><button class="btn soft">+ Add video</button><button class="btn pri">Add from link</button><button class="btn">Export CSV</button></span>')}
+      <div class="row rise" style="--d:2;margin-bottom:6px"><input class="input" style="flex:1" placeholder="Account, hook, keywords or notes"><button class="chip is-on">All platforms</button><button class="chip">All statuses</button><span class="mono sm muted" style="margin-left:auto">14 videos</span></div>
+      ${D.slots.map((s, i) => `<div class="slot rise ${i < 2 ? 'is-on' : ''}" style="--d:${i + 3}" data-togglebox><button class="slot-h" data-act="toggle"><span class="mono sm" style="color:var(--blue)">Video ${s.n}</span><span class="h3">${s.topic}</span><span class="sm muted">${s.status}</span><span class="mono sm muted">Due ${s.due}</span><span class="chev">›</span></button>
+        <div class="slot-b"><div><div class="refs" data-pickgroup>${s.vids.length ? s.vids.map((id, j) => `<button class="ref ${j === 0 ? 'is-on' : ''}" data-pick data-act="pick" data-toast="Picked for Video ${s.n}">${H.cover(V(id), '', false)}<span class="pk">★ Picked</span><small>${V(id).title}<br><span class="fv">${V(id).views} views</span></small></button>`).join('') : '<p class="muted sm">Nothing saved for this video yet. <a class="link" data-go="find">Find ideas →</a></p>'}</div></div></div></div>`).join('')}`),
+
+    compare: () => shell('compare', `${head('Find ideas · Compare videos', 'What do these <em>winners</em> share?', 'Paste 2 to 5 viral videos. We break each one down and show the format, the order of beats, the length and how it starts.', '<button class="btn pri" data-act="load" data-target=".cmpwrap" data-busy="Comparing…" data-done="Compare again" data-toast="Compared 3 videos">Compare videos</button>')}
+      <div class="cmpwrap" data-loadbox><div class="cmp rise" style="--d:2"><div></div>${['v1', 'v6', 'v5'].map((id) => `<div><div class="row" style="align-items:flex-start">${H.cover(V(id), '', false, 'width:64px')}<span><b class="h3" style="font-size:17px">${V(id).title}</b><br><span class="fv">${V(id).views} views · ${V(id).len}</span></span></div></div>`).join('')}
+        <div class="rh">Format</div>${['Overhead recipe, no face', 'Overhead recipe, no face', 'Overhead recipe, one hand on camera'].map((x) => `<div class="shared">${x}</div>`).join('')}
+        <div class="rh">Order of beats</div>${[[2, 6, 3, 2], [3, 9, 8, 4], [2, 8, 5, 3]].map((b) => `<div><span class="beats">${b.map((w, i) => `<i class="b-${['hook', 'setup', 'proof', 'cta'][i]}" style="flex:${w}"></i>`).join('')}</span><span class="sm muted">Result · Steps · Crunch · Pack</span></div>`).join('')}
+        <div class="rh">Length</div><div>13 s</div><div>24 s</div><div>18 s</div>
+        <div class="rh">How it starts</div>${['The finished dish, first second', 'The finished dish, first second', 'The pan sizzling, then the dish'].map((x, i) => `<div class="${i < 2 ? 'shared' : ''}">${x}</div>`).join('')}
+      </div>
+      <p class="sm rise" style="--d:3;margin-top:16px"><span class="shared" style="padding:2px 6px">Highlighted</span> = what they share. <b>Copy this:</b> show the finished tofu in the first second, then the steps from above, under 25 seconds.</p></div>`),
+
+    plans: () => shell('plans', `${head(`${C.name} · Plans`, 'Plans for <em>November</em>', 'Pick videos, write the shot lists, then send them for approval. Drag a plan to move it.', `<span class="row"><span class="muted sm"><b class="mono" style="color:var(--ink)">5 of 12</b> approved</span><button class="btn pri" data-go="review">Review 2</button></span>`)}
+      <div class="board" data-dnd>${D.cols.map((c) => `<div class="bcol ${c.id === 'back' ? 'col-back' : ''}" data-col data-colname="${c.name}"><h3>${c.name}<span data-colcount>${D.plans.filter((p) => p.col === c.id).length}</span></h3><div data-colbody>
+        ${D.plans.filter((p) => p.col === c.id).map((p, i) => `<div class="pcard rise" style="--d:${i + 2}" data-card>${H.cover(V(p.v), '', false)}<div><b>${p.title}</b><small>${p.note}</small><small class="mono">Due ${p.due}</small><a class="link sm" data-go="plan">Open plan <span class="ar">→</span></a></div></div>`).join('')}</div></div>`).join('')}</div>`),
+
+    plan: () => shell('plans', `<a class="link sm muted" data-go="plans">← Back to plans</a>
+      <div class="plan" style="margin-top:14px"><div class="rise" style="--d:0">${H.cover(V('v4'))}<p class="fv" style="margin-top:10px">${fv(V('v4'))} · ${V('v4').acct}</p></div>
+        <div><p class="dateline rise" style="--d:1">${C.name} · Still planning · Due Nov 21</p><h1 class="h1 rise" style="--d:1">No tofu press? <em>Do this</em></h1>
+          <section class="rise" style="--d:2;margin-top:18px"><div class="between"><h2 class="h3">1 · How it starts</h2><span class="muted sm">Written from this idea. Pick one.</span></div>
+            <div class="hooks" style="margin-top:10px" data-pickgroup>${D.hooks.map((h) => `<div class="hook ${h.picked ? 'is-on' : ''}" data-pick><span class="mono sm" style="color:var(--blue)">0${h.n}</span><div><span class="emo emo-${h.emo}">Viewer feels: ${h.label}</span><p class="h3" style="margin-top:6px">${h.text}</p></div><button class="btn sm" data-act="pick" data-on="Picked" data-off="Use this">${h.picked ? 'Picked' : 'Use this'}</button></div>`).join('')}</div></section>
+          <section class="rise" style="--d:3;margin-top:24px"><div class="between"><h2 class="h3">2 · The shots</h2><span class="muted sm">4 shots, about 15 seconds</span></div>
+            <div class="shots" style="margin-top:10px">${D.shots.map((s) => `<div class="shot"><span class="mono" style="color:var(--blue)">${s.n}</span><span><b>${s.role}</b><br><span class="mono sm muted">${s.t}</span></span><span>${s.see}</span><span class="muted">Says: "${s.says}"</span></div>`).join('')}</div>
+            <button class="btn sm soft" style="margin-top:12px">+ Add a shot</button></section>
+          <div style="height:70px"></div></div></div>`,
+      { after: `<div class="bar"><button class="btn" data-go="board">Open planning board</button><button class="btn" data-toast="Saved for later" data-act="toast">Save for later</button><button class="btn pri" data-act="toast" data-toast="Sent. <b>Waiting for you to approve</b>">Send for approval</button></div>` }),
+
+    board: () => shell('plans', `${head('No tofu press? · Planning board', 'Pressing tofu <em>without a press</em>', '4 shots, about 15 seconds. Every change saves to the plan\'s shot list.', '<span class="savest" data-savestate>Saved</span>')}
+      <div style="display:grid;grid-template-columns:1fr 250px;gap:22px"><div class="graphwrap rise" style="--d:2;height:470px" data-graph><svg class="links">${[1, 2, 3].map((i) => `<path data-link="s${i}>s${i + 1}"></path>`).join('')}</svg>
+        ${D.shots.map((s, i) => `<div class="plate" data-node="s${s.n}" style="left:${22 + i * 168}px;top:${[40, 130, 60, 150][i]}px"><span class="port i"></span><span class="port o"></span><div class="frame9">${i === 0 ? '<i class="cv-art cv-cube"></i>' : s.n}</div><b>${s.n} · ${s.role} <span class="mono sm muted">${s.t}</span></b><small>${s.see}</small></div>`).join('')}</div>
+        <aside class="rise" style="--d:3" data-loadbox><p class="kick">Change the shot list</p><textarea class="input" style="width:100%;margin-top:8px" placeholder="Say what to change, like “make it faster”"></textarea>
+          <button class="btn soft sm" style="margin-top:10px" data-act="load" data-busy="Rewriting…" data-done="Rewrite again" data-toast="Rewrote 2 shots">Rewrite the shots</button>
+          <p class="when-loading muted sm" style="margin-top:10px">Reading your note against the brief…</p><p class="when-done sm" style="margin-top:10px;color:var(--early)">✓ Shot 2 and 3 are shorter now.</p>
+          <hr class="rule thin"><p class="kick">Upload what you already have</p><div class="dash sm" style="margin-top:8px">Drop photos or clips on a link between two shots.</div>
+          <p class="muted sm" style="margin-top:14px">Drag the plates. The lines follow.</p></aside></div>`),
+
+    review: () => shell('plans', `${head(`${C.name} · Review`, '<span data-remaining>2</span> plans <em>waiting</em> for you', 'One at a time. Approve, approve with changes, or send it back with a reason.', '<a class="link" data-go="plans">← Back to Plans</a>')}
+      <div style="display:grid;grid-template-columns:1fr 240px;gap:32px"><div class="stack" data-stack>
+        <div class="done"><p class="dateline">All done</p><h2 class="h1">Nothing else is <em>waiting</em>.</h2><div class="row" style="margin-top:18px"><button class="btn" data-go="plans">Back to Plans</button><button class="btn pri" data-go="agency">Next: MYST Nightclub (1 waiting)</button></div></div>
+        ${D.plans.filter((p) => p.col === 'waiting').reverse().map((p) => `<article class="stack-card" data-title="${p.title}"><span class="stamp ok">Approved</span><span class="stamp ch">With changes</span><span class="stamp no">Sent back</span>
+          <p class="dateline">${p.note} · Film due ${p.due}</p><h2 class="h1" style="font-size:38px">${p.title}</h2>
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:22px;margin-top:14px">${H.cover(V(p.v))}<div><p class="kick">How it starts</p><span class="emo emo-curiosity" style="margin-top:6px">Viewer feels: Curiosity</span><p class="h3" style="margin:6px 0 14px">${RH[p.id]}</p>
+          <p class="kick">Shots</p>${RS[p.id].map((s, i) => `<p class="sm" style="padding:4px 0;border-bottom:1px solid var(--line)"><span class="mono" style="color:var(--blue)">${i + 1}</span> ${s}</p>`).join('')}</div></div></article>`).join('')}
+      </div>
+      <aside><p class="kick">Your decision</p><div style="display:grid;gap:8px;margin-top:10px"><button class="btn pri" data-act="decide" data-dir="right">Approve</button><button class="btn" data-act="decide" data-dir="up">Approve with changes</button><button class="btn" style="color:var(--no)" data-act="decide" data-dir="left">Send back</button></div>
+        <label class="field" style="margin-top:18px"><span class="lbl">Reason or changes</span><textarea class="input" placeholder="e.g. Show the pack in the first 3 seconds"></textarea></label>
+        <p class="muted sm" style="margin-top:10px">Your notes go into Evergreen's client memory.</p></aside></div>`),
+
+    canvas: () => shell('canvas', `${head('Crispy tofu ASMR · Canvas', 'Make the <em>video</em>', 'Approved plan. Each node feeds the next. Generate costs a little of today\'s budget.', '<span class="row"><span class="savest" data-savestate>Saved</span><span class="mono sm muted" style="white-space:nowrap">US$3.20 left today</span><button class="btn pri" data-go="editor">Make the video</button></span>')}
+      <div class="graphwrap rise" style="--d:2;height:500px" data-graph><svg class="links"><path data-link="shot>prompt"></path><path data-link="prompt>story"></path><path data-link="story>video"></path><path class="dash" data-link="up>video" data-ty="0.8"></path></svg>
+        <div class="node" data-node="shot" style="left:24px;top:60px"><span class="port o"></span><p class="kick"><span>Shot 1 · Hook</span><span>text</span></p><p class="h3" style="font-size:16px">Tofu block between two plates, heavy pan on top</p><p class="muted sm" style="margin-top:6px">On screen: "No tofu press? Do this"</p></div>
+        <div class="node" data-node="prompt" style="left:258px;top:30px"><span class="port i"></span><span class="port o"></span><p class="kick"><span>Prompt</span><span>text</span></p><p class="sm">Overhead shot, white bench, two plates pressing a block of firm tofu, cast-iron pan on top, soft morning light.</p></div>
+        <div class="node" data-node="story" style="left:500px;top:70px;width:170px"><span class="port i"></span><span class="port o"></span><p class="kick"><span>Storyboard</span><span>v2 of 3</span></p><div class="cover" style="--g:#7ab8ff;aspect-ratio:9/12"><i class="cv-art cv-cube"></i></div></div>
+        <div class="node gen" data-node="video" style="left:716px;top:110px;width:200px" data-loadbox><span class="port i"></span><p class="kick"><span>Video</span><span>≈ US$0.40</span></p><div class="when-idle muted sm">Nothing made yet</div><div class="when-loading sm">Generating… <div class="bar2"><i></i></div></div><div class="when-done">${H.cover(V('v4'), '', false, 'aspect-ratio:9/10')}</div><button class="btn sm pri" style="margin-top:8px" data-act="load" data-busy="Generating…" data-done="Regenerate" data-ms="2300" data-toast="Version 1 is ready">Generate</button></div>
+        <div class="node" data-node="up" style="left:400px;top:360px;width:190px"><span class="port o"></span><p class="kick"><span>Footage</span><span>upload</span></p><p class="sm muted">IMG_2041.mov · 0:06</p></div>
+      </div>
+      <div class="row rise" style="--d:3;margin-top:12px;gap:8px"><span class="kick">Versions</span>${[1, 2, 3].map((n) => `<button class="chip ${n === 2 ? 'is-on' : ''}" data-act="toast" data-toast="Showing version ${n}">v${n}</button>`).join('')}<span class="muted sm" style="margin-left:auto">Drag nodes to tidy. The canvas saves as you go.</span></div>`),
+
+    editor: () => shell('canvas', `${head('Crispy tofu ASMR · Edit', 'Put it <em>together</em>', 'Fill in shot order, trim, set the sound, then export.', '<span class="row"><span class="savest">Saved</span><span data-loadbox><button class="btn pri" data-act="load" data-busy="Exporting…" data-done="✓ Exported" data-ms="2400" data-toast="Exported. Ready to send for approval">Export the video</button></span></span>')}
+      <div class="ed" data-playbox style="--dur:8s"><div><div class="prev rise" style="--d:2">${H.cover(V('v1'))}</div>
+        <div class="tl rise" style="--d:3"><div class="between" style="margin-bottom:8px"><button class="btn sm" data-act="play" data-on="❚❚ Pause">▶ Play</button><span class="mono sm muted">Total 15s · S splits · Delete removes</span></div>
+          <div class="ruler"><span>0s</span><span>3s</span><span>6s</span><span>9s</span><span>12s</span><span>15s</span></div>
+          <div class="track"><span class="kick">Video</span><div class="clips">${D.shots.map((s, i) => `<div class="clip" style="flex:${s.sec};background:${['var(--blue)', '#3a4fd9', 'var(--violet)', 'var(--navy)'][i]}">Shot ${s.n}</div>`).join('')}</div></div>
+          <div class="track"><span class="kick">Sound</span><div class="music"></div></div><span class="playhead"></span></div></div>
+        <aside class="rise" style="--d:4"><p class="kick">Clip sound</p>${D.shots.map((s) => `<div class="item" style="border-bottom:1px solid var(--line)"><span class="sm">Shot ${s.n} · ${s.role}</span><input type="range" value="${s.n === 3 ? 100 : 60}" style="width:90px;accent-color:var(--blue)"></div>`).join('')}
+          <p class="kick" style="margin-top:18px">Footage</p><p class="sm muted" style="margin-top:6px">4 takes, 2 generated clips. The reel can be 3 minutes at most.</p></aside></div>`),
+
+    publish: () => shell('canvas', `${head('Crispy tofu ASMR · Publish', 'Out it <em>goes</em>', 'Approved by Annie on 4 Nov. Simulated posts: nothing is sent to TikTok in the demo.')}
+      <div class="two"><div class="rise" style="--d:2"><div class="row" style="align-items:flex-start;gap:22px">${H.cover(V('v1'), '', true, 'width:150px')}<div><p class="kick">The video</p><p class="h3">Crispy tofu ASMR, top-down</p><p class="muted sm">0:15 · exported 4 Nov, 10:42</p><div class="row" style="margin-top:12px"><button class="btn sm">Download</button></div></div></div>
+        <p class="kick" style="margin-top:22px">Where it goes</p>
+        <div class="prow" data-togglebox><b>♪ TikTok</b><span class="sm">Fri 7 Nov, 6:30 pm</span><span class="status s-q">Queued</span></div>
+        <div class="prow" data-loadbox><b>◎ Instagram</b><span class="sm muted">Not scheduled</span><span><span class="when-idle"><button class="btn sm soft" data-act="load" data-busy="Scheduling…" data-ms="1200" data-toast="Instagram: queued for Fri 7 Nov">Schedule</button></span><span class="when-loading status s-d">Sending</span><span class="when-done status s-q">Queued</span></span></div></div>
+        <div class="rise" style="--d:3"><p class="kick">How it did · 48 hours after posting</p><div class="metric" style="margin-top:8px">${[['Views', '48.2', 'k'], ['Likes', '3.9', 'k'], ['Comments', '212', ''], ['Shares', '640', ''], ['Saves', '2.1', 'k']].map((m) => `<div><span class="lbl">${m[0]}</span><strong data-count="${m[1]}" data-suffix="${m[2]}">${m[1]}${m[2]}</strong></div>`).join('')}</div>
+          <div class="cmpbar"><div><span>This video</span><i style="--w:100%"></i><span class="mono sm">48.2k</span></div><div><span>Your last 3 tofu videos</span><i style="--w:64%"></i><span class="mono sm">31k avg</span></div></div>
+          <p class="muted sm" style="margin-top:14px">Numbers typed in by Lin from the TikTok app. Remake doesn't collect them yet.</p></div></div>`),
+
+    channel: () => shell('channel', `${head('Channel', 'What does <em>@smallkitchen</em> keep making?', 'Enter a channel and see the formats it keeps using, why they work, and its best videos.')}
+      <div class="row rise" style="--d:2" data-loadbox><span class="seg" data-pickgroup><button class="is-on" data-pick data-act="pick">TikTok</button><button data-pick data-act="pick">YouTube</button><button data-pick data-act="pick">Instagram</button></span><input class="input" style="flex:1" value="@smallkitchen.sample"><span class="chip">Newest 50</span><button class="btn pri" data-act="load" data-busy="Reading 50 videos…" data-done="Analyse again" data-toast="Analysed 50 videos">Analyse channel</button></div>
+      <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:44px;margin-top:24px"><section class="rise" style="--d:3"><h2 class="h3">Formats it keeps using</h2><div class="fmt" style="margin-top:10px">${D.formats.map((f, i) => `<div><span><b style="font-weight:500">${f.name}</b><br><span class="muted sm">${f.why}</span></span><i style="--w:${f.share * 2}%;animation-delay:${i * 90 + 200}ms"></i><span class="mono sm">${f.share}%</span></div>`).join('')}</div></section>
+        <section class="rise" style="--d:4"><h2 class="h3">Views per video, last 12 weeks</h2><div class="cols" style="margin-top:14px">${D.weekly.map((w, i) => `<i style="--h:${w / 9}%;--i:${i}" title="${w}k"></i>`).join('')}</div><p class="muted sm" style="margin-top:8px">Up 4 times since August. Recipes drive it.</p>
+          <h2 class="h3" style="margin-top:20px">Best videos</h2><div class="row" style="margin-top:10px">${['v1', 'v5', 'v6'].map((id) => H.cover(V(id), '', false, 'width:80px')).join('')}</div></section></div>`),
+
+    brief: () => shell('brief', `${head(`${C.name} · Brief`, 'About <em>this client</em>', 'Remake uses this to suggest searches, check what they can film, and track the monthly target. Changes save as you type.')}
+      <div class="two"><div class="rise" style="--d:2;display:grid;gap:18px">${[['Client name', C.name], ['What they sell', C.sells], ['Main audience', C.audience], ['Topics to watch', C.topics], ['Starter searches', C.starters]].map((f) => `<label class="field"><span class="lbl">${f[0]}</span><input class="input" value="${f[1]}"></label>`).join('')}
+        <div class="field"><span class="lbl">What they can't do</span><div class="row" style="flex-wrap:wrap;gap:8px">${['A kitchen', 'An overhead phone mount', 'People on the street', 'A blender', 'Supermarket filming'].map((x, i) => `<button class="chip ${i > 2 ? 'is-on' : ''}" data-act="toggle">${x}</button>`).join('')}</div></div></div>
+        <section class="rise" style="--d:3"><p class="kick b">Client memory</p><h2 class="h2" style="margin:6px 0 18px">What Annie has decided</h2><ul class="mem">${D.memory.map((m) => `<li class="${m.kind}"><span class="kick">${m.label} · ${m.when}</span><q>${m.quote}</q><span class="muted sm">${m.plan}</span></li>`).join('')}</ul></section></div>`),
+
+    settings: () => shell('', `${head('Settings', 'This <em>browser</em>', 'These apply to this browser only.')}
+      <section class="rise" style="--d:2"><p class="kick">Appearance</p><p class="muted sm">System follows your device. Light and Dark stay as you set them.</p>
+        <div style="display:grid;grid-template-columns:repeat(3,200px);gap:14px;margin-top:12px" data-pickgroup>${[['System', '#fff', '#0b0d1c'], ['Light', '#fff', '#fff'], ['Dark', '#0b0d1c', '#0b0d1c']].map((t, i) => `<button class="theme-card ${i === 0 ? 'is-on' : ''}" data-pick data-act="pick"><span class="mini"><span style="background:${t[1] === '#fff' ? '#f5f5f7' : '#14172b'}"></span><span style="background:linear-gradient(90deg,${t[1]} 50%,${t[2]} 50%)"></span></span>${t[0]}</button>`).join('')}</div></section>
+      <hr class="rule thin"><section class="rise" style="--d:3"><p class="kick">Language</p><p class="muted sm">Menus and screens. Client names and your own notes stay as written.</p><select class="input" style="margin-top:8px;width:260px"><option>English</option><option>繁體中文</option></select></section>`),
+
+    portal: () => `<div class="portal"><div class="between rise" style="--d:0"><span class="wordmark">Remake<i>.</i></span><span class="kick">Shared by Sample Social Co.</span></div><hr class="rule">
+      <p class="dateline rise" style="--d:1">Evergreen Foods · November</p><h1 class="h1 rise" style="--d:1;font-size:60px">Your videos this <em>month</em></h1>
+      <div class="row rise" style="--d:2;gap:20px;margin:12px 0 26px"><span class="big-n" style="font-size:64px" data-count="5">5</span><span><span class="h3">of 12 videos approved</span><br>${H.ticks(12, 5)}</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:32px">${['p5', 'p6', 'p3'].map((id, i) => { const p = D.plans.find((x) => x.id === id); return `<article class="rise" style="--d:${i + 3}">${H.cover(V(p.v), '', true, 'aspect-ratio:4/3')}<p class="kick b" style="margin-top:12px">${p.col === 'waiting' ? 'Being planned' : 'Approved, filming soon'}</p><h2 class="h3">${p.title}</h2><p class="muted sm">Film by ${p.due}</p></article>`; }).join('')}</div>
+      <p class="muted sm" style="margin-top:30px">Read-only link. Comments are coming soon.</p></div>`,
+  };
+  // Breakdown = results with the drawer open on top
+  R.breakdown = () => {
+    const v = V('v1');
+    return R.results().replace(/<\/div>$/, '') + `<div class="wrapd is-open" data-drawer><div class="scrim" data-act="close" data-target="[data-drawer]"></div>
+      <aside class="drawer"><div class="between"><p class="kick b">TikTok · ${v.acct}</p><button class="btn sm" data-act="close" data-target="[data-drawer]" aria-label="Close">✕</button></div>
+        <h2 class="h1" style="font-size:36px">"${v.title}"</h2>
+        <p class="kick" style="margin-top:14px">Views compared with the account's usual</p><p class="h2" style="font-size:40px"><span data-count="267">267</span> times</p><p class="muted sm">${v.fol} followers → ${v.views} views</p>
+        <div class="stat4" style="margin-top:16px"><div><span class="lbl">Views</span><strong>2.4M</strong></div><div><span class="lbl">Shares + saves</span><strong>6.7</strong><span class="sm muted">per 100 views</span></div><div><span class="lbl">Growth</span><strong>267k</strong><span class="sm muted">views a day</span></div><div><span class="lbl">Accounts posting this</span><strong>8</strong><span class="sm muted">Catching on, not luck</span></div></div>
+        <p class="kick" style="margin-top:18px">Can Evergreen Foods film it?</p><p>Easy. Needs a kitchen and an overhead phone mount.</p>
+        <p class="kick" style="margin-top:18px">Why it worked · along the 13 seconds</p><div class="annot">${D.why.map((w, i) => `<i style="left:${w.at + 4}%">${i + 1}</i>`).join('')}</div>
+        <ol class="why">${D.why.map((w) => `<li><span><b>${w.k}</b>${w.v}</span></li>`).join('')}</ol>
+        <div class="row" style="margin-top:18px"><button class="btn pri" data-act="save">Save for Evergreen Foods</button></div></aside></div></div>`;
+  };
+
+  window.SET = {
+    tms: 560,
+    render: (id) => R[id](),
+    notes: {
+      landing: 'the client toggle swaps the picks; lines rise in order.',
+      agency: 'tick boxes fill one by one; sparklines draw; the big number counts up.',
+      home: 'Approve stamps in place and shows a confirmation.',
+      find: 'the search box types sample searches; platform circles toggle; every start point opens Searching.',
+      searching: 'steps tick off in order, the rule fills, then the result line rises in.',
+      results: 'Save changes the button, bumps the count and slides up the saved tray.',
+      breakdown: 'the drawer slides in over a dimmed page; ✕ or the page closes it.',
+      research: 'rows open and close on a smooth height change; pick a reference to star it.',
+      compare: 'beat strips grow from the left; Compare shows a loading state.',
+      plans: 'drag a plan between columns; the column tints, counts update, a note confirms.',
+      plan: 'Use this moves the pick; the bottom bar stays put.',
+      board: 'drag a plate; links redraw live and the save state goes Saving… then Saved.',
+      review: 'decide and the sheet slides away with a stamp; the last one shows All done.',
+      canvas: 'Generate shows progress and then the clip; drag nodes to save.',
+      editor: 'Play runs the playhead across the timeline; Export shows progress.',
+      channel: 'bars grow one by one; hover a week for its number.',
+    },
+  };
+})();
+</script>
+</body>
+</html>

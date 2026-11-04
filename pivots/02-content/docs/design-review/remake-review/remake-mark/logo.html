@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Remake logo sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,600&family=Inter:wght@400;500;600&family=Tiny5&display=swap" rel="stylesheet">
+<style>
+/* Palette only: navy, blue, mustard, beige, black, white */
+:root{--n:#060a47;--b:#1a33f2;--m:#f2b705;--e:#f6f1e7;--k:#000;--w:#fff;
+  --ui:'Bricolage Grotesque',system-ui,sans-serif;--wm:'Inter',system-ui,sans-serif;--pix:'Tiny5',monospace;
+  --gridbg:linear-gradient(var(--w) 1px,transparent 1px) 0 0/40px 40px,linear-gradient(90deg,var(--w) 1px,transparent 1px) 0 0/40px 40px}
+*{box-sizing:border-box}
+html{background:var(--e)}
+body{margin:0;background:var(--gridbg),var(--e);color:var(--n);font:400 15.5px/1.55 var(--ui);overflow-x:hidden}
+.wrap{max-width:1160px;margin:0 auto;padding:44px 40px 80px}
+.meta{font:300 11.5px/1.4 var(--ui);letter-spacing:.14em;text-transform:uppercase;margin:0}
+h1{font:500 72px/.95 var(--ui);letter-spacing:-.06em;margin:14px 0 16px}
+h2{font:500 36px/1.05 var(--ui);letter-spacing:-.045em;margin:8px 0 10px}
+h3{font:600 15px/1.3 var(--ui);margin:0 0 6px}
+p{margin:0 0 12px}
+.lede{font-size:17px;line-height:1.5;max-width:700px}
+.sm{font-size:13.5px;line-height:1.5}
+.num{font:400 20px/1 var(--pix);color:var(--b)}
+section{padding:48px 0;border-top:1px solid var(--n)}
+section:first-of-type{margin-top:36px}
+.sec-h{max-width:760px;margin-bottom:24px}
+.card{background:var(--e);box-shadow:inset 0 0 0 1px var(--n);padding:20px}
+.cap{font:300 11px/1.3 var(--ui);letter-spacing:.12em;text-transform:uppercase;margin-top:8px}
+svg.px{display:block;shape-rendering:crispEdges;flex:none}
+.wm{font:600 1em/1 var(--wm);letter-spacing:-.02em}
+
+/* 1. Sizes */
+.sizes{display:flex;align-items:flex-end;gap:28px;flex-wrap:wrap}
+.sizes figure{margin:0;display:grid;justify-items:center}
+.small-row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end;margin-top:22px}
+.small-row .card{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;max-width:100%}
+.sz512{width:512px;height:512px}
+.glyph-grid{background-image:linear-gradient(rgba(6,10,71,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(6,10,71,.12) 1px,transparent 1px);background-size:16px 16px}
+
+/* 2. One-colour */
+.swatches{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}
+.sw{display:grid;justify-items:center;gap:10px;padding:22px 10px 14px;box-shadow:inset 0 0 0 1px var(--n)}
+.sw .row{display:flex;gap:10px;align-items:flex-end}
+.sw b{font:500 12.5px/1.3 var(--ui);text-align:center}
+
+/* 3. Lockups */
+.lockups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.lk{display:grid;place-items:center;min-height:200px;padding:28px}
+.lk.light{background:var(--e);box-shadow:inset 0 0 0 1px var(--n);color:var(--n)}
+.lk.dark{background:var(--n);color:var(--e)}
+.hz{display:flex;align-items:center;gap:12px;font-size:40px}
+.st{display:grid;justify-items:center;gap:12px;font-size:34px}
+.rules{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;margin-top:20px;align-items:start}
+.clear{position:relative;display:inline-flex;align-items:center;gap:12px;font-size:40px;padding:24px;outline:1px dashed var(--b);outline-offset:0}
+.clear::before{content:"";position:absolute;inset:24px;outline:1px solid rgba(26,51,242,.35)}
+.clear i{position:absolute;background:var(--m);opacity:.55}
+.clear i.t{left:24px;top:0;width:24px;height:24px}.clear i.l{left:0;top:24px;width:24px;height:24px}
+
+/* 4. Animation */
+.anim{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:40px;align-items:center}
+.hv{position:relative;width:100%;max-width:440px}
+.xh{position:absolute;width:24px;height:24px}.xh path{stroke:var(--n);stroke-width:1.2;fill:none}
+.hv .xh.a{left:0;top:0}.hv .xh.b{right:0;bottom:30%}
+.bsq{position:absolute;width:14px;height:14px;background:var(--k)}
+.hv .bsq.a{right:30px;top:30px}.hv .bsq.b{left:40px;bottom:26%;width:8px;height:8px}
+.tri{width:100%;height:auto;aspect-ratio:440/460;display:block;image-rendering:pixelated}
+.label{display:inline-block;background:var(--m);color:var(--k);padding:3px 10px;border-radius:999px;font:500 12px/1.5 var(--ui);letter-spacing:.06em;text-transform:uppercase}
+.btn{appearance:none;border:0;cursor:pointer;border-radius:999px;font:500 14px var(--ui);height:40px;padding:0 20px;background:transparent;color:var(--n);box-shadow:inset 0 0 0 1.5px var(--n);transition:background .2s,color .2s}
+.btn:hover{background:var(--n);color:var(--w)}
+.btn:focus-visible{outline:2px solid var(--b);outline-offset:3px}
+.seq{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:28px}
+.seq figure{margin:0}
+.seq .fr{aspect-ratio:1;display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--n);background:var(--e);overflow:hidden}
+.seq canvas{width:86%;height:auto;image-rendering:pixelated}
+.seq figcaption{font-size:12.5px;line-height:1.4;margin-top:8px}
+
+/* 5. Mockups */
+.mocks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.mock{min-width:0}
+.mock h3{margin-bottom:10px}
+.tabs{background:#fff;box-shadow:inset 0 0 0 1px var(--n);padding:8px 8px 0;display:flex;gap:2px;overflow:hidden}
+.tabs.dk{background:var(--n);box-shadow:none}
+.tab{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;min-width:0;flex:1 1 0;font:400 12.5px/1 var(--wm);color:var(--n);border-radius:8px 8px 0 0;white-space:nowrap;overflow:hidden}
+.tabs.dk .tab{color:#fff}
+.tab.on{background:var(--e)}
+.tabs.dk .tab.on{background:#1b2063}
+.tab span{overflow:hidden;text-overflow:ellipsis}
+.fav{width:16px;height:16px;flex:none;display:block}
+.fav.c{border-radius:50%;background:var(--m)}.fav.s{background:var(--b)}.fav.d{background:var(--k);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+.urlbar{background:var(--e);padding:8px 10px;display:flex;align-items:center;gap:10px;box-shadow:inset 0 0 0 1px var(--n);border-top:0;font:400 12.5px var(--wm)}
+.tabs.dk + .urlbar{background:#1b2063;color:#fff;box-shadow:none}
+.urlbar .rl{font-size:15px}
+.urlbar .addr{flex:1;min-width:0;background:#fff;border-radius:999px;padding:5px 12px;color:var(--n);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tabs.dk + .urlbar .addr{background:var(--n);color:#fff}
+
+.phone{width:100%;max-width:340px;margin:0 auto;border-radius:36px;background:var(--n);padding:14px}
+.screen{border-radius:26px;background:var(--b);padding:34px 18px 26px;background-image:radial-gradient(circle at 30% 20%,rgba(242,183,5,.35),transparent 55%)}
+.home{display:grid;grid-template-columns:repeat(4,64px);justify-content:space-between;row-gap:16px}
+.app{display:grid;justify-items:center;gap:5px;font:400 11px/1.2 var(--wm);color:#fff}
+.app .ic{width:64px;height:64px;border-radius:15px;overflow:hidden;display:grid;place-items:center}
+.ic.g1{background:var(--e)}.ic.g2{background:var(--m)}.ic.g3{background:#fff}.ic.g4{background:var(--k)}
+.ic .sh{width:28px;height:28px}
+.ic.g1 .sh{background:var(--b);border-radius:50%}.ic.g2 .sh{background:var(--n)}.ic.g3 .sh{background:var(--m);clip-path:polygon(50% 0,100% 100%,0 100%)}.ic.g4 .sh{border:5px solid var(--e);border-radius:50%}
+
+.profile{background:#fff;box-shadow:inset 0 0 0 1px var(--n);padding:20px;font-family:var(--wm);color:var(--n)}
+.pf-top{display:flex;align-items:center;gap:20px}
+.avatar{width:120px;height:120px;border-radius:50%;overflow:hidden;flex:none;box-shadow:0 0 0 2px var(--m),0 0 0 4px #fff}
+.stats{display:flex;gap:18px;font-size:13px}.stats b{display:block;font-size:16px}
+.pf-name{font-weight:600;margin:14px 0 2px}.pf-bio{font-size:13px;margin:0}
+.pf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:14px}.pf-grid i{aspect-ratio:1;background:var(--e)}.pf-grid i:nth-child(2n){background:var(--n)}.pf-grid i:nth-child(3n){background:var(--b)}
+
+.sidebar{display:flex;border:1px solid var(--n);min-height:250px;background:var(--e)}
+.sb{width:220px;flex:none;border-right:1px solid var(--n);padding:16px 14px;font-family:var(--wm)}
+.sb .brand{display:flex;align-items:center;gap:8px;font-size:19px}
+.sb .client{margin-top:16px;padding:8px 10px;box-shadow:inset 0 0 0 1px var(--n);border-radius:8px;font-size:12.5px}
+.sb .client small{display:block;font-size:11px;opacity:.7}
+.sb ul{list-style:none;padding:0;margin:14px 0 0;font-size:13px}.sb li{padding:6px 8px;border-radius:6px}.sb li.on{background:var(--n);color:#fff}
+.sb-main{flex:1;min-width:0;padding:16px;background:var(--gridbg),var(--e)}
+.sb-main i{display:block;height:10px;background:var(--n);opacity:.15;margin-bottom:10px;border-radius:2px}.sb-main i:first-child{width:50%;opacity:.8;height:14px}
+
+.nav{display:flex;align-items:center;gap:18px;padding:14px 18px;background:var(--e);box-shadow:inset 0 0 0 1px var(--n);font:400 13.5px var(--wm)}
+.nav .brand{display:flex;align-items:center;gap:9px;font-size:22px;margin-right:auto}
+.nav .pill{background:var(--n);color:#fff;border-radius:999px;padding:8px 16px;font-weight:500}
+.nav-hero{padding:22px 18px 26px;background:var(--gridbg),var(--e);box-shadow:inset 0 0 0 1px var(--n);border-top:0}
+.nav-hero b{display:block;font:500 30px/1 var(--ui);letter-spacing:-.05em}
+
+.loading{background:var(--n);color:var(--e);display:grid;justify-items:center;align-content:center;gap:14px;min-height:300px;padding:24px;text-align:center}
+.loading canvas{width:170px;height:auto;aspect-ratio:440/460;image-rendering:pixelated}
+.loading p{margin:0;font:400 14px var(--wm)}
+.loading .dots{display:flex;gap:6px}.loading .dots i{width:6px;height:6px;background:var(--m);animation:blink 1.2s steps(1) infinite}
+.loading .dots i:nth-child(2){animation-delay:.2s}.loading .dots i:nth-child(3){animation-delay:.4s}
+@keyframes blink{50%{opacity:.2}}
+
+.sig{background:#fff;box-shadow:inset 0 0 0 1px var(--n);padding:20px;font:400 13px/1.5 var(--wm);color:var(--k)}
+.sig .body{color:#333;margin-bottom:18px}
+.sig .row{display:flex;gap:14px;align-items:center;border-top:1px solid var(--e);padding-top:14px}
+.sig .row b{display:block;font-weight:600;color:var(--n)}
+.sig .bar{width:1px;align-self:stretch;background:var(--n);opacity:.3}
+.sig .brand{display:flex;align-items:center;gap:6px;font-size:16px;color:var(--n)}
+.sig a{color:var(--b)}
+
+/* 6. Comparison */
+.cmp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.cmp .col{box-shadow:inset 0 0 0 1px var(--n);padding:20px;min-width:0}
+.cmp .col.win{box-shadow:inset 0 0 0 2px var(--b)}
+.cmp .row{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin:10px 0 18px}
+.cmp .one{display:flex;gap:8px;flex-wrap:wrap}
+.verdict{list-style:none;padding:0;margin:0}
+.verdict li{padding-left:22px;position:relative;margin-bottom:8px;font-size:14px}
+.verdict li::before{content:"";position:absolute;left:0;top:7px;width:10px;height:10px}
+.verdict li.ok::before{background:var(--b)}.verdict li.no::before{background:var(--k)}.verdict li.mid::before{background:var(--m)}
+
+.check{list-style:none;padding:0;margin:0;columns:2;column-gap:40px}
+.check li{break-inside:avoid;padding-left:26px;position:relative;margin-bottom:12px}
+.check li::before{content:"";position:absolute;left:0;top:4px;width:14px;height:14px;box-shadow:inset 0 0 0 1.5px var(--n)}
+.verdictbox{background:var(--n);color:var(--e);padding:28px}
+.verdictbox h2{color:var(--e)}
+
+@media (max-width:900px){
+  .swatches{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .mocks,.cmp,.lockups,.rules,.anim{grid-template-columns:minmax(0,1fr)}
+  .seq{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .check{columns:1}
+}
+@media (max-width:640px){
+  .wrap{padding:28px 16px 60px}
+  h1{font-size:46px}h2{font-size:30px}
+  .sz512{width:320px;height:320px}
+  .swatches{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hz{font-size:30px}.st{font-size:28px}
+  .clear{font-size:30px}
+  .sb{width:170px}
+  .nav{gap:10px;font-size:12px}.nav .lnk{display:none}
+  .tab{padding:0 8px}
+  .screen{padding:28px 12px 22px}
+}
+@media (prefers-reduced-motion:reduce){.loading .dots i{animation:none}.btn{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="meta">Remake · logo sheet · proposal · 4 Nov 2026</p>
+  <h1>The R as Remake's logo.</h1>
+  <p class="lede">A pixel R whose counter is a play triangle. <b>The static icon is the logo</b>: whole pixels, one colour, no glyphs, no scatter. The tile animation is kept for a few brand moments only. The Loop runs through the same tests at the end, for comparison.</p>
+
+  <!-- 1 -->
+  <section id="icon" aria-labelledby="h-icon">
+    <div class="sec-h"><span class="num">01</span><h2 id="h-icon">Static icon</h2>
+      <p>Drawn on a 32 × 32 pixel grid as SVG rects with crisp edges. Every size shown is a whole-number multiple of its grid, so no pixel ever lands on a half pixel. <b>16px and 24px are hand-drawn</b>, not shrunk: halving the 32 grid would turn the 9-row play triangle into 4½ rows, and 24 is not a whole multiple of 32.</p></div>
+    <div class="sizes" id="sizes"></div>
+    <div class="small-row" id="smallrow"></div>
+    <p class="sm" style="margin-top:16px">The three grids, magnified ×8 (16 and 24) and ×6 (32), with the play counter in mustard so you can see it. In the logo it is an empty hole.</p>
+    <div class="small-row" id="grids"></div>
+  </section>
+
+  <!-- 2 -->
+  <section id="mono" aria-labelledby="h-mono">
+    <div class="sec-h"><span class="num">02</span><h2 id="h-mono">One-colour versions</h2>
+      <p>The R is always one solid colour on one ground; the play triangle is a hole that shows the ground. A two-tone version fills the hole with mustard, the colour Remake already uses for "far above usual views". It earns its place on the app icon and avatar, where the play reads as a lit button, but stays out of the favicon and anywhere the logo is printed in one ink.</p></div>
+    <div class="swatches" id="swatches"></div>
+  </section>
+
+  <!-- 3 -->
+  <section id="lockups" aria-labelledby="h-lock">
+    <div class="sec-h"><span class="num">03</span><h2 id="h-lock">Lockups</h2>
+      <p>Icon plus the lowercase <span class="wm">remake</span> wordmark in Inter Semibold, −2% tracking: the same style as the landing page's <code>.rk-logo</code> text. Note: the live landing currently shows a serif "Remake" image (<code>remake-logo.png</code>); adopting this sheet means swapping that image too.</p></div>
+    <div class="lockups">
+      <div class="lk light"><span class="hz" id="lk1"></span></div>
+      <div class="lk dark"><span class="hz" id="lk2"></span></div>
+      <div class="lk light"><span class="st" id="lk3"></span></div>
+      <div class="lk dark"><span class="st" id="lk4"></span></div>
+    </div>
+    <div class="rules">
+      <div class="card"><h3>Clear space</h3><p class="sm">Keep a margin of one <b>stem width</b> on every side (the R's stem is 6 of its 32 pixels, so 3/16 of the icon height). The mustard squares show it. The gap between icon and wordmark is also ¾ of a stem.</p>
+        <span class="clear" id="clear"><i class="t"></i><i class="l"></i></span></div>
+      <div class="card"><h3>Minimum size</h3><p class="sm"><b>Icon:</b> 16px on screen, using the hand-drawn 16 grid. Below that, don't use it.<br><b>Horizontal lockup:</b> icon 16px with the wordmark at 16px (about 80px wide).<br><b>Stacked lockup:</b> icon 32px; below that use the horizontal one.<br><b>Print:</b> 6mm icon, only at sizes where each pixel is at least 0.2mm.<br><b>Sizes:</b> use 16, 24, 32 or a multiple of 32 so pixels stay whole. If a platform forces another size (the 180px Apple touch icon), put the 32 grid at ×5 = 160px on a 180px tile.</p></div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section id="motion" aria-labelledby="h-motion">
+    <div class="anim">
+      <div class="hv"><svg class="xh a" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><svg class="xh b" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0V24M0 12H24M6 18L18 6"/></svg><i class="bsq a"></i><i class="bsq b"></i>
+        <canvas class="tri" data-anim width="440" height="460" role="img" aria-label="The R logo assembling from small video-frame tiles; three tiles turn mustard"></canvas></div>
+      <div><span class="num">04</span><h2 id="h-motion">The animated mark</h2>
+        <p><span class="label">For brand moments only: landing hero, log in, searching, approved</span></p>
+        <p>The Render tile animation, unchanged, now forming the R from the same 32-pixel drawing as the static icon. Each tile is one video read; three turn mustard. Never use it as the logo in a header, favicon or avatar; those always get the static icon.</p>
+        <button class="btn" id="replay">↻ Replay</button></div>
+    </div>
+    <h3 style="margin-top:36px">How the animation resolves into the static icon</h3>
+    <div class="seq" id="seq"></div>
+  </section>
+
+  <!-- 5 -->
+  <section id="inuse" aria-labelledby="h-use">
+    <div class="sec-h"><span class="num">05</span><h2 id="h-use">In use</h2><p>Generic mockups, no real third-party branding. The favicons are drawn at a true 16px.</p></div>
+    <div class="mocks">
+      <div class="mock" id="m-tabs"><h3>Browser tab, light and dark</h3>
+        <div class="tabs" id="tabs1"></div><div class="urlbar"><span class="rl">←</span><span class="addr">remake.app/clients/evergreen-foods</span></div>
+        <div style="height:12px"></div>
+        <div class="tabs dk" id="tabs2"></div><div class="urlbar"><span class="rl">←</span><span class="addr">remake.app/clients/evergreen-foods</span></div></div>
+      <div class="mock" id="m-home"><h3>App icon on a home screen</h3>
+        <div class="phone"><div class="screen"><div class="home" id="home"></div></div></div></div>
+      <div class="mock" id="m-avatar"><h3>Profile avatar, circle crop</h3>
+        <div class="profile"><div class="pf-top"><span class="avatar" id="avatar"></span><div class="stats"><span><b>48</b>posts</span><span><b>2.1k</b>followers</span><span><b>180</b>following</span></div></div>
+          <p class="pf-name">Remake</p><p class="pf-bio">Know what each client should film this week.<br>remake.app</p>
+          <div class="pf-grid"><i></i><i></i><i></i></div></div>
+        <p class="sm" style="margin-top:8px">The home-screen icon uses the 24 grid at ×2 inside a 64 tile, so the R keeps a margin inside the rounded mask. The avatar uses a padded tile (the 32 grid inside 40) so the leg and stem corners survive the circle crop.</p></div>
+      <div class="mock" id="m-side"><h3>App sidebar header</h3>
+        <div class="sidebar"><div class="sb"><span class="brand" id="sbbrand"></span><div class="client"><small>Client</small><b>Evergreen Foods ▾</b></div><ul><li class="on">Home</li><li>Find ideas</li><li>Plans</li><li>Brief</li></ul></div><div class="sb-main"><i></i><i></i><i style="width:80%"></i><i style="width:65%"></i></div></div></div>
+      <div class="mock" id="m-nav"><h3>Landing page nav</h3>
+        <div class="nav"><span class="brand" id="navbrand"></span><span class="lnk">How it works</span><span class="lnk">FAQ</span><span>Log in</span><span class="pill">Try the demo</span></div>
+        <div class="nav-hero"><b>Know what each client should film this week.</b></div></div>
+      <div class="mock" id="m-load"><h3>Loading screen</h3>
+        <div class="loading"><canvas data-anim="load" width="440" height="460" role="img" aria-label="Loading: the R assembling from tiles"></canvas><p>Finding this week's videos for Evergreen Foods</p><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div></div>
+      <div class="mock" id="m-sig"><h3>Email signature</h3>
+        <div class="sig"><div class="body">Hi Annie, the plan for Thursday's shoot is ready for your OK.<br>Thanks,</div>
+          <div class="row"><span id="sigicon"></span><span class="bar"></span><div><b>Alex Tan</b>Founder<br><span class="brand" id="sigbrand"></span><a>remake.app</a></div></div></div></div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section id="compare" aria-labelledby="h-cmp">
+    <div class="sec-h"><span class="num">06</span><h2 id="h-cmp">R versus The Loop</h2><p>Same tests, same grids, same colours.</p></div>
+    <div class="cmp">
+      <div class="col win" id="cmpR"><h3>R-play (main)</h3></div>
+      <div class="col" id="cmpL"><h3>The Loop</h3></div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section id="next" aria-labelledby="h-next">
+    <div class="verdictbox"><p class="meta">Verdict</p><h2>Adopt the R. Keep the Loop as a motion idea, not a logo.</h2>
+      <p>The R holds up at every test: it is legible at 16px, it is ours (a letter, not a generic symbol), and the play counter gives it a second read once you know it's there. The Loop is a strong <i>story</i> but a weak <i>logo</i>: at 16px it is the browser's reload button, and it sits next to the real one in every tab bar.</p></div>
+    <h2 style="margin-top:36px">Before adopting it</h2>
+    <ul class="check">
+      <li><b>Trademark search</b> (a search, not legal clearance): "Remake" word mark plus pixel-R device marks in classes 9, 35 and 42, on IP Australia, WIPO Global Brand Database and USPTO. R monograms are a crowded space; a lawyer should clear it before money is spent.</li>
+      <li><b>Real devices:</b> favicon in Chrome, Safari and Firefox tab bars in light and dark, on a non-retina screen; home screen icon on an iPhone and on an Android phone with a circle mask.</li>
+      <li><b>Platform exports:</b> favicon.ico (16/32/48), apple-touch-icon 180 (32 grid ×5 on a 180 tile), Android adaptive icon (keep the R inside the 66% safe zone), 512 store icon, social avatars at 320 and 1080.</li>
+      <li><b>Wordmark decision:</b> replace the serif "Remake" image on the landing page with the Inter lowercase lockup, or keep the serif and pair it with the R. Pick one.</li>
+      <li><b>Accessibility:</b> contrast checks for each one-colour pairing in real UI (mustard on navy and blue on white pass for a graphic; check the wordmark text sizes).</li>
+      <li><b>Animation rules:</b> confirm the four brand moments, the reduced-motion fallback (static icon), and that it never runs in loops longer than one play.</li>
+      <li><b>Master files:</b> a Figma master (the 16, 24 and 32 grids as editable frames) and exported SVGs, so nobody redraws it by eye.</li>
+      <li><b>Handles and domain:</b> check social handles and the domain match the lockup.</li>
+      <li><b>Founder sign-off</b> on the R, the two-tone app icon, and the wordmark.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const K = { n: '#060a47', b: '#1a33f2', m: '#f2b705', e: '#f6f1e7', k: '#000000', w: '#ffffff' };
+  const G = {
+    R16: [
+      '................',
+      '..########......',
+      '..#########.....',
+      '..###p######....',
+      '..###pp#####....',
+      '..###ppp####....',
+      '..###pp#####....',
+      '..###p######....',
+      '..#########.....',
+      '..########......',
+      '..###..####.....',
+      '..###...####....',
+      '..###...####....',
+      '..###....####...',
+      '..###....####...',
+      '................'
+    ],
+    R24: [
+      '........................',
+      '........................',
+      '...############.........',
+      '...#############........',
+      '...##############.......',
+      '...#####p#########......',
+      '...#####pp########......',
+      '...#####ppp#######......',
+      '...#####pppp######......',
+      '...#####ppp#######......',
+      '...#####pp########......',
+      '...#####p#########......',
+      '...##############.......',
+      '...#############........',
+      '...############.........',
+      '...#####..######........',
+      '...#####...######.......',
+      '...#####...######.......',
+      '...#####....######......',
+      '...#####.....######.....',
+      '...#####.....######.....',
+      '...#####......######....',
+      '........................',
+      '........................'
+    ],
+    R32: [
+      '................................',
+      '................................',
+      '....###############.............',
+      '....#################...........',
+      '....##################..........',
+      '....###################.........',
+      '....######p############.........',
+      '....######pp###########.........',
+      '....######ppp##########.........',
+      '....######pppp#########.........',
+      '....######ppppp########.........',
+      '....######pppp#########.........',
+      '....######ppp##########.........',
+      '....######pp###########.........',
+      '....######p############.........',
+      '....###################.........',
+      '....##################..........',
+      '....#################...........',
+      '....###############.............',
+      '....######...#######............',
+      '....######....#######...........',
+      '....######.....#######..........',
+      '....######.....#######..........',
+      '....######......#######.........',
+      '....######.......#######........',
+      '....######.......#######........',
+      '....######........#######.......',
+      '....######.........#######......',
+      '....######..........#######.....',
+      '....######...........#######....',
+      '................................',
+      '................................'
+    ],
+    L16: [
+      '.......#........',
+      '.......##.......',
+      '.......###......',
+      '.....######.....',
+      '...########.....',
+      '...#######......',
+      '..###..##.......',
+      '..###..#........',
+      '..##............',
+      '..##........##..',
+      '..###......###..',
+      '..###......###..',
+      '...####..####...',
+      '...##########...',
+      '.....######.....',
+      '................'
+    ],
+    L32: [
+      '................................',
+      '...............#................',
+      '...............##...............',
+      '...............###..............',
+      '...............####.............',
+      '...............#####............',
+      '...........##########...........',
+      '.........#############..........',
+      '........##############..........',
+      '.......##############...........',
+      '......##############............',
+      '.....#######...####.............',
+      '.....######....###..............',
+      '....######.....##...............',
+      '....#####......#................',
+      '....#####.......................',
+      '....#####................###....',
+      '....#####..............#####....',
+      '....#####..............#####....',
+      '....#####..............#####....',
+      '....#####..............#####....',
+      '....#####..............#####....',
+      '....######............######....',
+      '.....######..........######.....',
+      '.....#######........#######.....',
+      '......####################......',
+      '.......##################.......',
+      '........################........',
+      '.........##############.........',
+      '...........##########...........',
+      '................................',
+      '................................'
+    ]
+  };
+  const reduce = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  /* ---------- SVG from a pixel grid: one rect per horizontal run, crisp edges ---------- */
+  // o: fg, bg, hole (colour for the play counter, else empty), pad (grid units around), label
+  function svg(grid, size, o = {}) {
+    const N = grid.length, pad = o.pad || 0, V = N + pad * 2;
+    let r = o.bg ? `<rect x="${-pad}" y="${-pad}" width="${V}" height="${V}" fill="${o.bg}"/>` : '';
+    const run = (ch, fill) => { grid.forEach((row, y) => { let x = 0; while (x < N) { if (row[x] === ch) { let e = x; while (e < N && row[e] === ch) e++; r += `<rect x="${x}" y="${y}" width="${e - x}" height="1" fill="${fill}"/>`; x = e; } else x++; } }); };
+    run('#', o.fg || K.n);
+    if (o.hole) run('p', o.hole);
+    const lab = o.label ? `role="img" aria-label="${o.label}"` : 'aria-hidden="true"';
+    return `<svg class="px ${o.cls || ''}" ${lab} width="${size}" height="${size}" viewBox="${-pad} ${-pad} ${V} ${V}" shape-rendering="crispEdges">${r}</svg>`;
+  }
+  // pick the right grid for a size: hand-drawn 16 and 24, else the 32 master
+  const R = (size) => size === 16 ? G.R16 : size === 24 ? G.R24 : G.R32;
+  const L = (size) => size === 16 ? G.L16 : G.L32;
+  const icon = (size, o = {}) => svg((o.loop ? L : R)(size), size, Object.assign({ label: `${o.loop ? 'Loop' : 'Remake R'} icon, ${size}px` }, o));
+  const $ = (id) => document.getElementById(id);
+  const fig = (html, cap) => `<figure>${html}<figcaption class="cap">${cap}</figcaption></figure>`;
+
+  /* 1. sizes: app-icon tile, beige R on navy */
+  const TILE = { fg: K.e, bg: K.n };
+  $('sizes').innerHTML = [16, 24, 32, 64, 128, 512].map((s) => fig(icon(s, Object.assign({ cls: s === 512 ? 'sz512' : '' }, TILE)), s + 'px' + (s === 16 || s === 24 ? ' · hand-drawn' : ''))).join('');
+  $('smallrow').innerHTML =
+    `<div class="card" id="small-light">${[16, 24, 32].map((s) => fig(icon(s), s + 'px')).join('')}<span class="sm">navy, no tile</span></div>` +
+    `<div class="card" id="small-dark" style="background:${K.n};color:${K.e}">${[16, 24, 32].map((s) => fig(icon(s, { fg: K.e }), s + 'px')).join('')}<span class="sm">beige on navy</span></div>` +
+    `<div class="card" id="small-two">${[16, 24, 32].map((s) => fig(icon(s, { fg: K.e, bg: K.n, hole: K.m }), s + 'px')).join('')}<span class="sm">two-tone tile</span></div>`;
+  $('grids').innerHTML = [[G.R16, 8, '16 grid'], [G.R24, 8, '24 grid'], [G.R32, 6, '32 master']].map(([g, k, c]) => fig(`<span class="glyph-grid" style="display:block;background-size:${k}px ${k}px">${svg(g, g.length * k, { hole: K.m, label: c })}</span>`, c)).join('');
+
+  /* 2. one-colour */
+  const SW = [['Navy on beige', K.n, K.e], ['White on navy', K.w, K.n], ['Black on white', K.k, K.w], ['Mustard on navy', K.m, K.n], ['Blue on white', K.b, K.w], ['Two-tone', K.e, K.n, K.m]];
+  $('swatches').innerHTML = SW.map(([t, fg, bg, h]) => `<div class="sw" style="background:${bg};color:${fg === K.m || fg === K.w || fg === K.e ? K.e : K.n}"><span class="row">${icon(16, { fg, hole: h })}${icon(32, { fg, hole: h })}${icon(64, { fg, hole: h })}</span><b>${t}</b></div>`).join('');
+
+  /* 3. lockups */
+  const word = '<span class="wm">remake</span>';
+  $('lk1').innerHTML = icon(64, { fg: K.n }) + word; $('lk2').innerHTML = icon(64, { fg: K.e }) + word;
+  $('lk3').innerHTML = icon(96, { fg: K.n }) + word; $('lk4').innerHTML = icon(96, { fg: K.e }) + word;
+  $('clear').innerHTML += icon(64, { fg: K.n }) + word;
+
+  /* 5. mockups */
+  const tabsHTML = (dk, loop) => [['c', 'Inbox (3)'], ['remake', 'Evergreen Foods · Remake'], ['s', 'Q4 content plan'], ['d', 'Calendar']].map(([f, t], i) =>
+    `<span class="tab ${i === 1 ? 'on' : ''}">${f === 'remake' ? icon(16, Object.assign({ cls: 'fav', label: 'Remake favicon' }, loop ? { loop: 1 } : {}, { fg: K.e, bg: K.n })) : `<i class="fav ${f}"></i>`}<span>${t}</span></span>`).join('');
+  $('tabs1').innerHTML = tabsHTML(0); $('tabs2').innerHTML = tabsHTML(1);
+  const others = ['g1', 'g2', 'g3', 'g4', 'g2', 'g4', 'g1', 'g3', 'g4', 'g3', 'g1'];
+  const names = ['Photos', 'Notes', 'Maps', 'Clock', 'Mail', 'Music', 'Files', 'Camera', 'Weather', 'Wallet', 'Books'];
+  $('home').innerHTML = others.slice(0, 5).map((g, i) => `<span class="app"><span class="ic ${g}"><i class="sh"></i></span>${names[i]}</span>`).join('') +
+    `<span class="app"><span class="ic">${svg(G.R24, 64, { fg: K.e, bg: K.n, hole: K.m, pad: 4, label: 'Remake app icon' })}</span>Remake</span>` +
+    others.slice(5).map((g, i) => `<span class="app"><span class="ic ${g}"><i class="sh"></i></span>${names[i + 5]}</span>`).join('');
+  $('avatar').innerHTML = svg(G.R32, 120, { fg: K.e, bg: K.n, hole: K.m, pad: 4, label: 'Remake profile avatar' });
+  $('sbbrand').innerHTML = icon(24, { fg: K.n }) + word;
+  $('navbrand').innerHTML = icon(32, { fg: K.n }) + word;
+  $('sigicon').innerHTML = icon(32, { fg: K.e, bg: K.n });
+  $('sigbrand').innerHTML = icon(16, { fg: K.n }) + word;
+
+  /* 6. comparison */
+  const cmpCol = (loop) => {
+    const o = loop ? { loop: 1 } : {};
+    const one = SW.slice(0, 5).map(([t, fg, bg]) => `<span style="background:${bg};padding:6px;display:inline-block;box-shadow:inset 0 0 0 1px ${K.n}" title="${t}">${icon(32, Object.assign({ fg }, o))}</span>`).join('');
+    const tabs = `<div class="tabs" style="margin-top:6px">${tabsHTML(0, loop)}</div><div class="tabs dk">${tabsHTML(1, loop)}</div>`;
+    const notes = loop ? `<ul class="verdict">
+        <li class="no"><b>At 16px it reads as "refresh".</b> In a tab bar it sits right next to the browser's own reload arrow, and users may read it as "this page is loading" rather than as a brand.</li>
+        <li class="no"><b>Not ownable.</b> Circular arrows are the standard icon for sync, retry, repost and undo; many apps already use one.</li>
+        <li class="mid"><b>The arrowhead is the weak point.</b> At 16px it is 4 pixels and merges into the ring; without it the mark is just a ring.</li>
+        <li class="ok"><b>Holds up in one colour</b> and has the best story ("make it again"), so it stays useful as a motion idea (e.g. the replay button, or the ring that closes as plans are approved).</li></ul>`
+      : `<ul class="verdict">
+        <li class="ok"><b>Legible at 16px.</b> Stem, bowl and leg each keep at least 2 clear pixels; the gap between stem and leg never closes.</li>
+        <li class="ok"><b>Ownable.</b> It is the first letter of the name, not a shared symbol; it works with or without the wordmark.</li>
+        <li class="mid"><b>The play counter is a second read.</b> At 16px it is a 5-pixel notch; people will see an R first and the play later. That is the right order.</li>
+        <li class="mid"><b>Pixel letters can look retro or gaming.</b> The clean palette and Inter wordmark keep it on the "tool" side; keep the tile animation for brand moments only.</li></ul>`;
+    return `<p class="cap">Static icon, 128 · 32 · 16</p><div class="row">${icon(128, Object.assign({ fg: K.e, bg: K.n }, o))}${icon(32, Object.assign({ fg: K.e, bg: K.n }, o))}${icon(16, Object.assign({ fg: K.e, bg: K.n }, o))}</div>
+      <p class="cap">1:1, no tile, 32 · 16</p><div class="row">${icon(32, o)}${icon(16, o)}</div>
+      <p class="cap">One colour</p><div class="one">${one}</div>
+      <p class="cap" style="margin-top:18px">Favicon in a tab bar</p>${tabs}<div style="height:16px"></div>${notes}`;
+  };
+  $('cmpR').innerHTML += cmpCol(false); $('cmpL').innerHTML += cmpCol(true);
+
+  /* ---------- 4. Tile animation: the Render engine, unchanged; the shape is the 32-pixel R ---------- */
+  const R32 = G.R32, N32 = R32.length;
+  const cellAt = (u, v) => { const x = Math.floor(u * N32), y = Math.floor(v * N32); return x < 0 || y < 0 || x >= N32 || y >= N32 ? '.' : R32[y][x]; };
+  const legStart = R32.map((row) => { const i = row.indexOf('#', 10); return i < 0 ? N32 : i; });
+  const solid = (u, v) => cellAt(u, v) === '#';
+  const hole = (u, v) => { const x = Math.floor(u * N32), y = Math.floor(v * N32); if (cellAt(u, v) === 'p') return true; return y >= 19 && y < N32 - 2 && x >= 10 && x < legStart[y] - 1; };
+  const SHAPE = (u, v) => {
+    if (solid(u, v)) return 1; if (hole(u, v)) return 0;
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; if (solid(u + Math.cos(a) * 0.05, v + Math.sin(a) * 0.05)) return 0.4; }
+    return 0;
+  };
+  let seed = 1; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const runs = new WeakMap();
+  function build(cv) {
+    const W = cv.width, Hh = cv.height, x = cv.getContext('2d');
+    const T = 16, cols = Math.floor(W / T), rows = Math.floor(Hh / T), tiles = [];
+    const inS = (c, r) => SHAPE((c + 0.5) / cols, (r + 0.5) / rows);
+    seed = 11;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const k = inS(c, r); if (k && rnd() < (k === 1 ? 0.93 : 0.35)) tiles.push({ c, r, bg: [K.n, K.b, K.n, K.e, K.k][Math.floor(rnd() * 5)], fg: [K.w, K.m, K.e, K.b][Math.floor(rnd() * 4)], sx: rnd() * W, sy: rnd() * Hh, t: rnd() * 0.7, hit: false, s: rnd() < 0.18 ? 10 : 14 }); }
+    for (let i = 0; i < 60; i++) { const c = Math.floor(rnd() * cols), r = Math.floor(rnd() * rows); if (!inS(c, r)) tiles.push({ c, r, bg: rnd() < 0.5 ? K.n : K.k, fg: null, sx: rnd() * W, sy: rnd() * Hh, t: rnd() * 0.9, hit: false, s: [4, 6, 8][Math.floor(rnd() * 3)], loose: true }); }
+    const core = tiles.filter((t) => !t.loose); [0.15, 0.48, 0.81].forEach((f) => { const t = core[Math.floor(f * core.length)]; if (t) t.hit = true; });
+    return (p) => {
+      x.clearRect(0, 0, W, Hh);
+      tiles.forEach((t) => {
+        const q = Math.max(0, Math.min(1, (p - t.t) / 0.3)), e = 1 - Math.pow(1 - q, 3);
+        if (q <= 0) return;
+        const tx = t.c * T + (T - t.s) / 2, ty = t.r * T + (T - t.s) / 2;
+        const X = Math.round(t.sx + (tx - t.sx) * e), Y = Math.round(t.sy + (ty - t.sy) * e);
+        x.fillStyle = t.hit && q >= 1 ? K.m : t.bg; x.fillRect(X, Y, t.s, t.s);
+        if (t.fg && t.s >= 10) { x.fillStyle = t.hit && q >= 1 ? K.k : t.fg; x.fillRect(X + 3, Y + t.s - 6, t.s - 6, 2); x.fillRect(X + (t.s >> 1) - 1, Y + 3, 3, 3); }
+      });
+    };
+  }
+  function play(cv) {
+    const paint = build(cv), run = {}; runs.set(cv, run);
+    if (reduce()) { cv.dataset.done = '1'; return paint(2); }
+    const dur = 1800, t0 = performance.now(); cv.dataset.done = '';
+    const tick = (t) => { if (runs.get(cv) !== run) return; const p = Math.min(1.3, (t - t0) / dur * 1.3); paint(p); if (p < 1.3) requestAnimationFrame(tick); else cv.dataset.done = '1'; };
+    requestAnimationFrame(tick);
+  }
+  const animCv = [...document.querySelectorAll('canvas[data-anim]')];
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); play(e.target); } }), { threshold: 0.25 });
+    animCv.forEach((c) => io.observe(c));
+  } else animCv.forEach(play);
+  $('replay').addEventListener('click', () => play(document.querySelector('canvas[data-anim=""]')));
+
+  /* the resolve sequence: scatter → arriving → tiles → cells → icon */
+  const mk = () => { const c = document.createElement('canvas'); c.width = 440; c.height = 460; return c; };
+  const frames = [[0.2, '1 · Scatter: videos are read, tiles fly in'], [0.65, '2 · Arriving: the R starts to form'], [2, '3 · Settled: the animated mark, three tiles mustard'], ['cells', '4 · Tiles drop their frames and snap to the 32 grid'], ['icon', '5 · The static icon: one colour, whole pixels']];
+  $('seq').innerHTML = frames.map((f, i) => `<figure><div class="fr" id="sq${i}"></div><figcaption>${f[1]}</figcaption></figure>`).join('');
+  frames.forEach(([p], i) => {
+    const box = $('sq' + i);
+    if (typeof p === 'number') { const c = mk(); c.setAttribute('aria-hidden', 'true'); build(c)(p); box.appendChild(c); return; }
+    if (p === 'cells') { // the 32 grid as gapped cells in the tile colours
+      const c = document.createElement('canvas'), S = 12; c.width = c.height = 32 * S; const x = c.getContext('2d'); seed = 3;
+      R32.forEach((row, y) => [...row].forEach((ch, xx) => { if (ch !== '#') return; const v = rnd(); x.fillStyle = v < 0.55 ? K.n : v < 0.85 ? K.b : K.k; x.fillRect(xx * S + 1, y * S + 1, S - 2, S - 2); }));
+      c.setAttribute('aria-hidden', 'true'); box.appendChild(c); return;
+    }
+    box.innerHTML = svg(R32, 128, { fg: K.n, label: 'Static R icon' });
+  });
+})();
+</script>
+</body>
+</html>

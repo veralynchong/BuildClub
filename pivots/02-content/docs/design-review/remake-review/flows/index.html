@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remake Site Flows</title>
+<meta name="description" content="The current Remake prototype mapped button by button, three proposed whole-site flows, a comparison and a recommendation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Remake tokens (src/styles/theme-remake.css, light + dark) */
+:root {
+  --canvas: #ffffff; --canvas-alt: #f5f5f7; --ink: #1a1a22; --ink-muted: #5d5f6e;
+  --navy: #060a47; --navy-deep: #070b24; --on-navy: #f4f5ff; --on-navy-muted: #a9b0e0;
+  --blue: #1a33f2; --blue-hover: #1426c4; --blue-soft: #e9ecff;
+  --violet: #7b1fe0; --violet-soft: #f2e9ff; --mustard: #f2b705; --on-mustard: #060a47;
+  --line: #e8e8ee; --line-strong: #c9cad6; --surface: #ffffff;
+  --early: #1a7a44; --early-soft: #e5f4ea; --rising: #8a5a06; --rising-soft: #fbf3e1; --no: #b42318; --no-soft: #fdeceb;
+  --font-serif: 'Newsreader', Georgia, serif; --font-sans: 'Inter', system-ui, sans-serif; --font-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+  --radius: 12px; --shadow-card: 0 1px 2px rgb(10 12 40 / .04), 0 8px 24px rgb(10 12 40 / .06);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0b0d1c; --canvas-alt: #14172b; --ink: #eceef6; --ink-muted: #a3a7c0;
+    --blue: #4a5cff; --blue-hover: #6474ff; --blue-soft: #1a2160; --violet: #b98aff; --violet-soft: #2a1d4a;
+    --line: #262a48; --line-strong: #3a3f66; --surface: #14172b;
+    --early: #5fd08f; --early-soft: #12301f; --rising: #f2c75c; --rising-soft: #33280e; --no: #ff8a80; --no-soft: #3a1515;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canvas: #0b0d1c; --canvas-alt: #14172b; --ink: #eceef6; --ink-muted: #a3a7c0;
+  --blue: #4a5cff; --blue-hover: #6474ff; --blue-soft: #1a2160; --violet: #b98aff; --violet-soft: #2a1d4a;
+  --line: #262a48; --line-strong: #3a3f66; --surface: #14172b;
+  --early: #5fd08f; --early-soft: #12301f; --rising: #f2c75c; --rising-soft: #33280e; --no: #ff8a80; --no-soft: #3a1515;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--canvas); color: var(--ink); font: 15px/1.55 var(--font-sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+h1, h2, h3 { font-family: var(--font-serif); font-weight: 500; letter-spacing: -0.01em; line-height: 1.15; margin: 0 0 .4em; }
+h1 { font-size: clamp(34px, 5vw, 52px); }
+h2 { font-size: clamp(26px, 3vw, 34px); margin-top: 1.6em; }
+h3 { font-size: 22px; margin-top: 1.4em; }
+p { margin: 0 0 .9em; max-width: 78ch; }
+a { color: var(--blue); }
+code, .mono { font-family: var(--font-mono); font-size: .86em; }
+.kicker { font: 500 11px/1.2 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); }
+
+.hero { background: var(--navy); color: var(--on-navy); padding: 48px 16px 0; background-image: radial-gradient(rgb(255 255 255 / .07) 1px, transparent 1px); background-size: 18px 18px; }
+.hero-in { max-width: 1240px; margin: 0 auto; }
+.hero .kicker { color: var(--on-navy-muted); }
+.hero h1 em { font-style: italic; color: #7ab8ff; }
+.hero p { color: var(--on-navy-muted); }
+.tabs { display: flex; gap: 4px; margin-top: 28px; overflow-x: auto; scrollbar-width: none; }
+.tabs button { flex: none; font: 500 14px var(--font-sans); color: var(--on-navy-muted); background: transparent; border: 0; border-radius: 12px 12px 0 0; padding: 12px 18px; cursor: pointer; }
+.tabs button:hover { color: var(--on-navy); }
+.tabs button[aria-selected="true"] { background: var(--canvas); color: var(--ink); }
+.tabs .num { font-family: var(--font-mono); font-size: 11px; opacity: .7; margin-right: 6px; }
+
+main { max-width: 1240px; margin: 0 auto; padding: 32px 16px 80px; }
+.panel[hidden] { display: none; }
+.lede { font-size: 17px; color: var(--ink-muted); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 16px 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+.card h4 { margin: 0 0 6px; font: 600 15px var(--font-sans); }
+.card p, .card li { font-size: 14px; }
+.card ul { margin: 0; padding-left: 18px; }
+.pill { display: inline-block; font: 500 11px/1 var(--font-mono); letter-spacing: .04em; padding: 5px 9px; border-radius: 999px; background: var(--blue-soft); color: var(--blue); }
+.pill.mustard { background: var(--mustard); color: var(--on-mustard); }
+.pill.red { background: var(--no-soft); color: var(--no); }
+.pill.green { background: var(--early-soft); color: var(--early); }
+
+/* Legend */
+.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 12px 0 4px; font-size: 13px; color: var(--ink-muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 22px; height: 14px; border-radius: 4px; border: 1.5px solid; display: inline-block; }
+.sw.page { background: #fff; border-color: #1a33f2; }
+.sw.modal { background: #f2e9ff; border-color: #7b1fe0; border-style: dashed; }
+.sw.dec { background: #060a47; border-color: #060a47; transform: rotate(45deg) scale(.7); width: 16px; height: 16px; }
+.sw.st { background: #fbf3e1; border-color: #8a5a06; border-radius: 999px; }
+.sw.ext { background: #f5f5f7; border-color: #9a9cab; border-style: dashed; }
+.sw.gap { background: #fdeceb; border-color: #b42318; }
+.sw.nw { background: #e5f4ea; border-color: #1a7a44; }
+
+/* Diagram frame: always a light sheet so Mermaid's colours stay legible in dark mode */
+.dg { margin: 14px 0 28px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #fff; box-shadow: var(--shadow-card); }
+.dg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; background: #f5f5f7; border-bottom: 1px solid #e8e8ee; color: #1a1a22; }
+.dg-head strong { font: 600 14px var(--font-sans); }
+.dg-head .hint { font: 400 12px var(--font-sans); color: #5d5f6e; }
+.dg-tools { display: flex; gap: 6px; }
+.dg-tools button { font: 500 12px var(--font-mono); border: 1px solid #c9cad6; background: #fff; color: #060a47; border-radius: 999px; padding: 5px 11px; cursor: pointer; min-width: 34px; }
+.dg-tools button:hover { border-color: #1a33f2; color: #1a33f2; }
+.dg-view { position: relative; overflow: hidden; cursor: grab; touch-action: none; background: #fff radial-gradient(#e2e4ee 1px, transparent 1px) 0 0 / 16px 16px; }
+.dg-view.dragging { cursor: grabbing; }
+.dg-stage { transform-origin: 0 0; position: absolute; left: 0; top: 0; }
+.dg-stage svg { display: block; max-width: none !important; }
+.dg-src { display: none; }
+.dg-loading { padding: 40px; text-align: center; color: #5d5f6e; font-size: 13px; }
+.dg-err { padding: 20px; color: #b42318; font: 12px var(--font-mono); white-space: pre-wrap; }
+
+/* Tables */
+.tw { overflow-x: auto; margin: 12px 0 24px; border: 1px solid var(--line); border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; background: var(--surface); }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font: 500 11px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); background: var(--canvas-alt); position: sticky; top: 0; }
+tr:last-child td { border-bottom: 0; }
+td.btn { font-weight: 600; white-space: nowrap; }
+td.btn::before { content: ''; }
+.arrow { color: var(--blue); font-weight: 600; }
+details { border: 1px solid var(--line); border-radius: var(--radius); margin: 10px 0; background: var(--surface); }
+details > summary { cursor: pointer; padding: 12px 16px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::after { content: '+'; font-family: var(--font-mono); color: var(--blue); }
+details[open] > summary::after { content: '−'; }
+details .tw { margin: 0 12px 12px; }
+.gaps { counter-reset: g; list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
+.gaps li { counter-increment: g; position: relative; padding: 12px 14px 12px 52px; border: 1px solid var(--line); border-left: 3px solid var(--no); border-radius: 10px; background: var(--surface); font-size: 14px; }
+.gaps li::before { content: counter(g, decimal-leading-zero); position: absolute; left: 14px; top: 13px; font: 500 12px var(--font-mono); color: var(--no); }
+.gaps li strong { display: block; margin-bottom: 2px; }
+.gaps li .where { font: 11px var(--font-mono); color: var(--ink-muted); }
+.verdict { background: var(--navy); color: var(--on-navy); border-radius: var(--radius); padding: 24px 26px; margin: 18px 0; }
+.verdict h3 { margin-top: 0; color: var(--on-navy); }
+.verdict p, .verdict li { color: var(--on-navy-muted); }
+.verdict strong { color: var(--on-navy); }
+.score { font-family: var(--font-mono); white-space: nowrap; }
+.dots { letter-spacing: 2px; color: var(--blue); }
+.note { font-size: 13px; color: var(--ink-muted); }
+@media (max-width: 640px) { .hero { padding-top: 32px; } td.btn { white-space: normal; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-in">
+    <span class="kicker">BuildClub · Pivot 02 · Remake · UX review · 4 Nov 2026</span>
+    <h1>Site flows: today, and <em>three ways</em> to rebuild them</h1>
+    <p>Every page and every button in the Remake prototype, traced from the code in <code>feature/remake-review</code> (<code>App.tsx</code> view state, sidebar, and each screen's handlers) and checked against the running app. Then three whole-site flows that differ in structure, not in detail. Nothing here is built.</p>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" aria-selected="true" aria-controls="p-current" id="t-current" data-tab="current"><span class="num">00</span>Current flow</button>
+      <button role="tab" aria-selected="false" aria-controls="p-f1" id="t-f1" data-tab="f1"><span class="num">01</span>Stage Rail</button>
+      <button role="tab" aria-selected="false" aria-controls="p-f2" id="t-f2" data-tab="f2"><span class="num">02</span>Client Hub</button>
+      <button role="tab" aria-selected="false" aria-controls="p-f3" id="t-f3" data-tab="f3"><span class="num">03</span>Video Board</button>
+      <button role="tab" aria-selected="false" aria-controls="p-cmp" id="t-cmp" data-tab="cmp"><span class="num">04</span>Comparison and recommendation</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="legend" aria-label="Diagram legend">
+  <span><i class="sw page"></i>Page</span>
+  <span><i class="sw modal"></i>Drawer, modal or toast</span>
+  <span><i class="sw dec"></i>Decision</span>
+  <span><i class="sw st"></i>State or outcome</span>
+  <span><i class="sw ext"></i>Outside the app shell or new tab</span>
+  <span><i class="sw gap"></i>Dead end or gap</span>
+  <span><i class="sw nw"></i>New in this proposal</span>
+  <span class="note">Arrows are labelled with the button text. Drag to pan, use + and −, or hold Ctrl or Cmd and scroll to zoom.</span>
+</div>
+
+<!-- ============================ CURRENT ============================ -->
+<section class="panel" id="p-current" role="tabpanel" aria-labelledby="t-current">
+  <h2 style="margin-top:.6em">Current flow, as built</h2>
+  <p class="lede">The app has no URLs. One React state value (<code>view</code>) picks the screen, a second (<code>workspace</code>) is either <code>all</code> or a client id. Two paths sit outside the shell: <code>/method</code> and the approver's <code>/review/&lt;token&gt;</code> page. The demo always signs you in as a team member.</p>
+
+  <div class="grid2">
+    <div class="card"><h4>Sidebar inside a client</h4><ul><li>Home · Find ideas · Research (count) · Compare videos · Plans (badge = waiting + sent back) · Canvas</li><li>Channel · Brief</li><li>Footer: How we calculate this (new tab) · Live/Sample pill · Settings · user · Sign out</li></ul></div>
+    <div class="card"><h4>Sidebar on All clients</h4><ul><li>Home (All clients dashboard) · Compare videos · Channel</li><li>Hint: "Pick a client above to find ideas for them."</li><li>Client switcher on every screen: All clients · each client · + Add client</li></ul></div>
+    <div class="card"><h4>Landing rules (code)</h4><ul><li>First sign-in: All clients Home</li><li>Returning: last client, Find ideas</li><li>Session ended (401): same screen after sign-in</li><li>Refresh: same tab. Results fall back to Find ideas, Plan, Board, Canvas and Review fall back to Plans</li></ul></div>
+  </div>
+
+  <h3>1 · Entry, sign-in and pages outside the shell</h3>
+  <div class="dg" data-title="Entry and sign-in"><script type="text/plain" class="dg-src">
+flowchart TB
+  L["<b>Public landing</b><br/>Hero, live mini-demo picks,<br/>tour video, How it works, FAQ"]:::page
+  PV["<b>Trending pick preview</b><br/>video + why it fits"]:::modal
+  LG["<b>Log in</b><br/>Work email · Staff or Client<br/>Team member or Manager (approves)"]:::page
+  RG["<b>Register</b><br/>Start with the sample agency"]:::page
+  CL["<b>Client login</b><br/>Client logins are coming soon"]:::gap
+  GO["Google sign-in<br/>real accounts only"]:::ext
+  D1{"Sample data<br/>or real accounts?"}:::dec
+  D3{"Session ended<br/>mid-task?"}:::dec
+  D2{"Last client<br/>remembered?"}:::dec
+  FI["<b>Client · Find ideas</b>"]:::page
+  AC["<b>All clients · Home</b>"]:::page
+  BK(["Same screen as before"]):::st
+  APP(["Any signed-in screen"]):::st
+  L2["<b>Landing, still signed in</b>"]:::page
+  M["<b>How we calculate this</b><br/>method page, new tab"]:::ext
+  SR["<b>Approver page</b> review link<br/>plans and videos to approve"]:::ext
+  SRD(["All decided · close the page"]):::st
+  L -->|"Log in"| LG
+  L -->|"Try the demo"| D1
+  L -->|"tap a pick"| PV
+  PV -->|"Plan this in the demo"| D1
+  PV -->|"Close"| L
+  D1 -->|"sample: role = Team member"| D2
+  D1 -->|"real accounts"| LG
+  LG -->|"Register free"| RG
+  RG -->|"Log in"| LG
+  RG -->|"Register and log in"| D3
+  LG -->|"Log in · Staff"| D3
+  LG -->|"Continue · Client"| CL
+  CL -->|"Back to log in"| LG
+  LG -->|"Continue with Google"| GO
+  LG -->|"Back · logo"| L
+  D3 -->|"yes"| BK
+  D3 -->|"no"| D2
+  D2 -->|"yes · returning"| FI
+  D2 -->|"no · first time"| AC
+  APP -->|"Sign out"| LG
+  APP -->|"Remake logo"| L2
+  L2 -->|"Log in · Try the demo"| APP
+  APP -->|"How we calculate this"| M
+  SR -->|"Approve · Send back with this note"| SRD
+</script></div>
+
+  <h3>2 · Agency level: All clients, Add client and the tools</h3>
+  <div class="dg" data-title="All clients, switcher and Add client" data-dir="TB"><script type="text/plain" class="dg-src">
+flowchart TB
+  SW(["Client switcher<br/>on every screen"]):::st
+  AC["<b>All clients · Home</b><br/>Client dashboard: approved this month,<br/>Waiting for approval list, client table,<br/>After videos are posted placeholders,<br/>Agency name and manager name"]:::page
+  ADD["<b>Add a client</b><br/>name, niche, audience, topics,<br/>starter searches, videos per month,<br/>what they can't film"]:::page
+  FI["Client · Find ideas"]:::page
+  HO["Client · Home"]:::page
+  RV["Client · Review<br/>back link: All clients"]:::page
+  PREV(["Screen you came from"]):::st
+  AC -->|"+ Add client"| ADD
+  AC -->|"client name"| FI
+  AC -->|"Home · table row"| HO
+  AC -->|"Open · N waiting"| RV
+  SW -->|"All clients"| AC
+  SW -->|"a client"| FI
+  SW -->|"+ Add client"| ADD
+  ADD -->|"Save and find ideas"| FI
+  ADD -->|"Cancel"| PREV
+</script></div>
+  <div class="dg" data-title="Agency tools" data-dir="LR"><script type="text/plain" class="dg-src">
+flowchart LR
+  SB(["Sidebar, in or out of a client"]):::st
+  CMP["<b>Compare videos</b><br/>paste 2 to 5 links: shared format,<br/>structure, hook, what to copy"]:::page
+  CH["<b>Channel</b><br/>Analyse a channel: formats it uses,<br/>top videos"]:::page
+  PR["<b>Settings</b><br/>Appearance, Language<br/>this browser only"]:::page
+  X1["No way to save a result<br/>to Research or a plan"]:::gap
+  SB -->|"Compare videos"| CMP
+  SB -->|"Channel"| CH
+  SB -->|"Settings"| PR
+  CMP -->|"Compare · Start over"| CMP
+  CMP -.-> X1
+  CH -.-> X1
+</script></div>
+
+  <h3>3 · Inside a client: Home, Find ideas, results and the video drawer</h3>
+  <div class="dg" data-title="Client Home" data-dir="TB"><script type="text/plain" class="dg-src">
+flowchart TB
+  HO["<b>Home</b> · client dashboard<br/>What should X film next?<br/>Waiting for approval · This month<br/>Approved, ready to film<br/>After videos are posted"]:::page
+  FI["Find ideas"]:::page
+  STV["<b>Which video is this for?</b><br/>Video 1 to n · Not sure yet"]:::modal
+  PL["Plan"]:::page
+  PS["Plans, scrolled to a column"]:::page
+  RV["Review · back: Home"]:::page
+  HO -->|"Find ideas for X"| FI
+  HO -->|"Save to Research"| STV
+  HO -->|"Plan the shots"| PL
+  HO -->|"plan name"| PL
+  HO -->|"See them in Plans · See all N in Plans"| PS
+  HO -->|"Go through all N"| RV
+  HO -->|"Approve · manager only"| HO
+</script></div>
+  <div class="dg" data-title="Find ideas, results and the drawer" data-dir="TB"><script type="text/plain" class="dg-src">
+flowchart TB
+  FI["<b>Find ideas</b><br/>search box and platforms,<br/>Your searches, Saved to Research,<br/>Where to start"]:::page
+  LD(["Searching, live"]):::st
+  TO["<b>Toast</b> results ready"]:::modal
+  RS["<b>Results</b><br/>Best to copy hero, patterns,<br/>filters, All videos grid,<br/>saved strip"]:::page
+  BD["<b>Video breakdown drawer</b><br/>why it worked, Can X film it?,<br/>hook and emotion, line roles"]:::modal
+  STV["<b>Which video is this for?</b><br/>Video 1 to n · Not sure yet"]:::modal
+  ST["<b>Saved toast</b><br/>Change · Undo"]:::modal
+  RE["Research"]:::page
+  PL["Plan"]:::page
+  EXT["method page · platform<br/>new tab"]:::ext
+  FI -->|"Find trending videos"| LD
+  LD -->|"still on Find ideas"| RS
+  LD -->|"you moved away"| TO
+  TO -->|"View"| RS
+  FI -->|"Back to your results · Open · Run again · Search topic"| RS
+  FI -->|"Open Research"| RE
+  RS -->|"+ Save"| STV
+  STV -->|"Video n · Not sure yet"| ST
+  ST -->|"Change"| STV
+  RS -->|"See why it worked · tile"| BD
+  RS -->|"Open plan · status, only if planned"| PL
+  RS -->|"Open Research"| RE
+  BD -->|"Save to Research"| STV
+  BD -->|"Open Research"| RE
+  BD -->|"Open plan · status"| PL
+  BD -->|"How we calculate this · Watch on platform"| EXT
+</script></div>
+
+  <h3>4 · Research, Plans board and Review</h3>
+  <div class="dg" data-title="Research, Plans and Review"><script type="text/plain" class="dg-src">
+flowchart TB
+  RE["<b>Research</b><br/>sheet of reference videos grouped<br/>by the client's paid videos: status,<br/>account, hook, keywords, notes"]:::page
+  AV["<b>Add a video</b> slot form"]:::modal
+  AL["<b>Add a video from a link</b>"]:::modal
+  CSV["CSV download"]:::ext
+  PK{"Status dropdown"}:::dec
+  T1["<b>Toast</b> sent to Plans,<br/>Still planning"]:::modal
+  PLB["<b>Plans</b> board<br/>Still planning · Waiting for approval ·<br/>Approved, ready to film · month ring"]:::page
+  LK["<b>Approver link box</b><br/>in the Waiting column"]:::modal
+  SR["Approver page<br/>review link"]:::ext
+  RV["<b>Review</b><br/>N to review: reference, shots,<br/>team note, due date, comment per shot"]:::page
+  RD{"Role?"}:::dec
+  PL["Plan"]:::page
+  CV["Canvas with editor open"]:::page
+  BD["Breakdown drawer"]:::modal
+  FI["Find ideas"]:::page
+  NX["Next client's Review"]:::page
+  OR(["Where Review was opened:<br/>Home, Plans or All clients"]):::st
+  RE -->|"+ Add video"| AV
+  RE -->|"Add from link"| AL
+  RE -->|"Export CSV"| CSV
+  RE -->|"status"| PK
+  PK -->|"Picked: makes the plan"| T1
+  T1 -->|"Open Plans"| PLB
+  PK -->|"Backup · Not picked: Continue or Cancel"| RE
+  RE -->|"status pill"| PL
+  RE -->|"account name"| BD
+  RE -->|"Find ideas · empty sheet"| FI
+  PLB -->|"Start planning · Open plan"| PL
+  PLB -->|"From research"| RE
+  PLB -->|"Make the video · approved"| CV
+  PLB -->|"Take back · drag a card"| PLB
+  PLB -->|"Get review link · Copy link"| LK
+  LK -->|"approver opens the URL"| SR
+  PLB -->|"Review N · Preview as manager"| RV
+  RV --> RD
+  RD -->|"manager: Approve, Approve with changes, Send back"| RV
+  RD -->|"team member: read-only preview"| RV
+  RV -->|"Back to origin"| OR
+  RV -->|"All done: Next: client, N waiting"| NX
+  RV -->|"All done: Back to Plans"| PLB
+</script></div>
+
+  <h3>5 · One plan: status, planning board, canvas, editor, publish</h3>
+  <div class="dg" data-title="One plan, by status" data-dir="TB"><script type="text/plain" class="dg-src">
+flowchart TB
+  PL["<b>Plan</b><br/>reference header, Suggested hooks,<br/>Shot list frames, From script"]:::page
+  S{"Plan status?"}:::dec
+  P1(["Still planning or Sent back<br/>Use this · Write new ways to start ·<br/>+ Add a shot"]):::st
+  W1(["Waiting · team member"]):::st
+  W2(["Waiting · manager"]):::st
+  A(["Approved: banner, Shot checklist,<br/>The video, Post the video"]):::st
+  BRD["<b>Planning board</b><br/>shot nodes: add between, AI rewrite,<br/>Line the shots up again, undo"]:::page
+  ORG(["Screen the plan was opened from"]):::st
+  FI["Find ideas, empty box"]:::page
+  PLB["Plans"]:::page
+  NEXT["Production, next diagram"]:::st
+  PL --> S
+  S -->|"saved or sent back"| P1
+  S -->|"waiting"| W1
+  S -->|"waiting"| W2
+  S -->|"approved"| A
+  P1 -->|"Open planning board"| BRD
+  BRD -->|"Back to the plan"| PL
+  P1 -->|"Send for approval"| W1
+  P1 -->|"Save for later"| ORG
+  P1 -->|"Find another idea"| FI
+  W1 -->|"Take it back"| P1
+  W1 -->|"Open Plans"| PLB
+  W1 -->|"Plan another video"| FI
+  W2 -->|"Approve · Approve with changes"| A
+  W2 -->|"Send back"| P1
+  A -->|"Edit: Continue, back to Waiting"| W1
+  A -->|"Make the video · Open the canvas · Publish"| NEXT
+</script></div>
+  <div class="dg" data-title="Canvas, editor and publishing" data-dir="TB"><script type="text/plain" class="dg-src">
+flowchart TB
+  A(["Approved plan page"]):::st
+  CV["<b>Canvas</b><br/>node canvas: shots, prompts, AI clips,<br/>uploads, footage, versions"]:::page
+  ED["<b>Video editor</b><br/>Clips · Captions · Logo · Export · Send<br/>text, captions, voice, music, brand"]:::page
+  PL["Plan"]:::page
+  PLB["Plans"]:::page
+  CP["<b>Pick a plan for the canvas</b>"]:::page
+  SB(["Sidebar: Canvas"]):::st
+  D{"Approved plans<br/>for this client?"}:::dec
+  CUT["Finished video waits on the<br/>approver link only, not in Review"]:::gap
+  POST(["Posted · simulated"]):::st
+  A -->|"Make the video"| ED
+  A -->|"Open the canvas"| CV
+  A -->|"Publish, simulated"| POST
+  A -->|"Send to manager for approval"| CUT
+  CV -->|"Open editor"| ED
+  ED -->|"Back to canvas"| CV
+  ED -->|"Export and send"| CUT
+  CV -->|"Back to plan, always"| PL
+  SB --> D
+  D -->|"exactly 1"| CV
+  D -->|"0 or 2 and more"| CP
+  CP -->|"a plan"| CV
+  CP -->|"Go to Plans · none approved"| PLB
+</script></div>
+
+  <h3>Every button, screen by screen</h3>
+  <p class="note">Traced from the handlers in <code>App.tsx</code> and each component. Sidebar items are listed once above. "Stays" means the same screen updates.</p>
+
+  <details open><summary>Public landing, Log in, Register, Client login</summary><div class="tw"><table>
+  <thead><tr><th>Screen</th><th>Button or link</th><th>Goes to</th><th>What you land on</th></tr></thead><tbody>
+  <tr><td>Landing</td><td class="btn">Log in (nav)</td><td class="arrow">Log in</td><td>Email, Staff or Client, Team member or Manager</td></tr>
+  <tr><td>Landing</td><td class="btn">Try the demo (nav, hero, steps, footer CTA)</td><td class="arrow">App as Team member</td><td>Returning: last client's Find ideas. First time: All clients Home. Real accounts: Log in instead</td></tr>
+  <tr><td>Landing</td><td class="btn">Platform tabs, a trending pick</td><td class="arrow">Pick preview modal</td><td>Video, fit for the sample client. <b>Plan this in the demo</b> = Try the demo. <b>Close</b></td></tr>
+  <tr><td>Landing</td><td class="btn">Watch the tour, How it works, FAQ</td><td class="arrow">In-page anchors</td><td>Tour video (download link), steps, FAQ. Contact, Privacy, Terms are "soon" text</td></tr>
+  <tr><td>Log in</td><td class="btn">Log in (Staff)</td><td class="arrow">App</td><td>Role saved (member or manager), then landing rules</td></tr>
+  <tr><td>Log in</td><td class="btn">Continue (Client)</td><td class="arrow">Client login card</td><td>"Client logins are coming soon" + <b>Back to log in</b>. Dead end</td></tr>
+  <tr><td>Log in</td><td class="btn">Register free / Log in</td><td class="arrow">Toggle register mode</td><td>Register: "Register and log in" enters the sample agency</td></tr>
+  <tr><td>Log in</td><td class="btn">Continue with Google</td><td class="arrow">/api/auth/google/start</td><td>Only when the server has Google set up</td></tr>
+  <tr><td>Log in</td><td class="btn">Back, logo</td><td class="arrow">Landing</td><td></td></tr>
+  </tbody></table></div></details>
+
+  <details><summary>All clients Home, Add client, Compare, Channel, Settings</summary><div class="tw"><table>
+  <thead><tr><th>Screen</th><th>Button or link</th><th>Goes to</th><th>What you land on</th></tr></thead><tbody>
+  <tr><td>All clients</td><td class="btn">+ Add client</td><td class="arrow">Add a client</td><td>Form; Cancel returns to All clients</td></tr>
+  <tr><td>All clients</td><td class="btn">Open (Waiting for approval card)</td><td class="arrow">That client's Review</td><td>Back link reads "All clients". Team member gets a read-only preview</td></tr>
+  <tr><td>All clients</td><td class="btn">Client name (table)</td><td class="arrow">Client Find ideas</td><td>Search box with that client's last search</td></tr>
+  <tr><td>All clients</td><td class="btn">N waiting (table)</td><td class="arrow">Client Review</td><td>Same as Open</td></tr>
+  <tr><td>All clients</td><td class="btn">Home (table row)</td><td class="arrow">Client Home</td><td>Client dashboard</td></tr>
+  <tr><td>All clients</td><td class="btn">Agency name, Manager name fields</td><td class="arrow">Stays</td><td>Saved as typed</td></tr>
+  <tr><td>Add client</td><td class="btn">Save and find ideas</td><td class="arrow">New client Find ideas</td><td>Empty search page, Where to start chips from the brief</td></tr>
+  <tr><td>Add client</td><td class="btn">Cancel</td><td class="arrow">Previous screen</td><td></td></tr>
+  <tr><td>Compare videos</td><td class="btn">Compare, Start over</td><td class="arrow">Stays</td><td>Progress, then shared format, structure, hook pattern, what to copy, where they differ. Links open videos. No onward step</td></tr>
+  <tr><td>Channel</td><td class="btn">Analyse, Show all N videos</td><td class="arrow">Stays</td><td>Formats it uses, top videos (open on platform). No onward step</td></tr>
+  <tr><td>Settings</td><td class="btn">System, Light, Dark · English, 繁體中文</td><td class="arrow">Stays</td><td>Applies at once</td></tr>
+  </tbody></table></div></details>
+
+  <details><summary>Client Home, Find ideas, Results, breakdown drawer, save modal</summary><div class="tw"><table>
+  <thead><tr><th>Screen</th><th>Button or link</th><th>Goes to</th><th>What you land on</th></tr></thead><tbody>
+  <tr><td>Home</td><td class="btn">Find ideas for X</td><td class="arrow">Find ideas</td><td></td></tr>
+  <tr><td>Home</td><td class="btn">Save to Research (Film next pick)</td><td class="arrow">Which video modal, or saved at once if no slots</td><td>Card shows Undo and <b>Plan the shots</b></td></tr>
+  <tr><td>Home</td><td class="btn">Plan the shots</td><td class="arrow">Plan (Still planning)</td><td>Makes a plan directly, skipping the Research pick</td></tr>
+  <tr><td>Home</td><td class="btn">See them in Plans · See all N in Plans · pipeline step</td><td class="arrow">Plans (scrolled to that column)</td><td></td></tr>
+  <tr><td>Home</td><td class="btn">Go through all N</td><td class="arrow">Review (back: Home)</td><td></td></tr>
+  <tr><td>Home</td><td class="btn">Approve (manager) · plan name</td><td class="arrow">Stays · Plan</td><td></td></tr>
+  <tr><td>Home</td><td class="btn">Check TikTok now / Check again</td><td class="arrow">Stays</td><td>Refreshes the daily trend check</td></tr>
+  <tr><td>Find ideas</td><td class="btn">Find trending videos · Enter · voice</td><td class="arrow">Results</td><td>Live: loading card first; if you left, a toast with <b>View</b></td></tr>
+  <tr><td>Find ideas</td><td class="btn">Back to your results for "q"</td><td class="arrow">Results</td><td>Reruns if another search is on screen</td></tr>
+  <tr><td>Find ideas</td><td class="btn">Open · Run again (Your searches)</td><td class="arrow">Results</td><td>New since last time marked New</td></tr>
+  <tr><td>Find ideas</td><td class="btn">Open Research · Search "topic" · starting point</td><td class="arrow">Research · Results · Results</td><td></td></tr>
+  <tr><td>Results</td><td class="btn">+ Save / ✓ Video n</td><td class="arrow">Which video modal, then Saved toast</td><td>Pressing again removes the row (unless planned)</td></tr>
+  <tr><td>Results</td><td class="btn">Open plan · status</td><td class="arrow">Plan</td><td>Only shown when the video already has a plan</td></tr>
+  <tr><td>Results</td><td class="btn">See why it worked · a tile</td><td class="arrow">Breakdown drawer</td><td></td></tr>
+  <tr><td>Results</td><td class="btn">Filters, sort, pattern chips, ✕ on chips</td><td class="arrow">Stays</td><td></td></tr>
+  <tr><td>Results</td><td class="btn">Open Research (saved strip)</td><td class="arrow">Research</td><td></td></tr>
+  <tr><td>Drawer</td><td class="btn">Save to Research · ✓ Saved · Open Research · Open plan · status</td><td class="arrow">Modal · removes · Research · Plan</td><td></td></tr>
+  <tr><td>Drawer</td><td class="btn">Re-analyse · How we calculate this · Watch on platform · ✕</td><td class="arrow">Stays · new tab · new tab · closes</td><td></td></tr>
+  <tr><td>Save modal</td><td class="btn">Video n · Not sure yet · Cancel</td><td class="arrow">Saved (slot or Unsorted) · closes</td><td></td></tr>
+  <tr><td>Saved toast</td><td class="btn">Change · Undo · ✕</td><td class="arrow">Save modal · removes · closes</td><td></td></tr>
+  </tbody></table></div></details>
+
+  <details><summary>Research, Plans, Review</summary><div class="tw"><table>
+  <thead><tr><th>Screen</th><th>Button or link</th><th>Goes to</th><th>What you land on</th></tr></thead><tbody>
+  <tr><td>Research</td><td class="btn">+ Add video</td><td class="arrow">Add a video form</td><td>Number, topic, due date, references</td></tr>
+  <tr><td>Research</td><td class="btn">Add from link · Export CSV</td><td class="arrow">Link form · download</td><td></td></tr>
+  <tr><td>Research</td><td class="btn">Status: ★ Picked</td><td class="arrow">Stays + toast</td><td>Plan made in Still planning. <b>Open Plans</b> in the toast</td></tr>
+  <tr><td>Research</td><td class="btn">Status: Backup · Not picked</td><td class="arrow">Stays</td><td>Asks Continue or Cancel when it would delete a plan. Locked once Waiting or later</td></tr>
+  <tr><td>Research</td><td class="btn">Status pill (Still planning, Waiting...)</td><td class="arrow">Plan</td><td></td></tr>
+  <tr><td>Research</td><td class="btn">Account name · link icon</td><td class="arrow">Breakdown drawer · platform</td><td></td></tr>
+  <tr><td>Research</td><td class="btn">Find ideas (empty) · Clear filters · ✕ Keep</td><td class="arrow">Find ideas · stays</td><td></td></tr>
+  <tr><td>Plans</td><td class="btn">Start planning · Open plan</td><td class="arrow">Plan (back: plans)</td><td></td></tr>
+  <tr><td>Plans</td><td class="btn">Make the video (approved)</td><td class="arrow">Canvas, editor open</td><td>Back from canvas goes to the Plan, not Plans</td></tr>
+  <tr><td>Plans</td><td class="btn">From research · Remove · Take back</td><td class="arrow">Research · stays · stays</td><td></td></tr>
+  <tr><td>Plans</td><td class="btn">Stage menu (approved card)</td><td class="arrow">Stays</td><td>Ready to film, Filming, Editing, Posted</td></tr>
+  <tr><td>Plans</td><td class="btn">Drag a card</td><td class="arrow">Stays</td><td>Moving an approved card asks first</td></tr>
+  <tr><td>Plans</td><td class="btn">Get review link · Copy link · Turn off link · Make a new link</td><td class="arrow">Stays</td><td>The only place to make the approver link</td></tr>
+  <tr><td>Plans</td><td class="btn">Review N (manager) · Preview as manager (member)</td><td class="arrow">Review (back: Plans)</td><td></td></tr>
+  <tr><td>Review</td><td class="btn">Approve · Approve with changes · Send back · + Comment</td><td class="arrow">Stays</td><td>Card leaves the stack. Manager only</td></tr>
+  <tr><td>Review</td><td class="btn">Back to origin</td><td class="arrow">Home, Plans or All clients</td><td></td></tr>
+  <tr><td>Review</td><td class="btn">All done: Next: client (N waiting) · Back to Plans</td><td class="arrow">Next client's Review · Plans</td><td></td></tr>
+  </tbody></table></div></details>
+
+  <details><summary>Plan, planning board, Canvas, editor, Brief</summary><div class="tw"><table>
+  <thead><tr><th>Screen</th><th>Button or link</th><th>Goes to</th><th>What you land on</th></tr></thead><tbody>
+  <tr><td>Plan</td><td class="btn">Back to (origin)</td><td class="arrow">Where it was opened</td><td>Results, Plans, Research, Home...</td></tr>
+  <tr><td>Plan · planning</td><td class="btn">Use this · Write new ways to start · + Add a shot · From script</td><td class="arrow">Stays</td><td></td></tr>
+  <tr><td>Plan · planning</td><td class="btn">Open planning board</td><td class="arrow">Planning board</td><td>Back: the plan</td></tr>
+  <tr><td>Plan · planning</td><td class="btn">Save for later · Find another idea · Send for approval</td><td class="arrow">Origin · Find ideas · stays (Waiting)</td><td></td></tr>
+  <tr><td>Plan · waiting, member</td><td class="btn">Take it back · Open Plans · Plan another video</td><td class="arrow">Stays · Plans · Find ideas</td><td></td></tr>
+  <tr><td>Plan · waiting, manager</td><td class="btn">Send back · Approve with changes · Approve</td><td class="arrow">Stays</td><td>Comment required for the first two</td></tr>
+  <tr><td>Plan · approved</td><td class="btn">Make the video · Open the canvas</td><td class="arrow">Canvas (editor open · closed)</td><td></td></tr>
+  <tr><td>Plan · approved</td><td class="btn">Edit · Plan another video · Copy brief for editor</td><td class="arrow">Confirm, then Waiting · Find ideas · clipboard</td><td></td></tr>
+  <tr><td>Plan · approved</td><td class="btn">Use this take · Delete · Download · Send to manager for approval · Publish (simulated)</td><td class="arrow">Stays</td><td>Production panels at the bottom of the plan</td></tr>
+  <tr><td>Planning board</td><td class="btn">Back to the plan · edge click · Change the shot list · Line the shots up again · Undo</td><td class="arrow">Plan · stays</td><td></td></tr>
+  <tr><td>Canvas picker</td><td class="btn">A plan · Go to Plans</td><td class="arrow">Canvas · Plans</td><td></td></tr>
+  <tr><td>Canvas</td><td class="btn">Add · Open editor · Back to plan</td><td class="arrow">Stays · editor · Plan</td><td></td></tr>
+  <tr><td>Editor</td><td class="btn">Clips, Captions, Logo, Export, Send steps · tool tabs · Fill in shot order</td><td class="arrow">Stays</td><td></td></tr>
+  <tr><td>Editor</td><td class="btn">Export and send · Export · Download · Send to manager for approval</td><td class="arrow">Stays</td><td>Cut appears only on the approver link page</td></tr>
+  <tr><td>Editor</td><td class="btn">Back to canvas</td><td class="arrow">Canvas</td><td></td></tr>
+  <tr><td>Brief</td><td class="btn">Fields, can't-film ticks</td><td class="arrow">Stays</td><td>Saves as you type. "What we've learned" (client memory) below. No links out</td></tr>
+  </tbody></table></div></details>
+
+  <h3>Dead ends and gaps in today's flow</h3>
+  <ol class="gaps">
+    <li><strong>The demo can never approve.</strong> "Try the demo" always signs in as a team member, and there is no role switch in the app. The approval step, the product's key moment, is only reachable by signing out and choosing "Manager (approves)". <span class="where">LoginScreen.tsx tryDemo · App.tsx</span></li>
+    <li><strong>All clients Home speaks to the manager, whoever is signed in.</strong> As a team member it says "1 more is waiting for you to approve", and <b>Open</b> leads to a read-only Review. <span class="where">OverviewScreen.tsx (seen live as Team member)</span></li>
+    <li><strong>Canvas Back always goes to the plan.</strong> Opened from the sidebar Canvas or from Plans "Make the video", Back still lands on the Plan page, not where you came from. <span class="where">App.tsx CanvasScreen onBack</span></li>
+    <li><strong>Two ways to make a plan, with different rules.</strong> Research says plans are made by setting a row to ★ Picked; Home's "Plan the shots" makes one directly, and Results only shows a plan button once a plan exists. <span class="where">App.tsx planNow, planFromVideo, pickRow</span></li>
+    <li><strong>Finished videos can't be approved in the app.</strong> "Send to manager for approval" on a cut only reaches the approver link page. The in-app Review shows plans only, and the link is made only on the Plans board's Waiting column. <span class="where">CutPanel, ExportBar, ReviewScreen, ShortlistBoard</span></li>
+    <li><strong>Making the video lives in three places.</strong> Plan page bottom (checklist, The video, Post), Canvas, and the editor inside Canvas. The sidebar Canvas is gated on approval and needs a picker. <span class="where">PlanScreen, CanvasPick, CanvasScreen</span></li>
+    <li><strong>Compare videos and Channel are dead ends.</strong> Their results can't be saved to Research or turned into a plan, and on All clients they have no client to save to. <span class="where">CompareScreen, ChannelScreen</span></li>
+    <li><strong>Brief is a leaf.</strong> Home passes an "edit brief" handler that is never rendered, and nothing links to Brief or its client memory except the sidebar. Memory is shown, not used. <span class="where">ClientHome onEditBrief unused</span></li>
+    <li><strong>Client side is a stub.</strong> "Continue" as Client ends at "coming soon"; <code>ClientPortal.tsx</code> is built but not wired. <span class="where">LoginScreen, ClientPortal</span></li>
+    <li><strong>No addresses.</strong> Browser Back leaves the app, nothing is linkable, and Results, Review, Plan, Board and Canvas don't survive a refresh (they fall back to Find ideas or Plans). <span class="where">App.tsx restoreTab</span></li>
+    <li><strong>"Sent back" has no column.</strong> The Plans badge counts sent-back plans, but they sit in Still planning with no lane of their own. <span class="where">ShortlistBoard COLUMNS</span></li>
+    <li><strong>Layout at about 1050px wide.</strong> Find ideas' "Your searches" table squeezes into a one-letter-wide column, and the Plans board's third column is cut off (it scrolls sideways). <span class="where">seen live, localhost:5192</span></li>
+    <li><strong>Leftover props.</strong> <code>onFindMore</code> on the Plans board is unused. The landing in-app (logo) has no "Back to the app", only Log in and Try the demo, which both just return. <span class="where">ShortlistBoard, App.tsx showLanding</span></li>
+  </ol>
+</section>
+
+<!-- ============================ FLOW 1 ============================ -->
+<section class="panel" id="p-f1" role="tabpanel" aria-labelledby="t-f1" hidden>
+  <span class="pill">Flow 1 · linear pipeline</span>
+  <h2 style="margin-top:.4em">Stage Rail</h2>
+  <p class="lede">A client is a six-step pipeline shown as a numbered rail: Find, Collect, Plan, Approve, Make, Post. Every stage page ends with one "Next" button, and the rail shows how many items sit at each stage. The app teaches the job by its shape.</p>
+  <div class="grid2">
+    <div class="card"><h4>Principle</h4><p>One direction, one primary action per page. Stage pages replace tabs. Plans stops being a board and becomes stage 3 and 4 lists. Production gets its own stage instead of sitting at the bottom of the plan.</p></div>
+    <div class="card"><h4>Serves best</h4><p>New team members, juniors and the demo. Anyone who doesn't yet know the agency's process. Judges clicking through in five minutes.</p></div>
+    <div class="card"><h4>What changes from today</h4><ul><li>Sidebar client tabs become the rail (Home becomes the rail's summary header)</li><li>Research renamed Collect; Compare and Channel move inside Find with "Add to Collect"</li><li>Batch "Send N for approval" from stage 3</li><li>Make = checklist, Canvas, editor for one plan; Post is its own step</li><li>Demo asks "Who are you today?" and the avatar menu switches role</li></ul></div>
+    <div class="card"><h4>Trade-offs</h4><ul><li>+ Easiest to learn, no dead ends by construction</li><li>+ Batch actions fit naturally between stages</li><li>− Real work isn't linear: sent-back plans, re-picks and filming across days fight the rail</li><li>− Managers who only approve must walk through a client's rail; cross-client approval needs an extra page</li><li>− Six stages is a lot of chrome for a two-person agency</li></ul></div>
+  </div>
+
+  <h3>Entry: new or returning, staff or manager</h3>
+  <div class="dg" data-title="Stage Rail · entry and roles"><script type="text/plain" class="dg-src">
+flowchart TB
+  L["<b>Landing</b>"]:::page
+  LG["<b>Log in</b><br/>email · role"]:::page
+  RP["<b>Who are you today?</b><br/>Team member · Manager<br/>demo only, switch later in avatar menu"]:::nw
+  D1{"First time<br/>in this agency?"}:::dec
+  D2{"Role?"}:::dec
+  D3{"Plans waiting<br/>for you?"}:::dec
+  SET["<b>Set up your first client</b><br/>name, niche, videos per month<br/>3 fields, rest later in Brief"]:::nw
+  AC["<b>All clients</b><br/>one row per client with its rail counts"]:::page
+  R1["Client rail · 1 Find<br/>with a 3-tip guide"]:::nw
+  RL["Last client · last stage"]:::page
+  R4["Client rail · 4 Approve"]:::page
+  L -->|"Try the demo"| RP
+  L -->|"Log in"| LG
+  RP -->|"Team member · Manager"| D1
+  LG -->|"Log in"| D1
+  D1 -->|"yes"| SET
+  SET -->|"Save and find ideas"| R1
+  SET -->|"Skip, use sample clients"| AC
+  D1 -->|"no"| D2
+  D2 -->|"Team member"| RL
+  D2 -->|"Manager"| D3
+  D3 -->|"yes"| R4
+  D3 -->|"no"| RL
+  AC -->|"client row · stage count"| RL
+</script></div>
+
+  <h3>The client rail, page by page</h3>
+  <div class="dg" data-title="Stage Rail · client workspace"><script type="text/plain" class="dg-src">
+flowchart TB
+  RAIL(["Rail header on every stage<br/>1 Find 2 Collect 3 Plan 4 Approve 5 Make 6 Post<br/>counts · month target · Brief link"]):::nw
+  F["<b>1 Find</b><br/>search, Your searches, Where to start,<br/>Best to copy, grid · tools: Compare links,<br/>Analyse a channel"]:::page
+  BD["<b>Breakdown drawer</b>"]:::modal
+  C["<b>2 Collect</b><br/>references grouped by the client's<br/>paid videos · pick one per video"]:::page
+  P["<b>3 Plan</b><br/>left: picked videos · right: hooks,<br/>shot list, board view toggle"]:::page
+  A["<b>4 Approve</b><br/>queue of waiting plans and finished cuts<br/>Approve · With changes · Send back"]:::page
+  M["<b>5 Make</b><br/>per approved plan: shot checklist,<br/>Canvas, editor"]:::page
+  PO["<b>6 Post</b><br/>publish per platform, mark posted,<br/>results later"]:::page
+  B["<b>Brief</b><br/>profile and What we've learned"]:::page
+  RAIL -->|"any stage number"| F
+  F -->|"See why it worked"| BD
+  BD -->|"Add to Collect"| F
+  F -->|"+ Add to Collect · Video n"| F
+  F -->|"Next: pick from N collected"| C
+  C -->|"Find more for Video n"| F
+  C -->|"Pick"| C
+  C -->|"Next: plan N picked"| P
+  P -->|"Send N for approval"| A
+  A -->|"Approve"| M
+  A -->|"Send back · note pinned"| P
+  M -->|"Send cut for approval"| A
+  A -->|"Approve cut"| PO
+  PO -->|"Next video for this client"| F
+  RAIL -->|"client name · Brief"| B
+  B -->|"Back to stage"| RAIL
+</script></div>
+
+  <div class="tw"><table>
+  <thead><tr><th>Page</th><th>Key content</th><th>Buttons</th><th>Goes to</th></tr></thead><tbody>
+  <tr><td>1 Find</td><td>Search, starting points from the Brief, Best to copy, grid, Compare and Channel as tools</td><td>Find trending videos · + Add to Collect · See why it worked · <b>Next: pick from N</b></td><td>Results in place · Video n modal · drawer · 2 Collect</td></tr>
+  <tr><td>2 Collect</td><td>One group per paid video, references inside, Unsorted</td><td>Pick · Backup · Find more for Video n · Add from link · <b>Next: plan N picked</b></td><td>Stays · 1 Find, filtered · form · 3 Plan</td></tr>
+  <tr><td>3 Plan</td><td>List of picked videos with shot counts; editor pane</td><td>Use this hook · + Add a shot · Board view · <b>Send N for approval</b> (due date shown)</td><td>Stays · board toggle · 4 Approve</td></tr>
+  <tr><td>4 Approve</td><td>Manager: decision stack (plans, then cuts). Member: status list and approver link</td><td>Approve · Approve with changes · Send back · Copy approver link · Next client</td><td>5 Make · 3 Plan with note · next client's stage 4</td></tr>
+  <tr><td>5 Make</td><td>One approved plan at a time: takes per shot, Canvas, editor</td><td>Use this take · Open canvas · Open editor · <b>Send cut for approval</b></td><td>Stays · canvas · editor · 4 Approve</td></tr>
+  <tr><td>6 Post</td><td>Approved cut, caption, platforms</td><td>Publish · Mark posted · <b>Next video</b></td><td>Stays · 1 Find</td></tr>
+  </tbody></table></div>
+</section>
+
+<!-- ============================ FLOW 2 ============================ -->
+<section class="panel" id="p-f2" role="tabpanel" aria-labelledby="t-f2" hidden>
+  <span class="pill">Flow 2 · hub and spoke</span>
+  <h2 style="margin-top:.4em">Client Hub</h2>
+  <p class="lede">Two hubs. The agency hub is an inbox of what needs a person today across every client. The client hub is that client's Home: a card per question, each card a door to one focused page, and every page returns to the hub. People start from "what needs me", not from a search box.</p>
+  <div class="grid2">
+    <div class="card"><h4>Principle</h4><p>Role-based landing. Managers land on an Approvals inbox across clients; team members land on "My work". Client Home is the centre, all other client pages are spokes with "Back to client home".</p></div>
+    <div class="card"><h4>Serves best</h4><p>Managers and account leads running many clients, and returning users who come back to finish things rather than start them.</p></div>
+    <div class="card"><h4>What changes from today</h4><ul><li>New agency pages: Inbox (approvals of plans and cuts, all clients), My work, Clients, Agency settings (team and roles)</li><li>Picking a client opens Home, not Find ideas (reverses the 2 Nov decision)</li><li>Brief and memory become a Home card</li><li>Compare and Channel become agency tools with "Save to a client"</li></ul></div>
+    <div class="card"><h4>Trade-offs</h4><ul><li>+ Fastest manager loop; approvals no longer need a client switch</li><li>+ Fixes Brief, Compare and Channel dead ends with explicit returns</li><li>− One extra click to search, the most frequent team action</li><li>− Hubs need good data to feel useful; empty states matter more</li><li>− Reverses a founder decision (client opens Find ideas)</li></ul></div>
+  </div>
+
+  <h3>Agency level: who lands where</h3>
+  <div class="dg" data-title="Client Hub · agency level"><script type="text/plain" class="dg-src">
+flowchart TB
+  LG["<b>Log in</b> or Try the demo<br/>role chosen"]:::page
+  D1{"Any clients yet?"}:::dec
+  D2{"Role?"}:::dec
+  ON["<b>Add your first client</b>"]:::nw
+  IN["<b>Inbox</b> · manager<br/>plans and finished cuts waiting,<br/>all clients, oldest first"]:::nw
+  MW["<b>My work</b> · team member<br/>sent back to me, due this week,<br/>approved and ready to film"]:::nw
+  CL["<b>Clients</b><br/>month progress per client"]:::page
+  TL["<b>Tools</b><br/>Compare videos · Analyse a channel"]:::page
+  AS["<b>Agency settings</b><br/>agency, team, who approves"]:::nw
+  CH["<b>Client Home</b> hub"]:::page
+  FOC["<b>Focus review</b><br/>one item, full screen"]:::page
+  PICK["<b>Save to which client?</b>"]:::nw
+  LG --> D1
+  D1 -->|"no"| ON
+  ON -->|"Save"| CH
+  D1 -->|"yes"| D2
+  D2 -->|"Manager"| IN
+  D2 -->|"Team member"| MW
+  IN -->|"Review all · an item"| FOC
+  FOC -->|"Approve · With changes · Send back"| FOC
+  FOC -->|"Inbox zero: Back to Inbox"| IN
+  MW -->|"a sent-back plan · a due plan"| CH
+  CL -->|"client row"| CH
+  TL -->|"Save to client"| PICK
+  PICK -->|"a client"| CH
+  IN -.->|"sidebar"| CL
+  IN -.->|"sidebar"| TL
+  IN -.->|"sidebar"| AS
+</script></div>
+
+  <h3>The client hub and its spokes</h3>
+  <div class="dg" data-title="Client Hub · client hub"><script type="text/plain" class="dg-src">
+flowchart TB
+  H["<b>Client Home</b> hub<br/>This month · Film next · In planning ·<br/>Waiting · Ready to film · Posted ·<br/>Brief and What we've learned"]:::page
+  FI["<b>Find ideas</b><br/>search, results, drawer"]:::page
+  RE["<b>Research</b><br/>references by paid video"]:::page
+  PL["<b>Plans</b><br/>board: Planning · Sent back ·<br/>Waiting · Approved"]:::page
+  P["<b>Plan</b><br/>hooks, shots, board view,<br/>decision bar for manager"]:::page
+  MK["<b>Make</b><br/>checklist · Canvas · editor"]:::page
+  BR["<b>Brief</b><br/>profile, memory, can't film"]:::page
+  H -->|"Film next: Find more"| FI
+  H -->|"Film next: Save to Research"| RE
+  H -->|"In planning card"| PL
+  H -->|"a plan"| P
+  H -->|"Waiting: Review N"| P
+  H -->|"Ready to film: Make the video"| MK
+  H -->|"Brief card: Edit"| BR
+  FI -->|"Back to client home"| H
+  RE -->|"Back to client home"| H
+  PL -->|"Back to client home"| H
+  BR -->|"Back to client home"| H
+  FI -->|"Save to Research"| RE
+  RE -->|"Pick"| P
+  PL -->|"Open plan"| P
+  P -->|"Send for approval"| H
+  P -->|"Approved: Make the video"| MK
+  MK -->|"Send cut for approval"| H
+  MK -->|"Back to plan"| P
+</script></div>
+
+  <div class="tw"><table>
+  <thead><tr><th>Page</th><th>Key content</th><th>Buttons</th><th>Goes to</th></tr></thead><tbody>
+  <tr><td>Inbox (manager)</td><td>Waiting plans and cuts across clients, age, due date</td><td>Review all · an item · Approve inline · Copy approver link</td><td>Focus review · stays</td></tr>
+  <tr><td>My work (member)</td><td>Sent back to me, due this week, ready to film</td><td>Open · Find ideas for X</td><td>Plan or Client Home · Find ideas</td></tr>
+  <tr><td>Focus review</td><td>One plan or cut: reference, shots, comments, memory hints</td><td>Approve · Approve with changes · Send back · Skip · Back to Inbox</td><td>Next item, any client · Inbox</td></tr>
+  <tr><td>Client Home</td><td>Card per question; every card names its count</td><td>Find more · Review N · Make the video · Edit brief · a plan</td><td>Spoke pages</td></tr>
+  <tr><td>Spokes</td><td>Find ideas, Research, Plans, Plan, Make, Brief</td><td>Back to client home (always), page actions</td><td>Client Home</td></tr>
+  <tr><td>Tools</td><td>Compare videos, Analyse a channel</td><td>Save to client</td><td>Client picker, then Research</td></tr>
+  </tbody></table></div>
+</section>
+
+<!-- ============================ FLOW 3 ============================ -->
+<section class="panel" id="p-f3" role="tabpanel" aria-labelledby="t-f3" hidden>
+  <span class="pill">Flow 3 · board-centric</span>
+  <h2 style="margin-top:.4em">Video Board</h2>
+  <p class="lede">The client's month is a board of the videos they pay for. Twelve videos a month means twelve cards. A card moves left to right: Needs a reference, Planning, Waiting, Approved, Making, Posted. Everything about one video (its references, plan, takes, cut and post) opens in that card. Find ideas becomes a panel that fills a card.</p>
+  <div class="grid2">
+    <div class="card"><h4>Principle</h4><p>The unit of work is the paid video, not the search result. Research slots, plans and production stages already exist in the data; this flow puts them on one surface and removes Research and Plans as separate lists.</p></div>
+    <div class="card"><h4>Serves best</h4><p>Production-heavy teams who live in the work all week (planners, editors) and anyone who thinks "where's Video 7?". Also the client view later: the same board, read-only.</p></div>
+    <div class="card"><h4>What changes from today</h4><ul><li>Plans board grows to six columns and takes Research's slots as its cards</li><li>Card workspace with tabs: References, Plan, Make, Post, Activity</li><li>Find ideas opens as a side panel scoped to a card ("Add to Video 3")</li><li>Canvas picker and sidebar Canvas go away; Canvas is the Make tab</li><li>Review = board filtered to "Waiting on me", then focus mode</li></ul></div>
+    <div class="card"><h4>Trade-offs</h4><ul><li>+ One place per video, no back-stack confusion, no duplicate lists</li><li>+ Cuts and plans share the same approval column</li><li>+ The month target is literally the number of cards</li><li>− Exploring with no video in mind needs a home: a standing "Inbox ideas" card or Unsorted lane</li><li>− Dense board on small screens; needs a list view</li><li>− Biggest rebuild of the three</li></ul></div>
+  </div>
+
+  <h3>Entry and the agency board</h3>
+  <div class="dg" data-title="Video Board · entry"><script type="text/plain" class="dg-src">
+flowchart TB
+  LG["<b>Log in</b> or Try the demo<br/>role chosen"]:::page
+  D1{"First time?"}:::dec
+  D2{"Role?"}:::dec
+  NC["<b>Add a client</b><br/>videos per month makes the cards"]:::nw
+  AB["<b>All clients board</b><br/>one row per client, card counts per column<br/>filter: Waiting on me"]:::nw
+  CB["<b>Client board</b><br/>last client"]:::page
+  WM["<b>Client board</b><br/>filtered: Waiting on me"]:::page
+  LG --> D1
+  D1 -->|"yes"| NC
+  NC -->|"Save: 12 empty cards"| CB
+  D1 -->|"no"| D2
+  D2 -->|"Team member"| CB
+  D2 -->|"Manager"| AB
+  AB -->|"a client row"| CB
+  AB -->|"a Waiting count"| WM
+  WM -->|"Review N"| FR["<b>Focus review</b>"]:::page
+  FR -->|"Approve · With changes · Send back"| FR
+  FR -->|"Done: next client · Back to board"| AB
+</script></div>
+
+  <h3>One card, start to finish</h3>
+  <div class="dg" data-title="Video Board · card lifecycle"><script type="text/plain" class="dg-src">
+flowchart TB
+  B["<b>Client board</b><br/>Needs a reference · Planning · Waiting ·<br/>Approved · Making · Posted · Unsorted ideas"]:::page
+  CW["<b>Card workspace</b> · Video n<br/>tabs: References · Plan · Make · Post · Activity"]:::nw
+  FP["<b>Find panel</b><br/>search scoped to this card,<br/>Best to copy, drawer"]:::nw
+  S{"Card column"}:::dec
+  REF["References tab<br/>rows, pick one"]:::page
+  PLN["Plan tab<br/>hooks, shots, board view"]:::page
+  WT(["Waiting · plan or cut"]):::st
+  MK["Make tab<br/>takes · Canvas · editor"]:::page
+  PO["Post tab<br/>publish, caption, results"]:::page
+  BR["<b>Brief</b> drawer from client name<br/>profile and memory"]:::page
+  B -->|"a card"| CW
+  B -->|"+ Find references on a card"| FP
+  FP -->|"Add to Video n"| REF
+  CW --> S
+  S -->|"Needs a reference"| REF
+  REF -->|"Find more"| FP
+  REF -->|"Pick: card moves to Planning"| PLN
+  S -->|"Planning or Sent back"| PLN
+  PLN -->|"Send for approval"| WT
+  S -->|"Waiting"| WT
+  WT -->|"manager: Approve"| MK
+  WT -->|"manager: Send back with note"| PLN
+  WT -->|"member: Take back"| PLN
+  S -->|"Approved or Making"| MK
+  MK -->|"Send cut for approval"| WT
+  WT -->|"Approve cut"| PO
+  PO -->|"Publish: card to Posted"| B
+  CW -->|"Close · Esc"| B
+  B -->|"client name"| BR
+</script></div>
+
+  <div class="tw"><table>
+  <thead><tr><th>Page</th><th>Key content</th><th>Buttons</th><th>Goes to</th></tr></thead><tbody>
+  <tr><td>All clients board</td><td>Rows of clients, counts per column, due soon</td><td>A client · a Waiting count · + Add client</td><td>Client board · filtered board · form</td></tr>
+  <tr><td>Client board</td><td>Six columns of paid-video cards, Unsorted ideas lane, month ring</td><td>A card · + Find references · drag · filter: Mine, Waiting on me · Review N</td><td>Card workspace · Find panel · stays · Focus review</td></tr>
+  <tr><td>Find panel</td><td>Search, results, Best to copy, breakdown</td><td>Add to Video n · Add to Unsorted · Close</td><td>Card References tab · lane · board</td></tr>
+  <tr><td>Card · References</td><td>Saved references for this video</td><td>Pick · Backup · Find more · Add from link</td><td>Plan tab · stays · Find panel</td></tr>
+  <tr><td>Card · Plan</td><td>Hooks, shot list, node board view, manager decision bar</td><td>Send for approval · Take back · Approve · Send back</td><td>Waiting · Planning · Make · Plan</td></tr>
+  <tr><td>Card · Make</td><td>Takes per shot, Canvas, editor, export</td><td>Use this take · Open editor · Send cut for approval</td><td>Stays · editor · Waiting</td></tr>
+  <tr><td>Card · Post and Activity</td><td>Platforms, caption, publish; every decision and comment</td><td>Publish · Mark posted</td><td>Board, card in Posted</td></tr>
+  </tbody></table></div>
+</section>
+
+<!-- ============================ COMPARISON ============================ -->
+<section class="panel" id="p-cmp" role="tabpanel" aria-labelledby="t-cmp" hidden>
+  <h2 style="margin-top:.6em">Comparison</h2>
+  <p class="lede">Scored 1 to 5 against what Remake needs this month: a demo that shows the whole loop, a manager who approves quickly, and a team that finds and plans every day.</p>
+  <div class="tw"><table>
+  <thead><tr><th>Criterion</th><th>Today</th><th>1 · Stage Rail</th><th>2 · Client Hub</th><th>3 · Video Board</th></tr></thead><tbody>
+  <tr><td>New user and demo learnability</td><td class="score"><span class="dots">●●○○○</span> 2</td><td class="score"><span class="dots">●●●●●</span> 5</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●●●○</span> 4</td></tr>
+  <tr><td>Manager approval speed across clients</td><td class="score"><span class="dots">●●○○○</span> 2</td><td class="score"><span class="dots">●●○○○</span> 2</td><td class="score"><span class="dots">●●●●●</span> 5</td><td class="score"><span class="dots">●●●●○</span> 4</td></tr>
+  <tr><td>Team member's daily find and plan loop</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●●●○</span> 4</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●●●○</span> 4</td></tr>
+  <tr><td>Make and post (production) fit</td><td class="score"><span class="dots">●●○○○</span> 2</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●●●●</span> 5</td></tr>
+  <tr><td>Handles non-linear work (sent back, re-pick, multi-day filming)</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●○○○</span> 2</td><td class="score"><span class="dots">●●●●○</span> 4</td><td class="score"><span class="dots">●●●●●</span> 5</td></tr>
+  <tr><td>Removes duplicate lists and dead ends</td><td class="score"><span class="dots">●○○○○</span> 1</td><td class="score"><span class="dots">●●●●○</span> 4</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●●●●</span> 5</td></tr>
+  <tr><td>Ready for a client view later</td><td class="score"><span class="dots">●○○○○</span> 1</td><td class="score"><span class="dots">●●○○○</span> 2</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●●●●</span> 5</td></tr>
+  <tr><td>Build cost from today (5 = cheapest)</td><td class="score">–</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●●○○</span> 3</td><td class="score"><span class="dots">●●○○○</span> 2</td></tr>
+  <tr><td>Fits founder decisions (client opens Find ideas)</td><td class="score">yes</td><td class="score">yes (stage 1)</td><td class="score">no, opens Home</td><td class="score">partly, opens the board</td></tr>
+  </tbody></table></div>
+  <p class="note">Scores are a design judgement from the code and docs, not user data. Evidence for the agency workflow so far comes from one agency (see <code>client-workspace-nav.md</code> caveats), so treat them as directional.</p>
+
+  <div class="verdict">
+    <h3>Recommendation: Flow 3, Video Board, with two borrowings</h3>
+    <p><strong>Build the Video Board as the client workspace.</strong> The data already points there: Research is grouped by the client's paid videos, a plan belongs to one of those videos, and approved plans already carry Filming, Editing and Posted stages. Putting them on one board removes the two biggest problems today: the same work split across Research, Plans, the Plan page, Canvas and the editor, and Back buttons that lose your place.</p>
+    <ul>
+      <li><strong>From Flow 2, take the manager's Inbox.</strong> One cross-client "Waiting on me" view with focus review, covering plans and finished cuts. It fixes gaps 1, 2 and 5.</li>
+      <li><strong>From Flow 1, take the first-run guide and the role picker.</strong> "Who are you today?" on Try the demo, and a three-step guide on the first board, so the demo can show approval.</li>
+      <li><strong>Keep the founder rule in spirit:</strong> opening a client lands on its board with the Find panel one click away ("+ Find references"), and a returning team member can keep Find as their default.</li>
+    </ul>
+    <p><strong>Do first, whichever flow wins</strong> (cheap, fixes real dead ends): role picker on Try the demo; Canvas and editor Back return to origin; finished cuts appear in Review; Compare and Channel results get "Save to Research"; a Brief link on Home; a Sent back lane on Plans; real URLs per screen so Back and refresh work.</p>
+    <p class="note" style="color:var(--on-navy-muted)">This changes a major product decision (Research and Plans as separate tabs, and the sidebar from <code>app-flow.md</code>). Per CLAUDE.md, confirm with the founder before anyone builds it; nothing here touches <code>src/</code>.</p>
+  </div>
+
+  <h3>New vs returning, staff vs manager, in the recommended flow</h3>
+  <div class="tw"><table>
+  <thead><tr><th>Who</th><th>Lands on</th><th>First click</th><th>Ends the session on</th></tr></thead><tbody>
+  <tr><td>New, demo</td><td>Role picker, then sample client board with the guide</td><td>A card in Needs a reference, then + Find references</td><td>A card sent for approval, or approved if they chose Manager</td></tr>
+  <tr><td>New, real agency</td><td>Add a client (videos per month makes the cards)</td><td>+ Find references on Video 1</td><td>First plan waiting</td></tr>
+  <tr><td>Returning team member</td><td>Last client's board, filter Mine</td><td>A sent-back or Planning card</td><td>Card moved one column</td></tr>
+  <tr><td>Returning manager</td><td>Inbox: Waiting on me, all clients</td><td>Review N, focus mode</td><td>Inbox zero, then All clients board</td></tr>
+  </tbody></table></div>
+</section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+(function () {
+  var CLASSES = [
+    'classDef page fill:#ffffff,stroke:#1a33f2,stroke-width:1.5px,color:#1a1a22',
+    'classDef modal fill:#f2e9ff,stroke:#7b1fe0,stroke-width:1.5px,stroke-dasharray:5 3,color:#1a1a22',
+    'classDef dec fill:#060a47,stroke:#060a47,color:#f4f5ff',
+    'classDef st fill:#fbf3e1,stroke:#8a5a06,stroke-width:1.2px,color:#1a1a22',
+    'classDef ext fill:#f5f5f7,stroke:#9a9cab,stroke-width:1.2px,stroke-dasharray:4 3,color:#1a1a22',
+    'classDef gap fill:#fdeceb,stroke:#b42318,stroke-width:1.5px,color:#7a1a12',
+    'classDef nw fill:#e5f4ea,stroke:#1a7a44,stroke-width:1.5px,color:#123d24'
+  ].join('\n');
+
+  var ok = typeof window.mermaid !== 'undefined';
+  if (ok) {
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'base',
+      themeVariables: {
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: '14px',
+        primaryColor: '#ffffff',
+        primaryBorderColor: '#1a33f2',
+        primaryTextColor: '#1a1a22',
+        lineColor: '#6b6e86',
+        edgeLabelBackground: '#ffffff',
+        tertiaryColor: '#f5f5f7'
+      },
+      flowchart: { htmlLabels: true, curve: 'basis', nodeSpacing: 34, rankSpacing: 70, padding: 12, useMaxWidth: false }
+    });
+  }
+
+  // Long edge labels widen the layout a lot: break them into lines of about 18 characters.
+  function wrapLabel(t) {
+    var words = t.split(' '), lines = [], cur = '';
+    words.forEach(function (w) {
+      if (cur && (cur + ' ' + w).length > 18) { lines.push(cur); cur = w; } else { cur = cur ? cur + ' ' + w : w; }
+    });
+    if (cur) lines.push(cur);
+    return lines.join('<br/>');
+  }
+  function wrapEdges(s) {
+    return s.replace(/\|"([^"]*)"\|/g, function (_, t) { return '|"' + wrapLabel(t) + '"|'; });
+  }
+  window.__wrapEdges = wrapEdges;
+
+  var counter = 0;
+  function setup(dg) {
+    if (dg.dataset.done) return;
+    dg.dataset.done = '1';
+    var src = wrapEdges(dg.querySelector('.dg-src').textContent.trim()) + '\n' + CLASSES;
+    if (dg.dataset.dir) src = src.replace(/^flowchart \w+/, 'flowchart ' + dg.dataset.dir);
+    var head = document.createElement('div');
+    head.className = 'dg-head';
+    head.innerHTML = '<div><strong></strong> <span class="hint">Drag to pan · Ctrl or Cmd + scroll to zoom</span></div>' +
+      '<div class="dg-tools"><button type="button" data-z="out" aria-label="Zoom out">−</button>' +
+      '<button type="button" data-z="in" aria-label="Zoom in">+</button>' +
+      '<button type="button" data-z="fit">Whole</button><button type="button" data-z="one">100%</button></div>';
+    head.querySelector('strong').textContent = dg.dataset.title || 'Diagram';
+    var view = document.createElement('div');
+    view.className = 'dg-view';
+    view.innerHTML = '<div class="dg-loading">Drawing diagram…</div>';
+    dg.appendChild(head);
+    dg.appendChild(view);
+    if (!ok) { view.innerHTML = '<div class="dg-err">The diagram library could not load. Check the network and reload.</div>'; return; }
+    var id = 'dg' + (++counter);
+    mermaid.render(id, src).then(function (res) {
+      view.innerHTML = '<div class="dg-stage">' + res.svg + '</div>';
+      var stage = view.firstChild, svg = stage.querySelector('svg');
+      var vb = svg.viewBox.baseVal;
+      var w = vb && vb.width ? vb.width : svg.getBBox().width, h = vb && vb.height ? vb.height : svg.getBBox().height;
+      svg.setAttribute('width', w); svg.setAttribute('height', h); svg.style.maxWidth = 'none';
+      var s = 1, x = 0, y = 0, MIN = 0.25, MAX = 2.5;
+      function apply() { stage.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + s + ')'; }
+      function fit() {
+        var vw = view.clientWidth;
+        s = Math.min(1, (vw - 24) / w);
+        s = Math.max(s, 0.72);
+        var vh = Math.min(h * s + 24, window.innerHeight * 0.85);
+        view.style.height = Math.max(vh, 260) + 'px';
+        x = Math.max(12, (vw - w * s) / 2); y = 12;
+        apply();
+      }
+      function zoomAt(f, cx, cy) {
+        var ns = Math.min(MAX, Math.max(MIN, s * f));
+        x = cx - (cx - x) * (ns / s); y = cy - (cy - y) * (ns / s); s = ns; apply();
+      }
+      fit();
+      head.querySelector('.dg-tools').addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        var cx = view.clientWidth / 2, cy = view.clientHeight / 2;
+        if (b.dataset.z === 'in') zoomAt(1.2, cx, cy);
+        if (b.dataset.z === 'out') zoomAt(1 / 1.2, cx, cy);
+        if (b.dataset.z === 'fit') { var vw2 = view.clientWidth, vh2 = view.clientHeight; s = Math.min(1, (vw2 - 24) / w, (vh2 - 24) / h); x = (vw2 - w * s) / 2; y = (vh2 - h * s) / 2; apply(); }
+        if (b.dataset.z === 'one') { s = 1; x = 12; y = 12; apply(); }
+      });
+      view.addEventListener('wheel', function (e) {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        var r = view.getBoundingClientRect();
+        zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - r.left, e.clientY - r.top);
+      }, { passive: false });
+      var drag = null;
+      view.addEventListener('pointerdown', function (e) { drag = { px: e.clientX, py: e.clientY, x: x, y: y }; view.classList.add('dragging'); view.setPointerCapture(e.pointerId); });
+      view.addEventListener('pointermove', function (e) { if (!drag) return; x = drag.x + e.clientX - drag.px; y = drag.y + e.clientY - drag.py; apply(); });
+      function end() { drag = null; view.classList.remove('dragging'); }
+      view.addEventListener('pointerup', end); view.addEventListener('pointercancel', end);
+      var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(fit, 150); });
+    }).catch(function (err) {
+      view.innerHTML = '<div class="dg-err"></div>';
+      view.firstChild.textContent = 'Diagram error: ' + (err && err.message ? err.message : err);
+      var stray = document.getElementById('d' + id); if (stray) stray.remove();
+    });
+  }
+
+  function renderPanel(panel) {
+    var list = panel.querySelectorAll('.dg');
+    var chain = Promise.resolve();
+    list.forEach(function (dg) { chain = chain.then(function () { return new Promise(function (r) { setup(dg); setTimeout(r, 0); }); }); });
+  }
+
+  var tabs = document.querySelectorAll('[role="tab"]');
+  function show(name, push) {
+    tabs.forEach(function (t) {
+      var on = t.dataset.tab === name;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    renderPanel(document.getElementById('p-' + name));
+    if (push) { try { history.replaceState(null, '', '#' + name); } catch (e) {} }
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { show(t.dataset.tab, true); window.scrollTo({ top: 0 }); });
+    t.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      var n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      n.focus(); show(n.dataset.tab, true);
+    });
+  });
+  var start = (location.hash || '').slice(1);
+  var valid = ['current', 'f1', 'f2', 'f3', 'cmp'];
+  var go = function () { show(valid.indexOf(start) >= 0 ? start : 'current', false); };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(go); else go();
+})();
+</script>
+</body>
+</html>

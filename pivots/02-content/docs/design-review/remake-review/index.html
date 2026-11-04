@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Remake review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0a1048;--navy-deep:#070b2e;--navy-dot:#2a3170;--blue:#1f3bf5;--sky:#7ab8ff;--ink:#0d0f1a;--muted:#5b6070;--line:#e4e6ee;--paper:#fff;--wash:#f5f6fa}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{display:grid;grid-template-rows:auto 1fr;background:var(--wash);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif}
+header{background:var(--navy-deep);color:#f4f5ff;padding:20px 24px 0;background-image:radial-gradient(circle at 1px 1px,var(--navy-dot) 1px,transparent 1.5px);background-size:24px 24px}
+h1{font:400 30px/1.15 Newsreader,serif;margin:0 0 4px}
+header p{margin:0 0 16px;color:#b9c0e8;font-size:14px}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{font:500 14px/1.3 Inter,sans-serif;border:0;background:transparent;color:#c9cff5;padding:12px 16px 14px;border-radius:10px 10px 0 0;cursor:pointer;text-align:left;transition:background-color .16s cubic-bezier(.2,.8,.2,1),color .16s cubic-bezier(.2,.8,.2,1)}
+nav button small{display:block;font-weight:400;font-size:12px;color:var(--sky)}
+nav button:hover{background:rgba(255,255,255,.08);color:#fff}
+nav button[aria-selected=true]{background:var(--wash);color:var(--ink)}
+nav button[aria-selected=true] small{color:var(--muted)}
+nav button:focus-visible{outline:2px solid var(--sky);outline-offset:-2px}
+main{min-height:0}
+iframe{display:block;width:100%;height:100%;border:0;background:var(--paper)}
+@media (max-width:640px){nav button{padding:10px 12px}nav button small{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Remake review</h1>
+  <p>Each tab is one piece of work. Design proposals only. Nothing here is built into the app.</p>
+  <nav role="tablist" aria-label="Review sections">
+    <button role="tab" data-src="remake-mark/loading.html" aria-selected="true">Loading screen<small>Play mark as search progress</small></button>
+    <button role="tab" data-src="remake-mark/headlines.html" aria-selected="false">Headlines<small>4 headers in the hero</small></button>
+    <button role="tab" data-src="remake-mark/hero.html" aria-selected="false">Hero animation<small>3 ways to use the play mark</small></button>
+    <button role="tab" data-src="remake-mark/logo.html" aria-selected="false">Logo<small>R as the Remake logo</small></button>
+    <button role="tab" data-src="remake-mark/index.html" aria-selected="false">Remake mark<small>3 shapes, same animation</small></button>
+    <button role="tab" data-src="pixel-sets/index.html" aria-selected="false">1. Pixel UI directions<small>New: 3 pixel concepts, subtle to expressive</small></button>
+    <button role="tab" data-src="ui-sets/index.html" aria-selected="false">1a. First UI directions<small>Earlier round, not chosen</small></button>
+    <button role="tab" data-src="flows/index.html" aria-selected="false">2. Site flows<small>3 navigation maps, every button</small></button>
+    <button role="tab" data-src="content/index.html" aria-selected="false">3. Content audit<small>Every line of copy, rewritten</small></button>
+    <button role="tab" data-src="backend/index.html" aria-selected="false">4. Backend setup<small>Minchia's server, running locally</small></button>
+  </nav>
+</header>
+<main><iframe id="view" title="Review section" src="remake-mark/loading.html"></iframe></main>
+<script>
+const tabs=[...document.querySelectorAll('[role=tab]')],view=document.getElementById('view');
+function show(t){tabs.forEach(b=>b.setAttribute('aria-selected',b===t));view.src=t.dataset.src;try{localStorage.setItem('rr-tab',t.dataset.src)}catch(e){}}
+tabs.forEach(t=>t.addEventListener('click',()=>show(t)));
+try{const s=localStorage.getItem('rr-tab');const t=tabs.find(b=>b.dataset.src===s);if(t)show(t)}catch(e){}
+</script>
+</body>
+</html>

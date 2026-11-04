@@ -1,0 +1,1678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remake: Unit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+/* Shared scaffolding for the pixel set pages (frames, scaling, toast, drag). Each concept styles on top. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+input, textarea, select { font: inherit; color: inherit; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-weight: inherit; }
+img.px, .px { image-rendering: pixelated; image-rendering: crisp-edges; }
+img.px { display: block; width: 100%; height: auto; }
+svg.pi { width: 14px; height: 14px; flex: none; display: inline-block; vertical-align: -2px; }
+.pxw { position: relative; display: inline-block; flex: none; }
+.pxw i { position: absolute; background: currentColor; }
+
+/* A screen is designed at 1280 x 800 and scaled to fit its frame */
+.viewport { position: relative; width: 100%; overflow: hidden; isolation: isolate; }
+.screen { position: absolute; left: var(--ox, 0px); top: var(--oy, 0px); width: 1280px; height: 800px; transform: scale(var(--k, 1)); transform-origin: 0 0; overflow: hidden; isolation: isolate; }
+.frame { scroll-margin-top: 72px; }
+body.only { overflow: hidden; }
+body.only .only-vp { position: fixed; inset: 0; height: 100vh; }
+
+.toast { position: absolute; left: 50%; bottom: 28px; z-index: 80; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.3s; white-space: nowrap; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+[data-card] { touch-action: none; cursor: grab; user-select: none; }
+[data-card].is-dragging { opacity: 0.35; }
+.dnd-ghost { position: absolute !important; z-index: 90; pointer-events: none; cursor: grabbing; margin: 0 !important; }
+[data-graph] { position: relative; }
+[data-graph] > svg.links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+[data-node] { position: absolute; touch-action: none; cursor: grab; user-select: none; }
+[data-node].is-dragging { cursor: grabbing; z-index: 5; }
+[data-swipe] { touch-action: none; cursor: grab; }
+[data-swipe].is-swiping { transition: none !important; cursor: grabbing; }
+
+[data-loadbox] .when-loading, [data-loadbox] .when-done { display: none; }
+[data-loadbox].is-loading .when-loading { display: revert; }
+[data-loadbox].is-done .when-done { display: revert; }
+[data-loadbox].is-loading .when-idle, [data-loadbox].is-done .when-idle { display: none; }
+[data-panel] { display: none; } [data-panel].is-on { display: block; }
+[data-playbox] .playhead { left: 0; }
+[data-playbox].is-playing .playhead { animation: rm-playhead var(--dur, 15s) linear infinite; }
+@keyframes rm-playhead { from { left: var(--ph0, 0%); } to { left: var(--ph1, 100%); } }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.scroll { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ===== Concept A: Unit ===== */
+:root { --n: #060a47; --b: #1a33f2; --m: #f2b705; --e: #f6f1e7; --bk: #000; --w: #fff;
+  --ui: 'Geist', system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace; --pix: 'Silkscreen', monospace;
+  --notch: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px, 4px 4px); }
+/* Page chrome */
+body.page { background: var(--w); color: var(--n); font: 400 15px/1.55 var(--ui); }
+.pg { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+.pg-h { padding: 40px 0 28px; border-bottom: 2px solid var(--e); }
+.pg-h .crumb { font: 500 13px var(--mono); }
+.pg-h .crumb a { color: var(--b); }
+.pg-h h1 { font: 600 64px/1 var(--ui); letter-spacing: -.035em; margin: 14px 0 12px; display: flex; align-items: center; gap: 18px; }
+.pg-h p { max-width: 780px; }
+.pg-h .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 16px; font: 400 13px var(--mono); }
+#index { display: flex; flex-wrap: wrap; gap: 4px; padding: 16px 0; position: sticky; top: 0; background: var(--w); z-index: 20; border-bottom: 2px solid var(--e); }
+#index a { font: 500 12.5px var(--ui); color: var(--n); text-decoration: none; padding: 4px 8px; background: var(--e); }
+#index a span { font-family: var(--mono); color: var(--b); margin-right: 5px; }
+#index a:hover { background: var(--n); color: var(--w); }
+#index a:hover span { color: var(--m); }
+#player { margin: 28px 0 0; }
+.player-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.pb-label { font-weight: 600; }
+.pb-btn { width: 36px; height: 36px; background: var(--e) !important; clip-path: var(--notch); font-weight: 600; }
+.pb-btn:hover { background: var(--n) !important; color: var(--w); }
+.pb-select { height: 36px; border: 1px solid var(--n); background: var(--w); padding: 0 10px; }
+.pb-hint { font-size: 13px; }
+.viewport { background: var(--w); box-shadow: 0 0 0 1px var(--n); }
+.frame { margin: 64px 0; }
+.frame-label { display: grid; grid-template-columns: auto 1fr; gap: 2px 16px; align-items: baseline; margin-bottom: 14px; }
+.frame-label .fl-num { grid-row: span 3; font: 400 14px var(--pix); background: var(--n); color: var(--w); padding: 6px 8px; align-self: start; }
+.frame-label h2 { font: 600 30px/1.1 var(--ui); letter-spacing: -.02em; }
+.frame-label .fl-note { font-size: 14px; }
+.frame-label .fl-note::before { content: "Motion and interaction · "; font-weight: 600; }
+.frame.pulse .viewport { animation: fpulse .6s steps(3); }
+@keyframes fpulse { 50% { box-shadow: 0 0 0 4px var(--m); } }
+.pg-f { border-top: 2px solid var(--e); padding: 24px 0 60px; font-size: 13px; }
+
+/* ===== Screen base ===== */
+.screen { background: var(--w); color: var(--n); font: 400 14px/1.5 var(--ui); }
+.screen a { cursor: pointer; }
+.h1 { font: 600 30px/1.15 var(--ui); letter-spacing: -.025em; }
+.h2 { font: 600 21px/1.25 var(--ui); letter-spacing: -.015em; }
+.h3 { font: 600 15px/1.35 var(--ui); }
+.dsp { font: 600 56px/1.02 var(--ui); letter-spacing: -.04em; }
+.dsp em, .h1 em { font-style: normal; color: var(--b); }
+.lede { font-size: 16px; max-width: 620px; margin-top: 12px; }
+.sm { font-size: 13px; line-height: 1.45; }
+.meta { font: 400 12px/1.4 var(--mono); }
+small { font-size: 12px; }
+.blk { display: block; }
+.row { display: flex; align-items: center; gap: 12px; }
+.between { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.grow { flex: 1; min-width: 0; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.g2w { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; }
+.g2h { display: grid; grid-template-columns: 1.45fr 1fr; gap: 16px; }
+.g2p { display: grid; grid-template-columns: 1fr 1.05fr; gap: 16px; margin-top: 18px; }
+.lnk { color: var(--b); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.lnk:hover { text-decoration-thickness: 2px; }
+.lnk.back { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: 13px; margin-bottom: 8px; }
+.card { background: var(--e); padding: 20px; clip-path: var(--notch); }
+.card.ghost { background: var(--w); box-shadow: inset 0 0 0 1px var(--n); clip-path: none; }
+.card .h3 + .sm { margin-top: 2px; }
+.hd { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 22px; }
+.hd .sm { margin-top: 4px; }
+.sect { margin-top: 28px; }
+
+/* Buttons: square, with the pixel bite on two corners */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 18px; font: 500 14px var(--ui); clip-path: var(--notch); white-space: nowrap; transition: background .16s steps(2), color .16s steps(2); }
+.btn.pri { background: var(--b); color: var(--w); }
+.btn.pri:hover { background: var(--n); }
+.btn.sec { background: var(--w); color: var(--n); box-shadow: inset 0 0 0 1px var(--n); }
+.btn.sec:hover { background: var(--n); color: var(--w); }
+.btn.txt { color: var(--b); padding: 0 6px; text-decoration: underline; }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn.lgn { height: 48px; padding: 0 24px; font-size: 15px; }
+.btn.sq { width: 40px; padding: 0; font-size: 18px; }
+.btn[disabled] { background: var(--n); cursor: progress; }
+.btn.is-saved, .btn.is-on.pri { background: var(--n); color: var(--w); }
+.btn.pop { animation: bpop .3s steps(3); }
+@keyframes bpop { 50% { transform: translateY(-2px); } }
+:focus-visible { outline: 2px solid var(--m); outline-offset: 2px; }
+.btn:focus-visible, .chip:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--m); }
+svg.pi { width: 14px; height: 14px; }
+
+/* Inputs */
+.fld { display: grid; gap: 5px; }
+.fld > span { font-weight: 500; font-size: 13px; }
+.fld > small { font-size: 12px; }
+.fld.row { display: flex; align-items: center; }
+.inp { width: 100%; height: 40px; border: 1px solid var(--n); background: var(--w); padding: 0 12px; border-radius: 0; font-size: 14px; }
+textarea.inp { height: auto; padding: 10px 12px; resize: none; line-height: 1.45; }
+select.inp { padding-right: 28px; appearance: none; background: var(--w) linear-gradient(var(--n), var(--n)) no-repeat right 12px center / 8px 2px; }
+.inp.sm { height: 32px; font-size: 13px; }
+.inp::placeholder { color: var(--n); opacity: 1; font-style: italic; }
+.form { display: grid; gap: 14px; }
+.chks { display: grid; gap: 8px; margin-top: 10px; }
+.chk { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+.chk input { position: absolute; opacity: 0; }
+.chk > i { width: 16px; height: 16px; box-shadow: inset 0 0 0 1px var(--n); background: var(--w); display: grid; place-items: center; color: var(--w); }
+.chk > i svg { width: 10px; height: 10px; opacity: 0; }
+.chk input:checked + i { background: var(--b); box-shadow: none; }
+.chk input:checked + i svg { opacity: 1; }
+.chk input:focus-visible + i { outline: 2px solid var(--m); outline-offset: 2px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; background: var(--w); box-shadow: inset 0 0 0 1px var(--n); font-size: 13px; }
+.chip small { font: 400 10px var(--pix); }
+.chip.is-on { background: var(--n); color: var(--w); }
+.seg { display: inline-flex; align-items: center; gap: 0; box-shadow: inset 0 0 0 1px var(--n); }
+.seg > .sm { padding: 0 10px; }
+.seg button { height: 32px; padding: 0 12px; font-size: 13px; }
+.seg button.is-on { background: var(--n); color: var(--w); }
+.tag { display: inline-flex; align-items: center; gap: 5px; font: 500 12px var(--ui); padding: 3px 8px; background: var(--w); box-shadow: inset 0 0 0 1px var(--n); }
+.tag.m { background: var(--m); box-shadow: none; }
+.tag.ok { background: var(--b); color: var(--w); box-shadow: none; }
+.tagm { font-size: 12px; font-weight: 600; }
+.tagm::before, .wpx::before { content: ""; display: inline-block; width: 6px; height: 6px; background: var(--m); margin-right: 6px; vertical-align: 1px; box-shadow: 0 0 0 1px var(--n); }
+.wpx::before { margin-right: 6px; }
+.key { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; }
+.key i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; vertical-align: 0; }
+
+/* ===== The pixel elements ===== */
+.u { display: inline-flex; flex-wrap: wrap; gap: 2px; vertical-align: middle; }
+.u i { width: 10px; height: 10px; background: var(--w); box-shadow: inset 0 0 0 1px var(--n); }
+.card .u i:not(.on):not(.w):not(.b) { background: var(--w); }
+.u.xs i { width: 7px; height: 7px; }
+.u.lg i { width: 18px; height: 18px; }
+.u.lgn { gap: 3px; }
+.u i.on { background: var(--b); box-shadow: none; }
+.u i.w { background: var(--m); box-shadow: inset 0 0 0 1px var(--n); }
+.u i.b { background: var(--w); box-shadow: inset 0 0 0 2px var(--n); }
+.u i.z { box-shadow: inset 0 0 0 1px var(--n); background: transparent; }
+.key i.on { background: var(--b); } .key i.w { background: var(--m); box-shadow: inset 0 0 0 1px var(--n); } .key i.b { box-shadow: inset 0 0 0 2px var(--n); }
+.u i.pop { animation: upop .45s steps(3); }
+@keyframes upop { 0% { transform: scale(1.6); } }
+.screen.in .u.lg i, .screen.in .u.acc i { animation: ustep .3s steps(1) both; animation-delay: calc(var(--i, 0) * 45ms + 200ms); }
+@keyframes ustep { from { opacity: 0; } to { opacity: 1; } }
+.u.grey i { background: var(--n) !important; }
+.u.grey i:nth-child(odd) { background: var(--n) !important; }
+.proof { display: grid; grid-template-columns: repeat(var(--cols), 4px); gap: 1px; margin: 10px 0; }
+.proof i { width: 4px; height: 4px; background: var(--b); }
+.proof i.one { background: var(--n); box-shadow: 0 0 0 1px var(--m); }
+.screen.in .proof i:not(.one) { animation: ustep .1s steps(1) both; animation-delay: calc(var(--i) * 4ms + 300ms); }
+
+/* Logo: four pixels, one of them mustard: one idea picked out of the feed */
+.logo { display: inline-flex; align-items: center; gap: 8px; font: 600 18px var(--ui); letter-spacing: -.02em; color: var(--n); }
+.logo .lm { display: grid; grid-template-columns: 6px 6px; gap: 1px; }
+.logo .lm i { width: 6px; height: 6px; background: var(--n); }
+.logo .lm i.m { background: var(--m); }
+.logo.bign { font-size: 22px; }
+.logo.big .lm { grid-template-columns: 8px 8px; } .logo.big .lm i { width: 8px; height: 8px; }
+
+/* Covers */
+.cv { position: relative; aspect-ratio: 9 / 16; background: var(--n); overflow: hidden; flex: none; color: var(--w); }
+.cv img.px { width: 100%; height: 100%; object-fit: cover; }
+.cv-pl, .cv-len { position: absolute; top: 6px; font: 500 11px var(--mono); line-height: 1; }
+.cv-pl { left: 6px; } .cv-len { right: 6px; }
+.cv-pl svg { width: 10px; height: 10px; }
+.cv-cap { position: absolute; left: 8px; right: 8px; bottom: 8px; font: 600 13px/1.2 var(--ui); background: var(--n); padding: 4px 6px; }
+.cv.xs { width: 36px; } .cv.xs .cv-pl, .cv.xs .cv-len { display: none; }
+.cv.sm { width: 110px; } .cv.lgn { width: 200px; } .cv.tall { width: 220px; }
+.cv-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; background: var(--w); color: var(--n); display: grid; place-items: center; clip-path: var(--notch); }
+.cv-note { position: absolute; left: 8px; bottom: 8px; right: 8px; font-size: 11px; background: var(--n); padding: 3px 6px; }
+.fv { display: inline-flex; align-items: center; gap: 10px; }
+.fv > span { display: grid; }
+.fv b { font: 500 14px var(--mono); }
+.fv small { font-size: 11px; }
+.fv.big b { font: 600 36px/1 var(--ui); letter-spacing: -.03em; }
+.fv.big > span:first-child b { font-size: 22px; }
+
+/* Numbers */
+.num { font: 600 64px/1 var(--ui); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.num.md { font-size: 30px; }
+.num.sm { font-size: 20px; }
+.bign { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 14px; }
+.bign .of { font-size: 15px; font-weight: 500; }
+
+/* ===== Shell ===== */
+.sh { display: grid; grid-template-columns: 236px 1fr; height: 800px; }
+.sb { background: var(--e); padding: 20px 14px 14px; display: flex; flex-direction: column; gap: 4px; height: 800px; }
+.sb > .logo { padding: 0 8px 14px; }
+.csw { display: flex; align-items: center; gap: 10px; text-align: left; padding: 8px; background: var(--w); margin-bottom: 8px; clip-path: var(--notch); }
+.csw small { display: block; font-size: 11px; }
+.csw > span:nth-child(2) { flex: 1; font-weight: 600; font-size: 13.5px; line-height: 1.25; }
+.av { width: 28px; height: 28px; flex: none; display: grid; place-items: center; background: var(--n); color: var(--w); font: 400 9px var(--pix); }
+.nv { display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 14px; color: var(--n); text-decoration: none; position: relative; }
+.nv:hover { background: var(--w); }
+.nv.on { background: var(--w); font-weight: 600; }
+.nv.on::before { content: ""; position: absolute; left: -6px; top: 50%; width: 6px; height: 6px; margin-top: -3px; background: var(--m); box-shadow: 0 0 0 1px var(--n); }
+.nv .cnt, .cnt { margin-left: auto; font: 400 10px var(--pix); }
+.nv .av { width: 22px; height: 22px; font-size: 8px; }
+.nv .wpx { margin-left: auto; }
+.nv.all { font-size: 13px; }
+.sb nav { display: grid; gap: 1px; }
+.sb hr { border: 0; height: 2px; background: var(--w); margin: 8px 6px; }
+.sb-h { font-size: 12px; font-weight: 600; padding: 4px 10px; }
+.sb-ft { margin-top: auto; display: grid; gap: 6px; }
+.sb-ft > .lnk { padding: 0 10px; }
+.sd { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin-left: 10px; }
+.sd i { width: 6px; height: 6px; background: var(--m); box-shadow: 0 0 0 1px var(--n); }
+.me { display: flex; align-items: center; gap: 10px; padding: 10px 8px 0; border-top: 2px solid var(--w); font-size: 12.5px; }
+.me b { display: block; font-weight: 600; } .me small { font-size: 11.5px; }
+.so { margin-left: auto; cursor: pointer; }
+.mn { padding: 28px 40px 40px; height: 800px; }
+
+/* Lists and tables */
+.li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 2px solid var(--w); }
+.card.ghost .li { border-color: var(--e); }
+.li b { display: block; font-weight: 600; }
+.li small { display: block; }
+.tbl { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13.5px; }
+.tbl th { text-align: left; font: 500 12px var(--ui); padding: 8px 10px 8px 0; border-bottom: 1px solid var(--n); }
+.tbl td { padding: 10px 10px 10px 0; border-bottom: 2px solid var(--e); vertical-align: middle; }
+.tbl b { font-weight: 600; }
+.dot { display: inline-block; width: 6px; height: 6px; background: var(--b); margin-right: 8px; vertical-align: 2px; }
+.dl { display: grid; grid-template-columns: 150px 1fr; gap: 10px 14px; margin-top: 12px; }
+.dl dt { font-weight: 600; font-size: 13px; } .dl dd { margin: 0; }
+.empty { padding: 14px; box-shadow: inset 0 0 0 1px var(--n); font-size: 13px; }
+.banner { background: var(--e); padding: 12px 16px; font-size: 13.5px; border-left: 4px solid var(--m); }
+
+/* Toast: steps in */
+.toast { background: var(--n); color: var(--w); padding: 10px 16px 10px 12px; font-size: 13.5px; display: flex; align-items: center; gap: 10px; clip-path: var(--notch); transition: opacity .2s steps(2), transform .24s steps(3); }
+.toast::before { content: ""; width: 8px; height: 8px; background: var(--m); }
+.toast b { color: var(--m); font-weight: 600; }
+
+/* Screen transition: frame-step. The old frame steps out, the new one steps in at 12 fps */
+.screen.enter { opacity: 0; }
+.screen.in { opacity: 1; transition: opacity .3s steps(4); }
+.screen.leave { opacity: 0; transition: opacity .2s steps(3); }
+.screen:not(.in) .k { opacity: 0; }
+.screen.in .k { animation: kstep .36s steps(3) both; animation-delay: calc(var(--d, 0) * 60ms + 60ms); }
+@keyframes kstep { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Landing */
+.lp { background: var(--w); }
+.lp-nav { display: flex; align-items: center; gap: 22px; padding: 18px 56px; position: sticky; top: 0; background: var(--w); z-index: 3; border-bottom: 2px solid var(--e); }
+.lp-nav .gap { flex: 1; } .lp-nav a { font-size: 14px; font-weight: 500; }
+.lp-hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 56px; padding: 64px 56px 56px; align-items: center; }
+.lp-hero .dsp { font-size: 66px; }
+.lp-demo { background: var(--e); padding: 22px; clip-path: var(--notch); }
+.scan { display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; margin: 14px 0; }
+.scan i { aspect-ratio: 9 / 16; background: var(--w); box-shadow: inset 0 0 0 1px var(--n); }
+.scan i.hit { background: var(--b); box-shadow: none; }
+.scan i.top { background: var(--m); box-shadow: inset 0 0 0 1px var(--n); }
+.screen.in .scan i { animation: scanstep 4s steps(1) infinite; animation-delay: calc(var(--i) * 70ms); }
+@keyframes scanstep { 0%, 5% { outline: 2px solid var(--n); outline-offset: 1px; } 6%, 100% { outline: 0; } }
+.pick { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 8px 0; border-top: 2px solid var(--w); }
+.pick b { display: block; font-weight: 600; } .pick small { display: block; font-size: 12px; }
+.lp-sec { padding: 56px; }
+.lp-sec.alt { background: var(--e); }
+.lp-sec .h1 { font-size: 36px; max-width: 820px; margin-bottom: 20px; }
+.lp-sec .g3 p { margin-top: 6px; }
+.quote { margin-top: 28px; font-size: 20px; font-weight: 500; }
+.steps { list-style: none; padding: 0; margin: 22px 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+.steps li { background: var(--w); padding: 16px; clip-path: var(--notch); display: grid; gap: 6px; align-content: start; }
+.faq details { border-bottom: 2px solid var(--w); padding: 12px 0; } .faq summary { font-weight: 600; cursor: pointer; } .faq p { margin-top: 6px; }
+.lp-sec.end { text-align: left; }
+.lp-ft { display: flex; gap: 20px; padding: 20px 56px 40px; font-size: 13px; }
+
+/* Login */
+.lgn { display: grid; grid-template-columns: 1fr 1fr; height: 800px; }
+.lgn-l { background: var(--e); padding: 48px; display: flex; flex-direction: column; justify-content: space-between; }
+.lgn-r { padding: 110px 110px; display: grid; gap: 18px; align-content: center; }
+.lgn-r .seg { justify-self: start; }
+
+/* Home */
+.fn { display: grid; grid-template-columns: 150px 1fr; gap: 18px; margin-top: 14px; }
+.steps5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 12px; }
+.steps5 a { display: grid; gap: 6px; align-content: start; background: var(--w); padding: 12px; text-decoration: none; color: inherit; }
+.steps5 a:hover { box-shadow: inset 0 0 0 1px var(--n); }
+.kinds p { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+.mkc { box-shadow: inset 4px 0 0 var(--m); }
+
+/* Find */
+.fh { padding: 4px 0 0; }
+.fh .dsp { font-size: 50px; max-width: 760px; }
+.sbx { background: var(--e); padding: 16px; margin-top: 20px; clip-path: var(--notch); }
+.sbx.slim { margin-top: 0; padding: 10px; }
+.plat { width: 32px; height: 32px; display: grid; place-items: center; background: var(--w); box-shadow: inset 0 0 0 1px var(--n); }
+.plat.is-on { background: var(--n); color: var(--w); }
+.qrow { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.sbx.slim .qrow { margin-top: 0; }
+.q { flex: 1; height: 48px; background: var(--w); box-shadow: inset 0 0 0 1px var(--n); display: flex; align-items: center; padding: 0 14px; font-size: 16px; }
+.sbx.slim .q { height: 40px; }
+.caret { display: inline-block; width: 2px; height: 20px; background: var(--b); margin-left: 2px; animation: caret 1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.mic { width: 40px; height: 40px; display: grid; place-items: center; }
+.starts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; grid-auto-flow: row dense; }
+.starts .grp { grid-column: 1 / -1; font-weight: 600; font-size: 13px; margin-top: 8px; }
+.st { display: flex; flex-direction: column; justify-content: space-between; gap: 14px; text-align: left; padding: 14px; background: var(--e); min-height: 120px; clip-path: var(--notch); }
+.st b { display: block; font-size: 15px; font-weight: 600; } .st small { display: block; margin-top: 4px; font-size: 12.5px; }
+.st .go { display: inline-flex; gap: 8px; align-items: center; color: var(--b); font-weight: 500; font-size: 13px; }
+.st .go svg { transition: transform .2s steps(2); }
+.st:hover { background: var(--n); color: var(--w); } .st:hover .go { color: var(--m); } .st:hover .go svg { transform: translateX(4px); }
+
+/* Searching */
+.srch { display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; margin-top: 40px; }
+.ticks { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; }
+.ticks li { display: flex; gap: 12px; align-items: center; }
+.ticks li i { width: 12px; height: 12px; box-shadow: inset 0 0 0 1px var(--n); }
+.ticks li.now i { background: var(--m); animation: caret .5s steps(1) infinite; }
+.ticks li.done i { background: var(--b); box-shadow: none; }
+.ticks li.alldone { font-weight: 500; }
+.rgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-content: start; }
+.rgrid .cv { width: auto; }
+
+/* Results */
+.best { margin-top: 18px; background: var(--e); padding: 22px; clip-path: var(--notch); }
+.bestg { display: grid; grid-template-columns: 200px 1fr 210px; gap: 26px; margin-top: 16px; align-items: start; }
+.pf { background: var(--w); padding: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+.tile { display: grid; gap: 4px; align-content: start; }
+.tile .cv { margin-bottom: 6px; }
+.tile b { font-weight: 600; font-size: 13.5px; line-height: 1.25; } .tile > small { font-size: 12px; }
+.tile .fv b { font-size: 12.5px; }
+.mini { display: grid; gap: 3px; margin: 4px 0 6px; }
+.tray { position: absolute; left: 236px; right: 0; bottom: 0; background: var(--n); color: var(--w); display: flex; align-items: center; gap: 18px; padding: 14px 40px; font-size: 13px; z-index: 6; }
+.tray .meta { font-weight: 500; }
+.tray b { font: 400 10px var(--pix); background: var(--w); color: var(--n); padding: 2px 5px; margin-left: 4px; }
+.tray b.bump { animation: upop .4s steps(3); background: var(--m); }
+.tray .lnk { color: var(--w); margin-left: auto; }
+
+/* Drawer */
+.drw { position: absolute; inset: 0; z-index: 30; display: none; }
+.drw.is-open { display: block; }
+.scrim { position: absolute; inset: 0; background: var(--d-n-w-50); }
+.dpan { position: absolute; right: 0; top: 0; bottom: 0; width: 560px; background: var(--w); padding: 26px 30px; box-shadow: -1px 0 0 var(--n); }
+.screen.in .dpan { animation: dstep .36s steps(4) both; }
+@keyframes dstep { from { transform: translateX(80px); opacity: 0; } }
+.stat { background: var(--e); padding: 12px 14px; display: grid; gap: 4px; }
+.stat small { font-size: 12px; font-weight: 500; }
+.sec13 { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; margin: 10px 0 6px; }
+.sec13 i { aspect-ratio: 1; background: var(--e); display: grid; place-items: center; }
+.sec13 i.mkc { background: var(--b); color: var(--w); }
+.sec13 small { font: 400 9px var(--pix); }
+.why { padding-left: 22px; margin: 14px 0; display: grid; gap: 10px; }
+.why li::marker { font: 400 10px var(--pix); }
+.why b { display: block; font-weight: 600; }
+.calc { margin-top: 12px; } .calc summary { font-weight: 600; color: var(--b); cursor: pointer; } .calc p { margin-top: 6px; }
+
+/* Research */
+.filt { align-items: end; margin-bottom: 18px; } .filt .fld { min-width: 200px; } .filt .fld:first-child { min-width: 280px; }
+.slot { margin-bottom: 22px; }
+.slot-h { display: flex; align-items: center; gap: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--n); }
+.slot-h b { font-size: 16px; }
+.vn { font: 400 10px var(--pix); background: var(--n); color: var(--w); padding: 4px 6px; }
+.slot-h > span:last-child { margin-left: auto; font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.slot-h > span:last-child::before { content: ""; width: 8px; height: 8px; box-shadow: inset 0 0 0 1px var(--n); }
+.st-ok::before { background: var(--b); box-shadow: none !important; } .st-w::before { background: var(--m); }
+
+/* Compare */
+.picks { display: flex; gap: 8px; margin-bottom: 10px; }
+.pk { position: relative; } .pk .cv.xs { width: 54px; }
+.pkc { position: absolute; right: -4px; top: -4px; width: 18px; height: 18px; background: var(--w); box-shadow: inset 0 0 0 1px var(--n); display: grid; place-items: center; }
+.pkc svg { width: 10px; height: 10px; opacity: 0; }
+.pk.is-on .pkc { background: var(--b); color: var(--w); box-shadow: none; } .pk.is-on .pkc svg { opacity: 1; }
+.beat { display: grid; gap: 3px; margin-bottom: 8px; }
+.u.sec i, .tl i, .key i.s0 { box-shadow: none; }
+.s0 { background: var(--b) !important; } .s1 { background: var(--n) !important; } .s2 { background: var(--m) !important; box-shadow: inset 0 0 0 1px var(--n) !important; } .s3 { background: var(--e) !important; box-shadow: inset 0 0 0 1px var(--n) !important; }
+.u.sec i { width: 9px; height: 12px; }
+
+/* Plans */
+.tgt { display: flex; align-items: center; gap: 14px; font-size: 13px; }
+.board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: start; }
+.col { background: var(--e); padding: 12px; min-height: 560px; clip-path: var(--notch); transition: background .2s steps(2); }
+.col.is-over { background: var(--n); }
+.col-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; }
+.col.is-over .col-h { color: var(--w); }
+.colb { display: grid; gap: 10px; }
+.pc { background: var(--w); padding: 12px; display: grid; gap: 8px; }
+.pc.landed { animation: kstep .3s steps(3); }
+.pc-t { display: grid; grid-template-columns: 40px 1fr; gap: 10px; }
+.pc-t .cv.xs { width: 40px; }
+.pc-t b { display: block; font-weight: 600; line-height: 1.25; } .pc-t small { display: block; font-size: 12px; margin-bottom: 4px; }
+.pc .fv b { font-size: 12px; } .pc .fv small { font-size: 10.5px; }
+.pc.back { box-shadow: inset 4px 0 0 var(--m); }
+.bpx { display: inline-block; width: 6px; height: 6px; background: var(--m); box-shadow: 0 0 0 1px var(--n); margin-right: 6px; }
+.pc-a { gap: 6px; }
+.pc-f { display: flex; justify-content: space-between; font-size: 12px; padding-top: 6px; border-top: 2px solid var(--e); }
+.dnd-ghost { transform: rotate(-2deg); box-shadow: 4px 4px 0 var(--n); }
+
+/* Plan */
+.ph { display: flex; gap: 20px; align-items: flex-end; }
+.ph .fv { margin-top: 10px; }
+.hooks { display: grid; gap: 8px; margin-top: 12px; }
+.hk { background: var(--w); padding: 12px; display: grid; gap: 6px; }
+.hk.is-on { box-shadow: inset 0 0 0 2px var(--b); }
+.emo { font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.emo::before { content: ""; width: 6px; height: 6px; background: var(--b); }
+.tl { display: grid; grid-template-columns: repeat(15, 1fr); gap: 2px; margin-top: 12px; }
+.tl i { height: 18px; }
+.shot { display: grid; grid-template-columns: 26px 1fr; gap: 12px; padding: 10px 0; border-top: 2px solid var(--w); }
+.sn { width: 22px; height: 22px; display: grid; place-items: center; font: 400 9px var(--pix); color: var(--w); }
+.sn.s2, .sn.s3 { color: var(--n); }
+
+/* Board and canvas */
+.bwrap { display: grid; grid-template-columns: 1fr 260px; gap: 16px; }
+.grid { background-color: var(--w); background-image: linear-gradient(var(--e) 2px, transparent 2px), linear-gradient(90deg, var(--e) 2px, transparent 2px); background-size: 24px 24px; box-shadow: inset 0 0 0 1px var(--n); }
+.grid svg.links path { fill: none; stroke: var(--n); stroke-width: 2; stroke-dasharray: 4 4; }
+.node { width: 170px; background: var(--w); padding: 10px; box-shadow: inset 0 0 0 1px var(--n), 4px 4px 0 var(--e); display: grid; gap: 4px; }
+.node.is-dragging { box-shadow: inset 0 0 0 2px var(--b), 4px 4px 0 var(--n); }
+.nfr { width: 54px; } .nfr img { aspect-ratio: 9/16; }
+.plus { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; background: var(--b); color: var(--w); font-weight: 600; z-index: 2; clip-path: var(--notch); }
+.help { position: absolute; left: 14px; bottom: 10px; background: var(--w); padding: 2px 6px; }
+.side { display: grid; gap: 8px; align-content: start; }
+.save { font: 400 12px var(--mono); display: inline-flex; align-items: center; gap: 6px; }
+.save::before { content: ""; width: 7px; height: 7px; background: var(--b); }
+.save.is-saving::before { background: var(--m); animation: caret .4s steps(1) infinite; }
+.node.w { width: 220px; }
+.nh { display: flex; align-items: center; gap: 6px; font-weight: 600; padding-bottom: 6px; border-bottom: 2px solid var(--e); }
+.nh .meta { margin-left: auto; }
+.port { position: absolute; font: 400 11px var(--mono); background: var(--w); padding: 0 4px; box-shadow: inset 0 0 0 1px var(--n); top: 50%; }
+.port.o { right: -10px; transform: translateX(100%); } .port.i { left: -10px; transform: translateX(-100%); } .port.r2 { top: 76%; }
+.vers { display: flex; gap: 6px; } .vers button { width: 56px; display: grid; gap: 2px; text-align: left; } .vers button img { aspect-ratio: 9/16; } .vers button.is-on img { outline: 2px solid var(--b); }
+.vprev { position: relative; height: 150px; background: var(--e); display: grid; place-items: center; overflow: hidden; }
+.vprev img { width: 84px !important; opacity: 0; }
+[data-loadbox].is-gen .vprev img, [data-loadbox].is-done .vprev img { opacity: 1; }
+.vprev .meta { position: absolute; }
+
+/* Review */
+.rv { display: grid; grid-template-columns: 250px 1fr 270px; gap: 24px; align-items: start; }
+.deck { position: relative; height: 560px; }
+.stack-card { position: absolute; inset: 0 0 64px; background: var(--w); padding: 20px; box-shadow: inset 0 0 0 1px var(--n), 6px 6px 0 var(--e); transition: transform .3s steps(4), opacity .3s steps(4); overflow: hidden; }
+.stack-card:nth-last-of-type(2) { transform: translate(8px, 8px); }
+.stack-card.go-right { transform: translateX(120%) rotate(6deg); opacity: 0; }
+.stack-card.go-left { transform: translateX(-120%) rotate(-6deg); opacity: 0; }
+.stack-card.go-up { transform: translateY(-120%); opacity: 0; }
+.stamp { position: absolute; top: 18px; right: 18px; font: 400 14px var(--pix); padding: 6px 10px; display: none; align-items: center; gap: 6px; z-index: 2; }
+.stamp.ok { background: var(--b); color: var(--w); } .stamp.no { background: var(--n); color: var(--w); }
+[data-lean=right] .stamp.ok, [data-lean=left] .stamp.no { display: inline-flex; }
+.sc-h { display: grid; grid-template-columns: 110px 1fr; gap: 16px; }
+.note { margin-top: 10px; background: var(--e); padding: 8px 10px; font-size: 13px; } .note b { display: block; font-size: 12px; }
+.note.b { box-shadow: inset 4px 0 0 var(--m); }
+.shots4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+.shots4 > div { background: var(--e); padding: 10px; display: grid; gap: 4px; align-content: start; min-height: 120px; }
+.rbtns { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; justify-content: center; }
+.alldone { position: absolute; inset: 0 0 64px; display: grid; place-content: center; text-align: center; opacity: 0; pointer-events: none; }
+.is-empty .alldone { opacity: 1; pointer-events: auto; } .is-empty ~ .rbtns, .is-empty .rbtns { display: none; }
+.mem { padding: 10px 0; border-top: 2px solid var(--w); }
+.mem p:nth-child(2), .tlm .mq { font-weight: 500; }
+.m-approved .meta::before, .m-changes .meta::before, .m-back .meta::before, .tlm li::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; }
+.m-approved .meta::before { background: var(--b); } .m-changes .meta::before { background: var(--m); box-shadow: 0 0 0 1px var(--n); } .m-back .meta::before { box-shadow: inset 0 0 0 2px var(--n); }
+
+/* Editor */
+.ed { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+.pv { display: flex; gap: 20px; }
+.pv .cv.tall { width: 190px; }
+.tlw { position: relative; }
+.ruler { display: grid; grid-template-columns: repeat(16, 1fr); font: 400 10.5px var(--mono); margin-bottom: 4px; }
+.trk { display: flex; gap: 2px; height: 46px; margin-bottom: 4px; }
+.clip { color: var(--w); text-align: left; padding: 6px 8px; font-size: 12.5px; font-weight: 600; display: grid; align-content: start; }
+.clip small { font-weight: 400; } .clip.s2, .clip.s3 { color: var(--n); }
+.clip.is-on { outline: 3px solid var(--m); outline-offset: -3px; }
+.trk.au span { background: var(--e); box-shadow: inset 0 0 0 1px var(--n); padding: 12px; font-size: 12px; }
+.playhead { position: absolute; top: 14px; bottom: 0; width: 2px; background: var(--m); box-shadow: 0 0 0 1px var(--n); }
+input[type=range] { width: 100%; accent-color: var(--b); }
+.u.exp i { animation: ustep .1s steps(1) both; animation-delay: calc(var(--i) * 130ms); background: var(--b); box-shadow: none; }
+
+/* Publish, channel */
+.nums { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 12px 0; }
+.nums.three { grid-template-columns: repeat(3, 1fr); }
+.nums > div { background: var(--w); padding: 10px; display: grid; }
+.nums small { font-size: 12px; font-weight: 500; }
+.bar { display: grid; grid-template-columns: 180px 1fr 50px; gap: 10px; align-items: center; padding: 5px 0; }
+.u.grey i { background: var(--n); }
+.mosaic { margin: 12px 0 14px; gap: 3px; }
+.mosaic i { width: 16px; height: 22px; box-shadow: none; }
+.f0 { background: var(--b) !important; } .f1 { background: var(--n) !important; } .f2 { background: var(--m) !important; box-shadow: inset 0 0 0 1px var(--n) !important; } .f3 { background: var(--bk) !important; } .f4 { background: var(--w) !important; box-shadow: inset 0 0 0 1px var(--n) !important; }
+.screen.in .mosaic i { animation: ustep .1s steps(1) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
+.fmt { display: flex; gap: 10px; padding: 8px 0; border-top: 2px solid var(--w); }
+.fmt .fsw { width: 10px; height: 14px; margin-top: 3px; flex: none; }
+
+/* Brief, settings */
+.tlm { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 0; }
+.tlm li { padding: 12px 0 12px 18px; border-top: 2px solid var(--w); position: relative; }
+.tlm li::before { position: absolute; left: 0; top: 17px; }
+.tlm li.m-approved::before { background: var(--b); } .tlm li.m-changes::before { background: var(--m); box-shadow: 0 0 0 1px var(--n); } .tlm li.m-back::before { box-shadow: inset 0 0 0 2px var(--n); }
+.thm { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+.thm button { background: var(--w); padding: 12px; display: grid; gap: 10px; text-align: left; }
+.thm button.is-on { box-shadow: inset 0 0 0 2px var(--b); }
+.tp { display: grid; grid-template-columns: 1fr 1fr; height: 70px; box-shadow: inset 0 0 0 1px var(--n); }
+.tp i.n { background: var(--n); } .tp i.w { background: var(--w); }
+
+/* Portal */
+.pt { background: var(--w); }
+.pt-h { display: flex; justify-content: space-between; align-items: center; padding: 18px 56px; background: var(--e); }
+.pt-b { max-width: 900px; margin: 0 auto; padding: 30px 0 60px; display: grid; gap: 16px; }
+.pt-b > .sm { display: flex; align-items: center; gap: 12px; }
+.ptc { clip-path: none; }
+.drop { display: none; margin-top: 12px; }
+.drop.is-on { display: block; }
+.drop.ok { font-weight: 600; color: var(--b); }
+.pxlvl { display: inline-flex; gap: 4px; } .pxlvl i { width: 14px; height: 14px; background: var(--b); } .pxlvl i.o { background: var(--w); box-shadow: inset 0 0 0 2px var(--n); }
+.stack-card { overflow-y: auto; scrollbar-width: thin; }
+.stack-card .shots4 > div { min-height: 0; }
+.stack-card .shots4 .sm { font-size: 12px; }
+
+</style>
+</head>
+<body class="page">
+<div class="pg">
+<header class="pg-h"><p class="crumb"><a href="index.html">← Pixel concepts</a> · Concept A of 3 · subtle pixel influence</p>
+  <h1>Unit <span class="pxlvl" aria-label="Pixel level: subtle"><i></i><i class="o"></i><i class="o"></i></span></h1>
+  <p><b>One pixel, one thing that counts.</b> A calm, modern interface where a pixel only appears when Remake is counting something real: one square per video the client pays for, per second of a shot, per account posting a trend, per "usual" view count. Everything that is not a count stays plain Geist on white and beige. Mustard marks the one thing that needs you.</p>
+  <div class="facts"><span>Type: Geist (UI), Geist Mono (numbers, handles), Silkscreen (only on counts)</span><span>Beige #f6f1e7</span><span>Motion: frame-step, 12 fps, steps() easing</span><span>22 screens</span></div></header>
+<section id="player" data-start="results" aria-label="Click-through prototype"></section>
+<nav id="index" aria-label="Screens"></nav>
+<main id="gallery"></main>
+<footer class="pg-f">Mockups only, not built into the app. Sample data: Evergreen Foods. Self-contained: inline CSS and JS, Google Fonts only. Add <code>?only=results</code> (or any screen id) to see one screen full-window. Reduced motion is respected.</footer>
+</div>
+<script>
+/* Sample data: Evergreen Foods (plant-based tofu brand). Copy follows lib/strings/*.ts. */
+(function () {
+  const D = (window.D = {
+    user: { name: 'Annie Lau', initials: 'AL', agency: 'Sample Social Co.' },
+    team: 'Lin',
+    client: {
+      name: 'Evergreen Foods', short: 'EF', sells: 'Tofu brand sold at Woolworths',
+      audience: 'Busy mums and young professionals', topics: 'tofu, kitchen hacks, high-protein meals',
+      starters: 'crispy tofu, tofu desserts, tofu for kids', target: 12, approved: 5, waiting: 2, back: 1, planning: 2,
+      daysLeft: 26, month: 'November',
+    },
+    clients: [
+      { id: 'ev', name: 'Evergreen Foods', short: 'EF', sells: 'Tofu brand sold at Woolworths', target: 12, approved: 5, waiting: 2, back: 1, dec: '5 of 6 approved', next: 'Street blind taste test: "Is it chicken?"', due: 'Nov 8' },
+      { id: 'my', name: 'MYST Nightclub Sydney', short: 'MN', sells: 'Nightclub in Sydney: weekly event promos', target: 8, approved: 2, waiting: 1, back: 0, dec: '2 of 2 approved', next: 'Doors-open crowd reveal', due: 'Nov 7' },
+      { id: 'kp', name: 'Kinetic Pilates', short: 'KP', sells: 'Reformer studio, 3 locations', target: 4, approved: 3, waiting: 1, back: 1, dec: '3 of 4 approved', next: '60-second core fix', due: 'Nov 6' },
+      { id: 'ho', name: 'Hearth & Oat Bakery', short: 'HO', sells: 'Sourdough bakery in Newtown', target: 6, approved: 0, waiting: 0, back: 0, dec: 'None yet', next: '', due: '' },
+    ],
+    videos: [
+      { id: 'v1', title: 'Crispy tofu in 5 min', acct: '@smallkitchen.sample', fol: '3.1k', views: '2.4M', len: '0:13', usual: 267, ago: '9 days ago', spread: 5, art: 'pan', plat: 'TikTok' },
+      { id: 'v2', title: 'No-bake tofu cheesecake', acct: '@bake.less.sample', fol: '70k', views: '650k', len: '0:33', usual: 31, ago: '4 days ago', spread: 3, art: 'slice', plat: 'TikTok' },
+      { id: 'v3', title: 'Is this chicken?', acct: '@streettaste.sample', fol: '88k', views: '3.1M', len: '0:21', usual: 44, ago: '12 days ago', spread: 6, art: 'mic', plat: 'TikTok', hard: 'People willing to be filmed on the street' },
+      { id: 'v4', title: 'No tofu press? Do this', acct: '@kitchen.tricks.sample', fol: '140k', views: '380k', len: '0:15', usual: 9, ago: '2 days ago', spread: 2, art: 'cube', plat: 'Instagram' },
+      { id: 'v5', title: 'Tofu scramble in 4 min', acct: '@mumsmeals.sample', fol: '9.8k', views: '390k', len: '0:18', usual: 58, ago: '6 days ago', spread: 4, art: 'pan', plat: 'TikTok' },
+      { id: 'v6', title: 'Air-fryer tofu, no oil', acct: '@airfry.daily.sample', fol: '22k', views: '1.1M', len: '0:24', usual: 71, ago: '3 days ago', spread: 7, art: 'cube', plat: 'TikTok' },
+      { id: 'v7', title: 'Gym bro tries tofu', acct: '@liftandeat.sample', fol: '210k', views: '870k', len: '0:29', usual: 6, ago: '11 days ago', spread: 1, art: 'mic', plat: 'Instagram' },
+      { id: 'v8', title: 'Tofu that crunches like chips', acct: '@plantplates.sample', fol: '45k', views: '1.3M', len: '0:12', usual: 112, ago: '5 days ago', spread: 3, art: 'nug', plat: 'TikTok' },
+    ],
+    starts: [
+      { group: 'Catching on now', q: 'crispy tofu', why: 'Spreading now: 5 accounts have posted this, and new ones keep coming' },
+      { group: 'Searches that fit busy mums and young professionals', q: 'crispy tofu for busy mums', why: 'Videos like this tend to work for busy mums' },
+      { group: '', q: 'tofu desserts for busy mums', why: 'Videos like this tend to work for busy mums' },
+      { group: 'More like your saved ideas', q: 'More like "tofu taste tests"', why: 'You approved a plan like this' },
+      { group: '', q: 'More like "tofu desserts"', why: 'A plan like this is waiting for your approval' },
+      { group: '', q: 'More like "tofu hacks"', why: 'You saved a video like this for Evergreen Foods' },
+      { group: 'Other ways in', q: 'Ask a question', why: '"What tofu recipe videos are working right now?"' },
+      { group: '', q: 'Paste a video link', why: 'Find more videos that copy the same idea' },
+    ],
+    recent: [{ q: 'crispy tofu', plats: 'TikTok, Instagram · 6 videos', since: '2 new since yesterday', saved: '4 saved' }, { q: 'tofu desserts', plats: 'TikTok · 9 videos', since: 'Nothing new', saved: '2 saved' }, { q: 'high protein lunch', plats: 'TikTok · 12 videos', since: '5 new since 28 Oct', saved: 'None saved' }],
+    hooks: [
+      { n: 1, emo: 'Curiosity', text: 'Did you know tofu could look like this?' },
+      { n: 2, emo: 'Relief', text: 'Watch this: pressing tofu, start to finish' },
+      { n: 3, emo: 'FOMO / insider', text: '3 things nobody tells you about tofu', picked: true },
+      { n: 4, emo: 'Surprise', text: 'You have been pressing tofu wrong' },
+    ],
+    shots: [
+      { n: 1, role: 'Hook', t: '0–3s', sec: 3, see: 'Tofu block between two plates, heavy pan on top', says: '3 things nobody tells you about tofu', on: 'No tofu press? Do this' },
+      { n: 2, role: 'Setup', t: '3–7s', sec: 4, see: 'Water squeezed out, close-up', says: 'Ten minutes, two plates, one heavy pan.', on: '' },
+      { n: 3, role: 'Proof', t: '7–12s', sec: 5, see: 'Pressed tofu sliced cleanly, hits hot oil', says: 'Listen to that.', on: '' },
+      { n: 4, role: 'CTA', t: '12–15s', sec: 3, see: 'Evergreen firm tofu pack on the bench', says: 'Firm tofu, $3.50 at Woolies.', on: 'Save this for dinner' },
+    ],
+    cols: [
+      { id: 'planning', name: 'Still planning' },
+      { id: 'waiting', name: 'Waiting for approval' },
+      { id: 'approved', name: 'Approved, ready to film' },
+    ],
+    plans: [
+      { id: 'p1', v: 'v4', title: 'No tofu press? Do this', col: 'planning', note: 'Shots not planned yet', due: 'Nov 21', act: 'Start planning', step: 1 },
+      { id: 'p2', v: 'v5', title: 'Tofu scramble in 4 min', col: 'planning', note: '2 of 4 shots written', due: 'Nov 24', act: 'Open plan', step: 2 },
+      { id: 'p7', v: 'v7', title: 'Gym bro tries tofu', col: 'planning', note: 'Sent back. Your reason: "Not on brand, too much shouting"', due: 'Nov 14', act: 'Fix it and send it again', step: 2, back: true },
+      { id: 'p3', v: 'v2', title: '3-ingredient tofu dessert', col: 'waiting', note: 'Sent by Lin, 2 hours ago', due: 'Nov 17', act: 'Open plan', step: 3 },
+      { id: 'p4', v: 'v6', title: 'Air-fryer tofu, no oil', col: 'waiting', note: 'Sent by Lin, yesterday', due: 'Nov 19', act: 'Open plan', step: 3 },
+      { id: 'p5', v: 'v3', title: 'Street blind taste test: "Is it chicken?"', col: 'approved', note: 'Approved, due Nov 8', due: 'Nov 8', act: 'Make the video', step: 4, stage: 'Filming' },
+      { id: 'p6', v: 'v1', title: 'Crispy tofu ASMR, top-down', col: 'approved', note: 'Approved with changes, due Nov 12', due: 'Nov 12', act: 'Make the video', step: 5, stage: 'Editing' },
+    ],
+    stages: ['Ready to film', 'Filming', 'Editing', 'Posted'],
+    slots: [
+      { n: 1, topic: 'Best tofu recipe', due: '10 Nov', vids: ['v1', 'v5', 'v6'], status: 'Approved, ready to film' },
+      { n: 2, topic: 'Easy tofu dessert', due: '17 Nov', vids: ['v2', 'v8'], status: 'Waiting for approval' },
+      { n: 3, topic: 'Street taste test: chicken or tofu?', due: '24 Nov', vids: ['v3'], status: 'Approved, ready to film' },
+      { n: 4, topic: 'Kitchen hack: pressing tofu', due: '1 Dec', vids: ['v4', 'v6'], status: 'Still planning' },
+      { n: 5, topic: 'Buying guide: which tofu to use', due: '5 Dec', vids: [], status: 'Not planned' },
+      { n: 6, topic: 'High-protein gym meal', due: '8 Dec', vids: ['v7'], status: 'Still planning' },
+    ],
+    memory: [
+      { kind: 'approved', label: 'Approved', plan: 'Street blind taste test', quote: 'Love the reveal. Keep it under 20 seconds.', when: '2 Nov' },
+      { kind: 'changes', label: 'Approved with changes', plan: 'Crispy tofu ASMR, top-down', quote: 'Show the pack in the first 3 seconds.', when: '30 Oct' },
+      { kind: 'back', label: 'Sent back', plan: 'Gym bro tries tofu', quote: 'Not on brand: too much shouting.', when: '28 Oct', tags: "Doesn't fit the brand's tone" },
+      { kind: 'approved', label: 'Approved', plan: 'Lunchbox tofu nuggets', quote: 'Kids eating it is the proof. More of that.', when: '21 Oct' },
+    ],
+    why: [
+      { k: 'How it starts', at: 0, v: 'The first words on screen, "Crispy tofu in 5 min", say exactly what you get, and fast.' },
+      { k: 'First 3 seconds', at: 8, v: 'Tofu hits hot oil straight away. The loud sizzle makes people stop.' },
+      { k: 'Length', at: 40, v: 'Only 13 seconds, so many people watch it twice.' },
+      { k: 'How it is made', at: 62, v: 'One camera from above. No face, no talking, so anyone can film it.' },
+      { k: 'Sound', at: 85, v: 'Just the sizzle and a soft beat. Works with the sound off too.' },
+    ],
+    formats: [
+      { name: 'Overhead 5-minute recipe', share: 42, n: 21, why: 'Result first, then the steps. No talking.' },
+      { name: 'Taste test reaction', share: 18, n: 9, why: 'A stranger guesses, the reveal is the payoff.' },
+      { name: 'Kitchen hack reveal', share: 14, n: 7, why: 'Problem in second 1, fix by second 5.' },
+      { name: 'Ingredient swap', share: 12, n: 6, why: '"Use this instead of that", with a price.' },
+      { name: 'No clear format', share: 14, n: 7, why: 'One-offs that did not repeat.' },
+    ],
+    weekly: [180, 240, 150, 320, 290, 410, 380, 520, 470, 690, 610, 880],
+    searchSteps: ['Searching TikTok and Instagram for "crispy tofu"', "Checking each account's usual views", 'Checking what Evergreen Foods can film', 'Ranking 48 videos for Evergreen Foods'],
+    cannot: ['A kitchen', 'An overhead phone mount', 'People willing to be filmed on the street', 'A busy public spot', 'A blender', 'Permission to film in a supermarket', 'A confident presenter'],
+    cannotOn: [2, 5],
+    sendBackTags: ["Doesn't fit the brand's tone", "Format doesn't suit this client", 'Too hard or costly to film', 'Did something similar recently', 'Other'],
+    landing: {
+      problems: [
+        ['Ten clients. Ideas in ten chats.', 'Links pile up in DMs, notes and group chats. Nobody knows which idea is for which client.'],
+        ['Hours of scrolling for one video.', 'You scroll for an hour to find one video worth copying. Then you do it again for the next client.'],
+        ['Approvals lost in DMs.', 'The plan waits in your manager’s messages. Filming day comes and nothing is signed off.'],
+      ],
+      steps: [
+        ['Client profile', 'Add each client once: what they sell, how they sound, and what they can’t film.'],
+        ['Search', 'Type a topic. See the videos that got way more views than usual.'],
+        ['Shortlist', 'Pick the videos worth copying for this client.'],
+        ['Shot list', 'Turn each pick into a shot list your team can film.'],
+        ['Manager approves', 'Your manager approves on their phone. Then you film.'],
+      ],
+      compare: [
+        ['Who it’s for', 'One account', 'Every client you manage'],
+        ['What you see', 'The same list for everyone', 'Picks for each client'],
+        ['Can they film it?', 'Not checked', 'Checked against what the client can film'],
+        ['Where it stops', 'At the video', 'At a shot list your team can film'],
+        ['Approvals', 'Lost in chat', 'In one place, on the manager’s phone'],
+        ['Memory', 'Forgets', 'Remembers every yes, no and reason'],
+      ],
+      features: [
+        ['Every client’s ideas on one board.', 'See what’s shortlisted, what’s waiting for your manager, and what’s ready to film. No more ideas spread across ten chats.'],
+        ['Approvals from a phone, in about a minute.', 'Your manager sees the original video and your shot list. They approve it, ask for changes, or send it back with a reason.'],
+        ['It remembers what each client said.', 'Every approval and every “not this one” is saved to the client. Next month, you can see what they liked and why.'],
+      ],
+      faq: [
+        ['Which apps does it search?', 'TikTok today. Instagram is coming soon.'],
+        ['Does it write scripts for us?', 'No. Remake shows why a real video worked and lays out the shots. Your team writes and films.'],
+        ['How long does it take my manager to approve?', 'About a minute per idea. They see the video, the shot list and a note, then tap approve or send back.'],
+        ['Can my clients log in?', 'Not yet. Client access is coming soon, by invite from your agency.'],
+        ['How much does it cost?', 'It’s free while we’re still testing it.'],
+      ],
+    },
+    later: [
+      ['How posted videos did', 'Views on each video Evergreen Foods posted, next to their usual views.', "Would need: access to Evergreen Foods' TikTok stats."],
+      ['Which copied videos worked', "Which of the TikTok videos we copied led to Evergreen Foods' best results.", 'Would need: TikTok stats, plus a link from each posted video back to its plan.'],
+      ['Follower growth', "How Evergreen Foods' followers changed month by month.", "Would need: access to Evergreen Foods' TikTok stats."],
+    ],
+  });
+  D.v = (id) => D.videos.find((x) => x.id === id);
+  D.p = (id) => D.plans.find((x) => x.id === id);
+
+  window.H = {
+    usual: (v) => `${v.usual} times its usual views`,
+    spread: (v) =>
+      v.spread >= 5 ? `Spreading now: ${v.spread} accounts have posted this, and new ones keep coming`
+      : v.spread >= 3 ? `Just started: ${v.spread} accounts in the last 2 weeks`
+      : 'Only one or two accounts. Could be luck',
+    fit: (v) => v.hard ? `Hard for Evergreen Foods: needs ${v.hard.toLowerCase()}.` : 'Easy to film for Evergreen Foods. Needs a kitchen.',
+  };
+
+  window.SCREENS = [
+    ['landing', 'Landing page', 'Marketing page. One goal: a click on Try the demo.'],
+    ['login', 'Log in', 'Staff and client tabs. A returning user lands on their last client.'],
+    ['agency', 'All clients: Home', 'The client dashboard: every target, and what is waiting for you.'],
+    ['addclient', 'Add client', 'Only the name is needed now. Saves straight into Find ideas.'],
+    ['home', 'Client Home', 'How Evergreen Foods is tracking this month, and what needs you.'],
+    ['find', 'Find ideas', 'Search, your searches, saved to Research, where to start.'],
+    ['searching', 'Searching (loading)', 'What you see while a search runs. Press Replay to run it again.'],
+    ['results', 'Results', 'Best to copy, all videos, filters, save feedback and the saved tray.'],
+    ['breakdown', 'Why it worked', 'The video breakdown drawer, over the results.'],
+    ['research', 'Research', 'Reference videos, grouped by the videos the client pays for.'],
+    ['compare', 'Compare videos', 'What 2 to 5 winning videos have in common.'],
+    ['plans', 'Plans', 'Still planning, waiting for approval, approved. Drag a plan to move it.'],
+    ['plan', 'Start planning', 'How the original starts, suggested hooks with emotion tags, the shot list.'],
+    ['board', 'Planning board', 'The shot list as nodes. Drag shots; links follow.'],
+    ['review', 'Review', 'The manager approves, approves with changes, or sends back.'],
+    ['canvas', 'Canvas', 'Node canvas for an approved plan: prompt, storyboard, generated video.'],
+    ['editor', 'Edit', 'Timeline: order, trim, sound, export.'],
+    ['publish', 'Publish and results', 'Post the video (simulated), then log how it did.'],
+    ['channel', 'Channel', 'Analyse one account: the formats it keeps using.'],
+    ['brief', 'Brief', 'About this client, and what we have learned about them.'],
+    ['settings', 'Settings', 'Appearance and language for this browser.'],
+    ['portal', 'Shared review link', 'What the manager opens from "Get review link".'],
+  ];
+})();
+
+</script>
+<script>
+/* PX: the shared pixel toolkit. Six colours only. Sprites are drawn at native size on a canvas
+   and shown scaled with image-rendering: pixelated; icons and bitmap words are whole-cell SVG/DOM. */
+(function () {
+  'use strict';
+  const C = { n: '#060a47', b: '#1a33f2', m: '#f2b705', e: '#f6f1e7', k: '#000000', w: '#ffffff' };
+  const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+  const cache = new Map();
+  const PX = (window.PX = { C, BAYER });
+
+  /* ---------- Raster helpers ---------- */
+  function raster(w, h, draw) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
+    const g = {
+      w, h,
+      px: (a, b, c) => { if (!c) return; x.fillStyle = C[c] || c; x.fillRect(a | 0, b | 0, 1, 1); },
+      rect: (a, b, ww, hh, c) => { x.fillStyle = C[c] || c; x.fillRect(a, b, ww, hh); },
+      disc: (cx, cy, r, c, sy = 1) => { for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++) if (xx * xx + (yy * yy) / (sy * sy) <= r * r + r * 0.6) g.px(cx + xx, cy + Math.round(yy), c); },
+      ramp: (a, b, ww, hh, c1, c2, from = 0, to = 1) => { for (let yy = 0; yy < hh; yy++) for (let xx = 0; xx < ww; xx++) { const t = from + (to - from) * (yy / Math.max(1, hh - 1)); g.px(a + xx, b + yy, BAYER[(b + yy) % 4][(a + xx) % 4] / 16 < t ? c2 : c1); } },
+      checker: (a, b, ww, hh, c1, c2) => { for (let yy = 0; yy < hh; yy++) for (let xx = 0; xx < ww; xx++) g.px(a + xx, b + yy, (xx + yy) % 2 ? c1 : c2); },
+    };
+    draw(g);
+    return cv;
+  }
+  PX.raster = raster;
+
+  /* ---------- Cover art: 18 x 32 sprites (a video frame is a block of pixels) ---------- */
+  const BG = {
+    navy: (g) => g.rect(0, 0, g.w, g.h, 'n'),
+    dither: (g) => { g.rect(0, 0, g.w, g.h, 'n'); g.ramp(0, 10, g.w, g.h - 10, 'n', 'b', 0, 0.9); },
+    blue: (g) => { g.rect(0, 0, g.w, g.h, 'b'); for (let y = 1; y < g.h; y += 3) for (let x = 1; x < g.w; x += 3) g.px(x, y, 'n'); },
+    beige: (g) => { g.rect(0, 0, g.w, g.h, 'e'); g.ramp(0, 18, g.w, g.h - 18, 'e', 'm', 0, 0.55); },
+  };
+  const ART = {
+    pan(g) { // overhead pan, crispy tofu cubes
+      g.disc(8, 17, 7, 'k'); g.disc(8, 17, 6, 'n'); g.rect(15, 16, 3, 2, 'k');
+      [[4, 13], [9, 14], [5, 18], [10, 19]].forEach(([x, y]) => { g.rect(x, y, 3, 3, 'm'); g.px(x, y, 'w'); g.px(x + 1, y, 'e'); g.px(x, y + 1, 'e'); });
+      [[2, 9], [13, 8], [3, 25]].forEach(([x, y]) => g.px(x, y, 'w'));
+    },
+    slice(g) { // no-bake cheesecake slice
+      for (let i = 0; i < 11; i++) g.rect(9 - Math.ceil(i * 0.6), 11 + i, Math.ceil(i * 1.2) + 1, 1, i < 8 ? (i % 4 === 1 ? 'e' : 'w') : 'm');
+      g.rect(2, 23, 14, 1, 'w'); g.rect(3, 24, 12, 1, 'e'); g.px(9, 9, 'm'); g.px(8, 10, 'm');
+    },
+    mic(g) { // street taste test
+      g.disc(8, 12, 3, 'w'); [[7, 11], [9, 11], [8, 13], [7, 13], [9, 13], [8, 11]].forEach(([x, y], i) => i % 2 && g.px(x, y, 'e'));
+      g.rect(7, 16, 3, 9, 'w'); g.rect(8, 16, 1, 9, 'e'); g.rect(6, 15, 5, 1, 'm');
+      g.rect(11, 5, 6, 4, 'm'); g.px(12, 9, 'm'); g.rect(12, 6, 1, 1, 'n'); g.rect(14, 6, 1, 1, 'n'); g.rect(13, 7, 1, 1, 'n');
+    },
+    cube(g) { // tofu pressed between plates
+      g.rect(3, 8, 12, 3, 'k'); g.rect(4, 7, 10, 1, 'k'); g.rect(14, 9, 3, 1, 'k');
+      g.rect(2, 11, 14, 1, 'w'); g.rect(4, 12, 10, 7, 'w'); g.rect(4, 12, 10, 1, 'e'); g.rect(13, 12, 1, 7, 'e');
+      g.rect(2, 19, 14, 1, 'w'); [[5, 21], [9, 22], [12, 21], [7, 23]].forEach(([x, y]) => g.px(x, y, 'b'));
+    },
+    nug(g) { // lunchbox nuggets, crunchy
+      g.rect(2, 13, 14, 11, 'w'); g.rect(3, 14, 12, 9, 'e'); g.rect(9, 14, 1, 9, 'w');
+      [[4, 15], [6, 17], [4, 19], [6, 20]].forEach(([x, y]) => { g.rect(x, y, 2, 2, 'm'); g.px(x, y, 'w'); });
+      g.rect(11, 16, 3, 4, 'b'); g.px(12, 15, 'b');
+    },
+  };
+  PX.cover = function (art, bg = 'navy', div = 1) {
+    const key = art + bg + div;
+    if (cache.has(key)) return cache.get(key);
+    const full = raster(18, 32, (g) => { (BG[bg] || BG.navy)(g); (ART[art] || ART.cube)(g); });
+    let out = full;
+    if (div > 1) { // low-res pass: sample every div-th pixel, then scale back up (nearest)
+      const w = Math.max(1, Math.round(18 / div)), h = Math.max(1, Math.round(32 / div));
+      const small = document.createElement('canvas'); small.width = w; small.height = h;
+      const sx = small.getContext('2d'); sx.imageSmoothingEnabled = false; sx.drawImage(full, 0, 0, w, h);
+      out = document.createElement('canvas'); out.width = 18; out.height = 32;
+      const ox = out.getContext('2d'); ox.imageSmoothingEnabled = false; ox.drawImage(small, 0, 0, 18, 32);
+    }
+    const url = out.toDataURL();
+    cache.set(key, url); return url;
+  };
+  PX.img = (art, bg, div, cls = '', alt = '') => `<img class="px ${cls}" src="${PX.cover(art, bg, div)}" alt="${alt}" width="18" height="32" draggable="false">`;
+
+  /* ---------- Dither tiles as CSS backgrounds (two palette colours, never a new hue) ---------- */
+  PX.ditherURL = function (fg, bg, level, cell = 2) {
+    const key = 'd' + fg + bg + level + cell; if (cache.has(key)) return cache.get(key);
+    const cv = raster(4, 4, (g) => { for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) g.px(x, y, BAYER[y][x] < level ? fg : bg); });
+    const big = document.createElement('canvas'); big.width = 4 * cell; big.height = 4 * cell;
+    const bx = big.getContext('2d'); bx.imageSmoothingEnabled = false; bx.drawImage(cv, 0, 0, 4 * cell, 4 * cell);
+    const url = `url(${big.toDataURL()})`; cache.set(key, url); return url;
+  };
+  PX.setDithers = function (list) { // [['--d-n-e-8', 'n', 'e', 8, 2], ...]
+    const r = document.documentElement.style;
+    list.forEach(([name, fg, bg, lv, cell]) => r.setProperty(name, PX.ditherURL(fg, bg, lv, cell)));
+  };
+
+  /* ---------- 7 x 7 pixel icons ---------- */
+  const ICONS = {
+    home: ['...#...', '..###..', '.#####.', '#######', '.#...#.', '.#.#.#.', '.#.#.#.'],
+    find: ['.###...', '#...#..', '#...#..', '#...#..', '.###...', '....##.', '.....##'],
+    research: ['###....', '#..####', '#.....#', '#.....#', '#.....#', '#.....#', '#######'],
+    compare: ['###.###', '#.#.#.#', '#.#.#.#', '#.#.#.#', '###.###', '.......', '#######'],
+    plans: ['###.###', '#.#.#.#', '###.###', '#.#....', '###.###', '....#.#', '....###'],
+    canvas: ['##.....', '##..##.', '.#..##.', '.####..', '....#..', '...###.', '...###.'],
+    channel: ['#######', '#.....#', '#.#...#', '#.##..#', '#.#...#', '#.....#', '#######'],
+    brief: ['#####..', '#...##.', '#.....#', '#.###.#', '#.....#', '#.###.#', '#######'],
+    settings: ['...#...', '.#####.', '.##.##.', '###.###', '.##.##.', '.#####.', '...#...'],
+    check: ['.......', '......#', '.....##', '#...##.', '##.##..', '.###...', '..#....'],
+    plus: ['...#...', '...#...', '...#...', '#######', '...#...', '...#...', '...#...'],
+    arrow: ['...#...', '....#..', '.....#.', '#######', '.....#.', '....#..', '...#...'],
+    back: ['...#...', '..#....', '.#.....', '#######', '.#.....', '..#....', '...#...'],
+    heart: ['.......', '.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'],
+    heartO: ['.......', '.##.##.', '#..#..#', '#.....#', '.#...#.', '..#.#..', '...#...'],
+    star: ['...#...', '...#...', '#######', '.#####.', '..###..', '.##.##.', '##...##'],
+    play: ['##.....', '####...', '######.', '#######', '######.', '####...', '##.....'],
+    pause: ['##..##.', '##..##.', '##..##.', '##..##.', '##..##.', '##..##.', '##..##.'],
+    cross: ['#.....#', '.#...#.', '..#.#..', '...#...', '..#.#..', '.#...#.', '#.....#'],
+    mic: ['..###..', '..###..', '..###..', '#.###.#', '#.....#', '.#####.', '...#...'],
+    pen: ['.....##', '....###', '...###.', '..###..', '.###...', '##.....', '#......'],
+    link: ['.......', '.##.##.', '#..#..#', '#.....#', '#..#..#', '.##.##.', '.......'],
+    eye: ['.......', '..###..', '.#...#.', '#..#..#', '.#...#.', '..###..', '.......'],
+    clock: ['.#####.', '#..#..#', '#..#..#', '#..##.#', '#.....#', '#.....#', '.#####.'],
+    up: ['...#...', '..###..', '.#.#.#.', '#..#..#', '...#...', '...#...', '...#...'],
+    tiktok: ['...##..', '...#.#.', '...#...', '.###...', '#..#...', '#..#...', '.##....'],
+    insta: ['#######', '#.....#', '#.###.#', '#.#.#.#', '#.###.#', '#.....#', '#######'],
+    yt: ['.#####.', '#.....#', '#.##..#', '#.###.#', '#.##..#', '#.....#', '.#####.'],
+    reddit: ['....#..', '.#####.', '#.....#', '#.#.#.#', '#.....#', '#.###.#', '.#####.'],
+    x: ['#.....#', '.#...#.', '..#.#..', '...#...', '..#.#..', '.#...#.', '#.....#'],
+    out: ['###....', '#......', '#...###', '#....##', '#...#.#', '#......', '###....'],
+    film: ['#######', '#.#.#.#', '#######', '#.....#', '#######', '#.#.#.#', '#######'],
+    upload: ['...#...', '..###..', '.#.#.#.', '...#...', '...#...', '#.....#', '#######'],
+    sound: ['...#...', '..##.#.', '###..#.', '###.#.#', '###..#.', '..##.#.', '...#...'],
+  };
+  PX.icon = function (name, cls = '') {
+    const b = ICONS[name]; if (!b) return '';
+    let d = '';
+    b.forEach((row, y) => { for (let x = 0; x < 7; x++) if (row[x] === '#') d += `M${x} ${y}h1v1h-1z`; });
+    return `<svg class="pi ${cls}" viewBox="0 0 7 7" aria-hidden="true" shape-rendering="crispEdges"><path d="${d}" fill="currentColor"/></svg>`;
+  };
+
+  /* ---------- 5 x 7 bitmap font: words built from pixels that can assemble ---------- */
+  const F = {
+    A: '.###.#...##...#######...##...##...#', B: '####.#...##...#####.#...##...#####.', C: '.###.#...##....#....#....#...#.###.',
+    D: '####.#...##...##...##...##...#####.', E: '######....#....####.#....#....#####', F: '######....#....####.#....#....#....',
+    G: '.###.#...##....#.####...##...#.####', H: '#...##...##...#######...##...##...#', I: '.###...#....#....#....#....#...###.',
+    J: '..###...#....#....#....##..#..##...', K: '#...##..#.#.#..##...#.#..#..#.#...#', L: '#....#....#....#....#....#....#####',
+    M: '#...###.###.#.##.#.##...##...##...#', N: '#...##...###..##.#.##..###...##...#', O: '.###.#...##...##...##...##...#.###.',
+    P: '####.#...##...#####.#....#....#....', Q: '.###.#...##...##...##.#.##..#..##.#', R: '####.#...##...#####.#.#..#..#.#...#',
+    S: '.#####....#.....###.....#....#####.', T: '#####..#....#....#....#....#....#..', U: '#...##...##...##...##...##...#.###.',
+    V: '#...##...##...##...##...#.#.#...#..', W: '#...##...##...##.#.##.#.##.#.#.#.#.', X: '#...##...#.#.#...#...#.#.#...##...#',
+    Y: '#...##...#.#.#...#....#....#....#..', Z: '#####....#...#...#...#...#....#####',
+    0: '.###.#...##..###.#.###..##...#.###.', 1: '..#...##....#....#....#....#...###.', 2: '.###.#...#....#...#...#...#...#####',
+    3: '####.....#....#.###.....#....#####.', 4: '...#...##..#.#.#..#.#####...#....#.', 5: '######....####.....#....##...#.###.',
+    6: '.###.#....#....####.#...##...#.###.', 7: '#####....#...#...#...#....#....#...', 8: '.###.#...##...#.###.#...##...#.###.',
+    9: '.###.#...##...#.####....#....#.###.', '?': '.###.#...#....#...#...#.........#..', '!': '..#....#....#....#....#.........#..',
+    '.': '................................#..', ',': '.........................#...#.....', "'": '..#....#...........................',
+    '-': '...............###.................', '/': '....#...#....#...#...#...#....#....', ':': '.......#..............#............',
+    '"': '.#.#..#.#..........................', '×': '.....#...#.#.#...#...#.#.#...#.....', ' ': '...................................',
+  };
+  /* PX.word('FILM', {cell: 8, gap: 1, scatter: true}) -> DOM of square cells, aria-labelled */
+  PX.word = function (text, o = {}) {
+    const cell = o.cell || 8, gap = o.gap == null ? 1 : o.gap, T = String(text).toUpperCase();
+    let out = '', x0 = 0, n = 0;
+    for (const ch of T) {
+      const g = F[ch] || F[' '];
+      for (let i = 0; i < 35; i++) if (g[i] === '#') {
+        const x = x0 + (i % 5), y = Math.floor(i / 5);
+        const sx = o.scatter ? Math.round((Math.sin(n * 12.9898) * 43758.5453 % 1) * 260) : 0;
+        const sy = o.scatter ? Math.round((Math.sin(n * 78.233) * 12345.678 % 1) * 160) : 0;
+        out += `<i style="left:${x * cell}px;top:${y * cell}px;width:${cell - gap}px;height:${cell - gap}px;--sx:${sx}px;--sy:${sy}px;--n:${n}"></i>`; n++;
+      }
+      x0 += 6;
+    }
+    const w = (x0 - 1) * cell, h = 7 * cell;
+    return `<span class="pxw ${o.cls || ''}" role="img" aria-label="${String(text).replace(/"/g, '&quot;')}" style="width:${w}px;height:${h}px">${out}</span>`;
+  };
+
+  /* ---------- Cell transitions on a canvas over a viewport ---------- */
+  /* order(c, r, cols, rows) returns 0..1: when each cell flips. Phase 1 covers, then onMid, then phase 2 uncovers. */
+  PX.cellWipe = function (vp, o) {
+    const cv = document.createElement('canvas'), dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = vp.clientWidth, Hh = vp.clientHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(Hh * dpr);
+    cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;image-rendering:pixelated';
+    vp.appendChild(cv);
+    const x = cv.getContext('2d'), cols = o.cols, rows = Math.round(o.cols * Hh / W) || 1;
+    const cw = cv.width / cols, ch = cv.height / rows;
+    const ord = []; for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) ord.push(o.order(c, r, cols, rows));
+    const t0 = performance.now(), half = o.ms / 2; let mid = false;
+    const paint = (t, phase) => {
+      x.clearRect(0, 0, cv.width, cv.height);
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const v = ord[r * cols + c], on = phase === 1 ? v <= t : v > t;
+        if (!on) continue;
+        const lead = o.lead && Math.abs(v - t) < 0.08;
+        x.fillStyle = lead ? o.lead : o.color;
+        x.fillRect(Math.floor(c * cw), Math.floor(r * ch), Math.ceil(cw), Math.ceil(ch));
+      }
+    };
+    const tick = (now) => {
+      const e = now - t0;
+      if (e < half) { paint(e / half, 1); requestAnimationFrame(tick); return; }
+      if (!mid) { mid = true; o.onMid && o.onMid(); }
+      if (e < o.ms) { paint((e - half) / half, 2); requestAnimationFrame(tick); return; }
+      cv.remove();
+    };
+    requestAnimationFrame(tick);
+  };
+})();
+
+</script>
+<script>
+/* Shared screen content for all three concepts: every string, field and action from the app lives here once.
+   Each concept passes its own pixel helpers (K) and overrides its signature screens. */
+window.makeR = function (K) {
+  const BG = K.bg || 'navy';
+  const C = D.client, V = D.v, I = PX.icon;
+  const NAV = [['home', 'Home', 'home'], ['find', 'Find ideas', 'find'], ['research', 'Research', 'research', 14], ['compare', 'Compare videos', 'compare'], ['plans', 'Plans', 'plans', 3], ['canvas', 'Canvas', 'canvas'], null, ['channel', 'Channel', 'channel'], ['brief', 'Brief', 'brief']];
+  const navOn = { searching: 'find', results: 'find', breakdown: 'find', plan: 'plans', board: 'plans', review: 'plans', editor: 'canvas', publish: 'canvas', addclient: 'agency' };
+  let logo = (big) => `<span class="logo ${big ? 'big' : ''}"><span class="lm" aria-hidden="true"><i></i><i></i><i></i><i class="m"></i></span>Remake</span>`;
+
+  let shell = (id, body, o = {}) => {
+    const on = navOn[id] || id;
+    const nav = o.all
+      ? `<p class="sb-h">Clients</p>${D.clients.map((c, i) => `<a class="nv" data-go="home"><span class="av">${c.short}</span>${c.name}${c.waiting ? `<span class="wpx" title="${c.waiting} waiting"></span>` : ''}</a>`).join('')}<a class="nv ${id === 'addclient' ? 'on' : ''}" data-go="addclient">${I('plus')}Add client</a>`
+      : NAV.map((n) => n ? `<a class="nv ${n[0] === on ? 'on' : ''}" data-go="${n[0]}">${I(n[2])}${n[1]}${n[3] ? `<span class="cnt" ${n[0] === 'research' ? 'data-counter' : ''}>${n[3]}</span>` : ''}</a>` : '<hr>').join('');
+    return `<div class="sh"><aside class="sb">${logo()}
+      <button class="csw" data-go="${o.all ? 'home' : 'agency'}"><span class="av">${o.all ? '★' : 'EF'}</span><span><small>${o.all ? 'Every client at a glance' : 'Client'}</small>${o.all ? 'All clients' : C.name}</span><span class="car">▾</span></button>
+      ${o.all ? '' : `<a class="nv all" data-go="agency">${I('back')}All clients</a>`}
+      <nav>${nav}</nav>
+      <div class="sb-ft"><a class="sm lnk">How we calculate this</a><span class="sd" title="All accounts and numbers are made up for this demo"><i></i>Sample data</span><a class="nv ${id === 'settings' ? 'on' : ''}" data-go="settings">${I('settings')}Settings</a>
+        <div class="me"><span class="av">AL</span><span><b>Annie Lau (manager)</b><small>Sample Social Co.</small></span><span class="so" title="Sign out" data-go="login">${I('out')}</span></div></div></aside>
+      <div class="mn scroll">${body}</div>${o.after || ''}</div>`;
+  };
+  /* Units: the one pixel element. on = done (blue), w = waiting for you (mustard), b = sent back (navy outline) */
+  let units = (n, on, w = 0, b = 0, cls = '') => `<span class="u ${cls}" role="img" aria-label="${on} of ${n}">${Array.from({ length: n }, (_, i) => `<i class="${i < on ? 'on' : i < on + w ? 'w' : i < on + w + b ? 'b' : ''}" style="--i:${i}"></i>`).join('')}</span>`;
+  /* Proof: one navy pixel is what the account usually gets; each blue pixel is one more of those */
+  let proof = (v, cols = 30) => `<span class="proof" style="--cols:${cols}" role="img" aria-label="${H.usual(v)}"><i class="one"></i>${Array.from({ length: v.usual - 1 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</span>`;
+  let cv = (v, o = {}) => `<div class="cv ${o.cls || ''}" ${o.attr || ''}>${PX.img(v.art, BG, o.div || 1, '', '')}<span class="cv-pl">${I(v.plat === 'TikTok' ? 'tiktok' : 'insta')}</span><span class="cv-len">${v.len}</span>${o.cap ? `<span class="cv-cap">${v.title}</span>` : ''}${o.badge || ''}</div>`;
+  let fv = (v, big) => `<span class="fv ${big ? 'big' : ''}"><span><b>${v.fol}</b><small>followers</small></span><i>${I('arrow')}</i><span><b>${v.views}</b><small>views${big ? ' on this video' : ''}</small></span></span>`;
+  let btn = (t, cls = '', a = '') => `<button class="btn ${cls}" ${a}>${t}</button>`;
+  const fld = (l, v, o = {}) => `<label class="fld"><span>${l}</span>${o.area ? `<textarea class="inp" rows="${o.rows || 3}" placeholder="${o.ph || ''}">${v}</textarea>` : `<input class="inp" value="${v}" placeholder="${o.ph || ''}" ${o.mirror ? `data-mirror="${o.mirror}"` : ''}>`}${o.help ? `<small>${o.help}</small>` : ''}</label>`;
+  const chk = (t, on) => `<label class="chk"><input type="checkbox" ${on ? 'checked' : ''}><i aria-hidden="true">${I('check')}</i>${t}</label>`;
+  let later = () => `<section class="sect"><h2 class="h2">After videos are posted</h2><p class="sm">These need numbers from Evergreen Foods' TikTok account after videos go live. Remake doesn't collect them yet, so nothing here is real data.</p>
+    <div class="g3" style="margin-top:14px">${D.later.map((l) => `<div class="card ghost"><p class="h3">${l[0]}: not built yet</p><p class="sm">${l[1]}</p><p class="sm meta">${l[2]}</p><p class="sm"><b>Needs a decision before we build this.</b></p></div>`).join('')}</div></section>`;
+  if (K.logo) logo = K.logo; if (K.shell) shell = K.shell(shell); if (K.units) units = K.units; if (K.proof) proof = K.proof; if (K.cv) cv = K.cv; if (K.fv) fv = K.fv; if (K.btn) btn = K.btn;
+  const RS = { p3: ['Silken tofu, cream cheese, biscuits on the bench', 'Blend, pour, chill', 'The slice, close-up', 'Pack and price'], p4: ['Cubes into the basket', 'Shake halfway', 'The crunch, close-up', 'Pack: "No oil needed"'] };
+  const RT = { p3: ['3 ingredients. No oven.', '', 'Listen to that fork.', '$3.50 at Woolies'], p4: ['No oil. Still crunchy.', '', '', 'Save this for dinner'] };
+
+  const R = {
+    landing: () => `<div class="lp scroll" style="height:800px">
+      <header class="lp-nav">${logo(true)}<span class="gap"></span><a>How it works</a><a>FAQ</a><a data-go="login">Log in</a>${btn('Try the demo', 'pri', 'data-go="home"')}</header>
+      <section class="lp-hero"><div class="k"><h1 class="dsp">Know what each client should <em>film</em> this week.</h1>
+          <p class="lede">Remake finds the trending videos worth copying for each client, plans the shots, and gets your manager's OK.</p>
+          <div class="row" style="margin-top:28px">${btn('Try the demo', 'pri lg', 'data-go="home"')}<span class="sm">No sign-up. A sample agency is ready to go.</span></div>
+          <p class="sm" style="margin-top:36px">Built with social agencies in Sydney. Ranks videos by <b>views ÷ followers</b>, the check agencies already do by hand.</p></div>
+        <div class="lp-demo k" style="--d:2"><div class="between"><span class="meta">remake.app</span><span class="meta">What your team would film</span></div>
+          <p class="h3" style="margin-top:14px">Evergreen Foods</p><p class="sm">3 videos way above usual</p>
+          <div class="scan" aria-hidden="true">${Array.from({ length: 40 }, (_, i) => `<i class="${[6, 17, 29].includes(i) ? 'hit' : ''} ${i === 6 ? 'top' : ''}" style="--i:${i}"></i>`).join('')}</div>
+          ${[['Crispy tofu, 3 ways', 42, '★ Best to copy'], ['Tofu taste test', 18, ''], ['Silken tofu hack', 9, '']].map((p) => `<div class="pick"><span><b>${p[0]}</b><small>${p[1]} times its usual views</small></span>${units(Math.min(p[1], 21), Math.min(p[1], 21), 0, 0, 'xs')}${p[2] ? `<span class="tag m">${p[2]}</span>` : ''}</div>`).join('')}
+          <div class="between" style="margin-top:14px"><span class="sm"><b>Shot list</b> · Crispy tofu · 4 shots</span><span class="tag ok">${I('check')} Approved</span></div></div></section>
+      <section class="lp-sec"><h2 class="h1">Finding ideas shouldn’t take all week.</h2><div class="g3">${D.landing.problems.map((p) => `<div><p class="h3">${p[0]}</p><p>${p[1]}</p></div>`).join('')}</div>
+        <p class="quote">“Quote from an agency goes here” <span class="sm">(waiting for their OK)</span></p></section>
+      <section class="lp-sec alt"><h2 class="h1">How it works</h2><p class="lede">From one search to an approved shot list, in five steps.</p>
+        <ol class="steps">${D.landing.steps.map((s, i) => `<li>${units(5, i + 1, 0, 0, 'xs')}<p class="h3">${s[0]}</p><p class="sm">${s[1]}</p></li>`).join('')}</ol>
+        <a class="lnk">Download the tour (MP4)</a></section>
+      <section class="lp-sec"><h2 class="h1">Trend tools show what’s popular. Remake shows what each client should <em>film</em>.</h2>
+        <table class="tbl"><thead><tr><th>Compared</th><th>Trend tools</th><th>Inside Remake</th></tr></thead><tbody>${D.landing.compare.map((r) => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td><span class="dot"></span>${r[2]}</td></tr>`).join('')}</tbody></table></section>
+      <section class="lp-sec alt"><div class="g3">${D.landing.features.map((f) => `<div><p class="h3">${f[0]}</p><p class="sm">${f[1]}</p></div>`).join('')}</div></section>
+      <section class="lp-sec"><h2 class="h1">We don’t write your content.</h2><p class="lede">Remake shows why real videos worked. Your team films them.</p></section>
+      <section class="lp-sec alt"><h2 class="h1">Questions agencies ask.</h2><div class="faq">${D.landing.faq.map((f, i) => `<details ${i === 0 ? 'open' : ''}><summary>${f[0]}</summary><p>${f[1]}</p></details>`).join('')}</div></section>
+      <section class="lp-sec end"><h2 class="dsp" style="font-size:52px">See what each client should <em>film</em> this week.</h2><div class="row" style="margin-top:20px">${btn('Try the demo', 'pri lg', 'data-go="home"')}<span class="sm">No sign-up. A sample agency is ready to go.</span></div></section>
+      <footer class="lp-ft"><span>© 2026 Remake</span><a>How it works</a></footer></div>`,
+
+    login: () => `<div class="lgn"><div class="lgn-l">${logo(true)}<div><p class="dsp" style="font-size:46px">Your plans, <em>approved</em>.</p>
+        <p class="sm" style="margin-top:12px">Where you'll land: Evergreen Foods, November.</p><div style="margin-top:18px">${units(12, 5, 2, 0, 'lg')}</div><p class="meta" style="margin-top:10px">5 of 12 approved · 2 waiting for you</p></div><span class="sm">© 2026 Remake</span></div>
+      <div class="lgn-r"><h1 class="h1">Welcome back to Remake</h1>
+        <div class="seg k" data-pickgroup><span class="sm">Log in as</span><button class="is-on" data-pick data-act="cpick" data-show="staff">Staff</button><button data-pick data-act="cpick" data-show="client">Client</button></div>
+        <div class="staff" style="display:grid;gap:14px"><p class="sm">Find videos, plan them and approve them.</p>${fld('Work email', '', { ph: 'annie@samplesocial.co' })}<label class="fld"><span>Password</span><input class="inp" type="password" value="" placeholder="••••••••"></label>
+          <label class="fld"><span>Your role</span><select class="inp"><option>Manager (approves)</option><option>Team member</option></select></label>
+          <div class="row">${btn('Log in', 'pri lg', 'data-go="home"')}<a class="lnk" data-go="agency">Start with the sample agency</a></div></div>
+        <div class="client" style="display:none"><p class="sm">See your plans and how the month is going.</p><div class="card" style="margin-top:14px"><p class="h3">Client login</p><p>Client logins are coming soon. Your agency will send you an invite to see your plans.</p></div></div></div></div>`,
+
+    agency: () => shell('agency', `<div class="hd k"><div><h1 class="h1">Client dashboard</h1><p class="sm">This month's video targets and what's waiting for you, across 4 clients.</p></div>${btn('+ Add client', 'pri', 'data-go="addclient"')}</div>
+      <div class="g2w k" style="--d:1"><div class="card"><p class="h3">Videos approved this month, all clients</p><div class="bign"><span class="num" data-count="10">10</span><span class="of">of 30</span></div>${units(30, 10, 4, 1, 'lg')}<p class="sm" style="margin-top:10px">20 more needed, 26 days left in November. 4 more are waiting for you to approve.</p>
+          <p class="key"><span><i class="on"></i>Approved</span><span><i class="w"></i>Waiting for you</span><span><i class="b"></i>Sent back</span></p></div>
+        <div class="card"><p class="h3">Waiting for approval</p>${D.clients.filter((c) => c.waiting).map((c) => `<div class="li"><span class="av">${c.short}</span><span class="grow"><b>${c.name}</b><small>${c.waiting} plan${c.waiting > 1 ? 's' : ''} to approve</small></span>${btn('Open', 'sec sm', 'data-go="review"')}</div>`).join('')}</div></div>
+      <table class="tbl k" style="--d:2"><thead><tr><th>Client</th><th>Approved this month</th><th>Waiting for you</th><th>Sent back</th><th>Your decisions</th><th>Next to film</th><th>Actions</th></tr></thead><tbody>
+        ${D.clients.map((c) => `<tr><td><span class="row" style="gap:10px"><span class="av">${c.short}</span><span><b>${c.name}</b><small class="blk">${c.sells}</small></span></span></td><td>${units(c.target, c.approved, c.waiting, c.back, 'xs')}<small class="blk meta">${c.approved} of ${c.target}</small></td><td>${c.waiting ? `<a class="lnk" data-go="review"><span class="wpx"></span>${c.waiting} waiting</a>` : '<span class="sm">None</span>'}</td><td>${c.back || '<span class="sm">None</span>'}</td><td class="sm">${c.dec}</td><td class="sm">${c.next ? `${c.next}<small class="blk meta">Due ${c.due}</small>` : 'Nothing approved yet'}</td><td>${btn('Home', 'sec sm', 'data-go="home"')}</td></tr>`).join('')}</tbody></table>
+      <div class="g2w k" style="--d:3;margin-top:22px"><div class="card"><p class="h3">Agency</p><p class="sm">The manager approves plans. Their name shows wherever a plan waits for review.</p><div class="g2" style="margin-top:12px">${fld('Agency name', 'Sample Social Co.', { help: 'Set by your account' })}${fld("Manager's name", 'Annie Lau')}</div></div><div></div></div>
+      ${later().replace(/Evergreen Foods' TikTok account/, "each client's TikTok account").replace(/Evergreen Foods'|Evergreen Foods/g, 'each client')}`, { all: true }),
+
+    addclient: () => shell('addclient', `<a class="lnk back" data-go="agency">${I('back')} Back to overview</a><div class="hd"><div><h1 class="h1">Add a client</h1><p class="sm">Only the name is needed now. You can change everything later in the Brief.</p></div></div>
+      <div class="g2w" style="align-items:start"><div class="card form">${fld('Client name', '', { ph: "e.g. Mia's Bakery", mirror: '.pv-n' })}${fld('What they sell', '', { ph: 'e.g. sourdough and cakes', mirror: '.pv-s' })}${fld('Main audience', '', { ph: 'e.g. locals and weekend brunch crowd' })}
+          ${fld('Topics to watch (comma-separated)', '', { ph: 'e.g. sourdough, bakery tour', help: 'We check the first topic on TikTok once a day to fill "Trending now".' })}${fld('Starter searches (comma-separated)', '', { ph: 'e.g. bread making asmr, cake decorating' })}
+          <div class="fld"><span>Videos per month</span><div class="row" data-stepper><button class="btn sec sq" data-act="tgt" data-delta="-1" aria-label="Fewer">−</button><b class="num md" data-stepval>12</b><button class="btn sec sq" data-act="tgt" data-delta="1" aria-label="More">+</button><span data-tgtunits>${units(12, 0)}</span></div><small>One square per video. They fill in as plans get approved.</small></div></div>
+        <div style="display:grid;gap:16px"><div class="card"><p class="h3">What this client can't do</p><p class="sm">Videos that need a ticked item get marked as hard to film.</p><div class="chks">${D.cannot.map((x) => chk(x, false)).join('')}</div></div>
+          <div class="card ghost"><p class="meta">In the sidebar</p><p class="row" style="margin-top:8px;gap:10px"><span class="av">+</span><span><b class="pv-n" data-empty="New client">New client</b><small class="blk pv-s" data-empty="What they sell">What they sell</small></span></p></div>
+          <div class="row">${btn('Save and find ideas', 'pri lg', 'data-go="find"')}${btn('Cancel', 'sec lg', 'data-go="agency"')}</div></div></div>`, { all: true }),
+
+    home: () => shell('home', `<div class="hd k"><div><h1 class="h1">Dashboard</h1><p class="sm">How Evergreen Foods is tracking this month, and what needs you.</p></div>${btn('Find ideas for Evergreen Foods', 'pri', 'data-go="find"')}</div>
+      <div class="g2h">
+        <div style="display:grid;gap:16px;align-content:start">
+          <div class="card k" style="--d:1"><h2 class="h2">What should Evergreen Foods film next?</h2><div class="fn">${cv(V('v1'), { cap: true })}<div><p class="h3">Crispy tofu ASMR, top-down</p><p class="sm">Copies "Crispy tofu in 5 min" by @smallkitchen.sample</p>
+            <p style="margin-top:10px">5 accounts on TikTok posted this. The biggest one got 2.4M views. Right now it's still growing.</p><p class="sm">Works for busy mums and young professionals.</p>${units(8, 5, 0, 0, 'acc')}<small class="blk meta">5 accounts posting</small>
+            <div class="row" style="margin-top:14px">${btn('Save to Research', 'pri', 'data-act="save" data-saved="✓ Saved to Research" data-toast="Saved &quot;Crispy tofu in 5 min&quot; to Evergreen Foods\' Research. <b>Plan the shots →</b>"')}</div></div></div>
+            <p class="h3" style="margin-top:18px">Also worth filming</p>${['v8', 'v5'].map((id) => { const v = V(id); return `<div class="li">${cv(v, { cls: 'xs' })}<span class="grow"><b>${v.title}</b><small>Copies "${v.title}" by ${v.acct} · ${H.usual(v)}</small></span>${btn('Save to Research', 'sec sm', `data-act="save" data-saved="✓ Saved" aria-label="Save to Research: ${v.title}"`)}</div>`; }).join('')}
+            <p class="sm" style="margin-top:12px">Not suggested here: 3 kinds of video that already have a plan for Evergreen Foods. <a class="lnk" data-go="plans">See them in Plans</a></p></div>
+          <div class="card k" style="--d:3"><p class="h3">Where Evergreen Foods' 10 ideas are</p><div class="steps5">${[[2, 'planned, no shots yet', ''], [0, 'shots planned, not sent to you yet', ''], [2, 'waiting for you to approve', 'w'], [5, 'approved and ready to film', 'on'], [1, 'sent back to fix', 'b']].map((s) => `<a data-go="plans"><span class="u xs">${Array.from({ length: Math.max(s[0], 1) }, (_, i) => `<i class="${s[0] ? s[2] : 'z'}"></i>`).join('')}</span><b class="num sm">${s[0]}</b><span class="sm">${s[1]}</span></a>`).join('')}</div></div>
+          <div class="g2 k" style="--d:4"><div class="card"><p class="h3">You approved 5 of 6 plans</p><p class="sm">5 approved (1 with changes) · 1 sent back to fix</p>${units(6, 5, 0, 1)}<p class="h3" style="margin-top:16px">Time to decide</p><p class="sm">On average 3 hours from a plan being sent to your decision (6 plans).</p></div>
+            <div class="card"><p class="h3">Why plans were sent back</p><p class="sm">Doesn't fit the brand's tone · 1</p><p class="h3" style="margin-top:16px">Kinds of video approved most</p><div class="kinds">${[['Overhead recipe', 3], ['Taste test reaction', 1], ['Kitchen hack reveal', 1]].map((k) => `<p><span class="sm">${k[0]}</span>${units(k[1], k[1], 0, 0, 'xs')}</p>`).join('')}</div><p class="sm">Each plan copies a TikTok video. This groups the approved ones for Evergreen Foods by the kind of video they copy.</p></div></div>
+          ${later()}</div>
+        <div style="display:grid;gap:16px;align-content:start">
+          <div class="card k monthcard" style="--d:2"><p class="h3">Videos approved this month</p><div class="bign"><span class="num" data-count="5">5</span><span class="of">of 12 approved</span></div>${units(12, 5, 2, 0, 'lg')}<p class="sm" style="margin-top:10px">7 more needed, 26 days left in November. 2 more are waiting for you to approve.</p></div>
+          <div class="card k mkc" style="--d:3"><p class="h3">Waiting for approval</p>${D.plans.filter((p) => p.col === 'waiting').map((p) => `<div class="li" data-togglebox><span class="grow"><b>${p.title}</b><small>Copies "${V(p.v).title}" by ${V(p.v).acct}</small><small class="meta">Film due ${p.due}</small></span>${btn('Approve', 'pri sm', `data-act="toggle" data-on="✓ Approved" data-toast="Approved: <b>${p.title}</b>" aria-label="Approve ${p.title}"`)}</div>`).join('')}<a class="lnk" data-go="review">Go through all 2 →</a></div>
+          <div class="card k" style="--d:4"><p class="h3">You sent back 1 plan to fix</p><div class="li"><span class="grow"><b>Gym bro tries tofu</b><small>Your reason: Not on brand, too much shouting</small></span></div></div>
+          <div class="card k" style="--d:5"><p class="h3">Approved, ready to film</p>${D.plans.filter((p) => p.col === 'approved').map((p) => `<div class="li">${cv(V(p.v), { cls: 'xs' })}<span class="grow"><b>${p.title}</b><small>Copies "${V(p.v).title}" by ${V(p.v).acct}</small><small class="meta">Approved, due ${p.due}</small></span></div>`).join('')}<a class="lnk" data-go="plans">See all 5 in Plans →</a></div></div></div>`),
+
+    find: () => shell('find', `<section class="fh k"><h1 class="dsp">What should Evergreen Foods <em>film</em> next?</h1><p class="lede">Search TikTok for a topic. We show first the videos that got far more views than their account usually gets, so you can copy what is already working.</p>
+        <div class="sbx"><div class="row"><span class="meta">Search on</span>${[['tiktok', 'TikTok', 1], ['insta', 'Instagram', 1], ['yt', 'YouTube', 0], ['reddit', 'Reddit', 0], ['x', 'X', 0]].map((p) => `<button class="plat ${p[2] ? 'is-on' : ''}" data-act="toggle" aria-label="${p[1]}" title="${p[1]}">${I(p[0])}</button>`).join('')}<span class="sm">TikTok and Instagram · each platform is a separate search</span></div>
+          <div class="qrow"><span class="q"><span data-type="crispy tofu|tofu desserts for busy mums|what tofu recipe videos are working right now?"></span><span class="caret"></span></span><button class="mic" aria-label="Speak">${I('mic')}</button>${btn('Find trending videos', 'pri lg', 'data-go="searching"')}</div><p class="sm" style="margin-top:6px">Search a topic, ask a question, or paste a video link</p></div>
+        <p class="row sm" style="margin-top:16px">${units(12, 5, 2)}<span>5 of 12 videos approved for Evergreen Foods this month</span></p></section>
+      <div class="g2 k" style="--d:2;margin-top:26px;align-items:start"><section><h2 class="h2">Your searches</h2><p class="sm">Searches run for Evergreen Foods in this browser. Open one to see its videos again: anything that wasn't there last time is marked New.</p>
+          <table class="tbl"><thead><tr><th>Search</th><th>Since last look</th><th>Saved</th><th></th></tr></thead><tbody>${D.recent.map((r) => `<tr><td><b>${r.q}</b><small class="blk">${r.plats}</small></td><td class="sm">${r.since}</td><td class="sm">${r.saved}</td><td><a class="lnk" data-go="results">Open →</a></td></tr>`).join('')}</tbody></table></section>
+        <section><h2 class="h2">Saved to Research</h2><p class="sm">Filed under the videos you are making for Evergreen Foods. Check here before saving the same idea twice.</p>
+          <table class="tbl"><thead><tr><th>Research video</th><th>Saved</th><th>Top saved</th></tr></thead><tbody>${D.slots.slice(0, 4).map((s) => { const v = V(s.vids[0]); return `<tr><td><b>V${s.n} · ${s.topic}</b><small class="blk meta">Due ${s.due}</small></td><td>${units(s.vids.length, s.vids.length, 0, 0, 'xs')}</td><td><span class="sm">${v.fol} → <b>${v.views}</b></span><small class="blk">${v.acct}</small>${s.n > 1 ? '<small class="blk tagm">★ Picked</small>' : ''}</td></tr>`; }).join('')}</tbody></table>
+          <div class="between" style="margin-top:8px"><a class="lnk">Show all 12 videos</a><a class="lnk" data-go="research">Open Research →</a></div></section></div>
+      <section class="k" style="--d:3;margin-top:28px"><h2 class="h2">Where to start for Evergreen Foods</h2><p class="sm">Pick one to search it now, or type your own search above.</p>
+        <div class="starts">${D.starts.map((s) => `${s.group ? `<p class="grp">${s.group}</p>` : ''}<button class="st" data-go="searching"><span><b>${s.q}</b><small>${s.why}</small></span><span class="go">${s.q === 'Paste a video link' ? 'Paste' : 'Search'} ${I('arrow')}</span></button>`).join('')}</div>
+        <p class="sm" style="margin-top:14px">This demo only has sample videos about tofu for now.</p></section>`),
+
+    searching: () => shell('searching', `<div class="sbx slim k"><div class="qrow"><span class="q"><b>crispy tofu</b></span><span class="row">${I('tiktok')}${I('insta')}</span>${btn('Searching…', 'pri', 'disabled aria-busy="true"')}</div></div>
+      <div class="srch"><div><h1 class="h1">Searching TikTok, Instagram for "crispy tofu"…</h1>
+          <ol class="ticks" data-steps data-ms="900">${D.searchSteps.map((s) => `<li data-step><i></i>${s}</li>`).join('')}</ol>
+          <p class="bign" style="margin-top:22px"><span class="num" data-count="48" data-dur="3600">48</span><span class="of">videos read so far</span></p>
+          <div class="row" style="margin-top:18px">${btn('↻ Replay', 'sec', 'data-act="reset"')}${btn('See the results →', 'pri', 'data-go="results"')}</div></div>
+        <div class="rgrid" aria-label="Video frames loading">${D.videos.concat(D.videos).slice(0, 12).map((v, i) => `<div class="cv" data-res="${v.art}" style="--i:${i}">${PX.img(v.art, BG, 6)}</div>`).join('')}</div></div>`),
+
+    results: () => shell('results', `<div class="sbx slim"><div class="qrow"><span class="q"><b>crispy tofu</b></span><span class="row">${I('tiktok')}${I('insta')}</span>${btn('Find trending videos', 'pri', 'data-go="searching"')}</div></div>
+      <div class="row k" style="margin:12px 0 6px"><span class="meta">Searching for</span><span class="chip">tofu ×</span><span class="chip">crispy ×</span></div>
+      <p class="k">We found <b>6</b> TikTok videos for "crispy tofu". Showing 6 of 6</p>
+      <div class="row k" style="margin-top:8px"><button class="chip is-on" data-act="toggle">Views: 1M+ <small>Default</small> ×</button><button class="chip is-on" data-act="toggle">Followers: Under 50K <small>Default</small> ×</button><button class="chip">Filters (2)</button><a class="lnk sm">Clear all</a></div>
+      <section class="best k" style="--d:1"><h2 class="h2">Best to copy for Evergreen Foods</h2><p class="sm">It got far more views than usual, and other accounts are starting to post the same idea.</p>
+        <div class="bestg">${cv(V('v1'), { cls: 'lg', badge: '<span class="cv-play">' + I('play') + '</span><span class="cv-note">Sample video, can’t play</span>' })}
+          <div><p class="sm">Spreading now: 5 accounts have posted this, and new ones keep coming.</p><p class="h1" style="margin:6px 0">"Crispy tofu in 5 min"</p><p class="sm">2.4M views from an account with 3.1k followers. Posted by @smallkitchen.sample 9 days ago.</p>
+            <div style="margin:16px 0">${fv(V('v1'), true)}</div><div class="row">${btn('See why it worked', 'sec', 'data-go="breakdown"')}${btn('Save to Research', 'pri', 'data-act="save" data-saved="✓ Video 1" data-toast="Saved to <b>V1 · Best tofu recipe</b>"')}</div></div>
+          <div class="pf"><p class="sm"><b><span data-count="267">267</span> times its usual views</b></p>${proof(V('v1'))}${K.proofNote == null ? '<p class="sm">The navy pixel is what this account usually gets. Each blue pixel is one more of those.</p>' : K.proofNote}</div></div></section>
+      <section class="k" style="--d:2;margin-top:24px"><div class="between"><div><h2 class="h2">All videos · 6</h2><p class="sm">Ranked by views compared with what each account usually gets. A big jump means the idea worked, not the account’s size.</p></div>
+        <label class="fld row"><span>Sort by</span><select class="inp"><option>Most views compared with usual</option><option>Views</option><option>Most views per follower</option><option>Newest</option><option>Most views a day</option></select></label></div>
+        <div class="row" style="margin:10px 0 14px"><span class="seg" data-pickgroup>${['Last 7 days', 'Last 30 days', 'Last 90 days', 'Any time'].map((t, i) => `<button class="${i === 1 ? 'is-on' : ''}" data-pick data-act="pick">${t}</button>`).join('')}</span><span class="seg" data-pickgroup>${['Any length', 'Under 15 sec', 'Under 30 sec', 'Under 60 sec'].map((t, i) => `<button class="${i === 0 ? 'is-on' : ''}" data-pick data-act="pick">${t}</button>`).join('')}</span></div>
+        <div class="tiles">${['v1', 'v8', 'v6', 'v5', 'v3', 'v2'].map((id) => { const v = V(id); return `<div class="tile">${cv(v)}<b>${v.title}</b><small>${v.acct}</small>${fv(v)}<span class="mini">${units(Math.min(10, Math.ceil(v.usual / 30)), Math.min(10, Math.ceil(v.usual / 30)), 0, 0, 'xs')}<small>${v.usual} times usual</small></span>${btn(id === 'v1' ? '✓ Video 1' : 'Save', 'sec sm' + (id === 'v1' ? ' is-saved' : ''), `data-act="save" data-saved="✓ Video 1" data-toast="Saved <b>${v.title}</b> to V1 · Best tofu recipe"`)}</div>`; }).join('')}</div></section><div style="height:70px"></div>`,
+      { after: `<div class="tray" data-tray><span class="meta">Saved to Research</span>${D.slots.slice(0, 4).map((s, i) => `<span class="ts">V${s.n} · ${s.topic} <b ${i === 0 ? 'data-counter' : ''}>${s.vids.length}</b></span>`).join('')}<a class="lnk" data-go="research">Open Research →</a></div>` }),
+
+    research: () => shell('research', `<div class="hd k"><div><h1 class="h1">Research</h1><p class="sm">Reference videos worth copying, grouped by the videos the client is paying for. Plan the best one in each slot.</p></div><div class="row">${btn('+ Add video', 'sec')}${btn('Add from link', 'sec')}${btn('Export CSV', 'sec')}</div></div>
+      <div class="row filt k"><label class="fld"><span>Search</span><input class="inp" placeholder="Account, hook, keywords or notes"></label><label class="fld"><span>Platform</span><select class="inp"><option>All platforms</option><option>TikTok</option><option>Instagram</option><option>YouTube</option></select></label><label class="fld"><span>Status</span><select class="inp"><option>All statuses</option>${['Not planned', 'Still planning', 'Waiting for approval', 'Approved, ready to film', 'Filming', 'Editing', 'Posted'].map((s) => `<option>${s}</option>`).join('')}</select></label><span class="meta" style="margin-left:auto">9 videos</span></div>
+      ${D.slots.map((s, i) => `<section class="slot k" style="--d:${i + 1}"><div class="slot-h"><span class="vn">Video ${s.n}</span><b>${s.topic}</b><a class="lnk sm">· Edit topic</a><span class="meta">Due ${s.due}</span><span class="st-${/Approved/.test(s.status) ? 'ok' : /Waiting/.test(s.status) ? 'w' : 'n'}">${s.status}</span></div>
+        ${s.vids.length ? `<table class="tbl"><thead><tr><th></th><th>Account</th><th>Platform</th><th>Followers</th><th>Views</th><th>Hook</th><th>Status</th><th>Link</th></tr></thead><tbody>${s.vids.map((id, j) => { const v = V(id); return `<tr><td style="width:44px">${cv(v, { cls: 'xs' })}</td><td><b>${v.acct}</b></td><td class="sm">${v.plat}</td><td class="meta">${v.fol}</td><td class="meta">${v.views}</td><td class="sm">"${v.title}"</td><td>${j === 0 ? '<span class="tagm">★ Picked</span>' : '<button class="lnk sm" data-act="toggle" data-on="★ Picked">Pick</button>'}</td><td><a class="lnk sm">Open</a></td></tr>`; }).join('')}</tbody></table>` : `<p class="empty">Nothing saved for this video yet. <a class="lnk" data-go="find">Find ideas →</a></p>`}</section>`).join('')}`),
+
+    compare: () => shell('compare', `<div class="hd k"><div><h1 class="h1">Compare videos</h1><p class="sm" style="max-width:640px">Paste 2 to 5 viral videos that work. We break each one down and show what they share: the format, the order of beats, the length and the hook.</p></div></div>
+      <div class="g2w" style="align-items:start" data-loadbox><div class="card"><label class="fld"><span>Video links</span><textarea class="inp" rows="3">https://www.tiktok.com/@smallkitchen.sample/video/7431
+https://www.tiktok.com/@airfry.daily.sample/video/7429
+https://www.tiktok.com/@mumsmeals.sample/video/7425</textarea><small>TikTok, Instagram, YouTube Shorts, Reddit video or X. One per line.</small></label>
+          <p class="h3" style="margin-top:14px">Or pick from your videos</p><div class="seg" data-pickgroup style="margin:8px 0"><button class="is-on" data-pick data-act="pick">Your shortlist</button><button data-pick data-act="pick">Latest search results</button></div>
+          <div class="picks">${['v1', 'v6', 'v5', 'v2', 'v8'].map((id, i) => `<button class="pk ${i < 3 ? 'is-on' : ''}" data-act="toggle">${cv(V(id), { cls: 'xs' })}<span class="pkc">${I('check')}</span></button>`).join('')}</div>
+          <p class="sm"><b>3 videos chosen</b> · Choose 2 to 5.</p><div class="row" style="margin-top:10px">${btn('Compare videos', 'pri', 'data-act="load" data-busy="Comparing 3 videos…" data-done="Compare videos" data-ms="1600" data-toast="Compared from <b>3 videos</b>"')}</div><p class="sm" style="margin-top:8px">A video that was broken down before is reused. Each new one uses a little of today's AI budget.</p></div>
+        <div class="card"><div class="when-loading"><p class="h3">Comparing 3 videos</p><p class="sm">Each new video takes about a minute.</p>${['v1', 'v6', 'v5'].map((id, i) => `<p class="li"><b class="grow">${V(id).title}</b><span class="meta">${['Done', 'Working', 'Waiting'][i]}</span></p>`).join('')}</div>
+          <div class="when-idle when-done"><div class="between"><p class="h3">Compared from 3 videos</p><a class="lnk sm">Start over</a></div>
+          <dl class="dl"><dt>What they all are</dt><dd>Overhead tofu recipe, finished dish first</dd>
+            <dt>Shared structure</dt><dd>${[['v1', [2, 6, 3, 2]], ['v6', [3, 9, 8, 4]], ['v5', [2, 8, 5, 3]]].map((r) => `<div class="beat"><small>${V(r[0]).title}</small><span class="u sec">${r[1].map((w, j) => Array.from({ length: w }, () => `<i class="s${j}"></i>`).join('')).join('')}</span></div>`).join('')}<p class="key"><span><i class="s0"></i>Result</span><span><i class="s1"></i>Steps</span><span><i class="s2"></i>Close-up</span><span><i class="s3"></i>Pack shot</span></p><small class="meta">One square = one second</small></dd>
+            <dt>Typical length</dt><dd>13 to 24 seconds</dd><dt>Hook pattern</dt><dd>Visual: the finished tofu in the first second</dd><dt>Feeling it triggers</dt><dd>Desire</dd>
+            <dt>What to copy</dt><dd><b>Finished tofu first, then the steps from above, under 25 seconds.</b></dd><dt>Where they differ</dt><dd>Two use a soft beat, one uses only the sizzle.</dd><dt>How sure are we</dt><dd>Medium: 3 videos from 3 accounts.</dd></dl>
+          <p class="h3" style="margin-top:12px">Videos compared</p>${['v1', 'v6', 'v5'].map((id) => `<p class="li"><span class="grow"><b>${V(id).title}</b><small>${V(id).acct}</small></span><a class="lnk sm">Open video</a></p>`).join('')}</div></div></div>`),
+
+    plans: () => shell('plans', `<div class="hd k"><div><h1 class="h1">Plans</h1><p class="sm">Pick videos, write the shot lists, then send them for approval. Drag a plan to move it.</p></div>
+        <div class="tgt">${units(12, 5, 2, 0)}<span><b>5 of 12</b> videos approved this month<small class="blk">0 posted this month</small></span></div></div>
+      <div class="board" data-dnd>${D.cols.map((c, ci) => `<section class="col k" style="--d:${ci + 1}" data-col data-colname="${c.name}"><div class="col-h"><b>${c.name}</b><span class="cnt" data-colcount>${D.plans.filter((p) => p.col === c.id).length}</span></div>
+        ${ci === 1 ? `<div class="row" style="gap:6px;margin-bottom:10px">${btn('Review 2', 'pri sm', 'data-go="review"')}${btn('Get review link', 'sec sm', 'data-go="portal"')}${btn('Preview as Annie', 'txt sm', 'data-go="portal"')}</div>` : ''}<div data-colbody class="colb">
+        ${D.plans.filter((p) => p.col === c.id).map((p) => { const v = V(p.v); return `<article class="pc ${p.back ? 'back' : ''}" data-card><div class="pc-t">${cv(v, { cls: 'xs' })}<span><b>${p.title}</b><small>${v.acct}</small>${fv(v)}</span></div>
+          <p class="sm pc-n">${p.back ? `<span class="bpx"></span>` : ''}${p.note}</p>
+          ${p.col === 'approved' ? `<label class="fld row"><span class="sr">Stage for ${p.title}</span><select class="inp sm">${D.stages.map((s) => `<option ${s === p.stage ? 'selected' : ''}>${s}</option>`).join('')}</select></label>` : ''}
+          <div class="row pc-a">${btn(p.act, (p.col === 'waiting' ? 'sec' : 'pri') + ' sm', `data-go="${p.act === 'Make the video' ? 'canvas' : 'plan'}"`)}${p.col === 'waiting' ? btn('Take back', 'txt sm', 'data-act="toast" data-toast="Taken back to <b>Still planning</b>"') : ''}<span class="meta grow" style="text-align:right">Due ${p.due}</span></div>
+          <p class="pc-f"><span>From research</span><button class="lnk sm">Remove</button></p></article>`; }).join('')}</div></section>`).join('')}</div>`),
+
+    plan: () => shell('plan', `<a class="lnk back" data-go="plans">${I('back')} Back to plans</a>
+      <div class="ph k">${cv(V('v4'), { cls: 'sm' })}<div><h1 class="h1">No tofu press? Do this</h1><p class="sm">Still planning · Due Nov 21 · Copies "No tofu press? Do this" by @kitchen.tricks.sample</p>${fv(V('v4'))}</div>
+        <div class="row" style="margin-left:auto;align-self:end">${btn('Open planning board', 'sec', 'data-go="board"')}${btn('Send for approval', 'pri', 'data-act="toast" data-toast="Sent to <b>Annie Lau</b> for approval"')}</div></div>
+      <div class="g2p">
+        <div style="display:grid;gap:16px;align-content:start"><div class="card k" style="--d:1"><p class="h3">How the original starts</p><p class="sm">The first words and first shot of the video you are copying.</p>
+            <dl class="dl sm"><dt>Text on screen</dt><dd>"No tofu press? Do this"</dd><dt>First shot</dt><dd>Tofu block between two plates, heavy pan on top</dd><dt>How it grabs people</dt><dd>Visual</dd><dt>Why it works</dt><dd>The problem and the fix are in the same first frame.</dd></dl></div>
+          <div class="card k" style="--d:2"><div class="between"><p class="h3">Suggested hooks</p><span class="meta">4 options · 1 picked</span></div><p class="sm">Samples written from this idea for the demo.</p>
+            <div class="hooks" data-pickgroup>${D.hooks.map((h) => `<div class="hk ${h.picked ? 'is-on' : ''}" data-pick><span class="meta">Hook ${h.n}</span><p><b>${h.text}</b></p><div class="between"><span class="emo">Viewer feels: ${h.emo}</span><button class="btn sm ${h.picked ? 'pri' : 'sec'}" data-act="pick" data-off="Use this" data-on="Picked" data-toast="Shot 1 starts with: &quot;${h.text}&quot;">${h.picked ? 'Picked' : 'Use this'}</button></div></div>`).join('')}</div>
+            <div data-loadbox style="margin-top:10px">${btn('Write new ways to start', 'sec sm', 'data-act="load" data-busy="Writing…" data-done="Write new ways to start" data-toast="Sample ways to start written."')}</div></div></div>
+        <div class="card k" style="--d:3"><div class="between"><p class="h3">Shot list</p><span class="meta">4 shots</span></div>
+          <div class="tl" aria-label="15 seconds, one square per second">${D.shots.map((s) => Array.from({ length: s.sec }, (_, j) => `<i class="s${s.n - 1} ${j === 0 ? 'f' : ''}"></i>`).join('')).join('')}</div><p class="meta" style="margin:4px 0 12px">15 seconds · one square per second</p>
+          ${D.shots.map((s) => `<div class="shot"><span class="sn s${s.n - 1}">${s.n}</span><div><p class="meta">Shot ${s.n} · ${s.role} · ${s.t}</p><p><b>What we film:</b> ${s.see}</p><p class="sm">Says: "${s.says}"</p>${s.on ? `<p class="sm">Text on screen: "${s.on}"</p>` : ''}</div></div>`).join('')}
+          <button class="lnk" style="margin-top:8px">+ Add a shot</button></div></div>`),
+
+    board: () => shell('board', `<a class="lnk back" data-go="plan">${I('back')} Back to plan</a><div class="hd" style="margin-bottom:10px"><div><h1 class="h1">Planning board</h1><p class="sm">No tofu press? Do this · 4 shots, about 15 seconds. Every change here saves to the plan’s shot list.</p></div>
+        <div class="row"><span class="save" data-savestate data-saving="Saving…" data-saved="Saved">Saved</span>${btn('Line the shots up again', 'sec sm', 'data-act="toast" data-toast="Lined the shots up again."')}</div></div>
+      <div class="bwrap"><div class="grid k" data-graph style="height:560px"><svg class="links">${[1, 2, 3].map((i) => `<path data-link="s${i}>s${i + 1}"></path>`).join('')}</svg>
+          ${[1, 2, 3].map((i) => `<button class="plus" data-mid="s${i}>s${i + 1}" data-act="toast" data-toast="Add a shot between shot ${i} and shot ${i + 1}" aria-label="Add a shot between shot ${i} and shot ${i + 1}">+</button>`).join('')}
+          ${D.shots.map((s, i) => `<div class="node" data-node="s${s.n}" style="left:${24 + i * 192}px;top:${[40, 210, 70, 250][i]}px"><div class="nfr">${PX.img(['cube', 'cube', 'pan', 'cube'][i], BG, 1)}</div><p class="meta">Shot ${s.n} · ${s.role} · ${s.t}</p><p class="sm"><b>${s.see}</b></p><p class="sm">"${s.says}"</p></div>`).join('')}
+          <p class="help sm">Drag to move around. Pinch or scroll to zoom. Press + on a link to add a shot there.</p></div>
+        <aside class="card side"><p class="h3">Change the shot list</p><textarea class="inp" rows="4" placeholder="e.g. make shot 2 a close-up of the water draining"></textarea><div data-loadbox>${btn('Rewrite the shots', 'pri sm', 'data-act="load" data-busy="Rewriting the shots…" data-done="Rewrite the shots" data-toast="Rewrote the shot list. It now has <b>4 shots</b>."')}</div>
+          <p class="h3" style="margin-top:18px">Upload what you already have</p><p class="sm">Photos or video clips. If a shot is selected, they go right after it. Otherwise drop each one on a link between two shots.</p>${btn(I('upload') + ' Choose photos or clips', 'sec sm')}
+          <p class="h3" style="margin-top:18px">Not in the plan yet</p><p class="sm">IMG_2041.mov · drop it on a link</p></aside></div>`),
+
+    review: () => shell('review', `<div class="rv"><div class="k"><a class="lnk back" data-go="plans">${I('back')} Back to plans</a><h1 class="h1" style="margin-top:10px"><span data-remaining>2</span> to review</h1><p class="sm">Swipe right to approve, left to send back.</p>
+          <div style="margin-top:14px">${units(12, 5, 2)}</div><p class="sm" style="margin-top:6px">Each approval fills a square in Evergreen Foods' month.</p></div>
+        <div class="deck" data-stack><div class="alldone"><p class="h1">All done</p><p class="sm">MYST Nightclub Sydney has 1 plan waiting too.</p><div class="row" style="margin-top:14px;justify-content:center">${btn('Back to Plans', 'sec', 'data-go="plans"')}${btn('Next: MYST Nightclub Sydney (1 waiting)', 'pri', 'data-go="agency"')}</div></div>
+          ${['p4', 'p3'].map((id) => { const p = D.p(id), v = V(p.v); return `<article class="stack-card" data-swipe data-title="${p.title}"><span class="stamp ok">${I('check')} Approve</span><span class="stamp no">${I('cross')} Send back</span>
+            <div class="sc-h">${cv(v, { cls: 'sm' })}<div><p class="meta">Due ${p.due}</p><p class="h2">${p.title}</p><p class="sm">Based on "${v.title}" · ${v.views} views. Finished dish in the first second.</p><p class="note"><b>Note from the team</b> Lin: Kept it under 20 seconds like you asked.</p></div></div>
+            <div class="shots4">${RS[id].map((s, i) => `<div><span class="meta">Shot ${i + 1}</span><p class="sm"><b>${s}</b></p>${RT[id][i] ? `<p class="sm">Text: "${RT[id][i]}"</p>` : ''}<button class="lnk sm">+ Comment</button></div>`).join('')}</div></article>`; }).join('')}
+          <div class="rbtns">${btn(I('cross') + ' Send back', 'sec', 'data-act="decide" data-dir="left"')}${btn(I('pen') + ' Approve with changes', 'sec', 'data-act="decide" data-dir="up"')}${btn(I('check') + ' Approve', 'pri', 'data-act="decide" data-dir="right"')}</div></div>
+        <aside class="card k" style="--d:2"><p class="h3">What we've learned about Evergreen Foods</p><p class="sm">3 approved (1 with changes) · 1 sent back</p>${D.memory.slice(0, 3).map((m) => `<div class="mem m-${m.kind}"><p class="meta">${m.label} · ${m.when}</p><p>"${m.quote}"</p><p class="sm">${m.plan}</p></div>`).join('')}</aside></div>`),
+
+    canvas: () => shell('canvas', `<a class="lnk back" data-go="plan">${I('back')} Back to plan</a><div class="hd" style="margin-bottom:10px"><div><h1 class="h1">Canvas</h1><p class="sm">Crispy tofu ASMR, top-down · Shot 1 of 4</p></div>
+        <div class="row"><span class="save" data-savestate data-saving="Saving…" data-saved="Saved">Saved</span><span class="meta">≈ US$0.40 · US$3.20 left today</span>${btn('Run the whole shot', 'sec sm', 'data-act="toast" data-toast="Run the whole shot: <b>≈ US$0.52</b>. Confirm in the next step."')}${btn('Make the video', 'pri sm', 'data-go="editor"')}</div></div>
+      <div class="grid k" data-graph style="height:600px"><svg class="links"><path data-link="shot>prompt"></path><path data-link="prompt>story"></path><path data-link="story>video" data-ty="0.3"></path><path data-link="up>video" data-ty="0.75"></path></svg>
+        <div class="node w" data-node="shot" style="left:16px;top:60px"><p class="nh">${I('film')} Shot 1 <span class="meta">text</span></p><p class="sm"><b>Tofu block between two plates, heavy pan on top</b></p><p class="sm">"3 things nobody tells you about tofu"</p><span class="port o">Output</span></div>
+        <div class="node w" data-node="prompt" style="left:256px;top:30px"><p class="nh">${I('pen')} Prompt <span class="meta">text</span></p><textarea class="inp sm" rows="4">Overhead, white bench, two plates pressing firm tofu, cast-iron pan on top, morning light.</textarea><span class="port i">Text</span></div>
+        <div class="node w" data-node="story" style="left:500px;top:100px"><p class="nh">${I('canvas')} Storyboard <span class="meta">image</span></p><div class="vers">${[1, 2, 3].map((n) => `<button class="${n === 2 ? 'is-on' : ''}" data-act="toggle">${PX.img('cube', BG, 1)}<small>Version ${n}</small></button>`).join('')}</div><span class="port i">Text</span></div>
+        <div class="node w gen" data-node="video" style="left:728px;top:50px" data-loadbox><p class="nh">${I('play')} Video <span class="meta">video</span></p><div class="vprev" data-genimg>${PX.img('cube', BG, 1)}<span class="when-idle meta">Nothing made yet</span></div>
+          <div class="g2" style="gap:8px;margin-top:8px"><label class="fld"><span>Model</span><select class="inp sm"><option>Veo 3 Fast</option><option>Kling 2.1</option></select></label><label class="fld"><span>Length</span><select class="inp sm"><option>5s</option><option>8s</option></select></label></div>
+          <p class="meta" style="margin:8px 0">≈ US$0.40 · US$3.20 left today</p>${btn('Generate', 'pri sm', 'style="width:100%" data-act="gen" data-busy="Generating…" data-done="Regenerate" data-ms="2400" data-toast="Version 1 is <b>ready</b>"')}<span class="port i">Start frame</span><span class="port i r2">Reference</span></div>
+        <div class="node w" data-node="up" style="left:500px;top:400px"><p class="nh">${I('upload')} Footage <span class="meta">upload</span></p><p class="sm">IMG_2041.mov · 0:06</p><span class="port o">Output</span></div></div>`),
+
+    editor: () => shell('editor', `<a class="lnk back" data-go="canvas">${I('back')} Back to canvas</a><div class="hd" style="margin-bottom:10px"><div><h1 class="h1">Edit</h1><p class="sm">Crispy tofu ASMR, top-down · Total 15s</p></div><span class="save">Saved</span></div>
+      <div class="ed" data-playbox><div><div class="pv">${cv(V('v1'), { cls: 'tall' })}<div class="row" style="flex-direction:column;align-items:flex-start;gap:8px">${btn(I('play') + ' Play', 'pri', 'data-act="play" data-on="❚❚ Pause"')}<span class="meta">0:00 / 0:15</span><p class="sm" style="max-width:220px">Select a clip, then S splits at the playhead, Delete removes it, Alt + arrows move it.</p>
+            <div class="row" style="gap:6px;flex-wrap:wrap">${btn('Split at playhead', 'sec sm')}${btn('Delete clip', 'sec sm')}${btn('Move earlier', 'sec sm')}${btn('Move later', 'sec sm')}</div></div></div>
+          <p class="h3" style="margin:18px 0 8px">Timeline</p><div class="tlw"><div class="ruler">${Array.from({ length: 16 }, (_, i) => `<span>${i}s</span>`).join('')}</div>
+            <div class="trk" data-pickgroup>${D.shots.map((s, i) => `<button class="clip s${i} ${i === 0 ? 'is-on' : ''}" style="flex:${s.sec}" data-pick data-act="pick">Shot ${s.n}<small>${s.sec}s</small></button>`).join('')}</div>
+            <div class="trk au"><span style="flex:1">Soft beat · 0:15</span></div><span class="playhead"></span></div></div>
+        <aside style="display:grid;gap:14px;align-content:start"><div class="card"><p class="h3">Clip sound</p><p class="sm">Shot 1: tofu sizzle</p><label class="fld"><span>Volume of Shot 1</span><input type="range" value="70"></label>${btn('Mute', 'sec sm', 'data-act="toggle" data-on="Unmute"')}</div>
+          <div class="card"><div class="between"><p class="h3">Footage</p>${btn('Fill in shot order', 'txt sm', 'data-act="toast" data-toast="Filled in shot order. Shot 3 has no video, skipped."')}</div>${[['Generated', 'Shot 1 · Version 2 · 5s'], ['Take', 'IMG_2041.mov · 6s'], ['Generated', 'Shot 4 · Version 1 · 3s']].map((f) => `<p class="li"><span class="grow"><b>${f[1]}</b><small>${f[0]}</small></span>${btn('Add', 'sec sm')}</p>`).join('')}</div>
+          <div class="card" data-loadbox>${btn('Export the video', 'pri', 'style="width:100%" data-act="load" data-busy="Exporting…" data-done="Export the video" data-ms="2200" data-toast="Exported. <b>Ready to post</b>"')}<div class="when-loading u lg exp" style="margin-top:10px">${Array.from({ length: 15 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div><p class="sm" style="margin-top:8px">This usually takes under a minute.</p><p class="sm">Annie Lau is your approver. Change the name under Agency on the All clients page.</p></div>
+          ${btn('Go to publish →', 'sec', 'data-go="publish"')}</aside></div>`),
+
+    publish: () => shell('publish', `<a class="lnk back" data-go="editor">${I('back')} Back to edit</a><div class="hd"><div><h1 class="h1">Post the video</h1><p class="sm">Crispy tofu ASMR, top-down · approved by Annie Lau</p></div></div>
+      <p class="banner">Simulated posting: nothing is sent to TikTok, Instagram or YouTube. The posts below only show how it will work.</p>
+      <div class="g2" style="align-items:start;margin-top:16px"><div class="card form">${fld('Caption', 'Crispy tofu, no press needed. Firm tofu, $3.50 at Woolies. #tofu #kitchenhack #easydinner', { area: true, ph: 'Write the caption and hashtags' })}
+          <div class="fld"><span>Where to post</span>${[['tiktok', 'TikTok', 1], ['insta', 'Instagram', 1], ['yt', 'YouTube', 0]].map((p) => `<label class="chk"><input type="checkbox" ${p[2] ? 'checked' : ''}><i aria-hidden="true">${I('check')}</i>${I(p[0])} ${p[1]}</label>`).join('')}</div>
+          <label class="fld"><span>Post at (optional)</span><input class="inp" type="datetime-local" value="2026-11-07T18:30"><small>Leave it empty to post now.</small></label>
+          <div data-loadbox>${btn('Publish (simulated)', 'pri lg', 'data-act="load" data-busy="Posting…" data-done="Publish (simulated)" data-toast="Simulated post: nothing was sent to <b>TikTok</b>"')}</div></div>
+        <div style="display:grid;gap:16px"><div class="card"><div class="between"><p class="h3">Result</p><span class="meta">Latest numbers: entered 9 Nov</span></div><p class="sm">TikTok · 48 hours after posting</p>
+            <div class="nums">${[['Views', '48.2', 'k'], ['Likes', '3.9', 'k'], ['Comments', '212', ''], ['Shares', '640', ''], ['Saves', '2.1', 'k']].map((m) => `<div><small>${m[0]}</small><b class="num md" data-count="${m[1]}" data-suffix="${m[2]}">${m[1]}${m[2]}</b></div>`).join('')}</div>
+            <p class="sm">48.2k views · 14% engagement</p>${btn('Update the numbers', 'sec sm')} ${btn('Add Instagram numbers', 'txt sm')}</div>
+          <div class="card"><p class="h3">How your earlier videos did</p><p class="sm">One square = 2k views.</p>${[['Crispy tofu ASMR, top-down', 24, 'This one'], ['Lunchbox tofu nuggets', 19, '38k'], ['Tofu scramble, 4 minutes', 14, '28k'], ['Silken tofu dessert', 13, '27k']].map((r, i) => `<div class="bar"><span class="sm">${r[0]}</span>${units(r[1], i ? 0 : r[1], 0, 0, 'xs ' + (i ? 'grey' : ''))}<span class="meta">${i ? r[2] : '48.2k'}</span></div>`).join('')}<p class="sm" style="margin-top:8px"><b>1.6 times</b> your last 3 tofu videos (31k views on average).</p></div></div></div>`),
+
+    channel: () => shell('channel', `<div class="hd k"><div><h1 class="h1">Analyse a channel</h1><p class="sm" style="max-width:620px">Enter a channel and see the formats it keeps using, why they work, and its best videos. It reads the newest videos, so it takes a few minutes.</p></div></div>
+      <div class="card form k" data-loadbox style="--d:1"><div class="row" style="align-items:end;gap:14px;flex-wrap:wrap"><div class="fld"><span>Platform</span><span class="seg" data-pickgroup><button data-pick data-act="pick">YouTube</button><button class="is-on" data-pick data-act="pick">TikTok</button><button data-pick data-act="pick">Instagram (not tested yet)</button></span></div>
+          <label class="fld" style="width:260px"><span>Channel</span><input class="inp" value="@smallkitchen.sample"><small>@name or tiktok.com/@name</small></label><label class="fld"><span>Videos</span><select class="inp"><option>Newest 50</option><option>Newest 100 (slower)</option></select></label>
+          ${btn('Analyse channel', 'pri', 'data-act="load" data-busy="Reading 50…" data-done="Analyse channel" data-ms="2000" data-toast="<b>50 videos</b> decoded"')}</div><p class="sm" style="margin-top:8px">Uses scraping quota: each run pulls the newest videos from the platform and costs money.</p>
+        <div class="when-loading" style="margin-top:12px"><p class="sm">12 of 50 videos. A channel of 50 videos takes 10 to 15 minutes. You can leave this page and come back.</p></div></div>
+      <div class="g2w k" style="--d:2;margin-top:16px;align-items:start"><div class="card"><div class="between"><p class="h3">@smallkitchen.sample</p><span class="meta">50 decoded · usually 41k views</span></div>
+          <p class="h3" style="margin-top:12px">Formats it uses</p><p class="sm">4 formats cover 43 of them. One square per video, newest on the right.</p>
+          <div class="u mosaic">${(() => { const seq = []; D.formats.forEach((f, fi) => { for (let i = 0; i < f.n; i++) seq.push(fi); }); seq.sort((a, b) => ((a * 7 + 3) % 5) - ((b * 7 + 3) % 5)); return seq.map((fi, i) => `<i class="f${fi}" style="--i:${i}"></i>`).join(''); })()}</div>
+          ${D.formats.map((f, i) => `<div class="fmt"><span class="fsw f${i}"></span><span class="grow"><b>${f.name}</b> <span class="meta">${f.n} videos</span><small class="blk">${i < 4 ? `<b>Why it works.</b> ${f.why} ${i === 0 ? '<b>Steal this.</b> Open on the finished dish, then cut back to step one.' : ''}` : f.why}</small></span></div>`).join('')}</div>
+        <div class="card"><p class="h3">Top videos</p><div class="nums three"><div><small>Videos</small><b class="num md">50</b></div><div><small>Median views</small><b class="num md">41k</b></div><div><small>Vs channel median</small><b class="num md">58×</b></div></div>
+          ${['v1', 'v5', 'v8'].map((id, i) => { const v = V(id); return `<div class="li">${cv(v, { cls: 'xs' })}<span class="grow"><b>${v.title}</b><small>${v.views} views · ${v.len.slice(2)}s · ${[58, 9, 11][i]} times its median</small></span><a class="lnk sm">Open the video</a></div>`; }).join('')}<a class="lnk">Show all 50 videos</a></div></div>`),
+
+    brief: () => shell('brief', `<div class="hd k"><div><h1 class="h1">About this client</h1><p class="sm">Remake uses this to suggest searches, check what they can film, and track the monthly target. Changes save as you type.</p></div><span class="save">Saved</span></div>
+      <div class="g2" style="align-items:start"><div class="card form k" style="--d:1">${fld('Client name', C.name)}${fld('What they sell', C.sells)}${fld('Main audience', C.audience)}${fld('Topics to watch (comma-separated)', C.topics, { help: 'We check the first topic on TikTok once a day to fill "Trending now".' })}${fld('Starter searches (comma-separated)', C.starters)}
+          <div class="fld"><span>Videos per month</span><div class="row" data-stepper><button class="btn sec sq" data-act="tgt" data-delta="-1" aria-label="Fewer">−</button><b class="num md" data-stepval>12</b><button class="btn sec sq" data-act="tgt" data-delta="1" aria-label="More">+</button><span data-tgtunits>${units(12, 5, 2)}</span></div></div>
+          <p class="h3" style="margin-top:6px">What this client can't do</p><p class="sm">Videos that need a ticked item get marked as hard to film.</p><div class="chks">${D.cannot.map((x, i) => chk(x, D.cannotOn.includes(i))).join('')}</div></div>
+        <div class="card k" style="--d:2"><p class="h3">What we've learned about Evergreen Foods</p><p class="sm">3 approved (1 with changes) · 1 sent back</p>${units(4, 3, 0, 1)}
+          <ol class="tlm">${D.memory.map((m) => `<li class="m-${m.kind}"><p class="meta">${m.when} · ${m.label}</p><p class="mq">"${m.quote}"</p><p class="sm">${m.plan}${m.tags ? ` · ${m.tags}` : ''}</p><p class="sm">Reference: "${m.plan === 'Gym bro tries tofu' ? 'Gym bro tries tofu' : m.plan}"</p></li>`).join('')}</ol></div></div>`),
+
+    settings: () => shell('settings', `<div class="hd k"><div><h1 class="h1">Settings</h1><p class="sm">These apply to this browser only.</p></div></div>
+      <div class="card k" style="--d:1;max-width:760px"><p class="h3">Appearance</p><p class="sm">System follows your device. Light and Dark stay as you set them.</p>
+        <div class="thm" data-pickgroup role="radiogroup" aria-label="Theme">${[['System', ['w', 'n']], ['Light', ['w', 'w']], ['Dark', ['n', 'n']]].map((t, i) => `<button class="${i === 0 ? 'is-on' : ''}" data-pick data-act="pick" data-toast="Theme: ${t[0]}"><span class="tp"><i class="${t[1][0]}"></i><i class="${t[1][1]}"></i></span><b>${t[0]}</b></button>`).join('')}</div></div>
+      <div class="card k" style="--d:2;max-width:760px;margin-top:16px"><p class="h3">Language</p><label class="fld" style="max-width:320px"><span>Language</span><select class="inp"><option>English</option><option>繁體中文</option></select></label><p class="sm">The language of menus and screens. Client names and your own notes stay as written.</p></div>`),
+
+    portal: () => `<div class="pt scroll" style="height:800px"><header class="pt-h">${logo()}<span class="meta">Shared by Sample Social Co. · Evergreen Foods</span></header>
+      <div class="pt-b"><h1 class="h1 k">Videos to approve</h1><p class="sm k">Evergreen Foods · 2 waiting for Annie Lau. ${units(12, 5, 2)}</p>
+        ${['p3', 'p4'].map((id, n) => { const p = D.p(id), v = V(p.v); return `<article class="card ptc k" style="--d:${n + 1}" data-togglebox><div class="sc-h">${cv(v, { cls: 'sm' })}<div><p class="meta">Due ${p.due}</p><p class="h2">${p.title}</p><p class="sm">Based on "${v.title}" · ${v.views} views.</p><p class="note"><b>Note from the team</b> Lin: Kept it under 20 seconds like you asked.</p>${n === 1 ? '<p class="note b"><b>Sent back last time</b> "Too much talking before the tofu."</p>' : ''}</div></div>
+          <div class="shots4">${RS[id].map((s, i) => `<div><span class="meta">Shot ${i + 1}</span><p class="sm"><b>${s}</b></p></div>`).join('')}</div>
+          <div class="row" style="margin-top:14px">${btn(I('check') + ' Approve', 'pri', `data-act="toggle" data-target="[data-pt='${id}']" data-toast="Approved: <b>${p.title}</b>"`)}${btn(I('pen') + ' Approve with changes', 'sec', `data-act="toggle" data-target="[data-ptc='${id}']"`)}${btn(I('cross') + ' Send back', 'sec', `data-act="toggle" data-target="[data-ptb='${id}']"`)}</div>
+          <div class="drop" data-ptc="${id}"><label class="fld"><span>What should change?</span><textarea class="inp" rows="2" placeholder="e.g. Show the pack in the first 3 seconds"></textarea></label></div>
+          <div class="drop" data-ptb="${id}"><p class="sm"><b>What didn't work? Pick any that apply.</b></p><div class="row" style="flex-wrap:wrap;gap:6px;margin:8px 0">${D.sendBackTags.map((t) => `<button class="chip" data-act="toggle">${t}</button>`).join('')}</div><label class="fld"><span>Anything to add?</span><textarea class="inp" rows="2"></textarea></label></div>
+          <p class="drop ok" data-pt="${id}">${I('check')} Approved. Lin will see it in Plans.</p></article>`; }).join('')}
+        <div class="card ghost k" style="--d:4"><p class="h3">All decided</p><p class="sm">New plans sent for approval will show up here. You can close this page.</p></div></div></div>`,
+  };
+  R.breakdown = () => {
+    const v = V('v1');
+    return R.results().replace(/<\/div>$/, '') + `<div class="drw is-open" data-drawer><div class="scrim" data-act="close" data-target="[data-drawer]"></div><section class="dpan scroll" role="dialog" aria-label="Why it worked">
+      <div class="between"><p class="meta">${v.plat} · ${v.acct} · ${v.ago}</p>${btn(I('cross') + ' Close', 'sec sm', 'data-act="close" data-target="[data-drawer]"')}</div>
+      <h2 class="h1" style="margin:8px 0 16px">Why "${v.title}" worked</h2>
+      <div class="g2" style="gap:10px">${[['Views compared with usual', '267', ' times'], ['Shares and saves', '6.7', ' per 100 views'], ['Views a day', '267', 'k'], ['Accounts posting this', '8', '']].map((s) => `<div class="stat"><small>${s[0]}</small><b class="num md" data-count="${s[1]}" data-suffix="${s[2]}">${s[1]}${s[2]}</b></div>`).join('')}</div>
+      <p class="h3" style="margin-top:18px">The 13 seconds</p><div class="sec13">${Array.from({ length: 13 }, (_, i) => `<i class="${[0, 1, 5, 8, 11].includes(i) ? 'mk' : ''}"><small>${[0, 1, 5, 8, 11].includes(i) ? [0, 1, 5, 8, 11].indexOf(i) + 1 : ''}</small></i>`).join('')}</div><p class="meta">One square per second · numbers match the reasons</p>
+      <ol class="why">${D.why.map((w) => `<li><b>${w.k}</b><span class="sm">${w.v}</span></li>`).join('')}</ol>
+      <div class="card ghost"><p class="h3">Can Evergreen Foods film it?</p><p class="sm">Easy to film for Evergreen Foods. Needs a kitchen and an overhead phone mount.</p></div>
+      <details class="calc"><summary>How we calculate this</summary><p class="sm">2.4M views ÷ 9k median (6 videos, 12 Oct to 2 Nov) = 267. Evidence: medium. Each account's baseline is only its latest 6 videos: a small sample.</p><p class="sm">We can't see watch time or retention. These numbers don't mean a copy will go viral.</p></details>
+      <div class="row" style="margin-top:14px">${btn('Save to Research', 'pri', 'data-act="save" data-saved="✓ Video 1" data-toast="Saved to <b>V1 · Best tofu recipe</b>"')}</div></section></div></div>`;
+  };
+  return { R, h: { shell, units, proof, cv, fv, btn, fld, chk, later, logo, RS, RT, NAV, navOn } };
+};
+
+</script>
+<script>
+/* Concept A: Unit (subtle). One pixel = one thing that counts. */
+(function () {
+  PX.setDithers([['--d-n-w-50', 'n', 'w', 6, 2]]);
+  const { R, h } = makeR({});
+  const units = h.units;
+  /* Frame-step motion: low-res frames resolve to sharp in three steps */
+  const resolve = (img, art, delays, done) => { [3, 1].forEach((d, i) => setTimeout(() => { if (img.isConnected) img.src = PX.cover(art, 'navy', d); if (i === 1 && done) done(); }, RM.reduce ? 0 : delays[i])); };
+
+  window.SET = {
+    tms: 300,
+    render: (id) => R[id](),
+    enter: (id, s) => {
+      if (id === 'searching') s.querySelectorAll('[data-res]').forEach((c, i) => { const img = c.querySelector('img'); img.src = PX.cover(c.dataset.res, 'navy', 6); resolve(img, c.dataset.res, [500 + i * 260, 900 + i * 260]); });
+    },
+    onDecide: (card, dir) => { if (dir === 'left') return; const u = card.closest('.screen').querySelector('.rv .u i.w'); if (u) { u.classList.replace('w', 'on'); u.classList.add('pop'); } },
+    acts: {
+      cpick(t) { ACTS.pick(t); const s = t.closest('.screen'); s.querySelector('.staff').style.display = t.dataset.show === 'staff' ? 'grid' : 'none'; s.querySelector('.client').style.display = t.dataset.show === 'client' ? 'block' : 'none'; },
+      tgt(t) { ACTS.step(t); const box = t.closest('[data-stepper]'), n = +box.querySelector('[data-stepval]').textContent, u = box.querySelector('[data-tgtunits]'); const brief = !!t.closest('.screen').querySelector('.tlm'); u.innerHTML = units(n, brief ? Math.min(5, n) : 0, brief ? Math.max(0, Math.min(2, n - 5)) : 0); },
+      gen(t) {
+        const box = t.closest('[data-loadbox]'), img = box.querySelector('[data-genimg] img');
+        box.classList.add('is-gen'); img.src = PX.cover('cube', 'navy', 9);
+        resolve(img, 'cube', [800, 1600]); ACTS.load(t);
+        setTimeout(() => box.classList.remove('is-gen'), RM.reduce ? 200 : 2400);
+      },
+    },
+    notes: {
+      landing: 'the scan strip steps across 40 videos and stops on the 3 that beat their usual views; the one mustard pixel is Best to copy. The page scrolls inside the frame.',
+      login: 'Staff and Client swap the form. The left panel previews the 12 squares you land on.',
+      agency: '30 squares, one per video the agency owes this month: blue approved, mustard waiting for you, navy outline sent back. They fill in frame steps.',
+      addclient: 'type a name and the sidebar preview updates; + and − redraw the target squares.',
+      home: 'the month fills square by square; Approve flips one mustard square to blue. The page scrolls.',
+      find: 'the search types itself; platform squares toggle. Start cards nudge their arrow one pixel step on hover.',
+      searching: 'video frames resolve from 3 × 5 blocks to 18 × 32 sharp, one after another, while the steps tick. Replay restarts.',
+      results: 'the proof block draws 267 pixels: one navy (usual views), the rest blue. Save stamps "✓ Video 1" and bumps the tray count.',
+      breakdown: 'the drawer steps in from the right; the 13-second strip marks where each reason happens.',
+      research: 'Pick toggles ★ Picked. Each slot is one video the client pays for.',
+      compare: 'Compare runs the per-video status list, then shows the shared beats, one square per second.',
+      plans: 'drag cards between the three columns; counts update and a toast confirms.',
+      plan: 'Use this picks a hook (one at a time). The shot list is drawn as 15 squares, one per second.',
+      board: 'drag shot nodes; links follow and "Saving…" ticks to "Saved". + adds a shot between two links.',
+      review: 'drag the card right to approve or left to send back, or use the buttons. Each approval turns a mustard square blue.',
+      canvas: 'Generate renders the frame in three resolution steps (2 × 4, 6 × 11, 18 × 32) before the clip is ready.',
+      editor: 'Play sweeps the playhead; Export fills 15 squares, one per second of video.',
+      publish: 'Publish runs a simulated post. Each earlier video is a row of squares, one per 2k views.',
+      channel: '50 squares, one per video analysed, coloured by format. Analyse runs a loading state.',
+      brief: 'fields are live; the target stepper redraws the month.',
+      settings: 'theme cards pick one at a time.',
+      portal: 'Approve, Approve with changes and Send back each open their own follow-up, as on the real page.',
+    },
+  };
+})();
+
+</script>
+<script>
+/* Remake pixel sets: shared engine (screen frames, scaling, interactions). Adapted from the ui-sets engine; inlined by build.py. */
+(function () {
+  'use strict';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) document.documentElement.classList.add('rm');
+
+  /* ---------- Sample data: Evergreen Foods (plant-based food brand) ---------- */
+  /* ---------- Helpers ---------- */
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const scr = (el) => el.closest('.screen');
+  const kOf = (el) => { const s = scr(el); return s ? s.getBoundingClientRect().width / 1280 : 1; };
+  const SET = () => window.SET;
+
+  function toast(el, msg) {
+    const s = scr(el); if (!s || !msg) return;
+    $$('.toast', s).forEach((t) => t.remove());
+    const t = document.createElement('div');
+    t.className = 'toast'; t.setAttribute('role', 'status'); t.innerHTML = msg;
+    s.appendChild(t);
+    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 450); }, 2600);
+  }
+  window.toast = toast;
+
+  function makeScreen(id) {
+    const s = document.createElement('div');
+    s.className = 'screen'; s.dataset.screen = id;
+    s.innerHTML = SET().render(id);
+    return s;
+  }
+  function afterMount(s) {
+    $$('[data-graph]', s).forEach(drawGraph);
+    SET().mount && SET().mount(s.dataset.screen, s);
+  }
+  function enter(s) {
+    s.classList.add('in');
+    runCounts(s); runTyping(s); runSteps(s);
+    SET().enter && SET().enter(s.dataset.screen, s);
+  }
+  window.RM = { toast, enter, afterMount, makeScreen, reduce, drawGraph: (g) => drawGraph(g) };
+
+  /* Count-ups: data-count="2.4" data-suffix="M" */
+  function runCounts(s) {
+    $$('[data-count]', s).forEach((el) => {
+      const raw = el.dataset.count, to = parseFloat(raw), dec = (raw.split('.')[1] || '').length, suf = el.dataset.suffix || '';
+      if (reduce) { el.textContent = to.toFixed(dec) + suf; return; }
+      const t0 = performance.now(), dur = +(el.dataset.dur || 1100);
+      const tick = (t) => {
+        const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+        el.textContent = (to * e).toFixed(dec) + suf;
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+  /* Typing placeholder: data-type="a|b|c" */
+  function runTyping(s) {
+    $$('[data-type]', s).forEach((el) => {
+      const words = el.dataset.type.split('|');
+      if (reduce) { el.textContent = words[0]; return; }
+      let w = 0, i = 0, dir = 1;
+      const step = () => {
+        if (!el.isConnected) return;
+        const word = words[w];
+        i += dir; el.textContent = word.slice(0, i);
+        let wait = dir > 0 ? 70 : 35;
+        if (dir > 0 && i >= word.length) { dir = -1; wait = 1600; }
+        else if (dir < 0 && i <= 0) { dir = 1; w = (w + 1) % words.length; wait = 400; }
+        setTimeout(step, wait);
+      };
+      setTimeout(step, 500);
+    });
+  }
+  /* Steps loader: [data-steps] > [data-step]; container gets .is-complete */
+  function runSteps(s) {
+    $$('[data-steps]', s).forEach((box) => {
+      const items = $$('[data-step]', box);
+      box.classList.remove('is-complete'); items.forEach((x) => x.classList.remove('done', 'now'));
+      if (reduce) { items.forEach((x) => x.classList.add('done')); box.classList.add('is-complete'); return; }
+      const ms = +(box.dataset.ms || 950);
+      items.forEach((x, i) => {
+        setTimeout(() => { if (items[i - 1]) items[i - 1].classList.replace('now', 'done'); x.classList.add('now'); }, i * ms);
+      });
+      setTimeout(() => { items.forEach((x) => { x.classList.remove('now'); x.classList.add('done'); }); box.classList.add('is-complete'); }, items.length * ms);
+    });
+  }
+
+  /* ---------- Graph: [data-graph] with [data-node] boxes and svg.links path[data-link="a>b"] ---------- */
+  function drawGraph(g) {
+    $$('path[data-link]', g).forEach((p) => {
+      const [a, b] = p.dataset.link.split('>');
+      const A = g.querySelector(`[data-node="${a}"]`), B = g.querySelector(`[data-node="${b}"]`);
+      if (!A || !B) return;
+      const fy = +(p.dataset.fy || 0.5), ty = +(p.dataset.ty || 0.5);
+      const x1 = A.offsetLeft + A.offsetWidth, y1 = A.offsetTop + A.offsetHeight * fy;
+      const x2 = B.offsetLeft, y2 = B.offsetTop + B.offsetHeight * ty;
+      const dx = Math.max(40, Math.abs(x2 - x1) / 2);
+      p.setAttribute('d', `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`);
+      const dot = g.querySelector(`[data-mid="${p.dataset.link}"]`);
+      if (dot) { dot.style.left = (x1 + x2) / 2 + 'px'; dot.style.top = (y1 + y2) / 2 + 'px'; }
+    });
+  }
+
+  /* ---------- Pointer interactions: node drag, card drag between columns, swipe cards ---------- */
+  const noDrag = 'button, a, input, textarea, select, label, [data-act], [contenteditable]';
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const node = e.target.closest('[data-node]');
+    if (node && !e.target.closest(noDrag) && node.closest('[data-graph]')) return dragNode(e, node);
+    const card = e.target.closest('[data-card]');
+    if (card && !e.target.closest(noDrag) && card.closest('[data-dnd]')) return dragCard(e, card);
+    const sw = e.target.closest('[data-swipe]');
+    if (sw && !e.target.closest(noDrag)) return swipe(e, sw);
+  });
+
+  function dragNode(e, node) {
+    const g = node.closest('[data-graph]'), k = kOf(node);
+    const sx = e.clientX, sy = e.clientY, ox = node.offsetLeft, oy = node.offsetTop;
+    node.classList.add('is-dragging'); node.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const x = Math.max(0, Math.min(g.clientWidth - node.offsetWidth, ox + (ev.clientX - sx) / k));
+      const y = Math.max(0, Math.min(g.clientHeight - node.offsetHeight, oy + (ev.clientY - sy) / k));
+      node.style.left = x + 'px'; node.style.top = y + 'px'; drawGraph(g);
+    };
+    const up = () => {
+      node.classList.remove('is-dragging');
+      node.removeEventListener('pointermove', move); node.removeEventListener('pointerup', up); node.removeEventListener('pointercancel', up);
+      const st = scr(g) && scr(g).querySelector('[data-savestate]');
+      if (st) {
+        st.classList.add('is-saving'); st.textContent = st.dataset.saving || 'Saving…';
+        setTimeout(() => { st.classList.remove('is-saving'); st.classList.add('is-saved'); st.textContent = st.dataset.saved || 'Saved'; setTimeout(() => st.classList.remove('is-saved'), 1200); }, 800);
+      }
+    };
+    node.addEventListener('pointermove', move); node.addEventListener('pointerup', up); node.addEventListener('pointercancel', up);
+  }
+
+  function dragCard(e, card) {
+    const s = scr(card), k = kOf(card), board = card.closest('[data-dnd]');
+    const sx = e.clientX, sy = e.clientY;
+    let ghost = null, over = null;
+    const sr = () => s.getBoundingClientRect();
+    const move = (ev) => {
+      if (!ghost) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+        const r = card.getBoundingClientRect(), S = sr();
+        ghost = card.cloneNode(true); ghost.classList.add('dnd-ghost');
+        ghost.style.width = r.width / k + 'px';
+        ghost.dataset.ox = (sx - r.left) / k; ghost.dataset.oy = (sy - r.top) / k;
+        s.appendChild(ghost); card.classList.add('is-dragging');
+      }
+      const S = sr();
+      ghost.style.left = (ev.clientX - S.left) / k - ghost.dataset.ox + 'px';
+      ghost.style.top = (ev.clientY - S.top) / k - ghost.dataset.oy + 'px';
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+      const col = hit && hit.closest('[data-col]');
+      const ok = col && board.contains(col) ? col : null;
+      if (ok !== over) { over && over.classList.remove('is-over'); over = ok; over && over.classList.add('is-over'); }
+    };
+    const up = () => {
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
+      if (!ghost) return;
+      ghost.remove(); card.classList.remove('is-dragging');
+      if (over) {
+        over.classList.remove('is-over');
+        const body = over.querySelector('[data-colbody]') || over;
+        const from = card.closest('[data-col]');
+        if (from !== over) {
+          body.appendChild(card);
+          card.classList.remove('landed'); void card.offsetWidth; card.classList.add('landed');
+          $$('[data-col]', board).forEach((c) => { const n = c.querySelector('[data-colcount]'); if (n) n.textContent = $$('[data-card]', c).length; });
+          toast(card, `Moved to <b>${over.dataset.colname || 'this column'}</b>`);
+          SET().onMove && SET().onMove(card, over);
+        }
+      }
+    };
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+  }
+
+  function swipe(e, el) {
+    const k = kOf(el), sx = e.clientX;
+    el.setPointerCapture(e.pointerId); el.classList.add('is-swiping');
+    let dx = 0;
+    const move = (ev) => { dx = (ev.clientX - sx) / k; el.style.transform = `translateX(${dx}px) rotate(${dx / 22}deg)`; el.dataset.lean = dx > 60 ? 'right' : dx < -60 ? 'left' : ''; };
+    const up = () => {
+      el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up);
+      el.classList.remove('is-swiping'); el.style.transform = ''; el.dataset.lean = '';
+      if (Math.abs(dx) > 140) decide(el, dx > 0 ? 'right' : 'left');
+    };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
+  }
+
+  /* Review stack: [data-stack] > .stack-card; [data-remaining] counts; .is-empty when done */
+  function decide(fromEl, dir, msg) {
+    const st = fromEl.closest('[data-stack]') || scr(fromEl).querySelector('[data-stack]');
+    if (!st) return;
+    const live = $$('.stack-card:not(.gone)', st), top = live[live.length - 1];
+    if (!top) return;
+    top.classList.add('gone', 'go-' + dir);
+    setTimeout(() => top.remove(), reduce ? 0 : 650);
+    const left = $$('.stack-card:not(.gone)', st).length;
+    $$('[data-remaining]', scr(st)).forEach((x) => (x.textContent = left));
+    const words = { right: 'Approved', up: 'Approved with changes', left: 'Sent back' };
+    toast(st, msg || `${words[dir]}: <b>${top.dataset.title || 'plan'}</b>`);
+    SET().onDecide && SET().onDecide(top, dir, st);
+    if (!left) setTimeout(() => st.classList.add('is-empty'), reduce ? 0 : 450);
+  }
+
+  /* ---------- Click actions ---------- */
+  const acts = {
+    pick(t) {
+      const g = t.closest('[data-pickgroup]'); if (!g) return;
+      $$('[data-pick]', g).forEach((x) => {
+        x.classList.remove('is-on'); x.setAttribute('aria-pressed', 'false');
+        const b = x.matches('[data-off]') ? x : x.querySelector('[data-off]'); if (b) b.textContent = b.dataset.off;
+      });
+      const it = t.closest('[data-pick]') || t;
+      it.classList.add('is-on'); it.setAttribute('aria-pressed', 'true');
+      if (t.dataset.on) t.textContent = t.dataset.on;
+      if (t.dataset.toast) toast(t, t.dataset.toast);
+    },
+    toggle(t) {
+      const x = t.dataset.target ? scr(t).querySelector(t.dataset.target) : t.closest('[data-togglebox]') || t;
+      const on = x.classList.toggle('is-on'); t.setAttribute('aria-pressed', on);
+      if (t.dataset.on) { t.dataset.offtxt = t.dataset.offtxt || t.textContent; t.textContent = on ? t.dataset.on : t.dataset.offtxt; }
+      if (on && t.dataset.toast) toast(t, t.dataset.toast);
+    },
+    save(t) {
+      const s = scr(t);
+      if (t.classList.contains('is-saved')) return toast(t, 'Already saved. Open Research to see it.');
+      t.classList.add('is-saved'); t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop');
+      t.innerHTML = t.dataset.saved || '✓ Saved';
+      $$('[data-counter]', s).forEach((c) => { c.textContent = +c.textContent + 1; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); });
+      const tray = s.querySelector('[data-tray]'); if (tray) tray.classList.add('is-on');
+      toast(t, t.dataset.toast || 'Saved to <b>Research</b> for Evergreen Foods');
+    },
+    toast(t) { toast(t, t.dataset.toast); },
+    open(t) { scr(t).querySelector(t.dataset.target).classList.add('is-open'); },
+    close(t) { scr(t).querySelector(t.dataset.target).classList.remove('is-open'); },
+    load(t) {
+      const box = t.dataset.target ? scr(t).querySelector(t.dataset.target) : t.closest('[data-loadbox]') || t;
+      if (box.classList.contains('is-loading')) return;
+      box.classList.remove('is-done'); box.classList.add('is-loading'); t.setAttribute('aria-busy', 'true');
+      const label = t.textContent; if (t.dataset.busy) t.textContent = t.dataset.busy;
+      setTimeout(() => {
+        box.classList.remove('is-loading'); box.classList.add('is-done'); t.removeAttribute('aria-busy');
+        t.textContent = t.dataset.done || label;
+        if (t.dataset.toast) toast(t, t.dataset.toast);
+        if (box.querySelector('[data-graph]')) $$('[data-graph]', box).forEach(drawGraph);
+      }, reduce ? 200 : +(t.dataset.ms || 1800));
+    },
+    play(t) { const p = t.closest('[data-playbox]'); const on = p.classList.toggle('is-playing'); t.setAttribute('aria-label', on ? 'Pause' : 'Play'); if (t.dataset.on) { t.dataset.offtxt = t.dataset.offtxt || t.textContent; t.textContent = on ? t.dataset.on : t.dataset.offtxt; } },
+    decide(t) { decide(t, t.dataset.dir, t.dataset.toast); },
+    reset(t) {
+      const s = scr(t); const fresh = makeScreen(s.dataset.screen);
+      s.innerHTML = fresh.innerHTML; afterMount(s); s.classList.remove('in'); void s.offsetWidth; enter(s);
+    },
+    step(t) {
+      const box = t.closest('[data-stepper]'), v = box.querySelector('[data-stepval]');
+      v.textContent = Math.max(1, Math.min(60, +v.textContent + +t.dataset.delta));
+    },
+    tab(t) {
+      const g = t.closest('[data-tabs]'); $$('[data-tab]', g).forEach((x) => x.classList.toggle('is-on', x === t));
+      const s = scr(t); $$(`[data-panel^="${g.dataset.tabs}:"]`, s).forEach((p) => p.classList.toggle('is-on', p.dataset.panel === `${g.dataset.tabs}:${t.dataset.tab}`));
+    },
+  };
+  window.ACTS = acts;
+
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-go], [data-act]');
+    if (!t || !scr(t)) return;
+    if (t.tagName === 'A') e.preventDefault();
+    if (t.dataset.act) {
+      const fn = (SET().acts && SET().acts[t.dataset.act]) || acts[t.dataset.act];
+      if (fn) fn(t, e);
+    }
+    if (t.dataset.go) go(t, t.dataset.go);
+  });
+  document.addEventListener('input', (e) => {
+    const t = e.target.closest('[data-mirror]'); if (!t) return;
+    $$(t.dataset.mirror, scr(t)).forEach((el) => (el.textContent = t.value || el.dataset.empty || ''));
+  });
+
+  /* ---------- Navigation between screens ---------- */
+  function go(fromEl, id) {
+    const host = fromEl.closest('[data-host]');
+    if (host) return host._go(id);
+    const f = document.getElementById('f-' + id);
+    if (!f) return;
+    f.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    f.classList.remove('pulse'); void f.offsetWidth; f.classList.add('pulse');
+  }
+
+  /* A host = a viewport where screens swap in place with the set's transition (player, ?only= embeds) */
+  function makeHost(vp, startId, onChange) {
+    vp.dataset.host = '1';
+    let cur = null;
+    vp._go = (id) => {
+      if (id === cur) return;
+      const old = vp.querySelector('.screen:not(.leave)');
+      const s = makeScreen(id);
+      if (old) s.classList.add('enter');
+      vp.appendChild(s); afterMount(s);
+      requestAnimationFrame(() => requestAnimationFrame(() => enter(s)));
+      const ms = reduce ? 0 : SET().tms || 520;
+      if (old && !reduce && SET().transition) SET().transition(vp, old, s);
+      if (old) { old.classList.add('leave'); setTimeout(() => old.remove(), ms); }
+      setTimeout(() => s.classList.remove('enter'), ms);
+      cur = id; onChange && onChange(id);
+    };
+    vp._go(startId);
+    return vp;
+  }
+
+  function fit(vp, mode) {
+    const w = vp.clientWidth;
+    if (mode === 'contain') {
+      const h = vp.clientHeight, k = Math.min(w / 1280, h / 800);
+      vp.style.setProperty('--k', k);
+      vp.style.setProperty('--ox', (w - 1280 * k) / 2 + 'px');
+      vp.style.setProperty('--oy', (h - 800 * k) / 2 + 'px');
+    } else {
+      const k = w / 1280; vp.style.setProperty('--k', k); vp.style.height = 800 * k + 'px';
+    }
+  }
+
+  /* ---------- Page build ---------- */
+  function build() {
+    const params = new URLSearchParams(location.search);
+    const only = params.get('only');
+    if (only) {
+      document.body.classList.add('only');
+      document.body.innerHTML = '<div class="viewport only-vp"></div>';
+      const vp = document.querySelector('.only-vp');
+      new ResizeObserver(() => fit(vp, 'contain')).observe(vp); fit(vp, 'contain');
+      makeHost(vp, SCREENS.some((s) => s[0] === only) ? only : 'home');
+      window.addEventListener('message', (e) => { if (e.data && e.data.rmGo) vp._go(e.data.rmGo); });
+      return;
+    }
+    const idx = document.getElementById('index');
+    if (idx) idx.innerHTML = SCREENS.map((s, i) => `<a href="#f-${s[0]}"><span>${String(i + 1).padStart(2, '0')}</span>${s[1]}</a>`).join('');
+
+    const player = document.getElementById('player');
+    if (player) {
+      player.innerHTML = `<div class="player-bar"><span class="pb-label">Click through it</span>
+        <button type="button" class="pb-btn" data-pp="-1" aria-label="Previous screen">←</button>
+        <select class="pb-select" aria-label="Screen">${SCREENS.map((s, i) => `<option value="${s[0]}">${String(i + 1).padStart(2, '0')} · ${s[1]}</option>`).join('')}</select>
+        <button type="button" class="pb-btn" data-pp="1" aria-label="Next screen">→</button>
+        <span class="pb-hint">Navigation, buttons and cards work inside the frame, and screens change with this set's transition.</span></div>
+        <div class="viewport player-vp"></div>`;
+      const vp = player.querySelector('.player-vp'), sel = player.querySelector('select');
+      new ResizeObserver(() => fit(vp)).observe(vp); fit(vp);
+      makeHost(vp, player.dataset.start || 'find', (id) => (sel.value = id));
+      sel.addEventListener('change', () => vp._go(sel.value));
+      player.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-pp]'); if (!b) return;
+        const i = SCREENS.findIndex((s) => s[0] === sel.value);
+        vp._go(SCREENS[(i + +b.dataset.pp + SCREENS.length) % SCREENS.length][0]);
+      });
+    }
+
+    const gal = document.getElementById('gallery');
+    const io = new IntersectionObserver((ents) => ents.forEach((en) => {
+      if (en.isIntersecting) { const s = en.target.querySelector('.screen'); if (s && !s.classList.contains('in')) enter(s); io.unobserve(en.target); }
+    }), { threshold: 0.25 });
+    SCREENS.forEach((sc, i) => {
+      const f = document.createElement('section');
+      f.className = 'frame'; f.id = 'f-' + sc[0];
+      f.innerHTML = `<header class="frame-label"><span class="fl-num">${String(i + 1).padStart(2, '0')}</span><h2>${sc[1]}</h2><p>${sc[2]}</p>${(SET().notes && SET().notes[sc[0]]) ? `<p class="fl-note">${SET().notes[sc[0]]}</p>` : ''}</header><div class="viewport"></div>`;
+      gal.appendChild(f);
+      const vp = f.querySelector('.viewport');
+      const s = makeScreen(sc[0]); vp.appendChild(s);
+      new ResizeObserver(() => fit(vp)).observe(vp); fit(vp);
+      afterMount(s); io.observe(f);
+    });
+    SET().page && SET().page();
+    if (location.hash) { const t = document.querySelector(location.hash.replace(/[^#\w-]/g, '')); if (t) setTimeout(() => t.scrollIntoView({ block: 'start' }), 60); }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build); else build();
+})();
+
+
+</script>
+</body>
+</html>

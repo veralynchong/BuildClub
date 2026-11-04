@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hero reel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Mockup only, not built. Remake palette: navy, blue, mustard, beige, black, white. */
+:root{--n:#060a47;--b:#1a33f2;--m:#f2b705;--e:#f6f1e7;--k:#000;--w:#fff;
+  --serif:'Newsreader',Georgia,serif;--sans:'Inter',system-ui,sans-serif;--mono:'Geist Mono',ui-monospace,monospace;
+  --ease:cubic-bezier(.2,.8,.2,1)}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:400 16px/24px var(--sans);color:var(--k);background:var(--w)}
+button{font:inherit}
+
+/* Review bar */
+.review{background:var(--e);border-bottom:1px solid var(--n);padding:10px 32px;display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;font-size:14px;color:var(--n)}
+.review strong{font:500 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.review .grp{display:flex;gap:6px;align-items:center}
+.chip{appearance:none;border:1.5px solid var(--n);background:transparent;color:var(--n);border-radius:999px;height:34px;padding:0 14px;cursor:pointer;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--n);color:var(--w)}
+.chip:focus-visible{outline:2px solid var(--b);outline-offset:2px}
+
+/* Nav */
+.rk-wrap{max-width:1280px;margin:0 auto;padding:0 32px}
+.nav{border-bottom:1px solid var(--e)}
+.nav-in{display:flex;align-items:center;gap:32px;height:64px}
+.logo{font:500 26px/1 var(--serif);letter-spacing:-.02em;color:var(--n);text-decoration:none}
+.links{display:flex;gap:28px}
+.links a{color:var(--n);text-decoration:none;font-size:15px}
+.nav-actions{margin-left:auto;display:flex;gap:6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1.5px solid transparent;font:500 15px/1 var(--sans);padding:12px 20px;min-height:44px;cursor:pointer;text-decoration:none}
+.btn-primary{background:var(--b);color:var(--w)}
+.btn-ghost{border-color:var(--n);color:var(--n);background:transparent}
+.btn-text{color:var(--n);background:transparent}
+
+/* Hero */
+.hero{padding:88px 0 96px;transition:background .3s var(--ease),color .3s var(--ease)}
+.eyebrow{font:500 13px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--b);margin:0 0 28px}
+.machine{display:flex;align-items:center;gap:.32em;font:400 76px/1 var(--serif);letter-spacing:-.025em;color:var(--n);--lh:1.18em}
+.fixed{white-space:nowrap;flex:none}
+
+/* The reel: a window three lines tall, the middle line is the answer, the lines above and below fade out. */
+.reel{position:relative;flex:none;display:block;height:calc(var(--lh) * 3);padding:0 .3em}
+.win{display:block;height:100%;overflow:hidden;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,rgba(0,0,0,.18) 22%,#000 40%,#000 60%,rgba(0,0,0,.18) 78%,transparent 100%);
+          mask-image:linear-gradient(to bottom,transparent 0,rgba(0,0,0,.18) 22%,#000 40%,#000 60%,rgba(0,0,0,.18) 78%,transparent 100%)}
+.reel::before,.reel::after{content:"";position:absolute;left:0;right:0;height:3px;background:var(--m);border-radius:3px;z-index:1}
+.reel::before{top:calc(var(--lh) - 2px)}
+.reel::after{top:calc(var(--lh) * 2 - 1px)}
+.strip{list-style:none;margin:0;padding:0;will-change:transform}
+.strip li{height:var(--lh);line-height:var(--lh);white-space:nowrap;font-style:italic;color:var(--b)}
+
+/* Counter under the reel */
+.count{display:flex;align-items:center;gap:14px;margin:18px 0 0;font:500 13px/1 var(--mono);letter-spacing:.06em;color:var(--n)}
+.count .num b{font-weight:500;color:var(--b)}
+.ticks{display:flex;gap:5px}
+.ticks i{width:18px;height:4px;border-radius:2px;background:var(--e);transition:background .25s var(--ease)}
+.ticks i.on{background:var(--m)}
+.ticks i.done{background:var(--n)}
+.pause{appearance:none;border:1px solid var(--n);background:transparent;color:var(--n);border-radius:999px;height:28px;padding:0 12px;font:500 12px var(--mono);letter-spacing:.04em;cursor:pointer}
+.pause:focus-visible{outline:2px solid var(--b);outline-offset:2px}
+
+/* Proof: small following, big views */
+.proof{display:flex;align-items:center;gap:28px;flex-wrap:wrap;margin:56px 0 0}
+.cmp{display:grid;grid-template-columns:auto auto auto;column-gap:14px;align-items:baseline}
+.cmp .from{font:400 34px/1 var(--serif);color:var(--n)}
+.cmp .to{font:400 60px/1 var(--serif);color:var(--n);letter-spacing:-.02em}
+.cmp .arr{font-size:22px;color:var(--n)}
+.cmp .cap{font-size:14px;color:var(--b);margin-top:8px}
+.proof-text{max-width:360px;margin:0;font-size:18px;line-height:27px;color:var(--n);border-left:3px solid var(--m);padding-left:18px}
+.proof-text strong{font-weight:600}
+.ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:44px}
+
+/* Navy version */
+.hero.navy{background:var(--n);color:var(--w)}
+.hero.navy .machine,.hero.navy .cmp .from,.hero.navy .cmp .to,.hero.navy .cmp .arr,.hero.navy .count,.hero.navy .proof-text{color:var(--w)}
+.hero.navy .strip li{color:var(--m)}
+.hero.navy .eyebrow,.hero.navy .cmp .cap,.hero.navy .count .num b{color:var(--e)}
+.hero.navy .ticks i{background:rgba(246,241,231,.2)}
+.hero.navy .ticks i.done{background:var(--e)}
+.hero.navy .reel::before,.hero.navy .reel::after{background:var(--b)}
+.hero.navy .pause{border-color:var(--e);color:var(--e)}
+.hero.navy .btn-ghost{border-color:var(--e);color:var(--w)}
+
+.notes{max-width:1280px;margin:0 auto;padding:40px 32px 80px;color:var(--n);font-size:15px}
+.notes h2{font:400 32px/1.1 var(--serif);margin:0 0 12px}
+.notes li{margin-bottom:6px}
+
+/* Phone: stack "We help you" above the reel */
+@media (max-width:860px){
+  .links{display:none}
+  .machine{flex-direction:column;align-items:flex-start;font-size:48px;gap:0}
+  .reel{margin-left:-.3em}
+}
+@media (max-width:640px){
+  .rk-wrap,.review,.notes{padding-left:16px;padding-right:16px}
+  .hero{padding:48px 0 64px}
+  .machine{font-size:38px}
+  .nav-actions .btn-text{display:none}
+  .cmp .to{font-size:46px}.cmp .from{font-size:28px}
+  .proof{gap:20px;margin-top:40px}
+}
+@media (prefers-reduced-motion:reduce){.strip{transition:none!important}}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+</style>
+</head>
+<body>
+
+<div class="review" role="region" aria-label="Mockup controls">
+  <strong>Mockup · not built</strong>
+  <div class="grp"><span>Background</span>
+    <button class="chip" data-bg="white" aria-pressed="true">White</button>
+    <button class="chip" data-bg="navy" aria-pressed="false">Navy</button>
+  </div>
+  <div class="grp"><span>Steps</span>
+    <button class="chip" data-steps="8" aria-pressed="true">All 8</button>
+    <button class="chip" data-steps="5" aria-pressed="false">5 merged</button>
+  </div>
+  <button class="chip" id="replay">Replay the spin</button>
+</div>
+
+<header class="nav"><div class="rk-wrap nav-in">
+  <a class="logo" href="#">Remake</a>
+  <nav class="links" aria-label="Main"><a href="#">How it works</a><a href="#">Pricing</a></nav>
+  <div class="nav-actions"><a class="btn btn-text" href="#">Log in</a><a class="btn btn-primary" href="#">Try the demo</a></div>
+</div></header>
+
+<main>
+<section class="hero" id="hero">
+  <div class="rk-wrap">
+    <p class="eyebrow">Find contents worth Remaking</p>
+
+    <h1 class="machine">
+      <span class="fixed">We help you</span>
+      <span class="reel" aria-hidden="true"><span class="win"><ul class="strip" id="strip"></ul></span></span>
+      <span class="sr-only" id="srText"></span>
+    </h1>
+
+    <div class="count">
+      <span class="num" aria-hidden="true"><b id="cur">01</b> / <span id="tot">08</span></span>
+      <span class="ticks" id="ticks" aria-hidden="true"></span>
+      <button class="pause" id="pause" aria-pressed="false">Pause</button>
+    </div>
+
+    <div class="proof">
+      <div class="cmp" aria-label="3.1 thousand followers, 2.4 million views">
+        <span class="from">3.1k</span><span class="arr" aria-hidden="true">→</span><span class="to">2.4M</span>
+        <span class="cap">followers</span><span></span><span class="cap">views</span>
+      </div>
+      <p class="proof-text"><strong>Small following, big views: that's a trend.</strong> When a small account blows up, the idea worked, not the account. Those are the videos we find.</p>
+    </div>
+
+    <div class="ctas">
+      <a class="btn btn-primary" href="#">Try the demo</a>
+      <a class="btn btn-ghost" href="#">See how it works</a>
+    </div>
+  </div>
+</section>
+
+<section class="notes">
+  <h2>How it moves</h2>
+  <ul>
+    <li><strong>On load:</strong> the reel spins fast past a few steps, slows down, and lands on 01.</li>
+    <li><strong>After that:</strong> one step at a time. Each step rests for about 2 seconds, then rolls up in 0.45s with a small settle at the end, like a slot reel.</li>
+    <li><strong>The mustard lines</strong> mark the payline. The step above and below show faintly, so it reads as a reel.</li>
+    <li><strong>The counter</strong> (01 / 08 plus ticks) makes it read as one flow, start to finish.</li>
+    <li><strong>The reel is as wide as the longest step,</strong> so "We help you" never moves.</li>
+    <li><strong>Pause</strong> stops the reel. People who turn off motion on their device see step 01 with no spinning.</li>
+    <li><strong>On phones</strong> "We help you" sits above the reel. Resize the window to see it.</li>
+  </ul>
+</section>
+</main>
+
+<script>
+const SETS = {
+  8: ['find trending videos','spot the hook','write the shot list','edit the shot list','drop in your footage','sort the flow with AI','add the transitions','finish the edit'],
+  5: ['find trending videos','spot the hook','plan the shots','edit with AI','post the video'],
+};
+const strip = document.getElementById('strip');
+const ticks = document.getElementById('ticks');
+const cur = document.getElementById('cur');
+const tot = document.getElementById('tot');
+const pauseBtn = document.getElementById('pause');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let items = SETS[8], n = items.length, idx = 0, timer = null, paused = false, token = 0;
+const REST = 2000, ROLL = 450;
+
+function lh(){ return strip.firstElementChild.getBoundingClientRect().height; }
+// Three copies so the step above and below are always there; the middle copy is "home".
+function build(){
+  n = items.length;
+  strip.innerHTML = [...items, ...items, ...items].map(s => `<li>${s}</li>`).join('');
+  ticks.innerHTML = items.map(() => '<i></i>').join('');
+  tot.textContent = String(n).padStart(2,'0');
+  document.getElementById('srText').textContent = items.join(', ') + '.';
+}
+// The window's middle line shows strip item i.
+function place(i, ms, ease){
+  strip.style.transition = ms ? `transform ${ms}ms ${ease}` : 'none';
+  strip.style.transform = `translateY(${(1 - i) * lh()}px)`;
+  idx = i;
+  const step = ((i % n) + n) % n;
+  cur.textContent = String(step + 1).padStart(2,'0');
+  [...ticks.children].forEach((t,k) => t.className = k === step ? 'on' : k < step ? 'done' : '');
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+// Fast spin that slows and lands on step 01 (middle copy).
+async function spin(){
+  const my = ++token;
+  clearTimeout(timer);
+  const target = n;          // step 01, middle copy
+  const start = 2;           // step 03, first copy
+  place(start, 0);
+  if (reduce){ place(target, 0); return; }
+  await wait(250);
+  for (let i = start + 1; i <= target; i++){
+    if (my !== token) return;
+    const left = target - i;               // slows down as it nears the payline
+    const ms = left > 3 ? 70 : left > 1 ? 140 : left === 1 ? 230 : 420;
+    const ease = left === 0 ? 'cubic-bezier(.3,1.45,.5,1)' : 'linear';
+    place(i, ms, ease);
+    await wait(ms + (left === 0 ? 40 : 0));
+  }
+  loop(my);
+}
+// One step at a time, with a small overshoot when it lands.
+function loop(my){
+  if (reduce) return;
+  timer = setTimeout(async () => {
+    if (my !== token) return;
+    if (paused){ loop(my); return; }
+    place(idx + 1, ROLL, 'cubic-bezier(.3,1.45,.5,1)');
+    await wait(ROLL + 20);
+    if (idx >= 2 * n) place(idx - n, 0);   // jump back to the middle copy without a visible move
+    loop(my);
+  }, REST);
+}
+
+pauseBtn.onclick = () => {
+  paused = !paused;
+  pauseBtn.setAttribute('aria-pressed', paused);
+  pauseBtn.textContent = paused ? 'Play' : 'Pause';
+};
+document.getElementById('replay').onclick = () => { paused = false; pauseBtn.textContent = 'Pause'; pauseBtn.setAttribute('aria-pressed', false); spin(); };
+document.querySelectorAll('[data-bg]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-bg]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  document.getElementById('hero').classList.toggle('navy', b.dataset.bg === 'navy');
+});
+document.querySelectorAll('[data-steps]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-steps]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  items = SETS[b.dataset.steps]; build(); spin();
+});
+addEventListener('resize', () => place(idx, 0));
+
+document.fonts.ready.then(() => { build(); spin(); });
+</script>
+</body>
+</html>
