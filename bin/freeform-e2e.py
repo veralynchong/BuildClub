@@ -11,6 +11,7 @@ import pwd
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -116,33 +117,87 @@ def inside(args):
                           input="pw-for-e2e\n", text=True, cwd=work, env=env, capture_output=True)
     if user.returncode:
         raise RuntimeError("Could not create the temporary test account: " + user.stderr[-2000:])
-    with (evidence / "backend.log").open("w") as log:
-        server = subprocess.Popen([str(PYTHON), "-m", "uvicorn", "server:app", "--app-dir",
-                                   str(work / "backend"), "--host", "127.0.0.1",
-                                   "--port", str(BACKEND_PORT)], cwd=work, env=env,
-                                  stdout=log, stderr=subprocess.STDOUT)
+    # Only this supervisor's Popen handles may stop or replace these children.
+    request, done = work / "restart-request", work / "restart-done"
+    env.update(FREEFORM_RESTART_REQUEST=str(request), FREEFORM_RESTART_DONE=str(done))
+    deadline = time.monotonic() + args.timeout
+    server = driver = None
+
+    def stop(child):
+        if child is None:
+            return
+        if child.poll() is None:
+            child.terminate()
         try:
-            for _ in range(120):
+            child.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait(timeout=5)
+
+    def check_deadline():
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Owned driver/backend deadline exceeded.")
+
+    def ready():
+        for _ in range(120):
+            check_deadline()
+            if driver is not None and driver.poll() is not None:
+                raise RuntimeError("Owned driver exited during backend restart.")
+            if server.poll() is not None:
+                raise RuntimeError("Owned backend exited; inspect backend.log.")
+            try:
+                with urllib.request.urlopen(env["BASE"] + "/api/health", timeout=1) as response:
+                    if response.status == 200:
+                        return
+            except (urllib.error.URLError, TimeoutError):
+                pass
+            time.sleep(0.25)
+        raise RuntimeError("Owned backend did not become ready.")
+
+    with (evidence / "backend.log").open("w") as log:
+        def start():
+            return subprocess.Popen([str(PYTHON), "-m", "uvicorn", "server:app", "--app-dir",
+                                     str(work / "backend"), "--host", "127.0.0.1",
+                                     "--port", str(BACKEND_PORT)], cwd=work, env=env,
+                                    stdout=log, stderr=subprocess.STDOUT)
+        try:
+            server = start()
+            ready()
+            driver = subprocess.Popen([shutil.which("node", path=PATH), str(args.script)],
+                                      cwd=APP, env=env)
+            while driver.poll() is None:
+                check_deadline()
                 if server.poll() is not None:
                     raise RuntimeError("Owned backend exited; inspect backend.log.")
-                try:
-                    with urllib.request.urlopen(env["BASE"] + "/api/health", timeout=1) as response:
-                        if response.status == 200:
-                            break
-                except (urllib.error.URLError, TimeoutError):
-                    pass
-                time.sleep(0.25)
-            else:
-                raise RuntimeError("Owned backend did not become ready.")
-            return subprocess.run([shutil.which("node", path=PATH), str(args.script)],
-                                  cwd=APP, env=env, check=False).returncode
+                if request.exists() or request.is_symlink():
+                    info = request.lstat()
+                    if not stat.S_ISREG(info.st_mode) or info.st_size != 32:
+                        raise RuntimeError("Invalid restart request marker.")
+                    token = request.read_text()
+                    if len(token) != 32 or any(c not in "0123456789abcdef" for c in token):
+                        raise RuntimeError("Invalid restart request token.")
+                    request.unlink()
+                    done.unlink(missing_ok=True)
+                    old_pid = server.pid
+                    stop(server)
+                    old_exit = server.returncode
+                    check_deadline()
+                    server = start()
+                    ready()
+                    acknowledgement = {"token": token, "oldPid": old_pid,
+                                       "newPid": server.pid, "oldExit": old_exit}
+                    with (evidence / "restart-audit.jsonl").open("a") as audit:
+                        audit.write(json.dumps(acknowledgement) + "\n")
+                    pending = done.with_suffix(".tmp")
+                    pending.write_text(json.dumps(acknowledgement))
+                    pending.replace(done)
+                time.sleep(0.05)
+            return driver.returncode
         finally:
-            server.terminate()
             try:
-                server.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                server.kill()
-                server.wait(timeout=5)
+                stop(driver)
+            finally:
+                stop(server)
 
 
 # macOS proc_bsdinfo from sys/proc_info.h: kernel birth has microsecond precision,
@@ -325,7 +380,8 @@ def main():
         env = clean_environment(work, evidence, args.pw_core)
         command = ["/usr/bin/sandbox-exec", "-f", str(profile), sys.executable, str(Path(__file__).resolve()),
                    "--inside", "--work", str(work), "--evidence", str(evidence),
-                   "--pw-core", str(args.pw_core), "--script", str(args.script)]
+                   "--pw-core", str(args.pw_core), "--script", str(args.script),
+                   "--timeout", str(args.timeout)]
         proxy = socket.socket(socket.AF_UNIX)
         proxy.bind(str(work / "forbidden-proxy.sock"))
         proxy.listen(1)
