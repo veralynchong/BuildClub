@@ -85,7 +85,8 @@ def load_env(path: Path) -> None:
             os.environ.setdefault(key, value.strip())
 
 
-load_env(HERE.parent / ".env")
+if os.environ.get("BUILDCLUB_OFFLINE_VERIFY") != "1":
+    load_env(HERE.parent / ".env")
 
 TOKEN = os.environ.get("APIFY_TOKEN", "").strip()
 ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "clockworks~tiktok-scraper")
