@@ -86,7 +86,7 @@
   --xy-node-color: var(--fg);
   --xy-node-border: 1px solid var(--line-strong);
   --xy-node-border-radius: var(--radius-sm);
-  --xy-node-boxshadow-hover: var(--shadow-md);
+  --xy-node-boxshadow-hover: var(--hover-shadow);
   --xy-node-boxshadow-selected: 0 0 0 2px var(--accent);
   --xy-edge-stroke: var(--muted);
   --xy-edge-stroke-selected: var(--accent);
@@ -95,7 +95,7 @@
   --xy-selection-background-color: var(--accent-soft);
   --xy-selection-border: 1px solid var(--accent);
   --xy-controls-button-background-color: var(--surface);
-  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-background-color-hover: var(--hover-tint);
   --xy-controls-button-color: var(--fg);
   --xy-controls-button-border-color: var(--line);
   --xy-attribution-background-color: transparent;
@@ -253,13 +253,12 @@
   width: 24px; height: 24px; padding: 0; line-height: 1; font-size: var(--text-md); cursor: pointer;
   border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); color: var(--fg);
 }
-.cv-add-plus:hover { background: var(--surface-2); }
 .cv-add-list {
   position: absolute; z-index: 10; top: 100%; right: 0; margin: var(--space-2xs) 0 0; padding: var(--space-2xs); list-style: none; min-width: 140px;
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-md);
 }
 .cv-add-list button, .cv-drop button { width: 100%; text-align: left; padding: var(--space-xs) var(--space-sm); border: 0; border-radius: var(--radius-sm); background: none; color: var(--fg); font: inherit; cursor: pointer; }
-.cv-add-list button:hover, .cv-add-list button:focus-visible, .cv-drop button:hover, .cv-drop button:focus-visible { background: var(--surface-2); outline: none; }
+.cv-drop button:hover, .cv-drop button:focus-visible { background: var(--surface-2); outline: none; }
 
 /* Why a line was refused */
 .cv-conn-note:empty { display: none; }

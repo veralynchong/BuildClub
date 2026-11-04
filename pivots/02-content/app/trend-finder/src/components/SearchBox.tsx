@@ -1,4 +1,6 @@
 import { useId, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
+import type { TypeAheadItem } from "../lib/findDesk";
 import type { Platform } from "../types";
 import type { ChipGroup } from "../lib/clientChips";
 import { PlatformToggles } from "./PlatformToggles";
@@ -27,7 +29,17 @@ interface Props {
   onImage?: (file: File) => void;
   // Home hides the trending chip row: its Trending card already shows the same data.
   hideChips?: boolean;
+  // Find ideas: the drop-down of suggestions while typing (recent searches, common searches, brief, questions).
+  // `past` is the server's past searches for what is typed (live mode). Without it, live mode keeps the datalist.
+  suggestFor?: (text: string, past: string[]) => TypeAheadItem[];
 }
+
+const GROUP_KEY = {
+  recent: "find.type.recent",
+  search: "find.type.search",
+  brief: "find.type.brief",
+  ask: "find.type.ask",
+} as const;
 
 // The search card used on Find ideas (before and after searching) and on Home:
 // platforms, the search bar (with voice), and optionally one row of search ideas for the client.
@@ -39,6 +51,38 @@ export function SearchBox(p: Props) {
   const past = usePastSearches(p.value, p.live);
   // One search at a time: the button waits while another runs in the background.
   const busy = Boolean(useApp().searching);
+  // The suggestions drop-down: open while the box has focus and something is typed; Escape or a pick closes it.
+  const [focused, setFocused] = useState(false);
+  const [closedFor, setClosedFor] = useState<string | null>(null);
+  const [active, setActive] = useState(-1);
+  const items = p.suggestFor && focused && closedFor !== p.value ? p.suggestFor(p.value, past) : [];
+  const open = items.length > 0;
+  const optionId = (i: number) => `${listId}-opt-${i}`;
+  const pickItem = (item: TypeAheadItem) => {
+    setClosedFor(item.value);
+    setActive(-1);
+    p.onValueChange(item.value);
+    p.onSearch(item.value);
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!open) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      // -1 is the box itself: moving past either end goes back to what was typed.
+      setActive((i) => {
+        const next = i + step;
+        return next >= items.length ? -1 : next < -1 ? items.length - 1 : next;
+      });
+    } else if (e.key === "Enter" && active >= 0 && active < items.length) {
+      e.preventDefault();
+      pickItem(items[active]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setClosedFor(p.value);
+      setActive(-1);
+    }
+  };
   const trending = p.chipGroups.find((g) => g.id === "trending");
   const oneRow = trending
     ? [trending]
@@ -74,7 +118,19 @@ export function SearchBox(p: Props) {
           <input
             id={p.inputId}
             value={p.value}
-            onChange={(e) => p.onValueChange(e.target.value)}
+            onChange={(e) => {
+              setActive(-1);
+              p.onValueChange(e.target.value);
+            }}
+            onFocus={() => setFocused(true)}
+            // A click on a suggestion lands before blur hides the list (mousedown keeps focus, see below).
+            onBlur={() => setFocused(false)}
+            onKeyDown={onKeyDown}
+            role={p.suggestFor ? "combobox" : undefined}
+            aria-expanded={p.suggestFor ? open : undefined}
+            aria-controls={p.suggestFor ? `${listId}-list` : undefined}
+            aria-autocomplete={p.suggestFor ? "list" : undefined}
+            aria-activedescendant={open && active >= 0 && active < items.length ? optionId(active) : undefined}
             placeholder={
               listening
                 ? t('find.box.listening')
@@ -83,10 +139,10 @@ export function SearchBox(p: Props) {
                   : t('find.box.egDemo')
             }
             autoFocus={p.autoFocus}
-            list={p.live ? listId : undefined}
+            list={p.live && !p.suggestFor ? listId : undefined}
             autoComplete="off"
           />
-          {p.live && (
+          {p.live && !p.suggestFor && (
             <datalist id={listId}>
               {past.map((q) => (
                 <option key={q} value={q} />
@@ -101,6 +157,30 @@ export function SearchBox(p: Props) {
             }}
             onListeningChange={setListening}
           />
+          {open && (
+            <ul className="fd-typeahead" id={`${listId}-list`} role="listbox" aria-label={t('find.type.label')}>
+              {items.map((item, i) => (
+                <li
+                  key={`${item.group}-${item.value}`}
+                  id={optionId(i)}
+                  role="option"
+                  aria-selected={i === active}
+                  className={`fd-ta-item ${i === active ? "is-active" : ""} ${i === 0 || items[i - 1].group !== item.group ? "is-first" : ""}`}
+                  // Keep focus in the box so the list doesn't close before the click lands.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickItem(item)}
+                  onMouseEnter={() => setActive(i)}
+                >
+                  <span className="fd-ta-group">{i === 0 || items[i - 1].group !== item.group ? t(GROUP_KEY[item.group]) : ""}</span>
+                  <span className="fd-ta-text">
+                    <span className="fd-ta-label">{item.label}</span>
+                    {item.hint && <small>{item.hint}</small>}
+                  </span>
+                  {i === active && <span className="fd-ta-enter">{t('find.type.enter')}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <button
           type="submit"
@@ -123,6 +203,7 @@ export function SearchBox(p: Props) {
             type="file"
             accept="image/png,image/jpeg,image/webp"
             className="sr-only"
+            id={`${p.inputId}-file`}
             aria-label={t('find.box.uploadAria')}
             // The visible "Upload screenshot" button opens this input, so it is not a second Tab stop.
             tabIndex={-1}

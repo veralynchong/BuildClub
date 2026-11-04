@@ -3,6 +3,7 @@ import type { Key } from '../../lib/i18n'
 import type { FormatTrend } from '../../lib/metrics'
 import { byFollowers, compact, outlierScore, platformName } from '../../lib/metrics'
 import { t, tp } from '../../lib/i18n'
+import { dateLocale, formatDay } from '../../lib/dates'
 
 const TYPE_KEY: Record<ContentType, Key> = {
   street_interview: 'find.ctype.street_interview',
@@ -85,3 +86,16 @@ export function spreadVerdict(trend: FormatTrend): string {
 
 // "1.2M views · 12k followers"
 export const viewsAndFollowers = (v: Video) => t('find.viewsAndFollowers', { views: compact(v.views), followers: compact(v.followers) })
+
+// A past moment as a short day: "today", "yesterday", the weekday within the last week ("Thu"), else "31 Oct".
+export function dayWord(at: number, now = Date.now()): string {
+  const start = (ms: number) => {
+    const d = new Date(ms)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  }
+  const days = Math.round((start(now) - start(at)) / 86_400_000)
+  if (days <= 0) return t('find.desk.today')
+  if (days === 1) return t('find.desk.yesterday')
+  if (days < 7) return new Date(at).toLocaleDateString(dateLocale(), { weekday: 'short' })
+  return formatDay(at)
+}

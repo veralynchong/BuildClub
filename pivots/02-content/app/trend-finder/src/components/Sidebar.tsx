@@ -17,6 +17,8 @@ export type View =
   | 'plan'
   | 'canvas'
   | 'canvasPick'
+  // The planning board for the open plan (components/board/ShotBoard.tsx).
+  | 'board'
   | 'settings'
   | 'preferences'
   | 'channel'
@@ -239,7 +241,7 @@ export function Sidebar(p: Props) {
               {item('research', 'research', t('shell.side.research'), p.counts.research)}
               {item('compare', 'compare', t('shell.side.compare'))}
               {/* Plans = the board of plans + review (batch mode) + one plan */}
-              {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
+              {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan', 'board'].includes(p.view))}
               {item('canvas', 'canvas', t('shell.side.canvas'), undefined, p.view === 'canvas' || p.view === 'canvasPick')}
               <div className="side-sep" />
               {item('channel', 'channel', t('shell.side.channel'))}

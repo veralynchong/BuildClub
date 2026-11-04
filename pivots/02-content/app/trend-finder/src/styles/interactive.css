@@ -1,0 +1,134 @@
+/* Hover system: one motion for every clickable thing in the app (the app screens, landing and login).
+   Timing tokens live in tokens.css (--hover-duration, --hover-ease, --hover-transition, --hover-transition-move,
+   --hover-lift, --hover-nudge, --press-scale); colour tokens in theme-remake.css (--hover-fill, --hover-soft,
+   --hover-tint, --hover-edge, --hover-border, --hover-shadow, --hover-text, --hover-add-*, --hover-media*).
+   Loaded last (index.css). Other stylesheets should not add their own :hover or transition for these controls:
+   add the class to the right group below instead.
+
+   What changes, by kind of control (how it moves is always the same):
+   1. Filled buttons (blue)          background darkens               --hover-fill
+   2. Light-blue buttons             background deepens               --hover-soft
+   3. Quiet controls (icon, ✕, nav,
+      menu items, rows, tabs,
+      segmented and outline buttons) a wash of their own text colour, text to full ink   --hover-tint, --hover-text
+   4. Text links and disclosures     text to full ink, underline goes solid (appears if it had none)   --hover-text
+   5. Chips, options, toggles        the edge firms up                --hover-edge
+   6. Inputs and dropdowns           the edge firms up                --hover-edge
+   7. Cards                          hairline firms up, soft shadow; a card that is itself the button also lifts
+                                     --hover-border, --hover-shadow, --hover-lift
+   8. Dashed "+ Add" tiles           blue wash and blue edge          --hover-add-fill, --hover-add-border
+   9. Controls on a video cover      go more opaque                   --hover-media, --hover-media-light
+   Pressed buttons and chips scale to --press-scale. Arrows inside a link or button slide --hover-nudge.
+
+   Rules: hover only where the device can hover (@media (hover: hover)), so touch screens don't stick.
+   Disabled and already-selected controls don't react. Movement (lift, press, nudge) only without
+   prefers-reduced-motion. Keyboard focus keeps the shared :focus-visible ring from theme-remake.css. */
+
+/* ---------- Timing: the same transition on everything clickable ---------- */
+:where(button, a[href], summary, select, input, textarea, label, [role="button"], [role="tab"],
+  .board-card, .board-node, .hook-option, .shot-frame, .search-input, .rs-sort-icon, .platform svg, .best-play,
+  .find-start-label, .fd-start-label, .rk-plus) {
+  transition: var(--hover-transition);
+}
+/* Controls that lift, press or nudge also animate transform. Never add anything positioned with an inline
+   transform here (the planning board's "+" between shots, timeline clips): it would lag behind the pointer. */
+:where(.btn, .rk-btn, .icon-btn, .cchip, .platform, .tile-save, .switcher-btn, .mic-btn,
+  .trend-card, button.board-card, .rk-pick, .tile-main .thumb, .rk-arrow, .find-start-arrow, .fd-arrow, .fd-go > span) {
+  transition: var(--hover-transition-move);
+}
+
+/* Where the text isn't ink, hover goes to that surface's full-strength text instead */
+.plan-stage, .rk-btn-on-navy { --hover-text: var(--on-navy); }   /* navy surfaces: full white */
+.cv-conn-note-x { --hover-text: currentColor; }                   /* the ✕ in a coloured note keeps the note's colour */
+
+/* Disclosures and bold links show their underline on hover, so they get a hidden one at rest */
+:is(.link-strong, .find-start-label, .fd-start-label, .rk-links a, .rk-footer nav a, .plan-more > summary, .board-tools summary, .portal-shots > summary) {
+  text-decoration-line: underline; text-decoration-color: transparent; text-underline-offset: 3px;
+}
+
+@media (hover: hover) {
+  /* 1. Filled buttons */
+  :root :is(.btn-primary, .rk-btn-primary):hover:not(:disabled, [aria-disabled="true"], .is-disabled) {
+    background-color: var(--hover-fill);
+  }
+
+  /* 2. Light-blue (secondary) buttons */
+  :root :is(.btn-ghost):hover:not(:disabled, [aria-disabled="true"], .is-disabled, [aria-pressed="true"]),
+  :root label.btn-ghost:hover:not(.is-disabled):not(:has(input:disabled)) {
+    background-color: var(--hover-soft);
+  }
+
+  /* 3. Quiet controls */
+  :root :is(.icon-btn, .toast-x, .q-chip-x, .mic-btn, .side-link, .switcher-item, .cv-add-list button, button.ch-steps-row,
+    .sb-toggle-btn, .theme-seg button, .cv-ed-tab, .cv-conn-note-x, .cv-clip-grip, .tc-at-link, .rs-ext, .rs-x,
+    .rs-group-toggle, .rk-btn-ghost, .rk-btn-outline, .rk-btn-on-navy, .react-flow__controls-button, .fd-go, .fd-start-item, .btn.fd-btn-line):hover:not(
+    :disabled, [aria-disabled="true"], .is-disabled, .mic-off, .mic-on, [aria-pressed="true"], [aria-selected="true"], .on, .side-on) {
+    background-color: var(--hover-tint); color: var(--hover-text);
+  }
+
+  /* 4. Text links and disclosures */
+  :root :is(.link-btn, .link-strong, .tile-link, .rs-account-btn, .rs-sort, .numsrc > summary, .rk-links a, .rk-footer nav a,
+    .rk-link-btn, .plan-more > summary, .board-tools summary, .portal-shots > summary, .cmp-videos a, .numsrc-list a):hover:not(
+    :disabled, [aria-disabled="true"]) {
+    color: var(--hover-text); text-decoration-color: currentColor;
+  }
+  :root .find-start-item:hover .find-start-label { color: var(--hover-text); text-decoration-color: currentColor; }
+  :root .find-start-item:hover .find-start-arrow { color: var(--hover-text); }
+  :root .fd-start-item:hover .fd-start-label { color: var(--hover-text); text-decoration-color: currentColor; }
+  :root .rs-sort:hover .rs-sort-icon:not(.is-on) { opacity: 0.5; }
+
+  /* 5. Chips, options and toggles */
+  :root :is(.cchip, .suggestion, .stv-option, .rs-status, .sb-swatch, .platform, .cv-version, .cv-ed-text-pick, .cv-ed-step,
+    .kbd-hint-btn, .switcher-btn, .rk-demo-platforms button):hover:not(
+    :disabled, [aria-disabled="true"], [aria-pressed="true"], [aria-current="step"], .is-on, .platform-on, .cchip-on) {
+    border-color: var(--hover-edge);
+  }
+  :root :is(.preset-chip, .fp-opt, .pub-platform, .cmp-pick, .rk-choice):hover:not(.is-on, .fp-opt-on, .cmp-pick-on, :has(input:checked), :has(input:disabled)) {
+    border-color: var(--hover-edge);
+  }
+  :root .rk-faq summary:hover .rk-plus { border-color: var(--hover-edge); }
+  /* Platform logos are greyed until picked: hover shows them in colour */
+  :root .platform:hover:not(:disabled) svg { opacity: 1; filter: none; }
+
+  /* 6. Inputs and dropdowns */
+  :root :is(input, select, textarea, .rs-edit-view):hover:not(:focus, :disabled, [type="checkbox"], [type="radio"], [type="range"]),
+  :root .search-input:hover:not(:focus-within) {
+    border-color: var(--hover-edge);
+  }
+  :root .search-input input:hover { border-color: transparent; }
+
+  /* 7. Cards */
+  :root :is(.board-card, .board-node, .hook-option, .shot-frame, .trend-card, .rk-pick):hover:not(:disabled, .is-picked, .is-selected, .trend-active, .plans-card-lifted),
+  :root .tile-main:hover .thumb {
+    border-color: var(--hover-border); box-shadow: var(--hover-shadow);
+  }
+  :root .plans-board.is-dragging .plans-card:hover { box-shadow: none; }
+
+  /* 8. Dashed "+ Add" tiles */
+  :root :is(.shot-frame-add, .board-edge-add, .cv-add-plus):hover:not(:disabled) {
+    background-color: var(--hover-add-fill); border-color: var(--hover-add-border); color: var(--accent-soft-fg);
+  }
+
+  /* 9. Controls on a video cover */
+  :root :is(.thumb-ctl, .best-fail-link):hover,
+  :root .best-video-sample:hover .best-play { background-color: var(--hover-media); }
+  :root .tile-save:hover:not(:disabled, .tile-save-on) { background-color: var(--hover-media-light); }
+}
+
+/* Movement: lift, press and nudge, never with reduced motion */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  :root :is(.trend-card, button.board-card, .rk-pick):hover:not(:disabled, .trend-active),
+  :root .tile-main:hover .thumb { transform: translateY(var(--hover-lift)); }
+  :root .rk-btn-primary:hover .rk-arrow,
+  :root .find-start-item:hover .find-start-arrow,
+  :root .fd-start-item:hover .fd-arrow,
+  :root .fd-go:hover > span { transform: translateX(var(--hover-nudge)); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root :is(.btn, .rk-btn, .icon-btn, .cchip, .platform, .tile-save, .switcher-btn, .mic-btn):active:not(:disabled, [aria-disabled="true"]) {
+    transform: scale(var(--press-scale));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], summary, select, input, textarea, label, .board-card, .hook-option, .shot-frame, .tile-main .thumb) { transition: none; }
+}

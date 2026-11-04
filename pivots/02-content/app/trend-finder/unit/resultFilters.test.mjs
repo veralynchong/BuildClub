@@ -1,18 +1,26 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  DEFAULT_FILTERS, applyFilters, followersPending, activeFilters, clearFilter, relaxHint, lengthBandOf,
+  DEFAULT_FILTERS, applyFilters, followersPending, activeFilters, clearFilter, relaxHint, lengthBandOf, isDefaultFilter,
 } from '../src/lib/resultFilters.ts'
 
 const vid = (o = {}) => ({ id: 'v', platform: 'tiktok', views: 2_000_000, followers: 100_000, daysAgo: 5, lengthSec: 30, ...o })
-const any = { ...DEFAULT_FILTERS, viewsMin: 0 }
+const any = { ...DEFAULT_FILTERS, viewsMin: 0, followersMax: 0 }
 const ids = (vs) => vs.map((v) => v.id)
 
-test('default is 1M+ views and nothing else', () => {
+test('default is 1M+ views from accounts under 50K followers, and nothing else', () => {
   assert.equal(DEFAULT_FILTERS.viewsMin, 1_000_000)
-  assert.deepEqual(activeFilters(DEFAULT_FILTERS), ['views'])
-  const out = applyFilters([vid({ id: 'a' }), vid({ id: 'b', views: 999_999 })], DEFAULT_FILTERS)
+  assert.equal(DEFAULT_FILTERS.followersMax, 50_000)
+  assert.deepEqual(activeFilters(DEFAULT_FILTERS), ['views', 'followers'])
+  const out = applyFilters([vid({ id: 'a', followers: 4_000 }), vid({ id: 'b', views: 999_999, followers: 4_000 }), vid({ id: 'c' })], DEFAULT_FILTERS)
   assert.deepEqual(ids(out), ['a'])
+})
+
+test('chips at their default value say so; changed or other filters do not', () => {
+  assert.equal(isDefaultFilter('followers', DEFAULT_FILTERS), true)
+  assert.equal(isDefaultFilter('views', DEFAULT_FILTERS), true)
+  assert.equal(isDefaultFilter('followers', { ...DEFAULT_FILTERS, followersMax: 5_000 }), false)
+  assert.equal(isDefaultFilter('smallBig', { ...DEFAULT_FILTERS, smallBig: true }), false)
 })
 
 test('views floor leaves Reddit alone (its views are upvotes)', () => {

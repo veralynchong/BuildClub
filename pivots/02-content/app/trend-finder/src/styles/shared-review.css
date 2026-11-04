@@ -21,7 +21,6 @@
 .tc-body p { margin: 0; overflow-wrap: anywhere; }
 .tc-at { font-variant-numeric: tabular-nums; font-size: var(--text-sm); font-weight: 600; background: var(--surface-2); border-radius: var(--radius-pill); padding: var(--space-2xs) var(--space-md); border: 0; color: var(--fg); }
 .tc-at-link { cursor: pointer; }
-.tc-at-link:hover { background: var(--surface-3); }
 .tc-form { display: grid; gap: var(--space-md); }
 .tc-row { display: flex; gap: var(--space-md); align-items: end; flex-wrap: wrap; }
 .tc-time { width: 96px; }

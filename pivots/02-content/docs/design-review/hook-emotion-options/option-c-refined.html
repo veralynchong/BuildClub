@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Option C refined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Geist+Mono:wght@400;500&display=swap" />
+<style>:root {
+  /* theme-remake.css (:root[data-ui="altitude"]), light */
+  --canvas: #ffffff; --canvas-alt: #f5f5f7; --ink: #1a1a22; --ink-muted: #5d5f6e;
+  --navy: #060a47; --navy-deep: #070b24; --navy-dot: #2a3170; --on-navy: #f4f5ff; --on-navy-muted: #a9b0e0; --sky: #7ab8ff;
+  --blue: #1a33f2; --blue-hover: #1426c4; --blue-soft: #e9ecff; --label: #1a33f2;
+  --violet: #7b1fe0; --violet-soft: #f2e9ff; --mustard: #f2b705; --on-mustard: #060a47;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bg: var(--canvas); --surface: #ffffff; --surface-2: var(--canvas-alt); --surface-3: #e8e8ee;
+  --fg: var(--ink); --muted: var(--ink-muted); --line: #e8e8ee; --line-strong: #c9cad6;
+  --accent: var(--blue); --accent-fg: #ffffff; --accent-soft: var(--blue-soft); --accent-soft-fg: var(--blue);
+  --radius-xs: 4px; --radius-sm: 8px; --radius: 12px; --radius-lg: 20px; --radius-pill: 999px;
+  /* tokens.css */
+  --text-3xs: 10px; --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-ms: 14px; --text-base: 15px; --text-body: 16px;
+  --text-lg: 18px; --text-xl: 22px; --text-3xl: 28px;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 6px; --space-sm: 8px; --space-md: 10px; --space-base: 12px; --space-lg: 14px;
+  --space-xl: 16px; --space-2xl: 18px; --space-3xl: 24px; --space-4xl: 28px;
+  /* drawer-plan.css: the plan type scale */
+  --plan-h2-size: var(--text-3xl); --plan-h2-lh: 1.15; --plan-body-size: var(--text-body); --plan-body-lh: 1.45;
+  --plan-help-size: var(--text-sm); --plan-help-lh: 1.5; --plan-card-pad: var(--space-xl); --plan-card-gap: var(--space-base);
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--canvas-alt); color: var(--fg); font-family: var(--font-sans); font-size: var(--text-base); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: var(--font-serif); font-weight: 400; letter-spacing: -0.02em; margin: 0; }
+p { margin: 0; }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--surface-3); padding: 1px 4px; border-radius: var(--radius-xs); }
+a { color: var(--blue); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.mono, .state-label { font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+.label { color: var(--label); }
+
+/* Review page shell */
+.page { max-width: 1440px; margin: 0 auto; padding: 48px 32px 96px; display: grid; gap: 40px; }
+.page-head { display: grid; gap: var(--space-base); max-width: 860px; }
+.page-head h1 { font-size: 44px; line-height: 1.08; }
+.page-head h1 em { font-style: italic; color: var(--label); }
+.lede { font-size: var(--text-lg); line-height: 1.5; color: var(--muted); }
+.rec { background: var(--navy-deep); color: var(--on-navy); border-radius: var(--radius-lg); padding: 32px; display: grid; gap: var(--space-xl);
+  background-image: radial-gradient(circle at 1px 1px, var(--navy-dot) 1px, transparent 1.5px); background-size: 24px 24px; }
+.rec .label { color: var(--sky); }
+.rec h2 { font-size: 34px; line-height: 1.1; }
+.rec ul, .rec ol { margin: 0; padding-left: 20px; display: grid; gap: var(--space-sm); line-height: 1.55; max-width: 900px; }
+.rec strong { color: #fff; font-weight: 600; }
+.rec-fallback { color: var(--on-navy-muted); }
+.rec a { color: var(--sky); }
+.rec code { background: var(--navy-dot); color: var(--on-navy); }
+.rec-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 24px; padding-top: var(--space-xl); border-top: 1px solid var(--navy-dot); color: var(--on-navy-muted); font-size: var(--text-ms); }
+.rec-notes > div { display: grid; gap: var(--space-base); align-content: start; }
+.rec .hook-yours { color: var(--fg); }
+
+.option { background: var(--canvas); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 32px; display: grid; gap: 24px; }
+.opt-head { display: grid; gap: var(--space-sm); max-width: 820px; }
+.opt-head h2 { font-size: var(--text-3xl); line-height: 1.15; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-base); }
+.opt-desc { color: var(--muted); font-size: var(--text-ms); line-height: 1.55; }
+.rec-badge { font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0; background: var(--mustard); color: var(--on-mustard); padding: 3px 10px; border-radius: var(--radius-pill); }
+.opt-grid { display: flex; flex-wrap: wrap; gap: 32px; align-items: start; }
+.opt-desk { flex: 1 1 900px; min-width: 0; display: grid; gap: var(--space-base); }
+.opt-desk .state-label:not(:first-child) { margin-top: var(--space-xl); }
+.opt-phone { flex: 0 0 375px; display: grid; gap: var(--space-base); max-width: 100%; }
+.state-label { color: var(--muted); }
+.tradeoffs { display: grid; gap: var(--space-sm); border-top: 1px solid var(--line); padding-top: var(--space-xl); }
+.trade { margin: 0; padding-left: 18px; display: grid; gap: var(--space-xs); font-size: var(--text-ms); line-height: 1.55; max-width: 900px; }
+
+/* In-context mock: navy stage stub + the work panel */
+.mock-scroll { overflow: hidden; border-radius: var(--radius); border: 1px solid var(--line); }
+.mock { display: grid; grid-template-columns: 180px minmax(0, 1fr); background: var(--bg); }
+.stage-stub { min-width: 0; display: grid; align-content: start; gap: var(--space-sm); padding: var(--space-3xl) var(--space-xl); background-color: var(--navy-deep); color: var(--on-navy);
+  background-image: radial-gradient(circle at 1px 1px, var(--navy-dot) 1px, transparent 1.5px); background-size: 24px 24px; }
+.stage-back { font-size: var(--text-sm); color: var(--on-navy-muted); text-decoration: underline; text-decoration-color: var(--navy-dot); text-underline-offset: 3px; }
+.stage-acct { font-size: var(--text-sm); color: var(--sky); overflow-wrap: anywhere; }
+.stage-cmp { display: grid; grid-template-columns: auto auto auto; justify-content: start; column-gap: var(--space-sm); row-gap: 2px; align-items: baseline; margin-top: var(--space-xs); }
+.cmp-n { font-family: var(--font-serif); font-size: var(--text-3xl); line-height: 1.15; color: var(--on-navy); }
+.cmp-arrow { font-size: var(--text-lg); color: var(--on-navy-muted); }
+.cmp-l { font-size: var(--text-xs); color: var(--sky); }
+.stage-title { margin-top: var(--space-base); font-family: var(--font-serif); font-size: var(--text-xl); line-height: 1.15; color: #fff; }
+.stage-video { margin-top: var(--space-base); width: 100%; aspect-ratio: 9 / 16; max-height: 220px; border-radius: var(--radius-sm); outline: 1px solid var(--navy-dot); background: linear-gradient(160deg, #1b2266, #0b0f33); }
+.panel { padding: 28px 24px 32px; min-width: 0; }
+
+/* App: drawer-plan.css section head */
+.plan-sec { display: grid; gap: var(--space-xl); min-width: 0; }
+.plan-sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-base); padding-bottom: var(--space-base); border-bottom: 1px solid var(--line); }
+.plan-sec-head h2 { font-family: var(--font-serif); font-weight: 400; font-size: var(--plan-h2-size); line-height: var(--plan-h2-lh); letter-spacing: -0.01em; }
+.plan-sec-hint { max-width: 62ch; font-size: var(--plan-help-size); line-height: var(--plan-help-lh); color: var(--muted); }
+
+/* App: storyboard.css hook card (copied) */
+.hook-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-base); }
+.hook-option { min-width: 0; display: grid; grid-template-rows: auto 1fr auto; gap: var(--plan-card-gap); min-height: 196px; padding: var(--plan-card-pad);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.hook-option.is-picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.hook-option-no { font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--label); font-variant-numeric: tabular-nums; }
+.hook-option-text { font-family: var(--font-sans); font-size: var(--plan-body-size); font-weight: 400; line-height: var(--plan-body-lh); color: var(--fg); overflow-wrap: anywhere; }
+.hook-option > .btn, .hook-option > .hook-state { justify-self: start; align-self: end; margin-top: calc(var(--space-xl) - var(--plan-card-gap)); }
+.hook-yours { margin: 0; padding: var(--plan-card-pad); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); font-size: var(--plan-body-size); line-height: var(--plan-body-lh); display: grid; gap: var(--space-base); }
+/* components.css + theme-remake.css buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); border: 1px solid transparent; border-radius: var(--radius-pill);
+  padding: 6px 14px; min-height: 34px; font: inherit; font-size: var(--text-ms); font-weight: 500; line-height: 1.4; white-space: nowrap; cursor: pointer; }
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-ghost { background: var(--accent-soft); color: var(--accent-soft-fg); }
+
+/* Label row: number on the left, the emotion (A-D) on the right */
+.hook-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: 22px; }
+/* Extra rows: B (why) and E (strip) sit between the text and the button */
+.hook-option.has-why, .hook-option.has-strip { grid-template-rows: auto 1fr auto auto; }
+
+/* Locked: no buttons, a plain status word. The picked card keeps its ring. */
+.hook-option.is-locked:not(.is-picked) { background: var(--surface-2); }
+.hook-state { display: inline-flex; align-items: center; gap: var(--space-2xs); min-height: 34px; font-size: var(--text-ms); font-weight: 500; color: var(--muted); }
+.hook-state.is-on { color: var(--blue); }
+.ico-check { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* The emotion: never interactive. No hover, no pointer, no focus, no pill. */
+.emo-tag, .emo-icon-word, .emo-strip { cursor: default; user-select: text; }
+
+/* A/B: square tag, neutral */
+.emo-tag { display: inline-flex; align-items: center; gap: var(--space-xs); flex: none; padding: 3px 8px; border-radius: var(--radius-xs);
+  background: var(--surface-3); color: var(--ink); font-size: var(--text-xs); font-weight: 500; line-height: 16px; white-space: nowrap; }
+.emo-why { font-size: var(--plan-help-size); line-height: var(--plan-help-lh); color: var(--muted); }
+
+/* C: muted tints from the navy/blue family; the word is always there (ink-dark text, AA on its tint) */
+.emo-c.emo-cur  { background: #e9ecff; color: #1a33f2; }  /* 6.4:1 */
+.emo-c.emo-rel  { background: #e4f1ff; color: #0d4a85; }  /* 7.8:1 */
+.emo-c.emo-fomo { background: #e7e8f1; color: #060a47; }  /* 15.1:1 */
+.emo-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.emo-cur .emo-dot { background: #1a33f2; }
+.emo-rel .emo-dot { background: #7ab8ff; box-shadow: inset 0 0 0 1px #3d82cf; }
+.emo-fomo .emo-dot { background: #060a47; }
+
+/* D: violet line icon + word, no container */
+.emo-icon-word { display: inline-flex; align-items: center; gap: var(--space-xs); flex: none; font-size: var(--text-sm); font-weight: 500; line-height: 16px; color: var(--ink); white-space: nowrap; }
+.emo-ico { width: 15px; height: 15px; fill: none; stroke: var(--violet); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* E: the first-2-seconds line */
+.emo-strip { display: grid; gap: var(--space-2xs); padding-top: var(--space-base); border-top: 1px solid var(--line); }
+.emo-strip-label { font-family: var(--font-mono); font-size: var(--text-3xs); line-height: 14px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-variant-numeric: tabular-nums; }
+.emo-strip-line { font-size: var(--text-sm); line-height: var(--plan-help-lh); color: var(--muted); }
+.emo-strip-line strong { color: var(--ink); font-weight: 600; }
+.hook-option.is-locked:not(.is-picked) .emo-strip { border-top-color: var(--line-strong); }
+.hook-yours .emo-strip.yours { display: grid; }
+
+/* Phone frame: plan panel at 375px, cards stacked */
+.phone { width: 375px; max-width: 100%; border: 1px solid var(--line-strong); border-radius: 28px; overflow: hidden; background: var(--bg); }
+.phone-panel { padding: var(--space-3xl) var(--space-xl) 32px; }
+.hook-list.is-phone { grid-template-columns: minmax(0, 1fr); }
+.hook-list.is-phone .hook-option { min-height: 0; }
+.hook-list.is-phone .hook-option > .btn { min-height: 44px; margin-top: 0; }
+
+@media (max-width: 900px) { .mock { grid-template-columns: minmax(0, 1fr); } .stage-stub { display: none; } }
+@media (max-width: 640px) {
+  .page { padding: 32px 16px 64px; gap: 28px; }
+  .page-head h1 { font-size: 32px; }
+  .rec, .option { padding: 20px 16px; }
+  .rec h2 { font-size: 26px; }
+  .opt-phone { flex: 1 1 100%; }
+}
+.next-link { justify-self: start; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--line); font-size: var(--text-ms); }
+
+.hue-teal { --f: #e3f2f0; --t: #1d5c57; --d: #4a9a92; }
+.dark .hue-teal { --f: #12302f; --t: #8fd6cc; --d: #8fd6cc; }
+.hue-apricot { --f: #fdecd9; --t: #84470d; --d: #e39a4e; }
+.dark .hue-apricot { --f: #3a2414; --t: #f4b98a; --d: #f4b98a; }
+.hue-sage { --f: #e8f0e2; --t: #3d5a2c; --d: #86a670; }
+.dark .hue-sage { --f: #1e2c1a; --t: #b5d29e; --d: #b5d29e; }
+.hue-plum { --f: #f1e8f3; --t: #6a2f72; --d: #a874b0; }
+.dark .hue-plum { --f: #2e1c36; --t: #d9b3e0; --d: #d9b3e0; }
+.hue-honey { --f: #f8f0d6; --t: #6e5208; --d: #c9a43a; }
+.dark .hue-honey { --f: #33290c; --t: #e8cc78; --d: #e8cc78; }
+.hue-rose { --f: #fbe7f0; --t: #8e2a5e; --d: #d47aa6; }
+.dark .hue-rose { --f: #3a1a2c; --t: #f0a9cc; --d: #f0a9cc; }
+.hue-slate { --f: #e9ecf0; --t: #3c4a5c; --d: #7d8b9d; }
+.dark .hue-slate { --f: #222a36; --t: #b8c3d2; --d: #b8c3d2; }
+.hue-brick { --f: #f7e2dc; --t: #8a2f1d; --d: #c25a3c; }
+.dark .hue-brick { --f: #3a1c16; --t: #f0a594; --d: #f0a594; }
+
+/* Emotion tag: a label, never a control. No hover, no pointer, no focus, no pill. */
+.tg { display: inline-flex; align-items: center; gap: var(--space-xs); flex: none; white-space: nowrap; cursor: default; user-select: text; }
+.tg-tint { padding: 3px 7px; border-radius: var(--radius-xs); background: var(--f); color: var(--t);
+  font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 16px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.tg-outline { padding: 2px 7px; border-radius: var(--radius-xs); border: 1px solid var(--d); color: var(--t); font-size: var(--text-xs); font-weight: 500; line-height: 16px; }
+.tg-dot { font-size: var(--text-sm); font-weight: 500; line-height: 16px; color: var(--ink); }
+.tg-dot::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--d); }
+
+.treat { display: grid; gap: var(--space-base); }
+.treat + .treat { padding-top: var(--space-3xl); border-top: 1px solid var(--line); }
+.treat-head h3 { font-size: var(--text-xl); line-height: 1.2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-base); }
+.treat-trade { font-size: var(--text-ms); line-height: 1.55; max-width: 900px; }
+.treat .panel { background: var(--bg); }
+
+.galleries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-xl); }
+.galleries > div { display: grid; gap: var(--space-sm); align-content: start; }
+.gal-bg { padding: var(--space-xl); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.gal-bg.is-grey { background: var(--surface-2); }
+.gallery { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+
+/* Dark scope: theme-remake.css dark values */
+.dark { --canvas: #0b0d1c; --canvas-alt: #14172b; --ink: #eceef6; --ink-muted: #a3a7c0; --surface: #14172b; --surface-2: #14172b; --line: #262a48; --line-strong: #454a78; --fg: var(--ink); --muted: var(--ink-muted); color: var(--fg); }
+.galleries > .dark { background: var(--canvas); padding: var(--space-base); border-radius: var(--radius); }
+.dark-panel { background: var(--canvas); padding: var(--space-xl); border-radius: var(--radius); display: grid; gap: var(--space-sm); }
+
+.swatches { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-base); }
+.sw { display: grid; gap: 2px; padding: var(--space-base); border-radius: var(--radius); background: var(--f); color: var(--t); }
+.sw-chip { width: 100%; height: 6px; border-radius: 2px; background: var(--d); margin-bottom: var(--space-sm); }
+.sw-name { font-family: var(--font-serif); font-size: var(--text-xl); line-height: 1.15; }
+.sw-emo { font-size: var(--text-sm); font-weight: 600; }
+.sw-hex, .sw-cr { font-family: var(--font-mono); font-size: var(--text-3xs); letter-spacing: 0.04em; }
+
+.table-wrap { overflow-x: auto; }
+.map { width: 100%; border-collapse: collapse; font-size: var(--text-ms); }
+.map th { text-align: left; font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 0 12px 10px 0; border-bottom: 1px solid var(--line); }
+.map td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.hue-name { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.hue-dot { width: 10px; height: 10px; border-radius: 2px; background: var(--d); }
+.trade strong { font-weight: 600; }
+</style></head>
+<body><main class="page">
+<header class="page-head">
+ <p class="mono label">Design review &middot; Plan screen &middot; 3 Nov 2026 &middot; <a href="index.html">&larr; All five options</a></p>
+ <h1>Option C, <em>refined</em>: one emotion list, one colour each</h1>
+ <p class="lede">The founder picked Option C. This page fixes its two risks (the tag read as a button, and every emotion was blue) and merges the two emotion lists into one.</p>
+</header>
+
+<section class="rec">
+ <p class="mono label">Recommendation</p>
+ <h2>Tinted label, eight muted hues, eight emotions</h2>
+ <ul>
+  <li><strong>Treatment: the tinted label.</strong> Square corners, mono caps, same-hue text on a pale tint. Every visual cue a Remake button has (pill, Inter, sentence case, blue) is reversed, and there is no hover, pointer or focus.</li>
+  <li><strong>Palette: no blue at all.</strong> Teal, apricot, sage, plum, honey, rose, slate, brick. All are muted, none is near the primary blue #1a33f2, and every tag passes AA (6.3:1 to 7.8:1 light, 7.7:1 to 9.1:1 dark).</li>
+  <li><strong>The word always shows.</strong> Colour helps scanning; the word carries the meaning. Screen readers hear &ldquo;Viewer feels: Curiosity&rdquo;.</li>
+  <li><strong>One list of 8</strong> replaces both the types.ts list and the proposed one (table below). The tofu hooks become Curiosity (teal), Relief (sage), FOMO / insider (plum).</li>
+ </ul>
+ <p class="rec-fallback">Watch: Alarm (brick) and Surprise (apricot) are the closest pair; they differ in hue (red vs orange) and the word disambiguates. Honey and the &ldquo;Best to copy&rdquo; mustard are related but honey is only ever a pale tint, never the solid winner fill.</p>
+</section>
+
+<section class="option">
+ <div class="opt-head"><h2>The refined tag on the plan screen</h2><p class="opt-desc">Tinted label on the HOOK row. Everything else is the current card.</p></div>
+ <div class="opt-grid">
+  <div class="opt-desk">
+   <p class="state-label">Desktop &middot; default (Hook 1 picked)</p><div class="mock-scroll"><div class="mock"><aside class="stage-stub" aria-hidden="true"><span class="stage-back">&larr; Back to plans</span><span class="stage-title">No tofu press? Do this</span><span class="stage-acct">@kitchen.tricks.sample</span><span class="stage-cmp"><span class="cmp-n">140k</span><span class="cmp-arrow">&rarr;</span><span class="cmp-n">380k</span><span class="cmp-l">followers</span><span></span><span class="cmp-l">views</span></span><span class="stage-video"></span></aside><div class="panel"><section class="plan-sec"><header class="plan-sec-head"><h2>Suggested hooks</h2></header><ul class="hook-list"><li class="hook-option is-picked"><div class="hook-head"><span class="hook-option-no">Hook 1</span><span class="tg tg-tint hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span></div><span class="hook-option-text">Did you know tofu hacks could look like this?</span><button type="button" class="btn btn-sm btn-primary" aria-pressed="true">Picked</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 2</span><span class="tg tg-tint hue-sage"><span class="sr">Viewer feels: </span>Relief</span></div><span class="hook-option-text">Watch this: tofu hacks, start to finish</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 3</span><span class="tg tg-tint hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span></div><span class="hook-option-text">3 things nobody tells you about tofu hacks</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li></ul></section></div></div></div>
+   <p class="state-label">Desktop &middot; locked (plan sent)</p><div class="mock-scroll"><div class="mock"><aside class="stage-stub" aria-hidden="true"><span class="stage-back">&larr; Back to plans</span><span class="stage-title">No tofu press? Do this</span><span class="stage-acct">@kitchen.tricks.sample</span><span class="stage-cmp"><span class="cmp-n">140k</span><span class="cmp-arrow">&rarr;</span><span class="cmp-n">380k</span><span class="cmp-l">followers</span><span></span><span class="cmp-l">views</span></span><span class="stage-video"></span></aside><div class="panel"><section class="plan-sec"><header class="plan-sec-head"><h2>Suggested hooks</h2></header><p class="plan-sec-hint">The line this video opens with. Locked while the plan is waiting or approved.</p><ul class="hook-list"><li class="hook-option is-picked is-locked"><div class="hook-head"><span class="hook-option-no">Hook 1</span><span class="tg tg-tint hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span></div><span class="hook-option-text">Did you know tofu hacks could look like this?</span><span class="hook-state is-on"><svg class="ico-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>Picked</span></li><li class="hook-option is-locked"><div class="hook-head"><span class="hook-option-no">Hook 2</span><span class="tg tg-tint hue-sage"><span class="sr">Viewer feels: </span>Relief</span></div><span class="hook-option-text">Watch this: tofu hacks, start to finish</span><span class="hook-state">Not used</span></li><li class="hook-option is-locked"><div class="hook-head"><span class="hook-option-no">Hook 3</span><span class="tg tg-tint hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span></div><span class="hook-option-text">3 things nobody tells you about tofu hacks</span><span class="hook-state">Not used</span></li></ul></section></div></div></div>
+  </div>
+  <div class="opt-phone"><p class="state-label">Phone &middot; 375px</p><div class="phone"><div class="phone-panel"><section class="plan-sec"><header class="plan-sec-head"><h2>Suggested hooks</h2></header><ul class="hook-list is-phone"><li class="hook-option is-picked"><div class="hook-head"><span class="hook-option-no">Hook 1</span><span class="tg tg-tint hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span></div><span class="hook-option-text">Did you know tofu hacks could look like this?</span><button type="button" class="btn btn-sm btn-primary" aria-pressed="true">Picked</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 2</span><span class="tg tg-tint hue-sage"><span class="sr">Viewer feels: </span>Relief</span></div><span class="hook-option-text">Watch this: tofu hacks, start to finish</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 3</span><span class="tg tg-tint hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span></div><span class="hook-option-text">3 things nobody tells you about tofu hacks</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li></ul></section></div></div></div>
+ </div>
+</section>
+
+<section class="option">
+ <div class="opt-head"><h2>Every emotion tag</h2><p class="opt-desc">All eight together, on a card, on a locked (grey) card, and in dark mode.</p></div>
+ <div class="galleries">
+  <div><p class="state-label">Light &middot; on a card</p><div class="gal-bg"><div class="gallery"><span class="tg tg-tint hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span><span class="tg tg-tint hue-apricot"><span class="sr">Viewer feels: </span>Surprise</span><span class="tg tg-tint hue-sage"><span class="sr">Viewer feels: </span>Relief</span><span class="tg tg-tint hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span><span class="tg tg-tint hue-honey"><span class="sr">Viewer feels: </span>Humour</span><span class="tg tg-tint hue-rose"><span class="sr">Viewer feels: </span>Desire</span><span class="tg tg-tint hue-slate"><span class="sr">Viewer feels: </span>Recognition</span><span class="tg tg-tint hue-brick"><span class="sr">Viewer feels: </span>Alarm</span></div></div></div>
+  <div><p class="state-label">Light &middot; on a locked card</p><div class="gal-bg is-grey"><div class="gallery"><span class="tg tg-tint hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span><span class="tg tg-tint hue-apricot"><span class="sr">Viewer feels: </span>Surprise</span><span class="tg tg-tint hue-sage"><span class="sr">Viewer feels: </span>Relief</span><span class="tg tg-tint hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span><span class="tg tg-tint hue-honey"><span class="sr">Viewer feels: </span>Humour</span><span class="tg tg-tint hue-rose"><span class="sr">Viewer feels: </span>Desire</span><span class="tg tg-tint hue-slate"><span class="sr">Viewer feels: </span>Recognition</span><span class="tg tg-tint hue-brick"><span class="sr">Viewer feels: </span>Alarm</span></div></div></div>
+  <div class="dark"><p class="state-label">Dark &middot; on a card</p><div class="gal-bg"><div class="gallery"><span class="tg tg-tint hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span><span class="tg tg-tint hue-apricot"><span class="sr">Viewer feels: </span>Surprise</span><span class="tg tg-tint hue-sage"><span class="sr">Viewer feels: </span>Relief</span><span class="tg tg-tint hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span><span class="tg tg-tint hue-honey"><span class="sr">Viewer feels: </span>Humour</span><span class="tg tg-tint hue-rose"><span class="sr">Viewer feels: </span>Desire</span><span class="tg tg-tint hue-slate"><span class="sr">Viewer feels: </span>Recognition</span><span class="tg tg-tint hue-brick"><span class="sr">Viewer feels: </span>Alarm</span></div></div></div>
+ </div>
+</section>
+
+<section class="option">
+ <div class="opt-head"><h2>Palette</h2><p class="opt-desc">Tint fill / text colour, and the contrast of the text on its tint. Dark values sit on the dark card surface (#14172b) from theme-remake.css.</p></div>
+ <p class="state-label">Light</p><ul class="swatches"><li class="sw hue-teal"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Teal</span><span class="sw-emo">Curiosity</span><span class="sw-hex">#e3f2f0 / #1d5c57</span><span class="sw-cr">6.7:1 AA</span></li><li class="sw hue-apricot"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Apricot</span><span class="sw-emo">Surprise</span><span class="sw-hex">#fdecd9 / #84470d</span><span class="sw-cr">6.3:1 AA</span></li><li class="sw hue-sage"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Sage</span><span class="sw-emo">Relief</span><span class="sw-hex">#e8f0e2 / #3d5a2c</span><span class="sw-cr">6.7:1 AA</span></li><li class="sw hue-plum"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Plum</span><span class="sw-emo">FOMO / insider</span><span class="sw-hex">#f1e8f3 / #6a2f72</span><span class="sw-cr">7.8:1 AA</span></li><li class="sw hue-honey"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Honey</span><span class="sw-emo">Humour</span><span class="sw-hex">#f8f0d6 / #6e5208</span><span class="sw-cr">6.4:1 AA</span></li><li class="sw hue-rose"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Rose</span><span class="sw-emo">Desire</span><span class="sw-hex">#fbe7f0 / #8e2a5e</span><span class="sw-cr">6.7:1 AA</span></li><li class="sw hue-slate"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Slate</span><span class="sw-emo">Recognition</span><span class="sw-hex">#e9ecf0 / #3c4a5c</span><span class="sw-cr">7.6:1 AA</span></li><li class="sw hue-brick"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Brick</span><span class="sw-emo">Alarm</span><span class="sw-hex">#f7e2dc / #8a2f1d</span><span class="sw-cr">6.7:1 AA</span></li></ul>
+ <div class="dark dark-panel"><p class="state-label">Dark</p><ul class="swatches"><li class="sw hue-teal"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Teal</span><span class="sw-emo">Curiosity</span><span class="sw-hex">#12302f / #8fd6cc</span><span class="sw-cr">8.5:1 AA</span></li><li class="sw hue-apricot"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Apricot</span><span class="sw-emo">Surprise</span><span class="sw-hex">#3a2414 / #f4b98a</span><span class="sw-cr">8.4:1 AA</span></li><li class="sw hue-sage"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Sage</span><span class="sw-emo">Relief</span><span class="sw-hex">#1e2c1a / #b5d29e</span><span class="sw-cr">8.9:1 AA</span></li><li class="sw hue-plum"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Plum</span><span class="sw-emo">FOMO / insider</span><span class="sw-hex">#2e1c36 / #d9b3e0</span><span class="sw-cr">8.6:1 AA</span></li><li class="sw hue-honey"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Honey</span><span class="sw-emo">Humour</span><span class="sw-hex">#33290c / #e8cc78</span><span class="sw-cr">9.1:1 AA</span></li><li class="sw hue-rose"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Rose</span><span class="sw-emo">Desire</span><span class="sw-hex">#3a1a2c / #f0a9cc</span><span class="sw-cr">8.2:1 AA</span></li><li class="sw hue-slate"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Slate</span><span class="sw-emo">Recognition</span><span class="sw-hex">#222a36 / #b8c3d2</span><span class="sw-cr">8.1:1 AA</span></li><li class="sw hue-brick"><span class="sw-chip" aria-hidden="true"></span><span class="sw-name">Brick</span><span class="sw-emo">Alarm</span><span class="sw-hex">#3a1c16 / #f0a594</span><span class="sw-cr">7.7:1 AA</span></li></ul></div>
+</section>
+
+<section class="option">
+ <div class="opt-head"><h2>One emotion list</h2><p class="opt-desc">Eight emotions, named for what the viewer feels in the first two seconds. Each old value maps to exactly one new one.</p></div>
+ <div class="table-wrap"><table class="map"><thead><tr><th>Emotion</th><th>The viewer thinks</th><th>Replaces (types.ts)</th><th>Proposed list</th><th>Hue</th></tr></thead><tbody><tr><td><span class="tg tg-tint hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span></td><td>&ldquo;What happens next?&rdquo;</td><td><code>curious</code></td><td>Curiosity</td><td><span class="hue-name hue-teal"><span class="hue-dot" aria-hidden="true"></span>Teal</span></td></tr><tr><td><span class="tg tg-tint hue-apricot"><span class="sr">Viewer feels: </span>Surprise</span></td><td>&ldquo;Wait, what?&rdquo;</td><td><code>excited</code></td><td>Surprise</td><td><span class="hue-name hue-apricot"><span class="hue-dot" aria-hidden="true"></span>Apricot</span></td></tr><tr><td><span class="tg tg-tint hue-sage"><span class="sr">Viewer feels: </span>Relief</span></td><td>&ldquo;Finally, an easy way.&rdquo;</td><td>&mdash;</td><td>Relief</td><td><span class="hue-name hue-sage"><span class="hue-dot" aria-hidden="true"></span>Sage</span></td></tr><tr><td><span class="tg tg-tint hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span></td><td>&ldquo;Others know this and I don&rsquo;t.&rdquo;</td><td>&mdash;</td><td>FOMO / insider</td><td><span class="hue-name hue-plum"><span class="hue-dot" aria-hidden="true"></span>Plum</span></td></tr><tr><td><span class="tg tg-tint hue-honey"><span class="sr">Viewer feels: </span>Humour</span></td><td>&ldquo;Ha. I&rsquo;m sending this to someone.&rdquo;</td><td><code>funny</code></td><td>Humour</td><td><span class="hue-name hue-honey"><span class="hue-dot" aria-hidden="true"></span>Honey</span></td></tr><tr><td><span class="tg tg-tint hue-rose"><span class="sr">Viewer feels: </span>Desire</span></td><td>&ldquo;I want that.&rdquo;</td><td><code>craving</code></td><td>Aspiration</td><td><span class="hue-name hue-rose"><span class="hue-dot" aria-hidden="true"></span>Rose</span></td></tr><tr><td><span class="tg tg-tint hue-slate"><span class="sr">Viewer feels: </span>Recognition</span></td><td>&ldquo;That&rsquo;s so me.&rdquo;</td><td><code>relatable</code></td><td>&mdash;</td><td><span class="hue-name hue-slate"><span class="hue-dot" aria-hidden="true"></span>Slate</span></td></tr><tr><td><span class="tg tg-tint hue-brick"><span class="sr">Viewer feels: </span>Alarm</span></td><td>&ldquo;Wait, that&rsquo;s wrong (or risky).&rdquo;</td><td><code>angry_comment</code></td><td>Alarm</td><td><span class="hue-name hue-brick"><span class="hue-dot" aria-hidden="true"></span>Brick</span></td></tr></tbody></table></div>
+ <ul class="trade">
+  <li><strong>Merges:</strong> craving and Aspiration become <strong>Desire</strong> (&ldquo;I want that&rdquo;, food or lifestyle); excited becomes <strong>Surprise</strong>; angry_comment folds into <strong>Alarm</strong> (the viewer feels something is wrong and wants to say so).</li>
+  <li><strong>Loosest mappings:</strong> excited &rarr; Surprise and angry_comment &rarr; Alarm. Worth a quick check against the saved breakdowns before migrating.</li>
+  <li><strong>For the build:</strong> suggested keys <code>curiosity, surprise, relief, insider, humour, desire, recognition, alarm</code>; the drawer&rsquo;s <code>.tag-emotion</code> chip should switch to the same tag so the two screens agree.</li>
+ </ul>
+</section>
+
+<section class="option">
+ <div class="opt-head"><h2>Tag treatments explored</h2><p class="opt-desc">Same hues, three shapes. Default state, Hook 1 picked.</p></div>
+ <div class="treat"><div class="treat-head"><h3>1 &middot; Tinted label <span class="rec-badge">Recommended</span></h3><p class="opt-desc">Square 4px corners, a pale tint of the hue, darker text of the same hue, set in Geist Mono caps like the HOOK 1 label.</p></div>
+<div class="mock-scroll"><div class="panel"><section class="plan-sec"><header class="plan-sec-head"><h2>Suggested hooks</h2></header><ul class="hook-list"><li class="hook-option is-picked"><div class="hook-head"><span class="hook-option-no">Hook 1</span><span class="tg tg-tint hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span></div><span class="hook-option-text">Did you know tofu hacks could look like this?</span><button type="button" class="btn btn-sm btn-primary" aria-pressed="true">Picked</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 2</span><span class="tg tg-tint hue-sage"><span class="sr">Viewer feels: </span>Relief</span></div><span class="hook-option-text">Watch this: tofu hacks, start to finish</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 3</span><span class="tg tg-tint hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span></div><span class="hook-option-text">3 things nobody tells you about tofu hacks</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li></ul></section></div></div><p class="treat-trade">Reads as part of the label row, not as an action: buttons in Remake are Inter, sentence case, pill, blue. Enough colour to scan three cards at once.</p></div><div class="treat"><div class="treat-head"><h3>2 &middot; Outline</h3><p class="opt-desc">Square corners, a 1px border in the hue, no fill, Inter sentence case.</p></div>
+<div class="mock-scroll"><div class="panel"><section class="plan-sec"><header class="plan-sec-head"><h2>Suggested hooks</h2></header><ul class="hook-list"><li class="hook-option is-picked"><div class="hook-head"><span class="hook-option-no">Hook 1</span><span class="tg tg-outline hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span></div><span class="hook-option-text">Did you know tofu hacks could look like this?</span><button type="button" class="btn btn-sm btn-primary" aria-pressed="true">Picked</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 2</span><span class="tg tg-outline hue-sage"><span class="sr">Viewer feels: </span>Relief</span></div><span class="hook-option-text">Watch this: tofu hacks, start to finish</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 3</span><span class="tg tg-outline hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span></div><span class="hook-option-text">3 things nobody tells you about tofu hacks</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li></ul></section></div></div><p class="treat-trade">Lightest on the card, but a bordered box in sentence case is the classic secondary-button or empty-field look. Colour only lives in a thin line, so it is hard to scan.</p></div><div class="treat"><div class="treat-head"><h3>3 &middot; Dot plus word</h3><p class="opt-desc">No container: an 8px square dot in the hue, then the word in ink.</p></div>
+<div class="mock-scroll"><div class="panel"><section class="plan-sec"><header class="plan-sec-head"><h2>Suggested hooks</h2></header><ul class="hook-list"><li class="hook-option is-picked"><div class="hook-head"><span class="hook-option-no">Hook 1</span><span class="tg tg-dot hue-teal"><span class="sr">Viewer feels: </span>Curiosity</span></div><span class="hook-option-text">Did you know tofu hacks could look like this?</span><button type="button" class="btn btn-sm btn-primary" aria-pressed="true">Picked</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 2</span><span class="tg tg-dot hue-sage"><span class="sr">Viewer feels: </span>Relief</span></div><span class="hook-option-text">Watch this: tofu hacks, start to finish</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li><li class="hook-option"><div class="hook-head"><span class="hook-option-no">Hook 3</span><span class="tg tg-dot hue-plum"><span class="sr">Viewer feels: </span>FOMO / insider</span></div><span class="hook-option-text">3 things nobody tells you about tofu hacks</span><button type="button" class="btn btn-sm btn-ghost" aria-pressed="false">Use this</button></li></ul></section></div></div><p class="treat-trade">Least button-like of all, but the colour is a tiny dot, so the palette barely helps scanning. Good fallback for dense lists (the breakdown drawer, tables).</p></div>
+</section>
+</main></body></html>

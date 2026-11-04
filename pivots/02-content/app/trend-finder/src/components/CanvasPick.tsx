@@ -42,7 +42,7 @@ export function CanvasPick(p: Props) {
                   <Thumb video={v} />
                   <div className="board-card-body">
                     <strong>{planName(v, p.formatById.get(v.formatId))}</strong>
-                    <span className="small">{t('plan.card.due', { date: dueLabel(idea.dueDate) })}</span>
+                    <span className="small">{t('shell.canvasPick.due', { date: dueLabel(idea.dueDate) })}</span>
                     <span className="small muted">{t('shell.canvasPick.counts', { shots: prog.shots, ready: prog.ready })}</span>
                   </div>
                 </button>

@@ -36,10 +36,13 @@
 :root[data-ui="altitude"] .plans-card.is-placeholder { opacity: 0.4; }
 :root[data-ui="altitude"] .plans-card:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 /* The copy under the pointer while dragging: lifted, so it floats. */
-:root[data-ui="altitude"] .plans-card-lifted,
-:root[data-ui="altitude"] .plans-card-lifted:hover { cursor: grabbing; box-shadow: var(--shadow-float); border-color: var(--line-strong); }
-:root[data-ui="altitude"] .plans-board.is-dragging .plans-card:hover { box-shadow: none; }
+:root[data-ui="altitude"] .plans-card-lifted { cursor: grabbing; box-shadow: var(--shadow-float); border-color: var(--line-strong); }
 
+:root[data-ui="altitude"] .plans-card-hook {
+  overflow-wrap: anywhere; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+:root[data-ui="altitude"] .plans-card-handle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :root[data-ui="altitude"] .plans-card .board-card-actions { flex-wrap: wrap; justify-content: flex-start; }
 :root[data-ui="altitude"] .plans-card .board-card-actions .link-btn { margin-left: auto; }
 

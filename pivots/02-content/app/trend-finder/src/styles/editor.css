@@ -24,7 +24,7 @@
 .cv-ed-clip-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cv-ed-clip-len { color: var(--muted); white-space: nowrap; }
 .cv-ed-edge { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; touch-action: none; background: var(--surface-3); }
-.cv-ed-edge:hover { background: var(--line-strong); }
+.cv-ed-edge:hover { background: var(--line-strong); } /* a drag handle, not a button: no transition, it follows the pointer */
 .cv-ed-edge-in { left: 0; }
 .cv-ed-edge-out { right: 0; }
 .cv-ed-playhead { position: absolute; top: 0; bottom: 0; margin-left: 12px; width: 2px; background: var(--hot); pointer-events: none; }
@@ -62,7 +62,6 @@
 .cv-ed-tabs { display: flex; gap: var(--space-2xs); border-bottom: 1px solid var(--line); }
 .cv-ed-tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: var(--space-sm) var(--space-xl); font: inherit; font-size: var(--text-sm); color: var(--muted); cursor: pointer; }
 .cv-ed-tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
-.cv-ed-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .cv-ed-panel { display: flex; flex-direction: column; gap: var(--space-xl); min-width: 0; }
 .cv-ed-tool { display: flex; flex-direction: column; gap: var(--space-base); min-width: 0; }
 .cv-ed-tool p { margin: 0; }

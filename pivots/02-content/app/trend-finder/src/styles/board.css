@@ -1,0 +1,116 @@
+/* Planning board (components/board/): one plan's shots as cards on a React Flow canvas. Tokens only, so light
+   and dark both follow theme-remake.css. React Flow's own colours are set through its --xy-* variables. */
+.board-screen { display: grid; gap: var(--space-lg); min-width: 0; }
+.board-screen .link-btn { justify-self: start; }
+.board-head { display: grid; gap: var(--space-xs); }
+.board-head h1 { margin: 0; }
+.board-head p { margin: 0; }
+
+.board-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--space-lg); align-items: start; }
+.board-canvas {
+  position: relative; height: min(72vh, 760px); min-height: 420px; min-width: 0; overflow: hidden;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+  --xy-background-color: var(--surface-2);
+  --xy-background-pattern-dots-color: var(--line-strong);
+  --xy-edge-stroke: var(--line-strong);
+  --xy-edge-stroke-selected: var(--accent);
+  --xy-edge-stroke-width: 2;
+  --xy-handle-background-color: var(--line-strong);
+  --xy-handle-border-color: var(--surface);
+  --xy-selection-background-color: var(--accent-soft);
+  --xy-selection-border: 1px dotted var(--accent);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--hover-tint);
+  --xy-controls-button-color: var(--fg);
+  --xy-controls-button-color-hover: var(--fg);
+  --xy-controls-button-border-color: var(--line);
+  --xy-controls-box-shadow: var(--shadow-md);
+  --xy-minimap-background-color: var(--surface);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  --xy-minimap-node-background-color: var(--line-strong);
+  --xy-minimap-node-stroke-color: transparent;
+  --xy-attribution-background-color: var(--frost);
+}
+.board-canvas .react-flow__attribution a { color: var(--muted); }
+.board-canvas .react-flow__controls { border-radius: var(--radius-sm); overflow: hidden; }
+.board-canvas .react-flow__controls-button svg { fill: currentColor; }
+.board-minimap { border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+
+/* Links: a quiet line, blue when an upload is dragged over it, with a + to add a shot */
+.board-canvas .board-edge.is-drop { stroke: var(--accent); stroke-width: 3; }
+.board-edge-add {
+  position: absolute; pointer-events: all; display: grid; place-items: center;
+  width: 28px; height: 28px; padding: 0; border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg);
+  font-size: var(--text-md); line-height: 1; cursor: pointer;
+}
+
+/* Cards */
+.board-node {
+  width: 240px; display: grid; gap: var(--space-sm); padding: 12px;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius);
+  font-size: var(--text-sm); box-shadow: var(--shadow-sm);
+}
+.board-node.is-selected { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.board-node.is-loose { border-style: dashed; border-color: var(--line-strong); }
+.board-node-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.board-loose-tag { font-size: var(--text-xs); font-weight: 600; color: var(--muted); }
+.board-node-media {
+  display: block; width: 100%; height: 140px; object-fit: cover;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm);
+}
+.board-node-gone { margin: 0; padding: 10px; border-radius: var(--radius-sm); background: var(--rising-soft); color: var(--rising); }
+.board-node-footage { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.board-footage-badge {
+  font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: var(--radius-pill);
+  background: var(--early-soft); color: var(--early);
+}
+.board-node-body { display: grid; gap: var(--space-xs); min-width: 0; }
+.board-node-shot { margin: 0; font-size: var(--text-ms); overflow-wrap: anywhere; }
+.board-node-line { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.board-node-camera { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
+.board-node-camera li { padding: 2px 8px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--muted); font-size: var(--text-xs); }
+.board-node-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.board-icon { width: 30px; height: 30px; }
+.board-node-form, .board-node-place { display: grid; gap: var(--space-2xs); cursor: auto; }
+.board-node-form label, .board-node-place label { font-size: var(--text-xs); color: var(--muted); }
+.board-node-form input, .board-node-form textarea, .board-node-place select { width: 100%; font-size: var(--text-sm); }
+/* Camera picks inside a card: one per row so they fit the card's width. */
+.board-node-form .cam-edit { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2xs); margin-top: var(--space-2xs); }
+.board-node-form .cam-select { display: grid; gap: 2px; }
+.board-node-form .cam-select select, .board-node-form .cam-tip-input { width: 100%; font-size: var(--text-sm); color: var(--fg); }
+.board-node-form .board-node-actions, .board-node-place .board-node-actions { margin-top: var(--space-xs); }
+.board-handle { opacity: 0; pointer-events: none; }
+
+/* Panels on the canvas */
+.board-empty, .board-insert {
+  max-width: min(420px, calc(100% - 24px)); padding: 14px; background: var(--surface); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+}
+.board-empty { color: var(--muted); font-size: var(--text-ms); }
+.board-insert form { display: grid; gap: var(--space-xs); }
+.board-insert h2 { margin: 0; font-size: var(--text-md); }
+.board-insert label { font-size: var(--text-sm); color: var(--muted); }
+.board-insert textarea { width: 100%; }
+
+/* Side tools */
+.board-tools details { display: grid; gap: var(--space-lg); padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.board-tools summary { cursor: pointer; font-weight: 600; }
+.board-tools details[open] > * + * { margin-top: var(--space-lg); }
+.board-tool { display: grid; gap: var(--space-xs); }
+.board-tool label { font-weight: 600; font-size: var(--text-ms); }
+.board-tool textarea { width: 100%; }
+.board-tool .btn { justify-self: start; }
+.board-file { font-size: var(--text-sm); max-width: 100%; }
+.board-row { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.board-error { margin: 0; color: var(--no); font-size: var(--text-sm); }
+.board-status { margin: 0; min-height: 1.4em; font-size: var(--text-ms); }
+.board-note { color: var(--rising); }
+
+/* Phone: the canvas fills the width, the tools fold up above it */
+@media (max-width: 720px) {
+  .board-layout { grid-template-columns: minmax(0, 1fr); }
+  .board-tools { order: -1; }
+  .board-canvas { height: 68dvh; min-height: 360px; }
+  .board-minimap { display: none; }
+}
