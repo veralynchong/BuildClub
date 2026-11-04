@@ -14,6 +14,7 @@ import assist
 import canvas
 import generations
 import storyboard
+import workspaces
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, StringConstraints
@@ -26,7 +27,9 @@ Prompt = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, m
 
 
 class AgentRequest(BaseModel):
-    shotId: str
+    shotId: Optional[str] = None
+    promptNodeId: Optional[str] = None
+    canvasVersion: Optional[int] = None
 
 
 class AgentOut(BaseModel):
@@ -118,20 +121,34 @@ def error(status: int, message: str, detail: str = "") -> JSONResponse:
     return JSONResponse({"error": message, **({"detail": detail} if detail else {})}, status_code=status)
 
 
-def make_router(load: Callable[[str], object], budget: Callable[[str, float], Optional[JSONResponse]]) -> APIRouter:
+def make_router(load: Callable[[str], object], budget: Callable[[str, float], Optional[JSONResponse]], db=None) -> APIRouter:
     router = APIRouter()
 
     @router.post("/api/ideas/{idea_id}/agent/plan")
     def plan(idea_id: str, body: AgentRequest):
-        idea = next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
+        idea = workspaces.resolve(db, load, idea_id) if db else next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
         if idea is None:
             return error(404, "That plan doesn't exist.")
         # plans saved before shots had ids get them here, the same ids the canvas shows
-        shots = [s.model_dump() for s in canvas.shots_of(idea)]
-        shot = next((s for s in shots if s.get("id") == body.shotId), None)
+        independent = idea.get('kind') == 'workspace'
+        if independent:
+            with db() as conn:
+                version, doc = workspaces.graph(conn, idea_id)
+            if type(body.canvasVersion) is not int or version != body.canvasVersion:
+                return error(409, canvas.STALE)
+            prompt = next((n for n in doc['nodes'] if n['id'] == body.promptNodeId and n['type'] == 'prompt'), None)
+            if prompt is None:
+                return error(422, 'Send the node, the model and a prompt.')
+            text = prompt['data'].get('prompt', prompt['data'].get('text', ''))
+            if not generations.voice_text_ok(text) and (not isinstance(text, str) or not text.strip() or len(text) > generations.MAX_PROMPT):
+                return error(422, 'This model needs a prompt.')
+            shots, shot = [], {'line': text}
+        else:
+            shots = [s.model_dump() for s in canvas.shots_of(idea)]
+            shot = next((s for s in shots if s.get("id") == body.shotId), None)
         if shot is None:
             return error(404, "That shot isn't in this plan.")
-        if idea.get("status") != "approved":
+        if not workspaces.editable(idea):
             return error(409, "Approve the plan before building shots.")
         menu = generations.menu_models()
         if not storyboard.use_claude():
@@ -153,9 +170,9 @@ def make_router(load: Callable[[str], object], budget: Callable[[str, float], Op
             except Exception as e:
                 return error(502, "Couldn't plan this shot. Try again.", str(e))
             source, usd = "claude", AGENT_USD
-        return {"source": source, "shotId": body.shotId,
+        return {"source": source, **({'promptNodeId': body.promptNodeId, 'canvasVersion': version} if independent else {'shotId': body.shotId}),
                 "storyboard": {"prompt": out.storyboardPrompt, "model": out.storyboardModel},
                 "video": {"prompt": out.videoPrompt, "model": out.videoModel, "duration": out.duration},
                 "planUsd": usd}
 
-    return router
+    return workspaces.aliases(router, db) if db else router

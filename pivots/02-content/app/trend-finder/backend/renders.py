@@ -20,6 +20,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 import takes
+import workspaces
 from cutting import CutError
 
 # Job columns describe the latest run; the out_* columns describe the video on disk and are written only
@@ -148,7 +149,8 @@ def is_stale(conn, idea_id: str, shots: Optional[int] = None) -> bool:
         import editing
         project = conn.execute("SELECT doc FROM edit_projects WHERE idea_id = ?", (idea_id,)).fetchone()
         project = json.loads(project[0]) if project else editing.empty_project()
-        return editing.signature(conn, _media_dir().resolve(), {"id": idea_id}, project) != out_sig
+        return (workspaces.stale_project(conn, idea_id, project, workspaces.stored_load(conn)) or
+                editing.signature(conn, _media_dir().resolve(), {"id": idea_id}, project) != out_sig)
     music = music_row(conn, idea_id)
     # The speed is part of the fingerprint, but it is the one the video was made at, so it never differs.
     current = signature([t[0] for t in chosen_ids(conn, idea_id, out_shots)], out_speed, music[0] if music else None)
@@ -249,7 +251,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
     jobs = RenderJobs(db, media_dir)
 
     def find_idea(idea_id: str):
-        return next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
+        return workspaces.resolve(db, load, idea_id)
 
     def folder_of(idea_id: str) -> Optional[Path]:
         return cut_folder(media_dir().resolve(), idea_id)
@@ -270,7 +272,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             if size is not None and folder is not None and (folder / "final.mp4").is_file():
                 # The version changes with every new final.mp4, so a preview player reloads after a re-cut.
                 version = (folder / "final.mp4").stat().st_mtime_ns
-                out["output"] = {"url": f"/api/ideas/{idea_id}/cut/file?v={version}", "size": size,
+                out["output"] = {"url": f"/api/{'workspaces' if idea_id.startswith('ws_') else 'ideas'}/{idea_id}/cut/file?v={version}", "size": size,
                                  "durationSec": duration}
                 out["stale"] = is_stale(conn, idea_id, shots)
                 sent = review_row(conn, idea_id)
@@ -287,7 +289,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         found = find_idea(idea_id)
         if found is None:
             return error(404, "That plan doesn't exist.")
-        if found["status"] != "approved":
+        if not workspaces.editable(found):
             return error(409, NOT_APPROVED)
         return None
 
@@ -329,7 +331,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         found = find_idea(idea_id)
         if found is None:
             return error(404, "That plan doesn't exist.")
-        if found["status"] != "approved":
+        if not workspaces.editable(found):
             return error(409, NOT_APPROVED)
         with render_lock:
             conn = db()
@@ -466,6 +468,8 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             row = conn.execute("SELECT doc FROM edit_projects WHERE idea_id = ?", (idea_id,)).fetchone()
             project = json.loads(row[0]) if row else editing.empty_project()
             sources = {s["key"]: s for s in editing.list_sources(conn, media_dir(), idea_id)}
+            if workspaces.stale_project(conn, idea_id, project, load):
+                return error(409, EDIT_STALE)
         if not project["clips"]:
             return error(409, editing.EMPTY)
         if editing.missing_sources(project, sources):
@@ -486,7 +490,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
                     conn.rollback()
                     return error(409, BUSY)
                 current = find_idea(idea_id)
-                if current is None or current["status"] != "approved":
+                if not workspaces.editable(current):
                     conn.rollback()
                     return error(409, NOT_APPROVED)
                 conn.execute(
@@ -505,4 +509,4 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         jobs.submit(idea_id)
         return JSONResponse(state_of(idea_id), status_code=202)
 
-    return router
+    return workspaces.aliases(router, db)

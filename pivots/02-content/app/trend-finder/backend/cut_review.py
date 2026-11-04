@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 import renders
 import share
+import workspaces
 from models import CutDecideRequest
 
 
@@ -24,8 +25,8 @@ def not_waiting() -> JSONResponse:
 
 def waiting(conn, load, root: Path, client_id: str, idea_id: str):
     """(final.mp4, review row, idea) when the approver may see this cut, else None."""
-    idea = next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
-    if idea is None or idea["clientId"] != client_id or idea["status"] != "approved":
+    idea = workspaces.workspace(conn, idea_id) or next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
+    if idea is None or idea["clientId"] != client_id or not workspaces.editable(idea):
         return None
     folder = renders.cut_folder(root, idea_id)
     version = renders.final_version(folder)
@@ -46,14 +47,22 @@ def waiting_cuts(db, load, media_dir: Callable[[], Path], client_id: str, token:
     formats = {f.get("id"): f for f in library.get("formats", [])}
     found = []
     with db() as conn:
-        for idea in load("ideas") or []:
-            if idea["clientId"] != client_id or idea["status"] != "approved":
+        independent = []
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE name='workspaces'").fetchone():
+            independent = [workspaces.metadata(r) for r in conn.execute('SELECT id,client_id,title,created_at,updated_at FROM workspaces WHERE client_id=?', (client_id,))]
+        for idea in [*(load("ideas") or []), *independent]:
+            if idea["clientId"] != client_id or not workspaces.editable(idea):
                 continue
             hit = waiting(conn, load, root, client_id, idea["id"])
             if hit is None:
                 continue
             _, review, _ = hit
             duration = conn.execute("SELECT out_duration FROM renders WHERE idea_id = ?", (idea["id"],)).fetchone()
+            if idea.get('kind') == 'workspace':
+                found.append((review[2], {'workspace': {'id': idea['id'], 'title': idea['title']},
+                    'cut': {'url': f"/api/review/{token}/cuts/{idea['id']}/file?v={review[0]}",
+                            'durationSec': duration[0] if duration else None, 'version': str(review[0]), 'sentAt': review[2]}}))
+                continue
             video = videos.get(idea["videoId"])
             found.append((review[2], {
                 "idea": {k: v for k, v in idea.items() if k != "notes"},

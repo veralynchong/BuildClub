@@ -55,6 +55,7 @@ import recheck
 import generations
 import renders
 import agent
+import workspaces
 import shotlist
 import storyboard
 import cleaning
@@ -179,6 +180,9 @@ def needs_session(path: str) -> bool:
 
 @app.middleware("http")
 async def require_password(request: Request, call_next):
+    path = request.url.path
+    if path.startswith('/api/ideas/ws_'):
+        return JSONResponse({'error': "That plan doesn't exist."}, status_code=404)
     with contextlib.closing(db()) as conn:
         users = auth.has_users(conn)
         session = auth.session_user(conn, request.cookies.get(auth.COOKIE), time.time()) if users else None
@@ -765,7 +769,7 @@ def db() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
     migrate_medians(conn)
-    for statement in auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + editing.SCHEMA + generations.SCHEMA + renders.SCHEMA + recheck.SCHEMA:
+    for statement in workspaces.SCHEMA + auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + editing.SCHEMA + generations.SCHEMA + renders.SCHEMA + recheck.SCHEMA:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
@@ -928,7 +932,7 @@ def storyboard_refund(wallet: str, usd: float) -> None:
 
 app.include_router(storyboard.make_router(load, lambda: MEDIA_DIR, storyboard_budget, storyboard_refund))
 app.include_router(shotlist.make_router(storyboard_budget))
-app.include_router(agent.make_router(load, storyboard_budget))
+app.include_router(agent.make_router(load, storyboard_budget, db))
 app.include_router(renders.make_router(db, load, lambda: MEDIA_DIR))
 GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_video", "DAILY_GEN_VIDEO_USD"),
                "voice": ("gen_voice", "DAILY_GEN_VOICE_USD")}
@@ -962,6 +966,7 @@ gen_router = generations.make_router(db, load, lambda: MEDIA_DIR, gen_budget, ge
 gen_jobs = gen_router.jobs
 app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
+app.include_router(workspaces.make_router(db, load))
 app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR, gen_router))
 app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(kit.make_router(load, save, lambda: MEDIA_DIR))
