@@ -23,7 +23,7 @@ SCHEMA = (
 
 ROW_H = 480
 LAYOUT = {"ROW_H": ROW_H, "x": {"shot": 0, "storyboard": 360, "footage": 720}}
-NODE_TYPES = {"shot", "prompt", "storyboard", "video", "upload", "footage", "kit"}
+NODE_TYPES = {"shot", "prompt", "storyboard", "video", "upload", "footage", "kit", "voice", "editor"}
 ID_RE = re.compile(r"^[A-Za-z0-9_:-]{1,200}$")
 MAX_NODES, MAX_EDGES, MAX_BYTES = 500, 1000, 512 * 1024
 STALE = "The canvas changed somewhere else. Reload it."

@@ -24,6 +24,7 @@ from starlette.concurrency import run_in_threadpool
 
 import cutting
 import generations
+import workspaces
 import renders
 import takes
 from canvas import ID_RE
@@ -354,7 +355,7 @@ def plan_client(conn, idea_id: str) -> dict:
         row = conn.execute("SELECT value FROM store WHERE key = ?", (key,)).fetchone()
         return json.loads(row[0]) if row else []
 
-    idea = next((i for i in stored("ideas") if i.get("id") == idea_id), None)
+    idea = workspaces.workspace(conn, idea_id) or next((i for i in stored("ideas") if i.get("id") == idea_id), None)
     return next((c for c in stored("clients") if idea and c.get("id") == idea.get("clientId")), {})
 
 
@@ -552,6 +553,8 @@ def render_project(db, media_dir: Path, idea_id: str, work: Path, out: Path, ste
         project = json.loads(row[0]) if row else empty_project()
         sources = {s["key"]: s for s in list_sources(conn, media, idea_id)}
         idea = {"id": idea_id}
+        if workspaces.stale_project(conn, idea_id, project, workspaces.stored_load(conn)):
+            raise cutting.CutError(renders.EDIT_STALE)
         sig = signature(conn, media, idea, project)
         if not project["clips"]:
             raise cutting.CutError(EMPTY)
@@ -612,10 +615,10 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
     router = APIRouter()
 
     def gate(idea_id: str):
-        found = next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
+        found = workspaces.resolve(db, load, idea_id)
         if found is None:
             return error(404, "That plan doesn't exist.")
-        if found["status"] != "approved":
+        if not workspaces.editable(found):
             return error(409, renders.NOT_APPROVED)
         return None
 
@@ -650,6 +653,12 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             problem = check_project(body.get("project"), voice_ids(media_dir(), idea_id))
             if problem:
                 return error(422, problem)
+            if workspaces.workspace(conn, idea_id):
+                available = _source_files(conn, media_dir(), idea_id)
+                if any(source_key(c['source']) not in available for c in body['project']['clips']):
+                    return error(422, "A clip's video was deleted. Remove it from the timeline first.")
+                if body['project'].get('primaries'):
+                    return error(422, 'Send the version and the project.')
             conn.execute("INSERT OR REPLACE INTO edit_projects (idea_id, version, doc, updated_at) VALUES (?, ?, ?, ?)",
                          (idea_id, version + 1, json.dumps(body["project"]), int(time.time() * 1000)))
         return {"version": version + 1}
@@ -666,7 +675,7 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
     def voice_response(idea_id: str, vid: str, path: Path, duration: float) -> dict:
         """Transcribe the saved voice file (a sync step: the callers run it in the threadpool) and describe it.
         Without whisper.cpp the file is kept and `words` is null."""
-        out = {"id": vid, "url": f"/api/ideas/{quote(idea_id, safe='')}/edit/voice/{quote(vid, safe='')}/file", "duration": duration, "words": None}
+        out = {"id": vid, "url": f"/api/{'workspaces' if idea_id.startswith('ws_') else 'ideas'}/{quote(idea_id, safe='')}/edit/voice/{quote(vid, safe='')}/file", "duration": duration, "words": None}
         try:
             with tempfile.TemporaryDirectory() as work:
                 words = transcribe_voice(path, Path(work))
@@ -717,11 +726,41 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             return stored
         return voice_response(idea_id, stored[0], stored[1], info["duration"])
 
+    def voice_node(idea_id, node_id):
+        with db() as conn:
+            if workspaces.workspace(conn, idea_id) is None:
+                return None
+            _, doc = workspaces.graph(conn, idea_id)
+        if not any(n['id'] == node_id and (n['type'] == 'voice' or
+                   (n['type'] == 'upload' and workspaces.media(n) == 'audio')) for n in doc['nodes']):
+            return error(422, 'Send the node, the model and a prompt.')
+        return None
+
+    def attach_voice(idea_id, node_id, out, gen_id=None):
+        if not isinstance(out, dict):
+            return out
+        with db() as conn:
+            if workspaces.workspace(conn, idea_id) is None:
+                return out
+            if gen_id is None:
+                path = voice_file(media_dir(), idea_id, out['id'])
+                folder = generations.gen_folder(media_dir(), idea_id)
+                folder.mkdir(parents=True, exist_ok=True)
+                name = 'voice-' + out['id'] + path.suffix
+                shutil.copyfile(path, folder / name)
+                gen = generations.insert_done(conn, idea_id, node_id, 'voice', 'upload', file=name)
+                gen_id = gen['id']
+            conn.execute('INSERT INTO workspace_voices VALUES (?,?,?,?)', (idea_id, out['id'], node_id, gen_id))
+        return {**out, 'voiceId': out['id'], 'nodeId': node_id, 'genId': gen_id}
+
     @router.put("/api/ideas/{idea_id}/edit/voice")
-    async def put_voice(idea_id: str, request: Request, source: str = ""):
+    async def put_voice(idea_id: str, request: Request, source: str = "", nodeId: str = ""):
         refused = gate(idea_id)
         if refused:
             return refused
+        bad = voice_node(idea_id, nodeId)
+        if bad:
+            return bad
         if source not in ("recording", "upload"):
             return error(422, "Say whether this is a recording or an upload.")
         ext = VOICE_TYPES.get(request.headers.get("content-type", "").split(";")[0].strip().lower())
@@ -746,7 +785,8 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             if size > MAX_VOICE_BYTES:
                 part.unlink(missing_ok=True)
                 return error(413, VOICE_TOO_BIG)
-            return await run_in_threadpool(finish_upload, idea_id, part, ext)
+            out = await run_in_threadpool(finish_upload, idea_id, part, ext)
+            return attach_voice(idea_id, nodeId, out)
         except BaseException:
             part.unlink(missing_ok=True)
             raise
@@ -762,6 +802,22 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             return refused
         if not isinstance(body, dict):
             return error(422, "Send the text, the model and confirm.")
+        node_id = body.get('nodeId', generations.VOICE_NODE)
+        bad = voice_node(idea_id, node_id)
+        if bad:
+            return bad
+        stamp, version = None, None
+        with db() as conn:
+            if workspaces.workspace(conn, idea_id):
+                try:
+                    version, resolved, stamp = workspaces.inputs(conn, idea_id, node_id, load)
+                except ValueError as e:
+                    return error(422, str(e))
+                if type(body.get('canvasVersion')) is not int:
+                    return error(422, 'Send the version and the canvas.')
+                if body['canvasVersion'] != version:
+                    return error(409, 'The canvas changed somewhere else. Reload it.')
+                body = {**body, 'text': resolved['prompt'], 'model': resolved['model']}
         text, model_id = body.get("text"), body.get("model")
         model, _, bad = gens.check(idea_id, [], generations.VOICE_NODE, model_id, text, None, None, None, voice=True)
         if bad is not None:
@@ -770,14 +826,16 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         wallet = gens.remaining()["voice"]
         left = round(max(0.0, wallet["cap"] - wallet["spent"]), 4)
         if body.get("confirm") is not True:  # a quote: nothing is spent
-            return {"usd": usd, "remaining": left}
+            return {"usd": usd, "remaining": left, **({'canvasVersion': version, 'inputStamp': stamp} if stamp else {})}
+        if stamp and body.get('inputStamp') != stamp:
+            return error(409, 'The canvas changed somewhere else. Reload it.')
         blocked = gens.budget("voice", usd)  # spends the estimate; a failed job gives it back
         if blocked is not None:
             return blocked
         try:
             with db() as conn:
-                out = generations.enqueue(conn, idea_id, generations.VOICE_NODE, "voice", model["id"],
-                                          {"prompt": text}, usd)
+                out = generations.enqueue(conn, idea_id, node_id, "voice", model["id"],
+                                          {'prompt': text, **({'inputStamp': stamp, 'canvasVersion': version} if stamp else {})}, usd)
         except Exception:
             gens.refund("voice", usd)
             raise
@@ -785,7 +843,7 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         return JSONResponse(out, status_code=201)
 
     @router.post("/api/ideas/{idea_id}/edit/voice/from-gen/{gen_id}")
-    async def voice_from_gen(idea_id: str, gen_id: str):
+    async def voice_from_gen(idea_id: str, gen_id: str, request: Request, nodeId: str = ""):
         refused = gate(idea_id)
         if refused:
             return refused
@@ -794,13 +852,27 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
                                (gen_id, idea_id)).fetchone()
         if row is None or row[0] != "voice":
             return error(404, "That voiceover doesn't exist.")
+        try:
+            body = await request.json()
+        except ValueError:
+            body = {}
+        node_id = (body.get('nodeId') if isinstance(body, dict) else None) or nodeId
+        bad = voice_node(idea_id, node_id)
+        if bad:
+            return bad
+        with db() as conn:
+            if workspaces.workspace(conn, idea_id):
+                grow = conn.execute(f'SELECT {generations.COLUMNS} FROM generations WHERE id=? AND idea_id=?', (gen_id, idea_id)).fetchone()
+                if grow[2] != node_id or workspaces.generation_stale(conn, idea_id, generations.to_json(grow), load):
+                    return error(409, renders.EDIT_STALE)
         gen = generations.gen_folder(media_dir(), idea_id)
         source = gen / row[2] if gen is not None and row[1] == "done" and row[2] else None
         if source is None:
             return error(409, "That voiceover isn't ready yet.")
         if not source.is_file():
             return error(404, "That voiceover's file is gone.")
-        return await run_in_threadpool(import_generated, idea_id, source, gen_id)
+        out = await run_in_threadpool(import_generated, idea_id, source, gen_id)
+        return attach_voice(idea_id, node_id, out, gen_id)
 
     def import_generated(idea_id: str, source: Path, gen_id: str):
         folder = voice_folder(media_dir(), idea_id)
@@ -864,8 +936,13 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             info = _probe(path) if path else None
             if path is None or info is None:
                 continue
-            out.append({"id": vid, "url": f"/api/ideas/{quote(idea_id, safe='')}/edit/voice/{quote(vid, safe='')}/file", "duration": info["duration"],
+            out.append({"id": vid, "url": f"/api/{'workspaces' if idea_id.startswith('ws_') else 'ideas'}/{quote(idea_id, safe='')}/edit/voice/{quote(vid, safe='')}/file", "duration": info["duration"],
                         "words": voice_words(path)})
+        with db() as conn:
+            if workspaces.workspace(conn, idea_id):
+                mapped = {r[0]: r[1:] for r in conn.execute('SELECT voice_id,node_id,gen_id FROM workspace_voices WHERE idea_id=?', (idea_id,))}
+                out = [{**v, 'voiceId': v['id'], 'nodeId': mapped[v['id']][0], 'genId': mapped[v['id']][1]}
+                       for v in out if v['id'] in mapped]
         return {"voices": out}
 
     @router.get("/api/ideas/{idea_id}/edit/voice/{vid}/file")
@@ -896,4 +973,4 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
             path.with_name(f"{vid}.words.json").unlink(missing_ok=True)
         return {"ok": True}
 
-    return router
+    return workspaces.aliases(router, db)

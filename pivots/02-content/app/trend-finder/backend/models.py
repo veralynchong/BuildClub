@@ -7,6 +7,16 @@ from typing import Annotated, Literal, Optional
 from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 
+class WorkspaceMetadata(BaseModel):
+    """An independent canvas belongs to an existing client, without an idea or shot list."""
+    id: str
+    kind: Literal['workspace'] = 'workspace'
+    clientId: str
+    title: str
+    createdAt: int
+    updatedAt: int
+
+
 class SearchVideo(BaseModel):
     """One video in a search result, as trimmed from the Apify item."""
     id: str
@@ -489,10 +499,20 @@ class ReviewCutItem(BaseModel):
     cut: ReviewCut
 
 
+class ReviewWorkspace(BaseModel):
+    id: str
+    title: str
+
+
+class ReviewWorkspaceCutItem(BaseModel):
+    workspace: ReviewWorkspace
+    cut: ReviewCut
+
+
 class ReviewList(BaseModel):
     client: ReviewClient
     ideas: list[ReviewItem]
-    cuts: list[ReviewCutItem] = []
+    cuts: list[ReviewCutItem | ReviewWorkspaceCutItem] = []
 
 
 class DecideRequest(BaseModel):
