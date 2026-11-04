@@ -158,20 +158,30 @@ def graph(conn, rid):
     return (row[0], json.loads(row[1])) if row else (0, copy.deepcopy(EMPTY))
 
 
+def prompt_text(doc, node_id):
+    """The node's own prompt wins; an empty prompt inherits the text input, as in the editor."""
+    nodes = {n['id']: n for n in doc['nodes']}
+    def text(nid):
+        node = nodes[nid]
+        data = node['data']
+        own = (data.get('text') or data.get('prompt') or '') if node['type'] == 'prompt' else (data.get('prompt') or '')
+        if own.strip():
+            return own
+        upstream = next((e for e in doc['edges'] if e['target'] == nid and e['targetHandle'] == 'in:text'), None)
+        return text(upstream['source']) if upstream else ''
+    return text(node_id)
+
+
 def inputs(conn, rid, node_id, load):
     """Resolve effective inputs and a canonical stamp from the persisted graph, never caller values."""
     import generations
     version, doc = graph(conn, rid)
     nodes = {n['id']: n for n in doc['nodes']}
+    if not isinstance(node_id, str):
+        raise ValueError('That node cannot generate media.')
     target = nodes.get(node_id)
     if not target or target['type'] not in ('storyboard', 'video', 'voice'):
         raise ValueError('That node cannot generate media.')
-    def text(nid):
-        upstream = [e for e in doc['edges'] if e['target'] == nid and e['targetHandle'] == 'in:text']
-        if upstream:
-            return text(upstream[0]['source'])
-        data = nodes[nid]['data']
-        return data.get('prompt', data.get('text', ''))
     data = target['data']
     refs, start = [], None
     for edge in doc['edges']:
@@ -204,7 +214,7 @@ def inputs(conn, rid, node_id, load):
     duration = data.get('duration') if kind == 'video' else None
     if duration is None and kind == 'video':
         duration = (model.get('durations') or [4])[0]
-    resolved = {'prompt': text(node_id), 'model': model_id, 'startFrame': start, 'references': refs, 'duration': duration}
+    resolved = {'prompt': prompt_text(doc, node_id), 'model': model_id, 'startFrame': start, 'references': refs, 'duration': duration}
     client = next((c for c in load('clients') or [] if c['id'] == workspace(conn, rid)['clientId']), {})
     used = {r.get('itemId') for r in refs if r.get('source') == 'kit'}
     stamp_data = {**resolved, 'kit': [i for i in (client.get('kit') or {}).get('items') or [] if i['id'] in used]}

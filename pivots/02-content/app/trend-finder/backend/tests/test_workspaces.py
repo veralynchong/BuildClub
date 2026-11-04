@@ -324,3 +324,17 @@ def test_workspace_video_upload_is_generation_with_no_take(client, monkeypatch):
     with server.db() as conn:
         assert conn.execute('SELECT COUNT(*) FROM takes').fetchone()[0] == 0
     assert client.get(out.json()['url']).content == b'local video'
+
+
+def test_inline_prompt_precedence_and_prompt_chain(client):
+    staff(client)
+    base, doc = setup_graph(client, [node('p', 'prompt', text='Upstream text'), node('q', 'prompt', text='Local text'),
+        node('s', 'storyboard', model='mock-image', prompt='Image override')], [connect('p', 'q'), connect('q', 's')])
+    quote = client.post(base + '/gen', json={'nodeId': 's', 'canvasVersion': 2}).json()
+    assert quote['inputs']['prompt'] == 'Image override'
+    doc['nodes'][2]['data']['prompt'] = ''
+    assert client.put(base, json={'version': 2, 'doc': doc}).status_code == 200
+    quote = client.post(base + '/gen', json={'nodeId': 's', 'canvasVersion': 3}).json()
+    assert quote['inputs']['prompt'] == 'Local text'
+    assert client.post(base + '/gen', json={'nodeId': [], 'canvasVersion': 3}).status_code == 422
+    assert client.post(base + '/agent/plan', json={'promptNodeId': 'p', 'canvasVersion': True}).status_code == 422
