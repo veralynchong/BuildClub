@@ -2,8 +2,8 @@ import type { Take } from '../takes.ts'
 import type { GenRef } from './kit.ts'
 
 // Shapes of the canvas document (backend/canvas.py) and generation rows (backend/generations.py to_json).
-export type Media = 'text' | 'image' | 'video' | 'kit'
-export type NodeKind = 'shot' | 'prompt' | 'storyboard' | 'video' | 'upload' | 'footage' | 'kit'
+export type Media = 'text' | 'image' | 'video' | 'audio' | 'kit'
+export type NodeKind = 'shot' | 'prompt' | 'storyboard' | 'video' | 'upload' | 'footage' | 'kit' | 'voice' | 'editor'
 export type InputNeed = 'required' | 'optional' | 'none'
 
 export interface NodeData {
@@ -15,7 +15,8 @@ export interface NodeData {
   selected?: string | null // the chosen version (a generation id)
   awaiting?: string // the generation being waited for; the chosen version stays until it finishes
   stale?: boolean // an input changed after the last version was made
-  media?: 'image' | 'video' // upload
+  media?: 'image' | 'video' | 'audio' // upload
+  voiceId?: string
   takeId?: string // upload of a video
   duration?: number
   kitItems?: string[] // kit node: the kit item ids this video uses
@@ -56,9 +57,10 @@ export interface Generation {
   id: string
   ideaId: string
   nodeId: string
-  kind: 'image' | 'video'
+  kind: 'image' | 'video' | 'voice'
   model: string // a model id, or 'upload' / 'imported'
   inputs: {
+    inputStamp?: string
     prompt?: string
     startFrame?: string | null
     references?: StoredRef[]
@@ -95,6 +97,7 @@ export interface GenModel {
 }
 
 export interface CanvasState {
+  workspace?: import('./resource.ts').Workspace
   version: number
   doc: CanvasDoc
   generations: Generation[]
@@ -105,6 +108,7 @@ export interface CanvasState {
 export interface Budget {
   image: { spent: number; cap: number }
   video: { spent: number; cap: number }
+  voice: { spent: number; cap: number }
 }
 
 export interface ChainBody {

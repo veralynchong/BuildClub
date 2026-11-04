@@ -1,3 +1,4 @@
+import { type ResourceInput } from '../canvas/resource.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getProject, putProject, StaleProject } from './api.ts'
 import type { EditProject } from './types.ts'
@@ -7,6 +8,9 @@ export type EditSave = 'idle' | 'saving' | 'saved' | 'failed'
 export const SAVE_DELAY_MS = 800
 
 export interface EditHook {
+  writing?: boolean
+  committedProject?: EditProject | null
+  persist?: (next: EditProject) => Promise<boolean>
   project: EditProject | null
   loadError: string | null
   save: EditSave
@@ -19,7 +23,10 @@ export interface EditHook {
 
 // The edit project of a plan, loaded once and saved 800 ms after the last change. It lives above the drawer so the
 // canvas nodes (and the export button) can read and change it while the drawer is closed.
-export function useEditProject(ideaId: string, readOnly: boolean): EditHook {
+export function useEditProject(ideaId: ResourceInput, readOnly: boolean): EditHook {
+  const [writing, setWriting] = useState(false)
+  const persisting = useRef(false)
+  const [committedProject, setCommittedProject] = useState<EditProject | null>(null)
   const [project, setProject] = useState<EditProject | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [save, setSave] = useState<EditSave>('idle')
@@ -53,6 +60,7 @@ export function useEditProject(ideaId: string, readOnly: boolean): EditHook {
       if (mounted.current) setSave('saving')
       try {
         version.current = await putProject(ideaId, version.current, snap)
+        if (mounted.current) setCommittedProject(snap)
         if (latest.current === snap) dirty.current = false
         if (mounted.current) setSave('saved')
       } catch (e) {
@@ -85,6 +93,7 @@ export function useEditProject(ideaId: string, readOnly: boolean): EditHook {
         dirty.current = fresh
         version.current = r.version
         setProject(loaded)
+        setCommittedProject(r.project)
         setLoadError(null)
         setStale(false)
         setSave('idle')
@@ -100,7 +109,7 @@ export function useEditProject(ideaId: string, readOnly: boolean): EditHook {
 
   const update = useCallback(
     (next: EditProject) => {
-      if (readOnlyRef.current || blocked.current || next === latest.current) return
+      if (readOnlyRef.current || blocked.current || persisting.current || next === latest.current) return
       latest.current = next
       dirty.current = true
       setProject(next)
@@ -137,5 +146,26 @@ export function useEditProject(ideaId: string, readOnly: boolean): EditHook {
 
   const current = useCallback(() => latest.current, [])
 
-  return { project, loadError, save, stale, update, flush, current, reload }
+  const persist = async (next: EditProject): Promise<boolean> => {
+    if (persisting.current || readOnlyRef.current || blocked.current) return false
+    const before = latest.current
+    persisting.current = true
+    setWriting(true)
+    try {
+      if ((await flush()) !== 'saved' || latest.current !== before) return false
+      setSave('saving')
+      version.current = await putProject(ideaId, version.current, next)
+      latest.current = next
+      dirty.current = false
+      setProject(next)
+      setCommittedProject(next)
+      setSave('saved')
+      return true
+    } catch (e) {
+      if (e instanceof StaleProject) { blocked.current = true; setStale(true) }
+      setSave('failed')
+      return false
+    } finally { persisting.current = false; setWriting(false) }
+  }
+  return { writing, committedProject, persist, project, loadError, save, stale, update, flush, current, reload }
 }

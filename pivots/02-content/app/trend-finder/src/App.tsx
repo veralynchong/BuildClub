@@ -71,7 +71,7 @@ import { AppContext } from './lib/appContext'
 import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
 import { CanvasPick } from './components/CanvasPick'
-import { approvedPlans } from './lib/canvasPick'
+import type { CanvasContext as CanvasResource, Workspace as CanvasWorkspace } from './lib/canvas/resource'
 import { readFullscreen, writeFullscreen } from './lib/canvas/shell'
 import { planName } from './components/plans/moves'
 import { AddClientScreen } from './components/AddClientScreen'
@@ -173,6 +173,12 @@ export default function App() {
   const setFull = (on: boolean) => {
     setCanvasFull(on)
     writeFullscreen(on)
+  }
+  const [canvasContext, setCanvasContext] = useState<CanvasResource | null>(null)
+  const openWorkspace = (workspace: CanvasWorkspace) => {
+    setCanvasContext({ resource: { kind: 'workspace', id: workspace.id }, clientId: workspace.clientId, title: workspace.title, readOnly: false, shots: [] })
+    setCanvasEditor(false)
+    setView('canvas')
   }
   const [canvasEditor, setCanvasEditor] = useState(false) // the canvas opens with the editor showing
   // The screen a plan was opened from, so Back returns there.
@@ -1074,6 +1080,8 @@ export default function App() {
   // The canvas needs the plan's shots saved with ids on the server; a plan that never edited its shots has none yet.
   const openCanvas = (idea: SavedIdea, formatShots: Shot[], editor = false) => {
     if (!idea.shots) setIdeas((prev) => prev.map((i) => (i.id === idea.id ? { ...i, shots: fillShotIds(formatShots) } : i)))
+    const v = videoById.get(idea.videoId)
+    setCanvasContext({ resource: { kind: 'legacy-plan', id: idea.id }, clientId: idea.clientId, title: v ? planName(v, formatById.get(v.formatId)) : idea.id, readOnly: idea.status !== 'approved', shots: idea.shots ?? fillShotIds(formatShots) })
     setCanvasEditor(editor)
     setView('canvas')
   }
@@ -1082,20 +1090,20 @@ export default function App() {
   const openPlanCanvas = (ideaId: string) => {
     const idea = ideas.find((i) => i.id === ideaId)
     const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
-    if (!idea || !format) return openPlan(ideaId)
+    if (!idea) return
     setPlanFrom(view)
     setPlanIdeaId(ideaId)
-    openCanvas(idea, format.shotList, false)
+    openCanvas(idea, idea.shots ?? format?.shotList ?? [], false)
   }
 
   // The Plans board's "Make the video": the plan's canvas, with the editor already open.
   const makeVideo = (ideaId: string) => {
     const idea = ideas.find((i) => i.id === ideaId)
     const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
-    if (!idea || !format) return openPlan(ideaId)
+    if (!idea) return
     setPlanFrom(view)
     setPlanIdeaId(ideaId)
-    openCanvas(idea, format.shotList, true)
+    openCanvas(idea, idea.shots ?? format?.shotList ?? [], true)
   }
 
   // The planning board for the plan that is open; its Back returns to the plan.
@@ -1356,8 +1364,7 @@ export default function App() {
   const navTo = (v: View) => {
     if (v === 'canvas') {
       // One approved plan opens its canvas straight away; otherwise pick one (or see why there is none).
-      const plans = approvedPlans(shownIdeas, client.id)
-      return plans.length === 1 ? openPlanCanvas(plans[0].id) : setView('canvasPick')
+      return setView('canvasPick')
     }
     if (v === 'search' && lastSearch && shownSearch === `${client.id}|${lastSearch}`) return setView('results')
     setView(v)
@@ -1733,26 +1740,23 @@ export default function App() {
 
           {inClient && view === 'canvasPick' && (
             <CanvasPick
+              clientId={client.id}
               clientName={client.name}
-              plans={approvedPlans(shownIdeas, client.id)}
+              plans={shownIdeas.filter((i) => i.clientId === client.id)}
               videoById={videoById}
               formatById={formatById}
               onPick={openPlanCanvas}
-              onGoPlans={() => setView('shortlist')}
+              onWorkspace={openWorkspace}
             />
           )}
 
-          {inClient && view === 'canvas' && planIdea && planVideo && planFormat && planClient && (
+          {inClient && view === 'canvas' && canvasContext && (
             <Suspense fallback={<p className="muted">{t('canvas.loading')}</p>}>
               <CanvasScreen
-                idea={planIdea}
-                shots={planIdea.shots ?? planFormat.shotList}
-                onChange={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
-                onBack={() => setView('plan')}
-                backLabel={t('shell.back.plan')}
+                context={canvasContext}
+                onBack={() => setView('canvasPick')}
                 openEditor={canvasEditor}
-                title={planName(planVideo, planFormat)}
-                clientName={planClient.name}
+                clientName={clients.find((c) => c.id === canvasContext.clientId)?.name ?? client.name}
                 fullscreen={canvasFull}
                 onFullscreen={setFull}
               />

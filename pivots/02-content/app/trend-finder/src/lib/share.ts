@@ -28,12 +28,18 @@ export interface ReviewItem {
 }
 
 // A finished video waiting for the approver. `version` is a decimal string: the file's mtime in ns exceeds 2^53.
-export interface ReviewCutItem {
+export interface LegacyReviewCutItem {
   idea: Omit<SavedIdea, 'notes'>
   video?: Video
   format?: Format
   cut: { url: string; durationSec: number; version: string; sentAt: number }
 }
+
+export interface WorkspaceReviewCutItem {
+  workspace: { id: string; title: string }
+  cut: LegacyReviewCutItem['cut']
+}
+export type ReviewCutItem = LegacyReviewCutItem | WorkspaceReviewCutItem
 
 export interface Review {
   client: { name: string }

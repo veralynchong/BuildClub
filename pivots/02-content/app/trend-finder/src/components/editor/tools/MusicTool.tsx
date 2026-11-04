@@ -1,3 +1,4 @@
+import { type ResourceInput } from '../../../lib/canvas/resource.ts'
 import { useState } from 'react'
 import { t } from '../../../lib/i18n'
 import { checkMusic, deleteMusic, putMusic, type CutState } from '../../../lib/cut'
@@ -9,7 +10,7 @@ const DEFAULT_VOLUME = 0.5
 export type MusicFile = CutState['music']
 
 interface Props {
-  ideaId: string
+  ideaId: ResourceInput
   project: EditProject
   file: MusicFile | undefined // undefined while it is still being looked up
   onFile: (file: MusicFile) => void

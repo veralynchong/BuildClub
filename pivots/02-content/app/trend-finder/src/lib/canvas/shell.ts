@@ -60,7 +60,7 @@ export function etaOf(
 export interface QueueItem {
   nodeId: string
   genId: string
-  kind: 'image' | 'video'
+  kind: 'image' | 'video' | 'voice'
   shotNumber: number | null
   elapsed: number
   left: number | null

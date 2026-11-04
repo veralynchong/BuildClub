@@ -134,7 +134,7 @@ export function SharedReviewPage({ token }: { token: string }) {
             <div className="review-stack">
               {review.cuts.map((item) => (
                 <SharedCutCard
-                  key={`${item.idea.id}:${item.cut.version}`}
+                  key={`${'workspace' in item ? item.workspace.id : item.idea.id}:${item.cut.version}`}
                   item={item}
                   token={token}
                   onDecided={decided}
@@ -294,8 +294,9 @@ interface CutCardProps {
 
 // A finished video waiting for the approver. It is played here and cannot be downloaded from the page.
 function SharedCutCard({ item, token, onDecided, onAlreadyReviewed, onReplaced, onClosed }: CutCardProps) {
-  const { idea, cut } = item
-  const title = item.format?.name ?? item.video?.hook ?? 'Plan'
+  const { cut } = item
+  const id = 'workspace' in item ? item.workspace.id : item.idea.id
+  const title = 'workspace' in item ? item.workspace.title : item.format?.name ?? item.video?.hook ?? 'Plan'
   const [back, setBack] = useState(false)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -306,7 +307,7 @@ function SharedCutCard({ item, token, onDecided, onAlreadyReviewed, onReplaced, 
     if (busy) return
     setBusy(true)
     setError('')
-    decideCut(token, idea.id, approved, cut.version, approved ? undefined : text.trim())
+    decideCut(token, id, approved, cut.version, approved ? undefined : text.trim())
       .then(() => onDecided(`${approved ? 'Approved' : 'Sent back'} the video: ${title}`, approved ? undefined : text.trim() || undefined))
       .catch((e: Error) => {
         if (e instanceof LinkClosed) return onClosed()
@@ -318,11 +319,11 @@ function SharedCutCard({ item, token, onDecided, onAlreadyReviewed, onReplaced, 
   }
 
   return (
-    <article className="review-card shared-card shared-cut" data-idea={idea.id} data-cut aria-label={`Video for ${title}`}>
+    <article className="review-card shared-card shared-cut" data-idea={id} data-cut aria-label={`Video for ${title}`}>
       <div className="review-ref shared-ref">
         <div>
           <strong>{title}</strong>
-          <span className="small muted">Video for this plan · {formatDuration(cut.durationSec)}</span>
+          <span className="small muted">{'workspace' in item ? 'Canvas video' : 'Video for this plan'} · {formatDuration(cut.durationSec)}</span>
         </div>
       </div>
       <video className="shared-cut-video" controls playsInline preload="metadata" src={cut.url} />

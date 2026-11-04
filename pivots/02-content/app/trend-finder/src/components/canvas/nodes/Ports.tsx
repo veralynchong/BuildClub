@@ -4,7 +4,7 @@ import { outMedia, PORTS } from '../../../lib/canvas/ports'
 import type { CanvasNode } from '../../../lib/canvas/types'
 import { useCanvas } from './ctx'
 
-const PORT_LABEL = { 'in:text': 'canvas.port.text', 'in:start': 'canvas.edge.start', 'in:ref': 'canvas.edge.ref', 'in:kit': 'canvas.port.kit' } as const
+const PORT_LABEL = { 'in:clips': 'canvas.port.clips', 'in:audio': 'canvas.port.audio', 'in:text': 'canvas.port.text', 'in:start': 'canvas.edge.start', 'in:ref': 'canvas.edge.ref', 'in:kit': 'canvas.port.kit' } as const
 
 // Inputs down the left edge, the one output on the right: small dots whose border colour says what they carry. The
 // name shows on hover (CSS, from data-label). While a line is dragged, the inputs it could end on light up.
