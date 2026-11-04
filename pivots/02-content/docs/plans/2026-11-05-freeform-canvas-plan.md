@@ -51,3 +51,19 @@
 - token review 從 workspace 的 client_id 和 title 解析，不依賴 ideas/library；不能讓其他客戶 token 看見 workspace 影片。保留失效連結、舊成片版本、退回後重匯出與並發判斷。
 
 T3 backend writer 唯一擁有 backend/（含新增 workspaces.py 與 backend tests）；T4 frontend writer 唯一擁有 src/、unit/ 及 UI 樣式，不改 backend/、package manifests、root docs 或 e2e/。Lead 擁有 docs、e2e、整合與最終驗證。兩 writer 自同一已固定契約 commit 分出獨立工作區，依契約平行實作；接口變更先通知 lead，不能各自猜測。
+
+### 串接細節與安全邊界（T1 第二部分）
+
+ResourceRef 型別 `{kind:'workspace'|'legacy-plan',id:string}`；Canvas context 另外持有 clientId/title/readOnly/shots（workspace shots=[]），不可建立 fake SavedIdea 滿足 props。apiBase 顯式決定 /workspaces 或 /ideas；既有計畫從同一個新版入口可開啟，不保留另一套公開舊 Canvas UI。
+
+新 workspace 路由必須即使沒有本機 users 也拒絕未登入；沿用 auth.session_user 的明確 dependency，不放寬舊 bootstrap 行為，不將 workspace 加 PUBLIC_API。不要讓 /api/ideas/ws_id 成為繞過新 session gate 的入口。內部 staff 帳戶依現有全機權限，不聲稱已新增多租戶隔離。
+
+editor node 使用 `n_editor`，最多一個，只由使用者新增；空圖不隱式建立。EditProject 是 clips/voiceover 的唯一真相：video→editor 的 `in:clips`、audio→editor 的 `in:audio` 是 derived edges，不存 doc.edges；連線成功先 PUT edit CAS，再畫線；刪線先移除 project 中對應來源再保存。後端拒直接持久化 editor-input edges（code editor_edges_derived）。workspace useForSource 重用通用 insertClip，不做 shot/primaries/oneClipPerShot。圖片先生成影片才入剪輯器，不提供 image→editor 假相容連線。
+
+圖的常規 ports：prompt.in:text←text；storyboard.in:text←text、in:ref←image、in:kit←kit；video.in:text←text、in:start←image、in:ref←image；voice.in:text←text；upload/kit 無input；out sourceHandle 固定 out。單值 port 至多一條、ref 依 model.maxRefs。backend 與 frontend 同時拒絕錯 handle/media、重複、self/cycle、模型不支援 input；workspace 嚴格驗證不破壞 legacy 舊圖。
+
+生成 inputStamp 為後端對有效 prompt、上游 selected generation/reference、model/duration/kit 等輸入的 canonical SHA256（不含座標/viewport/結果本身）；寫入 generation.inputs。workspace GET 純讀派生 stale，不能相信客端 stale:false；上游改動或運算期間改動不得被 done callback 洗掉。export/send/public review 也由後端檢查來源是否 stale。upload 不受生成stamp限制。舊 generation 無stamp只走legacy原規則，不整批作廢。
+
+voice 保留後端 kind='voice'，畫布媒體='audio'。TTS／upload／from-gen 沿原 editor API 與 body 格式加可選 nodeId，workspace 必須指向合法 voice/upload node，回傳 voiceId 再由連線加入 VoiceSeg；不是上傳就自動放入時間軸。voice file 及 generation/take source 全部驗證同scope，不能跨workspace引用。
+
+client_brand/shot_lines/signature 透過真scope找client，workspace無shot lines；沿既有音訊word timings／手動字幕與brand。review cuts DTO 用 union：舊 `{idea,video,format,cut}` 保留，新 `{workspace:{id,title},cut}` 不回 prompts/doc/private notes。SharedReviewPage 明確分支。token/client/version/active/stale/reject理由/並發保護完整保留。
