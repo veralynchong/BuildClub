@@ -1,0 +1,25 @@
+// Deterministic checks of the local-only runner, not the product journey.
+const assert = require('node:assert/strict')
+const net = require('node:net')
+const fs = require('node:fs')
+const path = require('node:path')
+const { execFileSync } = require('node:child_process')
+const denied = options => new Promise((resolve, reject) => {
+  const socket = net.createConnection(options)
+  socket.once('connect', () => { socket.destroy(); reject(new Error('unexpected connection allowed')) })
+  socket.once('error', error => { socket.destroy(); try { assert.equal(error.code, 'EPERM'); resolve() } catch(e) { reject(e) } })
+  socket.setTimeout(2000, () => { socket.destroy(); reject(new Error('connection was not denied immediately')) })
+})
+;(async () => {
+  await denied({host:'127.0.0.1',port:8871})
+  console.log('PASS other-session loopback port denied')
+  await denied({path:process.env.FREEFORM_PROXY_SOCKET})
+  console.log('PASS Unix proxy socket denied')
+  assert.throws(() => fs.writeFileSync(path.resolve('.remotion-bundle/freeform-isolation-probe'), 'forbidden', {flag:'wx'}), {code:'EPERM'})
+  console.log('PASS original render cache is read-only')
+  const app = process.env.REMOTION_APP_DIR
+  assert.ok(app.startsWith(process.env.FREEFORM_WORK_DIR + path.sep))
+  const result = execFileSync(process.execPath,[path.join(app,'render/smoke.mjs')],{cwd:app,encoding:'utf8',timeout:120000})
+  process.stdout.write(result)
+  console.log('PASS real local render with temporary app/cache and fixed owned ports')
+})().catch(error => { console.error(error); process.exitCode = 1 })

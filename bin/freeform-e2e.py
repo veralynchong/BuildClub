@@ -11,6 +11,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -20,6 +21,8 @@ APP = ROOT / "pivots/02-content/app/trend-finder"
 PYTHON = APP / "backend/.venv/bin/python"
 BACKEND_PORT = 8872
 RENDER_PORT = 8892
+MEDIA_PORT = 8893
+DEBUG_PORT = 8894
 PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 DEFAULT_PW = Path("/Users/tommy/.hermes/hermes-agent/node_modules/playwright-core")
 
@@ -40,13 +43,11 @@ def policy(work, evidence):
     home = Path(pwd.getpwuid(os.getuid()).pw_dir)
     sensitive = " ".join(f"(subpath {json.dumps(str(home / p))})"
                          for p in (".ssh", ".config", ".claude", ".codex"))
+    allowed = "\n".join(f'(allow network-outbound (remote ip "localhost:{port}"))\n(allow network-inbound (local ip "localhost:{port}"))\n(allow network-bind (local ip "localhost:{port}"))' for port in (BACKEND_PORT, RENDER_PORT, MEDIA_PORT, DEBUG_PORT))
     return f'''(version 1)
 (allow default)
 (deny network*)
-(allow network-outbound (remote ip "localhost:*"))
-(allow network-inbound (local ip "localhost:*"))
-(allow network-bind (local ip "localhost:*"))
-(allow network* (local unix-socket) (remote unix-socket))
+{allowed}
 (deny file-read-data (regex #"(^|/)\\.env($|[./])" #"(^|/)(auth\\.json|api-keys\\.fish)$"))
 (deny file-read-data {sensitive})
 (deny appleevent-send)
@@ -54,7 +55,6 @@ def policy(work, evidence):
 (deny file-write*)
 (allow file-write* (subpath {json.dumps(str(work))})
                   (subpath {json.dumps(str(evidence))})
-                  (subpath {json.dumps(str(APP / '.remotion-bundle'))})
                   (literal "/dev/null"))
 '''
 
@@ -62,18 +62,20 @@ def policy(work, evidence):
 def clean_environment(work, evidence, pw):
     return {"PATH": PATH, "HOME": str(work), "TMPDIR": str(work),
             "XDG_CACHE_HOME": str(work / "cache"), "PYTHONDONTWRITEBYTECODE": "1",
-            "BUILDCLUB_OFFLINE_VERIFY": "1", "REMOTION_APP_DIR": str(APP),
-            "REMOTION_PORT": str(RENDER_PORT), "MOCK_GEN_DELAY_S": "0.05",
+            "BUILDCLUB_OFFLINE_VERIFY": "1", "REMOTION_APP_DIR": str(work / "app"),
+            "REMOTION_PORT": str(RENDER_PORT), "REMOTION_MEDIA_PORT": str(MEDIA_PORT),
+            "REMOTION_BROWSER_EXECUTABLE": str(work / "render-browser"), "MOCK_GEN_DELAY_S": "0.05",
             "DAILY_APIFY_USD": "0", "DAILY_CLAUDE_USD": "0", "DAILY_JEV_USD": "0",
             "DAILY_GEN_IMAGE_USD": "0", "DAILY_GEN_VIDEO_USD": "0", "DAILY_GEN_VOICE_USD": "0",
             "DAILY_SCRAPECREATORS_CREDITS": "0", "LC_ALL": "en_US.UTF-8",
             "TZ": "Australia/Sydney", "PW_CORE": str(pw),
             "BASE": f"http://127.0.0.1:{BACKEND_PORT}",
-            "FREEFORM_EVIDENCE_DIR": str(evidence), "FREEFORM_WORK_DIR": str(work)}
+            "FREEFORM_EVIDENCE_DIR": str(evidence), "FREEFORM_WORK_DIR": str(work),
+            "FREEFORM_PROXY_SOCKET": str(work / "forbidden-proxy.sock")}
 
 
 def check_ports():
-    for port in (BACKEND_PORT, RENDER_PORT):
+    for port in (BACKEND_PORT, RENDER_PORT, MEDIA_PORT, DEBUG_PORT):
         with socket.socket() as sock:
             try:
                 sock.bind(("127.0.0.1", port))
@@ -89,6 +91,20 @@ def inside(args):
         ".venv", ".env*", "auth.json", "api-keys.fish", "data.db*", "__pycache__",
         "cache", "jobs", "channels", "media", "*.log"))
     shutil.copytree(APP / "dist", work / "dist")
+    render_app = work / "app"
+    render_app.mkdir()
+    for name in ("render", "src", "public"):
+        shutil.copytree(APP / name, render_app / name)
+    for name in ("package.json", "package-lock.json", "tsconfig.json"):
+        if (APP / name).is_file():
+            shutil.copy2(APP / name, render_app / name)
+    (render_app / "node_modules").symlink_to((APP / "node_modules").resolve(), target_is_directory=True)
+    browser = next(p for p in (APP / "node_modules/.remotion/chrome-headless-shell").glob("**/chrome-headless-shell") if p.is_file()).resolve()
+    wrapper = work / "render-browser"
+    wrapper.write_text("#!" + sys.executable + "\nimport os,sys\n" +
+                       "args=[arg.replace('--remote-debugging-port=0','--remote-debugging-port=" + str(DEBUG_PORT) + "') for arg in sys.argv[1:]]\n" +
+                       "os.execv(" + repr(str(browser)) + ",[" + repr(str(browser)) + "]+args)\n")
+    wrapper.chmod(0o700)
     user = subprocess.run([str(PYTHON), str(work / "backend/server.py"), "add-user",
                            "test@example.com", "E2E Tester", "E2E Agency", "--password-stdin"],
                           input="pw-for-e2e\n", text=True, cwd=work, env=env, capture_output=True)
@@ -123,15 +139,83 @@ def inside(args):
                 server.wait(timeout=5)
 
 
+
+class OwnedTree:
+    """Track descendants outside the sandbox, including renderer/Chrome session leaders."""
+    def __init__(self, root):
+        self.root = root
+        self.owned = {}
+        self.lock = threading.Lock()
+        self.stop = threading.Event()
+        self.capture()
+        self.thread = threading.Thread(target=self.watch, daemon=True)
+        self.thread.start()
+
+    @staticmethod
+    def snapshot():
+        result = subprocess.run(["/bin/ps", "-axo", "pid=,ppid=,lstart="],
+                                capture_output=True, text=True, check=True)
+        found = {}
+        for line in result.stdout.splitlines():
+            parts = line.split(None, 2)
+            if len(parts) == 3:
+                found[int(parts[0])] = (int(parts[1]), parts[2])
+        return found
+
+    def capture(self):
+        current = self.snapshot()
+        with self.lock:
+            if not self.owned and self.root in current:
+                self.owned[self.root] = current[self.root][1]
+            known = {pid for pid, stamp in self.owned.items()
+                     if pid in current and current[pid][1] == stamp}
+            changed = True
+            while changed:
+                changed = False
+                for pid, (parent, stamp) in current.items():
+                    if parent in known and pid not in known:
+                        self.owned[pid] = stamp
+                        known.add(pid)
+                        changed = True
+
+    def watch(self):
+        while not self.stop.wait(0.05):
+            self.capture()
+
+    def signal_owned(self, sig):
+        self.capture()
+        current = self.snapshot()
+        with self.lock:
+            targets = list(self.owned.items())
+        for pid, stamp in targets:
+            if pid in current and current[pid][1] == stamp:
+                try:
+                    os.kill(pid, sig)
+                except ProcessLookupError:
+                    pass
+
+    def close(self):
+        try:
+            self.signal_owned(signal.SIGTERM)
+            time.sleep(0.5)
+            self.signal_owned(signal.SIGKILL)
+        finally:
+            self.stop.set()
+            self.thread.join(timeout=5)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check-tools", action="store_true")
+    parser.add_argument("--timeout", type=float, default=900)
     parser.add_argument("--pw-core", type=Path, default=DEFAULT_PW)
     parser.add_argument("--script", type=Path, default=APP / "e2e/freeform.cjs")
     parser.add_argument("--evidence", type=Path)
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--work", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if not 0 < args.timeout <= 900:
+        parser.error("--timeout must be between 0 and 900 seconds")
     args.pw_core = args.pw_core.resolve()
     args.script = args.script.resolve()
     tools(args.pw_core)
@@ -153,19 +237,21 @@ def main():
         command = ["/usr/bin/sandbox-exec", "-f", str(profile), sys.executable, str(Path(__file__).resolve()),
                    "--inside", "--work", str(work), "--evidence", str(evidence),
                    "--pw-core", str(args.pw_core), "--script", str(args.script)]
+        proxy = socket.socket(socket.AF_UNIX)
+        proxy.bind(str(work / "forbidden-proxy.sock"))
+        proxy.listen(1)
         proc = subprocess.Popen(command, cwd=ROOT, env=env, start_new_session=True)
+        tree = OwnedTree(proc.pid)
         try:
-            code = proc.wait(timeout=900)
+            code = proc.wait(timeout=args.timeout)
         except subprocess.TimeoutExpired:
             code = 124
-            print("FAIL local E2E exceeded 900 seconds", file=sys.stderr)
+            print(f"FAIL local E2E exceeded {args.timeout}s", file=sys.stderr)
         finally:
-            # This group belongs solely to this check, never another browser or server.
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            tree.close()
             proc.wait(timeout=10)
+            proxy.close()
+            (evidence / "owned-processes.json").write_text(json.dumps(tree.owned, indent=2))
         print(f"Evidence: {evidence}")
         return code
 

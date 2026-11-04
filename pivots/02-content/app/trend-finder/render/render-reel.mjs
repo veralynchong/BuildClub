@@ -113,7 +113,7 @@ function serveMedia(mediaDir) {
   })
   return new Promise((resolve, reject) => {
     server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => resolve({ server, base: `http://127.0.0.1:${server.address().port}` }))
+    server.listen(Number(process.env.REMOTION_MEDIA_PORT) || 0, '127.0.0.1', () => resolve({ server, base: `http://127.0.0.1:${server.address().port}` }))
   })
 }
 
@@ -143,10 +143,11 @@ async function main() {
     const served = (name) => (name ? `${base}/${encodeURIComponent(name)}` : null)
     // fontUrl stays empty: Reel resolves the bundled font with staticFile. Music, voice and the logo are file names in mediaDir too.
     const inputProps = { ...input, urls, fontUrl: '', musicUrl: served(input.musicUrl), voice: (input.voice || []).map((v) => ({ ...v, url: served(v.url) })), brand: { ...input.brand, logoUrl: served(input.brand && input.brand.logoUrl) } }
-    const composition = await selectComposition({ serveUrl, id: 'Reel', inputProps, port: PORT })
+    const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE || undefined
+    const composition = await selectComposition({ serveUrl, id: 'Reel', inputProps, port: PORT, browserExecutable })
     let last = -1
     await renderMedia({
-      composition, serveUrl, inputProps, port: PORT,
+      composition, serveUrl, inputProps, port: PORT, browserExecutable,
       codec: 'h264', audioCodec: 'aac', enforceAudioTrack: true, pixelFormat: 'yuv420p',
       outputLocation: path.resolve(out),
       onProgress: ({ progress }) => {

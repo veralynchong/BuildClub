@@ -63,3 +63,22 @@ T2 來源 07d3d93，完整訊息 msg_ea7f2a8dcca4。分類依來源，不推測 
 2026-11-05 smoke：PASS sandboxed owned backend, temporary account, 1440 browser and cleanup。證據 `/private/var/folders/pt/707kh2wx67x3vwn5bzsv72zw0000gn/T/freeform-evidence-o4c0w0bn`。這只證明隔離入口，不代表新版產品E2E。首次使用/usr/bin/python3出現xcrun cache拒寫提醒但exit0，改用同一既有Homebrew sys.executable避免系統launcher；待新版整合再次驗證。
 
 2026-11-05：runner使用Homebrew sys.executable後smoke再次PASS且無xcrun提醒；證據 `/private/var/folders/pt/707kh2wx67x3vwn5bzsv72zw0000gn/T/freeform-evidence-lkuan1n7`。新runner納入後root `bash bin/verify.sh full` 四步PASS，984 passed,2 skipped in35.22s，frontend PASS，verify GREEN。T3暫存分支進度回報991 passed,2 skipped（待提交／review，不等於整合驗收）。
+
+## 審查與修正檢查點
+
+- Backend writer第一版9796217→163c732（998pass）及typed ports修正cd9cafc（999pass）已提交；尚未接受。完整review ctx_a78df15f5bf6 對979 source REJECT：typed ports None==None與upload media mismatch；前者已修待複審，後者／串流後node重核與confirm snapshot條件競態由原worker新dispatch ctx_39f6b97b8b62（task_0c64c90e10ac）接續。Orca曾報start_unknown，但transcript/worker-list證明同一terminal仍在工作，沒有重開writer。
+- Reviewer stop-hook另見full gate RED：migrate_medians ALTER duplicate n、背景render讀到已清除DB；已交backend追查新tests背景jobs清理／migration競態，不能沿用先前GREEN覆蓋。
+- Frontend第一版24535a6：offline backend984pass2skip、frontend536/536、build/lint0；追加翻譯1fee4f4後獨立分支full gate只有serverText stale因base缺backend新模組而RED，已知整合相依，未放寬。最新完整前端review ctx_c3c1eefe71bd/task_19ef123c91cf 執行中，尚未接受。
+- Lead補test_server_text collector（尚未提交）辨識workspaces tuple第一項、ValueError、HTTPException.detail，並納入MODULES；保持missing/stale雙向assert，待backend/frontend整合跑。
+- 隔離runner1eee371曾被ctx_d34d469c7a4e REJECT：任意loopback/Unix放行、共享render cache、detached renderer逾時清理。Lead已改成只允8872/8892/8893/8894、禁止Unix proxy、暫存render app/cache、在sandbox外追蹤自有PID+starttime，renderer增加測試所需MEDIA_PORT/BROWSER_EXECUTABLE環境接點（未設時原行為）。修正未提交／待複審。
+- 真實本機isolation測試PASS：other-session loopback denied、Unix proxy denied、render22.0s→1080x1920/30fps/AAC/6.016s，音訊-24.1dB、muted -91dB，證據 `/private/var/folders/pt/707kh2wx67x3vwn5bzsv72zw0000gn/T/freeform-evidence-bjhza5_3`。後加原cache拒寫assert需再跑。
+- 故意timeout18秒測試預期exit124：detached實際renderer99422，結束後26個追蹤自有程序全消失（PID+starttime核對）。證據 `/private/tmp/freeform-timeout-evidence`。這些仍是runner／render驗證，不代表新版Canvas全流程。
+- T5正式e2e/freeform.cjs尚待已review產品整合後寫與執行，沒有宣稱整晚目標完成。
+
+2026-11-05更新：stop-hook因root提前加入workspaces MODULES但尚未整合檔案而RED；已保存精確collector擴充於`/tmp/freeform-server-text.patch`並恢復root目前版本，保留原missing/stale雙向assert。重跑full gate GREEN：984passed2skipped in42.14s、frontendPASS。整合backend與翻譯時必須一起apply此patch再驗。
+
+最新isolation完整測試PASS，含原cache拒寫斷言：render13.9s、1080x1920/30fps/AAC/6.016s、audio -24.1dB muted -91dB，證據`/private/var/folders/pt/707kh2wx67x3vwn5bzsv72zw0000gn/T/freeform-evidence-72ah9gi4`。
+
+前端完整review source1fee4f4（ctx_c3c1eefe71bd）REJECT：7項blocking（離開期間生成完成恢復；voice history→voiceId；換voice後隱形舊軌；CAS草稿遺失；upload改媒體保留不相容線；legacy footage shotId複製；legacy kit refs/操作被省略）。已交原writer逐項回歸修正。frameImage writeback/client切換/port翻譯也納入。不是已驗收前端。
+
+Backend續修已以真正跨process barrier重現confirm競態與upload mismatch；進度1001/1003passes，尚未final。slow_editor fixture teardown只release未等待RenderJobs._run完成，已定位為既有跨fixture背景job風險，writer用deterministic證據修tests，不擅改runtime migration。
