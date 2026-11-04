@@ -121,7 +121,10 @@ def check_graph(doc):
         if dst['type'] == 'editor':
             return 'Editor input edges are derived from the edit project.', 'editor_edges_derived'
         key = (src['id'], dst['id'], port)
-        if e.get('sourceHandle') != 'out' or not isinstance(port, str) or ports.get(dst['type'], {}).get(port) != media(src):
+        accepted = ports.get(dst['type'], {})
+        source_media = media(src)
+        if e.get('sourceHandle') != 'out' or source_media is None or not isinstance(port, str) \
+                or port not in accepted or accepted[port] != source_media:
             return 'The ports do not accept this media.', 'invalid_graph'
         if src['id'] == dst['id'] or key in seen:
             return 'Duplicate and self connections are not allowed.', 'invalid_graph'
