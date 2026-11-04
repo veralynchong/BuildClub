@@ -555,3 +555,11 @@
 .fc-input-wire, .fc-legacy-takes>div { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:11px; }
 .fc-legacy-takes { padding:0 16px 10px; }
 .fc-legacy-takes span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.fc-kit-management { border:0; padding:0; min-width:0; --fg:#ddd; --muted:#999; --surface:#242424; --surface-2:#2c2c2c; --line-strong:#444; }
+.fc-kit-management input, .fc-kit-management textarea, .fc-kit-management select { color:#ddd; background:#242424; border-color:#444; max-width:100%; }
+.fc-kit-management .cv-kit-head { display:none; }
+.fc-kit-picks label { display:flex; align-items:center; gap:7px; margin:8px 0; }
+.fc-kit-picks p { white-space:pre-line; font-size:11px; }
+.fc-kit-summary { padding:24px; min-height:180px; font-size:12px; }
+.fc-kit-summary p { font-size:11px; color:#999; }

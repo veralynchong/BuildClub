@@ -23,3 +23,7 @@ export function apiBase(ref: ResourceInput): string {
   return `/api/${r.kind === 'workspace' ? 'workspaces' : 'ideas'}/${encodeURIComponent(r.id)}`
 }
 export const canvasUrl = (ref: ResourceInput): string => `${apiBase(ref)}${typeof ref !== 'string' && ref.kind === 'workspace' ? '' : '/canvas'}`
+
+export function scopedWorkspaces(spaces: Workspace[], clientId: string): Workspace[] {
+  return spaces.filter((w) => w.clientId === clientId)
+}

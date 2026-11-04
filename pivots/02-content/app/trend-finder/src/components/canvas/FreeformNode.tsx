@@ -7,6 +7,7 @@ import { PORTS, outMedia } from '../../lib/canvas/ports'
 import { genRequest, pendingGen, priceOf, selectedGen } from '../../lib/canvas/graph'
 import type { CanvasNode } from '../../lib/canvas/types'
 
+const portLabels = { 'in:text': 'textPort', 'in:start': 'startPort', 'in:ref': 'referencePort', 'in:kit': 'kitPort', 'in:clips': 'video', 'in:audio': 'audio' } as const
 const icons: Record<CanvasNode['type'], string> = { prompt: 'T', storyboard: '▧', video: '▷', upload: '↑', voice: '♫', editor: '▤', shot: '▦', footage: '▣', kit: '◈' }
 export function NodeSettings({ node, actions }: { node: CanvasNode; actions: FreeformActions }) {
   const kind = node.type === 'storyboard' ? 'image' : node.type
@@ -55,6 +56,7 @@ export function FreeformNode({ id, data: { node }, selected }: NodeProps<FreeNod
         <div className="fc-composition-count">{actions.project?.clips.length ?? 0} {ff('clips')} · {actions.project?.voiceover.length ?? 0} {ff('voices')}</div>
         <button className="fc-primary nodrag" onClick={actions.openEditor}>{ff('openEditor')} ↗</button>
       </div> : node.type === 'prompt' ? <textarea className="fc-prompt nodrag nopan nowheel" aria-label={ff('prompt')} placeholder={ff('hint')} value={node.data.text ?? ''} disabled={actions.readonly} onChange={(e) => actions.update(id, { text: e.target.value })} />
+      : node.type === 'kit' ? <div className="fc-kit-summary"><h3>{ff('kit')}</h3>{(actions.kit?.items ?? []).filter((item) => node.data.kitItems?.includes(item.id)).map((item) => <div key={item.id}><strong>{item.name}</strong><p>{item.note}</p></div>)}<button className="nodrag" onClick={() => actions.inspect(id)}>{ff('settings')}</button></div>
       : node.type === 'shot' ? <div className="fc-shot"><h3>{shot?.shot}</h3><p>{shot?.line}</p></div>
       : <>
         <div className={`fc-preview ${busy ? 'is-running' : ''}`}>
@@ -71,7 +73,7 @@ export function FreeformNode({ id, data: { node }, selected }: NodeProps<FreeNod
         {error && <p className="fc-node-error" role="alert">{serverText(error)}</p>}
       </>}
     </div>
-    {ports.map((p, i) => <Handle id={p.id} type="target" position={Position.Left} key={p.id} className={`fc-port media-${p.media}`} style={{ top: 62 + i * 38 }} title={`${ff('ports')}: ${p.media} (${p.id})`} aria-label={p.id}><span>{p.id.replace('in:', '')}</span></Handle>)}
-    {out && <Handle id="out" type="source" position={Position.Right} className={`fc-port media-${out}`} title={`${ff('output')}: ${out}`} aria-label={ff('output')}><span>{out === 'text' ? 'T' : out === 'image' ? '▧' : out === 'audio' ? '♫' : '▷'}</span></Handle>}
+    {ports.map((p, i) => <Handle id={p.id} type="target" position={Position.Left} key={p.id} className={`fc-port media-${p.media}`} style={{ top: 62 + i * 38 }} title={ff(portLabels[p.id])} aria-label={ff(portLabels[p.id])}><span>{ff(portLabels[p.id])}</span></Handle>)}
+    {out && <Handle id="out" type="source" position={Position.Right} className={`fc-port media-${out}`} title={ff('output')} aria-label={ff('output')}><span>{out === 'text' ? 'T' : out === 'image' ? '▧' : out === 'audio' ? '♫' : '▷'}</span></Handle>}
   </div>
 }

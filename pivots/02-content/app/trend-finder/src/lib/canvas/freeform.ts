@@ -3,12 +3,12 @@ import type { EditProject } from '../editor/types.ts'
 import type { VoiceInfo } from '../editor/api.ts'
 import { addNode } from './graph.ts'
 
-export function createNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: number }): CanvasDoc {
+export function createNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: number }, shotId?: string): CanvasDoc {
   if (kind === 'editor') {
     if (doc.nodes.some((n) => n.type === 'editor')) return doc
     return { ...doc, nodes: [...doc.nodes, { id: 'n_editor', type: 'editor', position: at, data: {} }] }
   }
-  const next = addNode(doc, kind, at)
+  const next = addNode(doc, kind, at, shotId)
   if (kind === 'upload') next.nodes[next.nodes.length - 1]!.data = { media: 'image' }
   if (kind === 'voice') next.nodes[next.nodes.length - 1]!.data = { model: 'mock-voice', prompt: '' }
   return next
@@ -89,4 +89,12 @@ export function connectedPrompt(doc: CanvasDoc, nodeId: string, seen = new Set<s
   if (own) return own
   const source = doc.edges.find((e) => e.target === nodeId && e.targetHandle === 'in:text')?.source
   return source ? connectedPrompt(doc, source, seen) : ''
+}
+
+export function duplicateNode(doc: CanvasDoc, nodeId: string): CanvasDoc {
+  const original = doc.nodes.find((n) => n.id === nodeId)!
+  const next = createNode(doc, original.type, { x: original.position.x + 60, y: original.position.y + 60 }, original.shotId)
+  const copy = next.nodes[next.nodes.length - 1]
+  copy.data = { ...original.data, selected: null, voiceId: undefined, takeId: undefined, awaiting: undefined }
+  return next
 }

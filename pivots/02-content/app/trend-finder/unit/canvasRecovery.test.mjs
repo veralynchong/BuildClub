@@ -64,3 +64,9 @@ test('failed save survives reload and explicit discard never races a PUT',async(
  await failed.prepareReload(true);assert.ok(draft)
  failed.discard();assert.equal(draft,null)
 })
+
+test('reopen recovers a first result from the earlier UI without an awaiting marker',async()=>{
+ let live=doc([node('i','storyboard'),node('voice','voice')]);const imported=[]
+ await reconcileGenerations([gen('image','i'),gen('speech','voice','voice')],{current:()=>live,change:d=>{live=d},flush:async()=>true,voices:[],importVoice:async(g,n)=>{imported.push(g);return{id:'v1',genId:g,nodeId:n}},onVoice:()=>{}})
+ assert.equal(live.nodes[0].data.selected,'image');assert.equal(live.nodes[1].data.voiceId,'v1');assert.deepEqual(imported,['speech'])
+})
