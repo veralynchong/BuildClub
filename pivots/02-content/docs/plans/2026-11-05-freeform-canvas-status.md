@@ -110,3 +110,15 @@ Backend防scope降級修正任務ctx_dfe8e8c427ed/task_208f5dacd655執行中，�
 Source8fb8da0，base5a27180，scope為bin runner與isolation/timeout/lifecycle四檔。Reviewer ctx_67e46be8f005 verdict ACCEPT（完整報告/tmp/freeform-t5-report.txt）；lead已讀diff及證據，Integrator ACCEPT：可信macOS wrapper的登記/停止互斥與kernel birth/group收割，未回退loopback/Unix及temp/cache隔離。小增量4619f1只改缺cache時wx probe目錄，lead已讀3行差異並接受，writer cold-cache isolation/GREEN證據保留。
 
 整合cherry-pick為e776c2b＋3d40f79，rootfull gate親跑GREEN：984passed2skipped in36.17s、frontendPASS。產品backend/frontend尚未接受，不把runner接受延伸成產品完成。
+
+## Backend接受與親跑HTTP證據
+
+完整source0b64468，原basea521141；scope為backend十一檔。review ctx_0f76b84fb4a9接受ports/image-video upload/atomicconfirm/slow_editor，ctx_d27df6f3dfbe肯定ce音訊attach交易但指出scope降級，最後ctx_bd5cac400466對0b64468修正ACCEPT且無blocking。lead已讀整體runtime diff/修正證據，Integrator ACCEPT該固定backend source；未把static接受宣稱UI完成。
+
+已依序cherry-pick為025c9f3、98e26a8、7a05505、df1ed8f、84a268c、256ca29。root親跑`bash bin/verify.sh full` GREEN：1021passed2skipped in37.72s、frontendPASS。
+
+新增`e2e/freeform-backend.cjs`只跑自有本機HTTP與真媒體，不開產品browser。命令：test-slot8872 with-command → python3 bin/freeform-e2e.py --script .../e2e/freeform-backend.cjs --evidence /tmp/freeform-backend-proof --timeout600。exit0，四項PASS：真正空白workspace/零fakeidea；實際queue mock adapter消費保存的prompt/selected image並產voice/from-gen；uploadvideo+generatedvideo+voice經真Remotion輸出1080x1920/AAC/預期timeline時長；signed-out token核准真workspace成片且ideas仍為零。證據backend-results.json/backend-ffprobe.json/backend-workspace.mp4，cleanup-audit survivors={}，lead另核kernel birth確認所有記錄程序皆不存活。
+
+仍須前端兩類修正複審、backend+frontend+collector整合雙語gate，並親跑完整UI/freeform.cjs；這次HTTP/媒體不替代UI可操作性與Magnific視覺檢查。
+
+Backend輸出另外親跑ffmpeg volumedetect：兩視覺clip已muted，仍有連入voice可聽（>-50dB）；腳本已加入相同斷言，保留backend-voice-volume.txt。

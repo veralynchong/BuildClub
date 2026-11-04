@@ -27,3 +27,9 @@
 T1 契約已寫入 Plan 的「固定實作契約」與「串接細節與安全邊界」。T3/T4 可從同一 contract commit 獨立並行，無共用檔案；介面變更必須先通知 lead，T5 僅在兩者整合後執行。
 
 T5入口：`python3 /Users/tommy/.agents/skills/test-slot/scripts/test_slot.py --resource local:127.0.0.1:8872:buildclub-e2e with-command --wait 10 --timeout 950 -- python3 bin/freeform-e2e.py`。後端8872、renderer8892；8871屬他人，禁止接管。`--check-tools`預檢不安裝；`--script`供驗證runner隔離smoke；正式產品測試使用app/e2e/freeform.cjs，待T3/T4整合後完成。
+
+T3真實本機HTTP/媒體驗收（lead已執行PASS，沒有UI）：
+```sh
+python3 /Users/tommy/.agents/skills/test-slot/scripts/test_slot.py --resource local:127.0.0.1:8872:buildclub-e2e with-command --wait 10 --timeout 650 -- python3 bin/freeform-e2e.py --script pivots/02-content/app/trend-finder/e2e/freeform-backend.cjs --evidence /tmp/freeform-backend-proof --timeout 600
+```
+預期空白workspace→實際mock queue→圖/影/配音與上傳→真MP4→signed-out核准四步PASS、cleanup-audit survivors={}；clips muted時音量>-50dB證明voice確實進輸出。這不替代T5真實UI操作。

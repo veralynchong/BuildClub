@@ -4,7 +4,7 @@
 
 使用者已核准：深色Magnific式空白畫布直接取代舊Canvas、六類節點能力與既有助手、全站接線盤點並優先素材→剪輯→輸出→送審；無人值守Multi Agent、commit/push/開PR，不合併，不做外部API測試、不花費、不安裝依賴。計畫／逐項任務／執行狀態位於 `pivots/02-content/docs/plans/2026-11-05-freeform-canvas-{plan,tasks,status}.md`。
 
-整合分支 `feat/freeform-canvas`，worktree `/Users/tommy/orca/workspaces/BuildClub/freeform-canvas`，從origin/main e442b3a分出。已整合並接受安全本機E2E lifecycle保護，2026-11-05本分支 `bash bin/verify.sh full` GREEN：984passed2skipped、frontendPASS。前後端產品仍在獨立worktree修正與review，尚未整合、未跑新版完整UI/E2E、未開產品PR，不可當作新版已完成。細節以任務Status最新紀錄為準，舊PR／8805等下方歷史不代表本輪狀態。
+整合分支 `feat/freeform-canvas`，worktree `/Users/tommy/orca/workspaces/BuildClub/freeform-canvas`，從origin/main e442b3a分出。已整合並接受安全本機E2E lifecycle保護與獨立workspace後端，2026-11-05本分支 `bash bin/verify.sh full` GREEN：1021passed2skipped、frontendPASS。真實本機HTTP→mock生成/音訊→Remotion MP4（4.011s）→signed-out token核准亦通過；前端仍在獨立worktree修正與review，未整合、未跑新版完整UI/E2E、未開產品PR，不可當作新版已完成。細節以任務Status最新紀錄為準，舊PR／8805等下方歷史不代表本輪狀態。
 
 Read first: `docs/todo.md` (open keys and tasks) and `docs/test-log.md` (every test run; skip a test that already passed at an unchanged commit). Demo branch: `chore/demo-integrate-main-1104`, PR #49 (draft, do not merge yet).
 
