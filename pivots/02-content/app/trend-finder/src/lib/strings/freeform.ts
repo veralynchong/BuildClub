@@ -4,6 +4,7 @@ const words = {
   queued: ['Queued', '排隊中'], waiting: ['Waiting', '等待中'], done: ['Done', '已完成'], failed: ['Failed', '失敗'], unknown: ['Result unknown', '結果不明'], image: ['Image', '圖片'], audio: ['Audio', '音訊'],
   canvasVoice: ['Add voice nodes or upload audio on the canvas, then connect them to the editor.', '請在畫布新增配音節點或上傳音訊，再連接至剪輯器。'],
   unavailable: ['Unavailable', '無法使用'], navigation: ['⌘ + scroll to zoom', '⌘ + 捲動縮放'], runAll: ['Run all', '全部執行'], stop: ['Stop after this node', '完成此節點後停止'], textPort: ['Text', '文字'], startPort: ['Start frame', '起始畫面'], referencePort: ['References', '參考圖片'], kitPort: ['Kit', '素材組'],
+  recoverTitle: ['Recover local canvas edits?', '恢復本機畫布變更？'], recoverBody: ['A local draft was kept. Restoring it replaces the current canvas with that draft; discard it to keep the server copy.', '已保留本機草稿。恢復會以草稿取代目前畫布；放棄則保留伺服器版本。'], restoreDraft: ['Restore draft', '恢復草稿'], discardDraft: ['Discard local draft', '放棄本機草稿'], unsavedTitle: ['Your edits are not saved', '變更尚未儲存'], unsavedBody: ['Keep a local draft before reloading, or explicitly discard these edits. Nothing will overwrite the newer server copy automatically.', '重新載入前保留本機草稿，或明確放棄變更。不會自動覆寫伺服器的新版本。'], keepReload: ['Keep draft and reload', '保留草稿並重新載入'],
   create: ['Create canvas', '建立畫布'], title: ['Untitled canvas', '未命名畫布'], spaces: ['Canvases', '畫布'],
   intro: ['Start with an empty space. Add an idea, connect your tools, make something new.', '從空白開始。加入想法，連接工具，創作新內容。'],
   name: ['Canvas name', '畫布名稱'], existing: ['Existing plan canvases', '既有計畫畫布'],

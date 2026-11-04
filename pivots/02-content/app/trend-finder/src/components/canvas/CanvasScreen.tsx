@@ -4,6 +4,7 @@ import '@xyflow/react/dist/style.css'
 import type { CanvasContext as CanvasResource } from '../../lib/canvas/resource'
 import type { CanvasDoc, CanvasNode, CanvasState, GenModel, Generation, NodeData, NodeKind, Budget } from '../../lib/canvas/types'
 import { getCanvas, getModels, getBudget, putCanvas, StaleCanvas, quoteNode, startGen, pollGen, uploadMedia } from '../../lib/canvas/api'
+import { createCanvasSession, draftStore, reconcileGenerations, selectGeneration, rememberGeneration } from '../../lib/canvas/session'
 import { genRequest, markStale, priceOf, selectedGen } from '../../lib/canvas/graph'
 import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
 import { apiBase } from '../../lib/canvas/resource'
@@ -52,7 +53,6 @@ type Dock = 'inspect' | 'history' | 'assistant' | null
 function Board({ context, initial, clientName, onBack, openEditor = false, fullscreen, onFullscreen, reload }: Props & { initial: CanvasState; reload: () => void }) {
   const { resource, shots, readOnly, clientId, title } = context
   const [doc, setDoc] = useState(initial.doc)
-  const current = useRef(initial.doc)
   const [takes, setTakes] = useState<Take[]>(initial.takes)
   const [gens, setGens] = useState(initial.generations)
   const [models, setModels] = useState<GenModel[]>([])
@@ -77,10 +77,18 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
   const [quote, setQuote] = useState<{ id: string; usd: number; remaining: number | null; signature: string; inputStamp?: string } | null>(null)
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
-  const version = useRef(initial.version)
-  const saved = useRef(initial.doc)
-  const locked = useRef(false)
-  const inflight = useRef<Promise<boolean> | null>(null)
+  const mounted = useRef(true)
+  const sessionRef = useRef<ReturnType<typeof createCanvasSession> | null>(null)
+  if (!sessionRef.current) sessionRef.current = createCanvasSession(initial, {
+    ...draftStore(`remake.canvas.draft:${resource.kind}:${resource.id}`),
+    save: (version, doc) => putCanvas(resource, version, doc),
+    changed: (s) => { setDoc(s.doc); setSave(s.save); setStale(s.conflict) },
+    isConflict: (e) => e instanceof StaleCanvas,
+    error: (e) => setNote(e instanceof Error ? e.message : String(e)),
+  })
+  const session = sessionRef.current
+  const [recoveryOpen, setRecoveryOpen] = useState(!!session.recovery())
+  const [reloadAsk, setReloadAsk] = useState(false)
   const abort = useRef(new AbortController())
   const drag = useRef<string | null>(null)
   const flowBox = useRef<HTMLDivElement>(null)
@@ -89,27 +97,11 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
   const sources = useSources(resource, JSON.stringify(gens.map((g) => [g.id, g.status])))
   const timeline = useTimelineActions({ freeform: resource.kind === 'workspace', edit, sources, shots, doc, gens, takes, readOnly: readOnly || stale, onPlaced: () => {}, notify: (key) => setNote(t(key)) })
   const change = useCallback((next: CanvasDoc) => {
-    if (readOnly || locked.current) return
-    current.current = next
-    setDoc(next)
-  }, [readOnly])
-  const flush = useCallback(async (): Promise<boolean> => {
-    if (readOnly || locked.current) return false
-    if (inflight.current) { if (!await inflight.current) return false; return flush() }
-    if (saved.current === current.current) return true
-    const snapshot = current.current
-    const task = (async () => {
-      setSave('saving')
-      try { version.current = await putCanvas(resource, version.current, snapshot); saved.current = snapshot; setSave('saved'); return true }
-      catch (e) { setSave('failed'); setNote(e instanceof Error ? e.message : String(e)); if (e instanceof StaleCanvas) { locked.current = true; setStale(true) }; return false }
-      finally { inflight.current = null }
-    })()
-    inflight.current = task
-    if (!await task) return false
-    return saved.current === current.current || flush()
-  }, [resource, readOnly])
-  useEffect(() => { if (doc === saved.current || readOnly) return; const timer = setTimeout(() => void flush(), 650); return () => clearTimeout(timer) }, [doc, flush, readOnly])
-  useEffect(() => { abort.current = new AbortController(); return () => { abort.current.abort(); void flush() } }, [flush])
+    if (!readOnly) session.change(next)
+  }, [readOnly, session])
+  const flush = useCallback(() => readOnly || !mounted.current ? Promise.resolve(false) : session.flush(), [session, readOnly])
+  useEffect(() => { if (doc === session.saved() || readOnly || recoveryOpen) return; const timer = setTimeout(() => void flush(), 650); return () => clearTimeout(timer) }, [doc, flush, readOnly, session, recoveryOpen])
+  useEffect(() => { mounted.current = true; abort.current = new AbortController(); return () => { mounted.current = false; abort.current.abort(); session.keepDraft() } }, [session])
   useEffect(() => {
     let cancelled = false
     Promise.all([getModels(), getBudget(), getVoices(resource)]).then(([m, b, v]) => { if (!cancelled) { setModels(m); setBudget(b); setVoices(v) } }, (e) => !cancelled && setNote(e.message))
@@ -117,57 +109,72 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
   }, [resource])
   const refresh = async () => {
     if (!await flush()) return
-    const snapshot = current.current
+    const snapshot = session.doc()
     const s = await getCanvas(resource)
     setGens(s.generations)
     // A concurrent local edit must survive an arriving generation. The next server read derives its stale flag.
-    if (snapshot === current.current) { version.current = s.version; saved.current = s.doc; current.current = s.doc; setDoc(s.doc) }
+    if (snapshot === session.doc()) session.acceptServer(s)
     setBudget(await getBudget())
     setVoices(await getVoices(resource))
   }
+  const selectionIO = (knownVoices = voices) => ({
+    current: session.doc, change, flush, voices: knownVoices, generations: gens,
+    importVoice: (genId: string, nodeId: string) => importTts(resource, genId, nodeId),
+    onVoice: (v: VoiceInfo) => setVoices((vs) => [...vs.filter((old) => old.id !== v.id), v]),
+  })
   const follow = async (gen: Generation) => {
     setGens((gs) => [...gs.filter((g) => g.id !== gen.id), gen])
     const end = await pollGen(resource, gen.id, (g) => setGens((gs) => [...gs.filter((x) => x.id !== g.id), g]), { signal: abort.current.signal })
     if (!end) return
-    if (end.status !== 'done') throw new Error(serverText(end.error) || t('canvas.err.start'))
-    const voice = end.kind === 'voice' ? await importTts(resource, end.id, end.nodeId) : null
-    // Selection is explicit. Workspace stale is derived from inputStamp by the subsequent server read.
-    const next = { ...current.current, nodes: current.current.nodes.map((n) => n.id === end.nodeId ? { ...n, data: { ...n.data, selected: end.id, ...(voice ? { voiceId: voice.id } : {}) } } : n) }
-    change(markStale(next, end.nodeId, [...gens, end]))
+    if (end.status !== 'done') {
+      await reconcileGenerations([end], selectionIO())
+      throw new Error(serverText(end.error) || t('canvas.err.start'))
+    }
+    if (!await selectGeneration(end, selectionIO())) throw new Error(ff('saveFirst'))
     await refresh()
   }
-  const followRef = useRef(follow)
-  followRef.current = follow
-  useEffect(() => {
-    for (const g of initial.generations.filter((g) => ['queued', 'running', 'waiting'].includes(g.status))) void followRef.current(g).catch((e) => setNote(e.message))
-  }, [initial])
+  const resumeRef = useRef<() => Promise<void>>(async () => {})
+  resumeRef.current = async () => {
+    if (readOnly || recoveryOpen) return
+    const knownVoices = await getVoices(resource)
+    if (!mounted.current) return
+    setVoices(knownVoices)
+    await reconcileGenerations(initial.generations, selectionIO(knownVoices))
+    for (const g of initial.generations.filter((g) => ['queued', 'running', 'waiting'].includes(g.status))) {
+      const n = session.doc().nodes.find((n) => n.id === g.nodeId)
+      if (!n) continue
+      if (!n.data.awaiting) { change({ ...session.doc(), nodes: session.doc().nodes.map((node) => node.id === n.id ? { ...node, data: { ...node.data, awaiting: g.id } } : node) }); if (!await flush()) return }
+      void follow(g).catch((e) => setNote(e.message))
+    }
+  }
+  useEffect(() => { void resumeRef.current().catch((e) => setNote(e.message)) }, [initial, recoveryOpen])
   const withBusy = async (id: string, run: () => Promise<void>) => {
     if (readOnly || stale || busyRef.current.has(id)) return
     busyRef.current.add(id); setBusy(new Set(busyRef.current)); setNote('')
-    try { await run() } catch (e) { setNote(e instanceof Error ? e.message : String(e)); runQueue.current = []; setRunAll(false); if (e instanceof StaleCanvas) { locked.current = true; setStale(true) } }
+    try { await run() } catch (e) { setNote(e instanceof Error ? e.message : String(e)); runQueue.current = []; setRunAll(false); if (e instanceof StaleCanvas) setStale(true) }
     finally { busyRef.current.delete(id); setBusy(new Set(busyRef.current)) }
   }
   const update = (id: string, patch: Partial<NodeData>) => {
     if (quote) return
-    const next = { ...current.current, nodes: current.current.nodes.map((n) => n.id === id ? { ...n, data: { ...n.data, ...patch, ...(['storyboard', 'video', 'voice'].includes(n.type) && selectedGen(n, gens) ? { stale: true } : {}) } } : n) }
+    const next = { ...session.doc(), nodes: session.doc().nodes.map((n) => n.id === id ? { ...n, data: { ...n.data, ...patch, ...(['storyboard', 'video', 'voice'].includes(n.type) && selectedGen(n, gens) ? { stale: true } : {}) } } : n) }
     change(markStale(next, id, gens))
   }
   const begin = async (id: string, confirmed = false) => withBusy(id, async () => {
     if (!await flush()) throw new Error(ff('saveFirst'))
-    const n = current.current.nodes.find((n) => n.id === id)!
+    const n = session.doc().nodes.find((n) => n.id === id)!
     const model = models.find((m) => m.id === n.data.model)
     if (!model?.available) throw new Error(t('canvas.err.models'))
-    const request = genRequest(current.current, id, shots, gens, null, model)
-    if (resource.kind === 'workspace') request.prompt = connectedPrompt(current.current, id)
-    const signature = JSON.stringify({ version: version.current, model: n.data.model, request })
+    const request = genRequest(session.doc(), id, shots, gens, null, model)
+    if (resource.kind === 'workspace') request.prompt = connectedPrompt(session.doc(), id)
+    const signature = JSON.stringify({ version: session.version(), model: n.data.model, request })
     let usd = priceOf(model, n.data.duration)
     let remaining: number | null = budget?.[model.kind] ? budget[model.kind].cap - budget[model.kind].spent : null
     let inputStamp: string | undefined
     if (n.type === 'voice') {
-      const q = await quoteTts(resource, request.prompt, model.id, id, version.current)
+      const q = await quoteTts(resource, request.prompt, model.id, id, session.version())
       usd = q.usd; remaining = q.remaining; inputStamp = q.inputStamp
     } else if (resource.kind === 'workspace') {
-      const q = await quoteNode(resource, id, version.current)
+      const q = await quoteNode(resource, id, session.version())
       usd = q.total; remaining = q.remaining[model.kind] ?? null; inputStamp = q.inputStamp
     }
     if (usd > 0 && (!confirmed || quote?.signature !== signature || quote.usd !== usd || quote.inputStamp !== inputStamp)) {
@@ -176,7 +183,8 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
       return
     }
     setQuote(null)
-    const g = n.type === 'voice' ? await startTts(resource, request.prompt, model.id, id, version.current, inputStamp) : await startGen(resource, { nodeId: id, model: model.id, ...request, canvasVersion: version.current, inputStamp, confirm: confirmed || usd === 0 })
+    const g = n.type === 'voice' ? await startTts(resource, request.prompt, model.id, id, session.version(), inputStamp) : await startGen(resource, { nodeId: id, model: model.id, ...request, canvasVersion: session.version(), inputStamp, confirm: confirmed || usd === 0 })
+    if (!await rememberGeneration(g, selectionIO())) throw new Error(ff('saveFirst'))
     await follow(g)
     setTimeout(() => nextRun.current(), 0)
   })
@@ -186,19 +194,19 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
     else setRunAll(false)
   }
   const runGraph = () => {
-    try { runQueue.current = generationOrder(current.current); setRunAll(true); nextRun.current() }
+    try { runQueue.current = generationOrder(session.doc()); setRunAll(true); nextRun.current() }
     catch (e) { setNote(serverText(String((e as Error).message))) }
   }
   const connect = async (c: Connection) => {
     if (readOnly || stale || quote) return
-    const fullDoc = { ...current.current, edges: [...current.current.edges, ...editorEdges(current.current, edit.committedProject ?? null)] }
+    const fullDoc = { ...session.doc(), edges: [...session.doc().edges, ...editorEdges(session.doc(), edit.committedProject ?? null, voices)] }
     const check = canConnect(fullDoc, { ...c, targetHandle: c.targetHandle ?? '' }, models)
     if (!check.ok) { setNote(t(check.reason, check.vars)); return }
-    const target = current.current.nodes.find((n) => n.id === c.target)
+    const target = session.doc().nodes.find((n) => n.id === c.target)
     if (target?.type === 'editor') {
       await withBusy('n_editor', async () => {
         if (!await flush()) throw new Error(ff('saveFirst'))
-        const node = current.current.nodes.find((n) => n.id === c.source)!
+        const node = session.doc().nodes.find((n) => n.id === c.source)!
         if (c.targetHandle === 'in:audio') {
           if (!node.data.voiceId) throw new Error(ff('needOutput'))
           const p = edit.current()
@@ -213,7 +221,7 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
       return
     }
     const edge = { id: `e_${c.source}_${c.target}_${c.targetHandle}`, source: c.source, sourceHandle: c.sourceHandle ?? 'out', target: c.target, targetHandle: c.targetHandle ?? '' }
-    change(markStale({ ...current.current, edges: [...current.current.edges, edge] }, c.source, gens))
+    change(markStale({ ...session.doc(), edges: [...session.doc().edges, edge] }, c.source, gens))
   }
   const removeEdges = async (edges: Edge[]) => {
     if (readOnly || stale || quote) return
@@ -222,23 +230,23 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
       if (derived.length) {
         let p = edit.current()
         if (!p || !edit.persist) throw new Error(ff('saveFirst'))
-        for (const e of derived) p = removeEditorSource(p, e.source, current.current)
+        for (const e of derived) p = removeEditorSource(p, e.source, session.doc(), voices)
         if (!await edit.persist(p)) throw new Error(ff('saveFirst'))
       }
       const ids = new Set(edges.map((e) => e.id))
-      let next = current.current
+      let next = session.doc()
       for (const e of edges) next = markStale(next, e.source, gens)
       change({ ...next, edges: next.edges.filter((e) => !ids.has(e.id)) })
     })
   }
   const remove = (ids: string[]) => void withBusy('delete', async () => {
-    const removable = new Set(ids.filter((id) => current.current.nodes.find((n) => n.id === id)?.type !== 'shot'))
+    const removable = new Set(ids.filter((id) => session.doc().nodes.find((n) => n.id === id)?.type !== 'shot'))
     let p = edit.current()
     if (p && edit.persist) {
-      for (const id of removable) p = id === 'n_editor' ? { ...p, clips: [], voiceover: [] } : removeEditorSource(p, id, current.current)
+      for (const id of removable) p = id === 'n_editor' ? { ...p, clips: [], voiceover: [] } : removeEditorSource(p, id, session.doc(), voices)
       if (!await edit.persist(p)) throw new Error(ff('saveFirst'))
     }
-    let next = current.current
+    let next = session.doc()
     for (const id of removable) next = markStale(next, id, gens)
     change({ ...next, nodes: next.nodes.filter((n) => !removable.has(n.id)), edges: next.edges.filter((e) => !removable.has(e.source) && !removable.has(e.target)) })
     setSelected([])
@@ -247,13 +255,13 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
     if (readOnly || stale || quote) return
     const rect = flowBox.current?.getBoundingClientRect()
     const center = at ?? screenToFlowPosition({ x: (rect?.left ?? 0) + (rect?.width ?? 900) / 2 - 160, y: (rect?.top ?? 0) + 160 })
-    const next = createNode(current.current, kind, center)
+    const next = createNode(session.doc(), kind, center)
     const n = kind === 'editor' ? next.nodes.find((n) => n.type === 'editor')! : next.nodes[next.nodes.length - 1]!
     change(next); setSelected([n.id]); setMenu(null)
     if (from) { const opt = compatibleKinds(next, from).find((o) => o.kind === kind); if (opt) void connect({ source: from, sourceHandle: 'out', target: n.id, targetHandle: opt.handle }) }
   }
   const upload = (id: string, file: File) => void withBusy(id, async () => {
-    const node = current.current.nodes.find((n) => n.id === id)!
+    const node = session.doc().nodes.find((n) => n.id === id)!
     const audio = file.type.startsWith('audio/') || /\.(mp3|m4a|wav|ogg|webm)$/i.test(file.name) && !file.type.startsWith('video/')
     const media = audio ? 'audio' : file.type.startsWith('video/') || /\.(mp4|mov)$/i.test(file.name) ? 'video' : 'image'
     if (node.type === 'footage' && resource.kind === 'legacy-plan') {
@@ -274,22 +282,22 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
     await flush()
   })
   const ask = async () => withBusy('assistant', async () => {
-    const id = selected.find((id) => current.current.nodes.find((n) => n.id === id)?.type === 'prompt')
+    const id = selected.find((id) => session.doc().nodes.find((n) => n.id === id)?.type === 'prompt')
     if (!id) throw new Error(ff('assistantHint'))
     if (!await flush()) throw new Error(ff('saveFirst'))
-    const r = await fetch(`${apiBase(resource)}/agent/plan`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ promptNodeId: id, canvasVersion: version.current }) })
+    const r = await fetch(`${apiBase(resource)}/agent/plan`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ promptNodeId: id, canvasVersion: session.version() }) })
     const body = await r.json()
     if (!r.ok) throw new Error(serverText(body.error) || t('canvas.err.start'))
     setPlan(body)
   })
   const actions: FreeformActions = {
-    doc, gens, models, shots, voices, takes, pickTake: (id) => void withBusy('take', async () => { setTakes(await chooseTake(resource.id, id)) }), freeform: resource.kind === 'workspace', project: edit.committedProject ?? null, readonly: readOnly || stale || !!quote || !!edit.writing, busy, update, run: (id) => void begin(id), upload, remove,
-    duplicate: (id) => { const n = current.current.nodes.find((n) => n.id === id)!; const next = createNode(current.current, n.type, { x: n.position.x + 60, y: n.position.y + 60 }); const copy = next.nodes[next.nodes.length - 1]!; copy.data = { ...n.data, selected: null, voiceId: undefined, takeId: undefined, awaiting: undefined }; change(next); setSelected([copy.id]) },
+    doc, gens, models, shots, voices, takes, pickTake: (id) => void withBusy('take', async () => { setTakes(await chooseTake(resource.id, id)) }), freeform: resource.kind === 'workspace', project: edit.committedProject ?? null, readonly: readOnly || stale || recoveryOpen || reloadAsk || !!quote || !!edit.writing, busy, update, run: (id) => void begin(id), upload, remove,
+    duplicate: (id) => { const n = session.doc().nodes.find((n) => n.id === id)!; const next = createNode(session.doc(), n.type, { x: n.position.x + 60, y: n.position.y + 60 }); const copy = next.nodes[next.nodes.length - 1]!; copy.data = { ...n.data, selected: null, voiceId: undefined, takeId: undefined, awaiting: undefined }; change(next); setSelected([copy.id]) },
     inspect: (id) => { setSelected([id]); setDock('inspect') }, openEditor: () => setEditing(true),
     connect: (id) => { const rect = flowBox.current!.getBoundingClientRect(); setMenu({ x: rect.width / 2, y: 150, from: id, at: screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + 150 }) }) },
   }
   const nodes: FreeNode[] = useMemo(() => doc.nodes.map((node) => ({ id: node.id, type: 'freeform', position: node.position, data: { node }, selected: selected.includes(node.id), deletable: node.type !== 'shot' })), [doc.nodes, selected])
-  const edges = [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null)].map((e) => ({ ...e, selected: selectedEdges.includes(e.id), className: `fc-edge media-${doc.nodes.find((n) => n.id === e.source)?.type === 'voice' ? 'audio' : 'image'}` }))
+  const edges = [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null, voices)].map((e) => ({ ...e, selected: selectedEdges.includes(e.id), className: `fc-edge media-${doc.nodes.find((n) => n.id === e.source)?.type === 'voice' ? 'audio' : 'image'}` }))
   const picked = doc.nodes.find((n) => selected.length === 1 && n.id === selected[0])
   const menuKinds = menu?.from ? compatibleKinds(doc, menu.from).map((o) => o.kind) : kinds
   const endConnect = (event: MouseEvent | TouchEvent, connection: FinalConnectionState) => {
@@ -302,12 +310,19 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
     const rect = flowBox.current!.getBoundingClientRect()
     setSearch(''); setMenu({ x: p.clientX - rect.left, y: p.clientY - rect.top, from: source, at: screenToFlowPosition({ x: p.clientX, y: p.clientY }) })
   }
+  const safeReload = async (keepDraft = false, discard = false) => {
+    const editResult = await edit.flush()
+    if (editResult === 'failed' || editResult === 'stale') { setNote(ff('saveFirst')); return }
+    if (discard) session.discard()
+    if (readOnly || await session.prepareReload(keepDraft)) reload()
+    else setReloadAsk(true)
+  }
   const back = async () => { const editResult = await edit.flush(); if ((!readOnly && !await flush()) || editResult === 'failed' || editResult === 'stale') { setNote(ff('saveFirst')); return }; onBack() }
   return <section className="fc-screen">
     {editing ? <div className="fc-editor"><EditorPanel ideaId={resource} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} doc={doc} gens={gens} takes={takes} readOnly={readOnly || stale} onBack={() => setEditing(false)} onJumpToNode={(id) => { setSelected([id]); setEditing(false) }} /></div> : null}
     <div className="fc-board" hidden={editing}>
       <header className="fc-top"><button className="fc-back" aria-label={ff('back')} onClick={() => void back()}>‹</button><div className="fc-crumb"><span className="fc-project-dot" />{clientName}<span>›</span><strong>{title}</strong></div><div className="fc-top-actions">
-        <button aria-label={ff('reload')} onClick={reload}>↻</button>
+        <button aria-label={ff('reload')} onClick={() => void safeReload()}>↻</button>
         <button className={save === 'failed' ? 'fc-error-button' : 'fc-save'} onClick={() => void flush()}>{ff(save === 'saving' ? 'saving' : save === 'failed' ? 'failedSave' : 'saved')}</button>
         {!readOnly && <button disabled={stale || (!!busy.size && !runAll) || !!quote} onClick={runAll ? () => { runQueue.current = []; setRunAll(false) } : runGraph}>{ff(runAll ? 'stop' : 'runAll')}</button>}
         <button className={dock === 'assistant' ? 'is-active' : ''} onClick={() => setDock(dock === 'assistant' ? null : 'assistant')}>✧ {ff('assistant')}</button>
@@ -323,7 +338,7 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
             nodesDraggable={!actions.readonly} nodesConnectable={!actions.readonly} deleteKeyCode={null}
             selectionOnDrag={!pan} panOnDrag={pan ? true : [1, 2]} colorMode="dark"
             onNodesChange={(changes) => {
-              let next = current.current
+              let next = session.doc()
               const moved = applyNodeChanges(changes.filter((c) => c.type === 'position'), nodes)
               if (changes.some((c) => c.type === 'position')) { const pos = new Map(moved.map((n) => [n.id, n.position])); next = { ...next, nodes: next.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) }; change(next) }
               const selects = changes.filter((c) => c.type === 'select')
@@ -333,8 +348,8 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
             onEdgeClick={(_, e) => { if (!actions.readonly) setNote(`${ff('delete')}: ${e.source} → ${e.target}`) }}
             onEdgeDoubleClick={(_, e) => void removeEdges([e])}
             onConnect={(c) => void connect(c)} onConnectStart={(_, p) => { drag.current = p.handleType === 'source' ? p.nodeId : null }} onConnectEnd={endConnect}
-            isValidConnection={(c) => canConnect({ ...doc, edges: [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null)] }, { ...c, targetHandle: c.targetHandle ?? '' }, models).ok}
-            onMoveEnd={(e, viewport) => { if (e) change({ ...current.current, viewport }) }}
+            isValidConnection={(c) => canConnect({ ...doc, edges: [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null, voices)] }, { ...c, targetHandle: c.targetHandle ?? '' }, models).ok}
+            onMoveEnd={(e, viewport) => { if (e) change({ ...session.doc(), viewport }) }}
             onPaneClick={() => { setMenu(null); setSelected([]) }}
             onKeyDown={(e) => { const el = e.target as HTMLElement; if (el.closest('input,textarea,select,button')) return; if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); if (selected.length) remove(selected); if (selectedEdges.length) void removeEdges(edges.filter((e) => selectedEdges.includes(e.id))) } if (e.key === 'Escape') { setMenu(null); setDock(null) } }}
             aria-label={t('canvas.flow.label')}>
@@ -352,13 +367,15 @@ function Board({ context, initial, clientName, onBack, openEditor = false, fulls
         </div>
         {dock && <aside className="fc-dock" aria-label={ff(dock)}><header><h2>{ff(dock)}</h2><button aria-label={ff('close')} onClick={() => setDock(null)}>×</button></header>
           {dock === 'inspect' && (picked ? <><h3>{ff(picked.type)}</h3>{['prompt', 'storyboard', 'video', 'voice'].includes(picked.type) && <NodeSettings node={picked} actions={actions} />}<h4>{ff('ports')}</h4>{PORTS_LABEL(picked)}{edges.filter((e) => e.target === picked.id).map((e) => <div className="fc-input-wire" key={e.id}><span>{ff(doc.nodes.find((n) => n.id === e.source)!.type)}</span><button disabled={actions.readonly} aria-label={ff('delete')} onClick={() => void removeEdges([e])}>×</button></div>)}{['storyboard', 'video', 'voice'].includes(picked.type) && <button className="fc-primary" disabled={actions.readonly || busy.has(picked.id)} onClick={() => void begin(picked.id)}>▶ {ff('run')}</button>}</> : <p>{ff('noSelection')}</p>)}
-          {dock === 'history' && <><div className="fc-wallet"><h3>{ff('budget')}</h3>{budget && Object.entries(budget).map(([k, b]) => <p key={k}><span>{ff(k as 'image' | 'video' | 'voice')}</span><b>{usd(Math.max(0, b.cap - b.spent))}</b></p>)}</div>{gens.length === 0 && <p>{ff('noHistory')}</p>}{[...gens].reverse().map((g) => <article className="fc-history" key={g.id}>{g.url && g.kind === 'image' && <img src={g.url} alt="" />}<strong>{g.model}</strong><span>{ff(g.status)} · {usd(g.actualUsd ?? g.estUsd)}</span>{g.status === 'done' && <button disabled={actions.readonly} onClick={() => { update(g.nodeId, { selected: g.id, stale: true }); setSelected([g.nodeId]); void refresh() }}>{ff('version')}</button>}{g.error && <p>{serverText(g.error)}</p>}</article>)}</>}
-          {dock === 'assistant' && <><p>{ff('assistantHint')}</p><button className="fc-primary" disabled={actions.readonly || busy.has('assistant') || !picked || picked.type !== 'prompt'} onClick={() => void ask()}>{ff('preview')}</button>{plan && <div className="fc-agent-plan"><span className="fc-demo">{plan.source === 'demo' ? ff('demo') : `${ff('source')}: ${plan.source}`}</span><h3>{ff('storyboard')}</h3><p>{plan.storyboard.prompt}</p><small>{plan.storyboard.model}</small><h3>{ff('video')}</h3><p>{plan.video.prompt}</p><small>{plan.video.model} · {seconds(plan.video.duration)} · {usd(plan.planUsd)}</small><p>{ff('noAuto')}</p><button className="fc-primary" disabled={actions.readonly} onClick={() => { if (version.current !== plan.canvasVersion || current.current !== saved.current) { setNote(ff('changed')); return }; change(applyPromptPlan(current.current, plan)); setPlan(null); setDock(null) }}>{ff('apply')}</button></div>}</>}
+          {dock === 'history' && <><div className="fc-wallet"><h3>{ff('budget')}</h3>{budget && Object.entries(budget).map(([k, b]) => <p key={k}><span>{ff(k as 'image' | 'video' | 'voice')}</span><b>{usd(Math.max(0, b.cap - b.spent))}</b></p>)}</div>{gens.length === 0 && <p>{ff('noHistory')}</p>}{[...gens].reverse().map((g) => <article className="fc-history" key={g.id}>{g.url && g.kind === 'image' && <img src={g.url} alt="" />}<strong>{g.model}</strong><span>{ff(g.status)} · {usd(g.actualUsd ?? g.estUsd)}</span>{g.status === 'done' && <button disabled={actions.readonly} onClick={() => void withBusy(g.nodeId, async () => { if (!await selectGeneration(g, selectionIO())) throw new Error(ff('saveFirst')); setSelected([g.nodeId]); await refresh() })}>{ff('version')}</button>}{g.error && <p>{serverText(g.error)}</p>}</article>)}</>}
+          {dock === 'assistant' && <><p>{ff('assistantHint')}</p><button className="fc-primary" disabled={actions.readonly || busy.has('assistant') || !picked || picked.type !== 'prompt'} onClick={() => void ask()}>{ff('preview')}</button>{plan && <div className="fc-agent-plan"><span className="fc-demo">{plan.source === 'demo' ? ff('demo') : `${ff('source')}: ${plan.source}`}</span><h3>{ff('storyboard')}</h3><p>{plan.storyboard.prompt}</p><small>{plan.storyboard.model}</small><h3>{ff('video')}</h3><p>{plan.video.prompt}</p><small>{plan.video.model} · {seconds(plan.video.duration)} · {usd(plan.planUsd)}</small><p>{ff('noAuto')}</p><button className="fc-primary" disabled={actions.readonly} onClick={() => { if (session.version() !== plan.canvasVersion || session.doc() !== session.saved()) { setNote(ff('changed')); return }; change(applyPromptPlan(session.doc(), plan)); setPlan(null); setDock(null) }}>{ff('apply')}</button></div>}</>}
         </aside>}
       </div>
       </FreeformContext.Provider>
-      {(stale || readOnly) && <div className="fc-banner">{stale ? ff('conflict') : ff('readonly')}{stale && <button onClick={reload}>{ff('reload')}</button>}</div>}
+      {(stale || readOnly) && <div className="fc-banner">{stale ? ff('conflict') : ff('readonly')}{stale && <button onClick={() => void safeReload()}>{ff('reload')}</button>}</div>}
       {note && <div className="fc-notice" role="alert"><span>{note}</span><button aria-label={ff('close')} onClick={() => setNote('')}>×</button></div>}
+      {recoveryOpen && <div className="fc-modal-back"><div className="fc-modal" role="dialog" aria-modal="true" aria-label={ff('recoverTitle')}><h2>{ff('recoverTitle')}</h2><p>{ff('recoverBody')}</p><footer><button onClick={() => { session.discard(); setRecoveryOpen(false) }}>{ff('discardDraft')}</button><button className="fc-primary" onClick={() => { session.restore(); setRecoveryOpen(false) }}>{ff('restoreDraft')}</button></footer></div></div>}
+      {reloadAsk && <div className="fc-modal-back"><div className="fc-modal" role="dialog" aria-modal="true" aria-label={ff('unsavedTitle')}><h2>{ff('unsavedTitle')}</h2><p>{ff('unsavedBody')}</p><footer><button onClick={() => setReloadAsk(false)}>{ff('cancel')}</button><button onClick={() => void safeReload(true, true)}>{ff('discardDraft')}</button><button className="fc-primary" onClick={() => void safeReload(true)}>{ff('keepReload')}</button></footer></div></div>}
       {quote && <div className="fc-modal-back"><div className="fc-modal" role="dialog" aria-modal="true" aria-label={ff('quote')}><h2>{ff('quote')}</h2><p>{models.find((m) => m.id === doc.nodes.find((n) => n.id === quote.id)?.data.model)?.label}</p><strong>{usd(quote.usd)}</strong><p>{ff('left')}: {quote.remaining === null ? '—' : usd(quote.remaining)}</p><footer><button onClick={() => { setQuote(null); runQueue.current = []; setRunAll(false) }}>{ff('cancel')}</button><button className="fc-primary" disabled={busy.has(quote.id)} onClick={() => void begin(quote.id, true)}>{ff('confirm')}</button></footer></div></div>}
       {link && <div className="fc-modal-back"><div className="fc-modal" role="dialog" aria-modal="true" aria-label={ff('share')}><h2>{ff('share')}</h2><input readOnly value={link} onFocus={(e) => e.target.select()} /><footer><button onClick={() => setLink('')}>{ff('close')}</button><button className="fc-primary" onClick={() => void navigator.clipboard.writeText(link).then(() => setCopied(true), (e) => setNote(e.message))}>{ff(copied ? 'copied' : 'copy')}</button></footer></div></div>}
     </div>
