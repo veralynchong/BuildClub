@@ -938,17 +938,31 @@ GEN_WALLETS = {"image": ("gen_image", "DAILY_GEN_IMAGE_USD"), "video": ("gen_vid
                "voice": ("gen_voice", "DAILY_GEN_VOICE_USD")}
 
 
+budget_lock = threading.Lock()
+
+
 def gen_cap(kind: str) -> float:
     return globals()[GEN_WALLETS[kind][1]]  # looked up at call time, so a test can change the cap
 
 
-def gen_budget(kind: str, usd: float):
+def gen_budget(kind: str, usd: float, conn=None):
     """None when a generation of this kind may be paid for, else the 429 to return."""
     wallet, env = GEN_WALLETS[kind]
     cap = gen_cap(kind)
-    if spend(wallet, usd, cap):
-        return None
-    left = remaining(wallet, cap)
+    if conn is None:
+        if spend(wallet, usd, cap):
+            return None
+        left = remaining(wallet, cap)
+    else:  # workspace confirm owns budget_lock and BEGIN IMMEDIATE on this connection
+        key = f'spend:{today()}'
+        row = conn.execute('SELECT value FROM store WHERE key=?', (key,)).fetchone()
+        spent = json.loads(row[0]) if row else {}
+        total = round(spent.get(wallet, 0) + usd, 4)
+        if total <= cap:
+            conn.execute('INSERT OR REPLACE INTO store (key,value) VALUES (?,?)',
+                         (key, json.dumps({**spent, wallet: total})))
+            return None
+        left = round(max(0, cap - spent.get(wallet, 0)), 4)
     return error(429, f"Today's {kind} generation budget has US${left:.2f} left, and this needs US${usd:.2f}. "
                       f"The budget resets at midnight; to allow more, raise {env} in .env and restart the API.")
 
@@ -962,7 +976,7 @@ def gen_remaining() -> dict:
             for k, (w, _) in GEN_WALLETS.items()}
 
 
-gen_router = generations.make_router(db, load, lambda: MEDIA_DIR, gen_budget, gen_refund, gen_remaining)
+gen_router = generations.make_router(db, load, lambda: MEDIA_DIR, gen_budget, gen_refund, gen_remaining, confirmation_lock=budget_lock)
 gen_jobs = gen_router.jobs
 app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
@@ -973,9 +987,6 @@ app.include_router(kit.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(recheck.make_router(db, lambda u: is_video_link(u)))
 publishing.seed_demo(db)
-
-
-budget_lock = threading.Lock()
 
 
 def today() -> str:

@@ -105,7 +105,16 @@ def fake_editor_ok(monkeypatch):
 
 @pytest.fixture
 def slow_editor(monkeypatch):
-    release, started = threading.Event(), threading.Event()
+    release, started, settled = threading.Event(), threading.Event(), threading.Event()
+    original_run = renders.RenderJobs._run
+
+    def tracked_run(self, idea_id):
+        try:
+            return original_run(self, idea_id)
+        finally:
+            settled.set()
+
+    monkeypatch.setattr(renders.RenderJobs, '_run', tracked_run)
 
     def run(db, media, idea_id, work, out, step):
         started.set()
@@ -116,6 +125,9 @@ def slow_editor(monkeypatch):
     monkeypatch.setattr(renders, "run_editor", run)
     yield started, release
     release.set()
+    # Keep the test's DB_PATH/media and fakes alive through final database writes and cleanup.
+    if started.is_set():
+        assert settled.wait(5), 'render worker outlived the test fixture'
 
 
 @pytest.fixture

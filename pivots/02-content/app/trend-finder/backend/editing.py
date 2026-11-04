@@ -827,8 +827,11 @@ def make_router(db, load, media_dir: Callable[[], Path], gens) -> APIRouter:
         left = round(max(0.0, wallet["cap"] - wallet["spent"]), 4)
         if body.get("confirm") is not True:  # a quote: nothing is spent
             return {"usd": usd, "remaining": left, **({'canvasVersion': version, 'inputStamp': stamp} if stamp else {})}
-        if stamp and body.get('inputStamp') != stamp:
-            return error(409, 'The canvas changed somewhere else. Reload it.')
+        if stamp:
+            if body.get('inputStamp') != stamp:
+                return error(409, 'The canvas changed somewhere else. Reload it.')
+            return gens.confirm_workspace(idea_id, node_id, version, stamp, model,
+                                          {'prompt': text, 'inputStamp': stamp, 'canvasVersion': version}, usd)
         blocked = gens.budget("voice", usd)  # spends the estimate; a failed job gives it back
         if blocked is not None:
             return blocked
