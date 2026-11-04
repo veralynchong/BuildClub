@@ -74,7 +74,13 @@ async function main() {
     const pass = name => { assert.deepEqual(pageerrors, []); checks.push(name); console.log('PASS', name) }
     const fit = async () => {
       await page.getByRole('button', { name: 'Fit to screen', exact: true }).click()
-      await sleep(250) // fitView animates for 200 ms.
+      let previous, stable = 0
+      await until('fit animation settles', async () => {
+        const current = await page.locator('.react-flow__viewport').getAttribute('style')
+        stable = current === previous ? stable + 1 : 0
+        previous = current
+        return stable >= 3
+      })
     }
     await page.goto(BASE)
     await page.getByText('Log in', { exact: true }).first().click()
@@ -176,6 +182,12 @@ async function main() {
     assert.deepEqual(applied.s.generations, before.generations)
     assert.ok(!requests.some(r => r.method === 'POST' && /\/(gen|generate|run)(\/|$)/.test(r.path)), 'no generation queued')
     await fit()
+    const card = id => page.locator('.react-flow__node[data-id=' + JSON.stringify(id) + '] .fc-card')
+    const imageBox = await card(applied.image.id).boundingBox(), videoBox = await card(applied.video.id).boundingBox()
+    assert.ok(imageBox && videoBox)
+    const overlaps = imageBox.x < videoBox.x + videoBox.width && videoBox.x < imageBox.x + imageBox.width && imageBox.y < videoBox.y + videoBox.height && videoBox.y < imageBox.y + imageBox.height
+    assert.equal(overlaps, false, JSON.stringify({ imageBox, videoBox }))
+    fs.writeFileSync(path.join(evidence, 'legacy-cards-geometry.json'), JSON.stringify({ imageBox, videoBox, overlaps }, null, 2))
     await snap('02-assistant-applied')
     const reloaded = page.waitForResponse(r => new URL(r.url()).pathname === canvas && r.request().method() === 'GET' && r.status() === 200)
     await page.getByRole('button', { name: 'Reload', exact: true }).click()

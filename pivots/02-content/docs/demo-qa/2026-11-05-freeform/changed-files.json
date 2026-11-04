@@ -1,0 +1,503 @@
+{
+  "base": "e442b3ae80964ee53fda7265df61d18a210f66b3",
+  "scope": "All repository files changed by the freeform task; later docs-only updates keep the same paths",
+  "repositoryChanges": [
+    {
+      "status": "A",
+      "path": "bin/freeform-e2e.py"
+    },
+    {
+      "status": "M",
+      "path": "bin/verify.sh"
+    },
+    {
+      "status": "A",
+      "path": "bin/verify_offline.py"
+    },
+    {
+      "status": "M",
+      "path": "docs/STATUS.md"
+    },
+    {
+      "status": "M",
+      "path": "docs/test-log.md"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/agent.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/canvas.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/channels.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/cut_review.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/editing.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/generations.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/models.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/renders.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/server.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/tests/test_channel.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/tests/test_editing.py"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/backend/tests/test_offline_verify.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/tests/test_renders.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/backend/tests/test_server_text.py"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/backend/tests/test_workspaces.py"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/backend/workspaces.py"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/e2e/FLOWS.md"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/e2e/freeform-backend.cjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/e2e/freeform-isolation.cjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/e2e/freeform-legacy-entry.cjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/e2e/freeform-lifecycle.py"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/e2e/freeform-recovery.cjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/e2e/freeform-restart.cjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/e2e/freeform-timeout.cjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/e2e/freeform.cjs"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/render/render-reel.mjs"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/App.tsx"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/components/CanvasPick.tsx"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/components/SharedReviewPage.tsx"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/components/canvas/CanvasScreen.tsx"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/components/canvas/FreeformNode.tsx"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/components/canvas/freeformContext.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/components/canvas/nodes/Ports.tsx"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/components/editor/EditorPanel.tsx"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/components/editor/ExportBar.tsx"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/components/editor/ShotClips.tsx"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/components/editor/tools/MusicTool.tsx"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/components/editor/tools/VoiceTool.tsx"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/agent.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/api.ts"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/freeform.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/graph.ts"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/legacy.ts"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/mediaReplacement.ts"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/operations.ts"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/placement.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/ports.ts"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/resource.ts"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/session.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/shell.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/types.ts"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/lib/canvas/voices.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/cut.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/editor/api.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/editor/useEditProject.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/editor/useSources.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/editor/useTimelineActions.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/share.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/strings/canvas.ts"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/src/lib/strings/freeform.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/lib/strings/server.ts"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/src/styles/canvas.css"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/unit/agent.test.mjs"
+    },
+    {
+      "status": "M",
+      "path": "pivots/02-content/app/trend-finder/unit/canvasEdges.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/unit/canvasEntry.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/unit/canvasFinalLifecycle.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/unit/canvasLegacyIntegration.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/unit/canvasLegacyMedia.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/unit/canvasPlacement.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/unit/canvasRecovery.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/unit/freeform.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/app/trend-finder/unit/legacyVoicePair.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/backend-audio.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/backend-ffprobe.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/backend-output-frame.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/backend-results.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/changed-files.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/cleanup-audit.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/legacy-entry-01-direct-editor-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/legacy-entry-02-assistant-applied-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/legacy-entry-02-assistant-reloaded-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/legacy-entry-03-auto-recovered-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/legacy-entry-03-held-put-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/legacy-entry-cleanup-audit.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/legacy-entry-legacy-cards-geometry.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/legacy-entry-results.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-01-empty-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-02-connected-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-03-review-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-04-editor-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-05-zh-Hant-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-06-inspector-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-canvas-geometry.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-cleanup-audit.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-connected-header-geometry.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-ffprobe.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-output-frame.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-port-styles.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-restart-approved.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-restart-audit.jsonl"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-restart-rejected.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-results.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-timeline-geometry.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-voice-volume.txt"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/recovery-assistant-preview-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/recovery-cleanup-audit.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/recovery-drag-targets.jsonl"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/recovery-filtered-create-menu-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/recovery-recovery-final-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/recovery-recovery-results.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/restart-deadline-cleanup-audit.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/restart-invalid-marker-cleanup-audit.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/tested-product-sources.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/ui-cleanup-audit.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/ui-failure-1440.png"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/demo-qa/2026-11-05-freeform/ui-results.json"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/plans/2026-11-05-freeform-canvas-plan.md"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/plans/2026-11-05-freeform-canvas-status.md"
+    },
+    {
+      "status": "A",
+      "path": "pivots/02-content/docs/plans/2026-11-05-freeform-canvas-tasks.md"
+    }
+  ],
+  "localHandoff": "/Users/tommy/.claude/handoffs/BuildClub.md (not committed)"
+}

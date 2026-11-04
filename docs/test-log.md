@@ -10,6 +10,10 @@ shows no change to the code it covers, do not run it again.
 
 | Date (AEDT) | Branch @ sha | What ran | Result | Cost | Evidence |
 |---|---|---|---|---|---|
+| 2026-11-05 | feat/freeform-canvas @f0f97c9 | Full offline gate, build/lint after accepted legacy card placement | 1023 passed, 2 skipped; frontend PASS; build/lint0 | US$0 | Freeform Status |
+| 2026-11-05 | @6e65cb1 + restart driver assertions | Main UI plus true server restart in approved/rejected states | 13 PASS; state/public JSON/media SHA256 unchanged; survivors={} | US$0/mock | QA main-ui-results/restart-*.json |
+| 2026-11-05 | @f0f97c9 | Legacy entry/real assistant/NoShots plus card bounds | 3 PASS; overlaps=false; survivors={} | US$0/mock | QA legacy-entry-results/legacy-cards-geometry |
+
 | 2026-11-05 | feat/freeform-canvas @4e92a14 | full offline gate; frontend build/lint | 1023 passed, 2 skipped; frontend PASS; build/lint exit0 | US$0 | Freeform Status; local-only sandbox |
 | 2026-11-05 | 4e92a14 + scoped port-padding fix | Main 1440 UI, real local MP4, approval/send-back, persistence, geometry, zh-Hant | 11 PASS; cleanup survivors={} | US$0/mock | pivots/02-content/docs/demo-qa/2026-11-05-freeform/main-ui-* |
 | 2026-11-05 | same tested product tree | Recovery/assistant/CAS/legacy kit/voice/navigation isolation | 5 groups PASS; errors=[], routeErrors=[], survivors={} | US$0/mock | same QA directory/recovery-* |

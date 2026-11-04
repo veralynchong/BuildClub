@@ -9,9 +9,11 @@
     "real editor UI trims, splits, reorders and saves a text overlay",
     "UI export produces real 1080x1920 AAC MP4 of timeline length with connected voice audible",
     "signed-out client review plays and approves workspace export without creating or approving a plan",
+    "actual backend restart preserves approved review, graph, generations, editor, voice and byte-identical media",
     "new export clears old approval and signed-out send-back blocks unchanged resend",
-    "zh-Hant workspace UI reloads existing content at 1440 without page overflow"
+    "zh-Hant workspace UI reloads existing content at 1440 without page overflow",
+    "actual backend restart preserves rejected review, graph, generations, editor, voice and byte-identical media"
   ],
-  "workspaceId": "ws_03c6efe460404ac588117585f5b2a0d0",
+  "workspaceId": "ws_863af390e3af4d24a81d27c87ac0c70f",
   "errors": []
 }

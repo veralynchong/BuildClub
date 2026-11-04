@@ -1,0 +1,25 @@
+{
+  "acknowledgement": {
+    "token": "f456ac08a26ad918b20fc9893f4fe396",
+    "oldPid": 93208,
+    "newPid": 93686,
+    "oldExit": -15
+  },
+  "graphVersion": 24,
+  "editVersion": 11,
+  "review": {
+    "status": "rejected",
+    "sentAt": 1793834719696,
+    "decidedAt": 1793834720211,
+    "reason": "Please change the closing text."
+  },
+  "mediaSha256": {
+    "/api/workspaces/ws_863af390e3af4d24a81d27c87ac0c70f/gen/oCEjk5YwvKYK/file": "0aaf8c3c2b57fe89ffb70925de794f53d605d9fa049287e4e76a71047d500334",
+    "/api/workspaces/ws_863af390e3af4d24a81d27c87ac0c70f/gen/Rm83M7UctbPL/file": "ad56996e884042619051128a15f4c86500c85a5af5355d3a0b37fdb097d337ec",
+    "/api/workspaces/ws_863af390e3af4d24a81d27c87ac0c70f/gen/D7PSRCLoN0KZ/file": "ea32fa8b978abee2b557eb453643a3d2ecb13fe83c7aabbc6ffc36504460a4c0",
+    "/api/workspaces/ws_863af390e3af4d24a81d27c87ac0c70f/gen/uKLK9SVXkL5S/file": "02ad64fb46537b0364dbc37143489cda1bd434289f917933f025ae034b1cb9e6",
+    "/api/workspaces/ws_863af390e3af4d24a81d27c87ac0c70f/gen/zA_qlS-vNRSA/file": "36044960a57eef20fd5a16bacfcfb82f52ed6ce74de1695565e79db9d3ece541",
+    "/api/workspaces/ws_863af390e3af4d24a81d27c87ac0c70f/edit/voice/c207e2epzwLa/file": "ea32fa8b978abee2b557eb453643a3d2ecb13fe83c7aabbc6ffc36504460a4c0",
+    "/api/workspaces/ws_863af390e3af4d24a81d27c87ac0c70f/cut/file?v=1793834717705356602": "140bc012a63eec30f3f9ca5faea489ff7002cab3948154b66b8cdb7879bb3a11"
+  }
+}

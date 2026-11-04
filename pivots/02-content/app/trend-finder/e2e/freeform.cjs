@@ -195,6 +195,9 @@ async function main() {
     assert.deepEqual((await state()).takes, [])
     ok('real video upload is durable without creating shots or takes and enters the timeline')
     await fit()
+    const connectedHeader = await page.locator('.fc-top').boundingBox()
+    assert.ok(connectedHeader.y >= -0.1 && connectedHeader.y <= 1 && connectedHeader.height >= 57, JSON.stringify(connectedHeader))
+    fs.writeFileSync(path.join(evidence, 'connected-header-geometry.json'), JSON.stringify(connectedHeader, null, 2))
     await page.screenshot({ path: path.join(evidence, '02-connected-1440.png') })
     await flowNode(image.id).locator('.fc-node-title').click()
     await page.locator('.fc-floating').getByRole('button', { name: 'Settings', exact: true }).click()
@@ -214,6 +217,48 @@ async function main() {
     await page.getByRole('button', { name: /Review link/ }).click()
     const dialog = page.getByRole('dialog')
     const reviewUrl = new URL(await dialog.locator('input').inputValue(), BASE).href
+    const restartWithState = async label => {
+      const request = process.env.FREEFORM_RESTART_REQUEST, done = process.env.FREEFORM_RESTART_DONE
+      assert.ok(request && done, 'use the owned restart supervisor')
+      const graph = await state(), editBefore = await api(base + '/edit'), voicesBefore = await api(base + '/edit/voice'), cutBefore = await api(base + '/cut')
+      const publicUrl = BASE + '/api/review/' + encodeURIComponent(new URL(reviewUrl).pathname.split('/').pop())
+      const publicBefore = await approver.request.get(publicUrl)
+      assert.equal(publicBefore.status(), 200)
+      const publicData = await publicBefore.json()
+      const urls = [...new Set([...graph.generations.map(g => g.url), ...voicesBefore.voices.map(v => v.url), cutBefore.output.url].filter(Boolean))]
+      const mediaHashes = async () => {
+        const hashes = {}
+        for (const url of urls) {
+          const address = new URL(url, BASE)
+          assert.equal(address.origin, BASE)
+          const response = await context.request.get(address.href)
+          assert.equal(response.status(), 200)
+          hashes[url] = require('node:crypto').createHash('sha256').update(await response.body()).digest('hex')
+        }
+        return hashes
+      }
+      const beforeHashes = await mediaHashes()
+      const token = require('node:crypto').randomBytes(16).toString('hex')
+      fs.writeFileSync(request + '.tmp', token)
+      fs.renameSync(request + '.tmp', request)
+      const acknowledgement = await until('owned backend restart ' + label, async () => {
+        if (!fs.existsSync(done)) return false
+        const ack = JSON.parse(fs.readFileSync(done, 'utf8'))
+        return ack.token === token && ack
+      }, 45000)
+      assert.notEqual(acknowledgement.oldPid, acknowledgement.newPid)
+      assert.ok([0, -15].includes(acknowledgement.oldExit))
+      assert.deepEqual(await state(), graph)
+      assert.deepEqual(await api(base + '/edit'), editBefore)
+      assert.deepEqual(await api(base + '/edit/voice'), voicesBefore)
+      assert.deepEqual(await api(base + '/cut'), cutBefore)
+      const publicAfter = await approver.request.get(publicUrl)
+      assert.equal(publicAfter.status(), 200)
+      assert.deepEqual(await publicAfter.json(), publicData)
+      assert.deepEqual(await mediaHashes(), beforeHashes)
+      fs.writeFileSync(path.join(evidence, 'restart-' + label + '.json'), JSON.stringify({ acknowledgement, graphVersion: graph.version, editVersion: editBefore.version, review: cutBefore.review, mediaSha256: beforeHashes }, null, 2))
+      ok('actual backend restart preserves ' + label + ' review, graph, generations, editor, voice and byte-identical media')
+    }
     await dialog.getByRole('button', { name: 'Close', exact: true }).click()
     // Isolate the connected voice in the rendered audio, keeping both visual clips.
     const project = await api(base + '/edit')
@@ -279,6 +324,7 @@ async function main() {
     await until('waiting review', async () => (await api(base + '/cut')).review?.status === 'waiting')
     approver = await localContext(browser)
     const review = await approver.newPage()
+    review.on('pageerror', error => errors.push('review: ' + error.message))
     await review.goto(reviewUrl)
     await review.getByText('Blank canvas proof', { exact: true }).first().waitFor()
     await review.locator('video').evaluate(async element => { element.muted = true; await element.play() })
@@ -288,6 +334,7 @@ async function main() {
     await until('approved persisted', async () => (await api(base + '/cut')).review?.status === 'approved')
     assert.equal((await api('/api/ideas') ?? []).length, 0)
     ok('signed-out client review plays and approves workspace export without creating or approving a plan')
+    await restartWithState('approved')
     await page.locator('[data-step="export"]').click()
     await until('new export retires previous approval', async () => { const next = await api(base + '/cut'); if (next.status === 'failed') throw new Error(next.error); return next.status === 'done' && next.output?.url !== cut.output.url && !next.review }, 240000)
     await page.locator('[data-step="send"]').click()
@@ -311,6 +358,7 @@ async function main() {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 1440))
     await page.screenshot({ path: path.join(evidence, '05-zh-Hant-1440.png') })
     ok('zh-Hant workspace UI reloads existing content at 1440 without page overflow')
+    await restartWithState('rejected')
     assert.deepEqual(errors, [])
     fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ passed: checks, workspaceId: workspace.id, errors }, null, 2))
   } catch (error) {

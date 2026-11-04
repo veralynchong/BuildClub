@@ -1,8 +1,9 @@
 {
   "date": "2026-11-05 Sydney",
   "base": "e442b3ae80964ee53fda7265df61d18a210f66b3",
-  "productHead": "4e92a14",
-  "workingTreeAddition": "scoped fc-port padding reset; measured and browser-tested",
+  "currentProductHead": "f0f97c9",
+  "mainEvidence": "6e65cb1 plus restart assertions; later application delta is legacy-only placement",
+  "legacyLayoutEvidence": "f0f97c9; actual no-overlap geometry",
   "sourceSha256": {
     "pivots/02-content/app/trend-finder/backend/agent.py": "b3225bb8c5cd02fb309b774cdac27d4c26a6b19c493c7c65dc9bd44de02ba53d",
     "pivots/02-content/app/trend-finder/backend/canvas.py": "03ffe47fb7ea3109fc1c17ffa12ab09341cb40073291fb19091bf28d98853ccb",
@@ -24,7 +25,7 @@
     "pivots/02-content/app/trend-finder/src/App.tsx": "0a9db97672957013a9afdb9900f1c4adf08447ef9982485f0b8986851a5a6780",
     "pivots/02-content/app/trend-finder/src/components/CanvasPick.tsx": "746ef980a27f40d531a83329701e69372b8b364aeb67cb29d01647a2574e2e1e",
     "pivots/02-content/app/trend-finder/src/components/SharedReviewPage.tsx": "bcd2e01fb6edc889e385c99b3358aa41f915d974f2fe356bb53abaa35d47f74a",
-    "pivots/02-content/app/trend-finder/src/components/canvas/CanvasScreen.tsx": "b9e5b51da99c368bfd3961c1351bb2cd69fbb7dc8290a3c9d8b03033bc0f411c",
+    "pivots/02-content/app/trend-finder/src/components/canvas/CanvasScreen.tsx": "159662caebcc38b06fadf9f0097dd033b7351554b769d0790ee3313852ba5da4",
     "pivots/02-content/app/trend-finder/src/components/canvas/FreeformNode.tsx": "132032ad958cd00891d9c829138122aa3cdf59ad13068fc8cacce9dec82e88f3",
     "pivots/02-content/app/trend-finder/src/components/canvas/freeformContext.ts": "ecd839fa218bdcb7ddd771347ecac16de79d6d85c5f7e7a8fc0609087e034516",
     "pivots/02-content/app/trend-finder/src/components/canvas/nodes/Ports.tsx": "1fe5f5d0ea9076d7fc5959dfd79cfd30bc555c5271f22f5d58aaff538395c880",
@@ -33,6 +34,7 @@
     "pivots/02-content/app/trend-finder/src/components/editor/ShotClips.tsx": "35237bbfdde4ba4620a9802c9ed075d81496b03158b3b64a4b3e1243eeecb5c9",
     "pivots/02-content/app/trend-finder/src/components/editor/tools/MusicTool.tsx": "c61761c29571a569a41582812d6e93702c3811a4aa50136ada9eaeedc0f6b104",
     "pivots/02-content/app/trend-finder/src/components/editor/tools/VoiceTool.tsx": "aabd607badb5cffc5f85ec4a57390dd38e0a21a993347ec76451186b51279532",
+    "pivots/02-content/app/trend-finder/src/lib/canvas/agent.ts": "0004c3655fd7a2d6401f8da29fa8a31bcb9eafccd665a801657c9e11c2c98081",
     "pivots/02-content/app/trend-finder/src/lib/canvas/api.ts": "13431a787f4b73c0879e793f78626bb1b73b08795f83bbb5ee8d9d1bf629a982",
     "pivots/02-content/app/trend-finder/src/lib/canvas/freeform.ts": "41b73ac34bbb0e526ef5eca28b1ffd94bf59ad73e75849e5b64290e4893a7412",
     "pivots/02-content/app/trend-finder/src/lib/canvas/graph.ts": "0810ce6ba13fd9ac69d48992c121ceefb44a13fa30debdbf10be960fe2e20e29",

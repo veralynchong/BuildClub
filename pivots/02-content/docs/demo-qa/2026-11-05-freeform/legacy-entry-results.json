@@ -11,439 +11,439 @@
       "method": "GET",
       "path": "/api/health",
       "body": null,
-      "at": 1793833659959
+      "at": 1793834866145
     },
     {
       "method": "GET",
       "path": "/api/search",
       "body": null,
-      "at": 1793833660080
+      "at": 1793834866273
     },
     {
       "method": "GET",
       "path": "/api/clients",
       "body": null,
-      "at": 1793833660245
+      "at": 1793834866422
     },
     {
       "method": "GET",
       "path": "/api/ideas",
       "body": null,
-      "at": 1793833660245
+      "at": 1793834866423
     },
     {
       "method": "GET",
       "path": "/api/library",
       "body": null,
-      "at": 1793833660245
+      "at": 1793834866423
     },
     {
       "method": "GET",
       "path": "/api/health",
       "body": null,
-      "at": 1793833660245
+      "at": 1793834866423
     },
     {
       "method": "PUT",
       "path": "/api/clients",
       "body": "[]",
-      "at": 1793833660291
+      "at": 1793834866451
     },
     {
       "method": "PUT",
       "path": "/api/library",
       "body": "{\"videos\":[],\"formats\":[]}",
-      "at": 1793833660291
+      "at": 1793834866452
     },
     {
       "method": "GET",
       "path": "/api/health",
       "body": null,
-      "at": 1793833660967
+      "at": 1793834867119
     },
     {
       "method": "GET",
       "path": "/api/clients",
       "body": null,
-      "at": 1793833660981
+      "at": 1793834867132
     },
     {
       "method": "GET",
       "path": "/api/ideas",
       "body": null,
-      "at": 1793833660981
+      "at": 1793834867132
     },
     {
       "method": "GET",
       "path": "/api/library",
       "body": null,
-      "at": 1793833660982
+      "at": 1793834867132
     },
     {
       "method": "GET",
       "path": "/api/health",
       "body": null,
-      "at": 1793833660982
+      "at": 1793834867133
     },
     {
       "method": "GET",
       "path": "/api/publishing/summary",
       "body": null,
-      "at": 1793833661314
+      "at": 1793834867473
     },
     {
       "method": "GET",
       "path": "/api/search",
       "body": null,
-      "at": 1793833661315
+      "at": 1793834867474
     },
     {
       "method": "GET",
       "path": "/api/production",
       "body": null,
-      "at": 1793833661739
+      "at": 1793834867899
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/canvas",
       "body": null,
-      "at": 1793833662357
+      "at": 1793834868633
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/cut",
       "body": null,
-      "at": 1793833662398
+      "at": 1793834868672
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice/pending",
       "body": null,
-      "at": 1793833662398
+      "at": 1793834868673
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "body": null,
-      "at": 1793833662399
+      "at": 1793834868673
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit",
       "body": null,
-      "at": 1793833662399
+      "at": 1793834868673
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/sources",
       "body": null,
-      "at": 1793833662400
+      "at": 1793834868674
     },
     {
       "method": "GET",
       "path": "/api/gen/models",
       "body": null,
-      "at": 1793833662400
+      "at": 1793834868674
     },
     {
       "method": "GET",
       "path": "/api/gen/budget",
       "body": null,
-      "at": 1793833662400
+      "at": 1793834868675
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "body": null,
-      "at": 1793833662401
+      "at": 1793834868675
     },
     {
       "method": "GET",
       "path": "/api/clients/legacy-entry-e2e/kit",
       "body": null,
-      "at": 1793833662401
+      "at": 1793834868675
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "body": null,
-      "at": 1793833662401
+      "at": 1793834868675
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/cut",
       "body": null,
-      "at": 1793833662605
+      "at": 1793834868862
     },
     {
       "method": "POST",
       "path": "/api/ideas/legacy-entry-approved/agent/plan",
       "body": "{\"shotId\":\"legacy_entry_shot_2\"}",
-      "at": 1793833663398
+      "at": 1793834870027
     },
     {
       "method": "PUT",
       "path": "/api/ideas/legacy-entry-approved/canvas",
-      "body": "{\"version\":2,\"doc\":{\"nodes\":[{\"id\":\"n_shot_legacy_entry_shot_1\",\"type\":\"shot\",\"shotId\":\"legacy_entry_shot_1\",\"position\":{\"x\":0,\"y\":0},\"data\":{\"removed\":false}},{\"id\":\"n_sb_legacy_entry_shot_1\",\"type\":\"storyboard\",\"shotId\":\"legacy_entry_shot_1\",\"position\":{\"x\":360,\"y\":0},\"data\":{\"primary\":true,\"model\":\"mock-image\",\"prompt\":\"\",\"selected\":null,\"stale\":false}},{\"id\":\"n_shot_legacy_entry_shot_2\",\"type\":\"shot\",\"shotId\":\"legacy_entry_shot_2\",\"position\":{\"x\":0,\"y\":480},\"data\":{\"removed\":false}},{\"id\":\"n_sb_legacy_entry_shot_2\",\"type\":\"storyboard\",\"shotId\":\"legacy_entry_shot_2\",\"position\":{\"x\":360,\"y\":480},\"data\":{\"primary\":true,\"model\":\"mock-image\",\"prompt\":\"Opening frame of the shot: A handmade cup in cafe scene 2.\",\"selected\":null,\"stale\":false}},{\"id\":\"n_shot_legacy_entry_shot_3\",\"type\":\"shot\",\"shotId\":\"legacy_entry_shot_3\",\"position\":{\"x\":0,\"y\":960},\"data\":{\"removed\":false}},{\"id\":\"n_sb_legacy_entry_shot_3\",\"type\":\"storyboard\",\"shotId\":\"legacy_entry_shot_3\",\"position\":{\"x\":360,\"y\":960},\"data\":{\"primary\":true,\"model\":\"mock-image\",\"prompt\":\"\",\"selected\":null,\"stale\":false}},{\"id\":\"n_legacy_entry_prompt\",\"type\":\"prompt\",\"position\":{\"x\":-400,\"y\":0},\"data\":{\"text\":\"Keep this unrelated prompt.\"}},{\"id\":\"n_legacy_entry_kit\",\"type\":\"kit\",\"position\":{\"x\":-400,\"y\":350},\"data\":{\"kitItems\":[]}},{\"id\":\"n_video_06k9pa\",\"type\":\"video\",\"shotId\":\"legacy_entry_shot_2\",\"position\":{\"x\":600,\"y\":480},\"data\":{\"model\":\"mock-video\",\"prompt\":\"Camera and subject move naturally through the shot: A handmade cup in cafe scene 2.\",\"duration\":4}}],\"edges\":[{\"id\":\"e_n_shot_legacy_entry_shot_1_n_sb_legacy_entry_shot_1\",\"source\":\"n_shot_legacy_entry_shot_1\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_1\",\"targetHandle\":\"in:text\"},{\"id\":\"e_n_shot_legacy_entry_shot_2_n_sb_legacy_entry_shot_2\",\"source\":\"n_shot_legacy_entry_shot_2\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_2\",\"targetHandle\":\"in:text\"},{\"id\":\"e_n_shot_legacy_entry_shot_3_n_sb_legacy_entry_shot_3\",\"source\":\"n_shot_legacy_entry_shot_3\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_3\",\"targetHandle\":\"in:text\"},{\"id\":\"e_n_legacy_entry_kit_n_sb_legacy_entry_shot_1_in:kit\",\"source\":\"n_legacy_entry_kit\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_1\",\"targetHandle\":\"in:kit\"},{\"id\":\"e_n_legacy_entry_kit_n_sb_legacy_entry_shot_2_in:kit\",\"source\":\"n_legacy_entry_kit\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_2\",\"targetHandle\":\"in:kit\"},{\"id\":\"e_n_legacy_entry_kit_n_sb_legacy_entry_shot_3_in:kit\",\"source\":\"n_legacy_entry_kit\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_3\",\"targetHandle\":\"in:kit\"},{\"id\":\"e_n_sb_legacy_entry_shot_2_n_video_06k9pa_in:start\",\"source\":\"n_sb_legacy_entry_shot_2\",\"sourceHandle\":\"out\",\"target\":\"n_video_06k9pa\",\"targetHandle\":\"in:start\"}],\"viewport\":{\"x\":0,\"y\":0,\"zoom\":1}}}",
-      "at": 1793833664120
+      "body": "{\"version\":2,\"doc\":{\"nodes\":[{\"id\":\"n_shot_legacy_entry_shot_1\",\"type\":\"shot\",\"shotId\":\"legacy_entry_shot_1\",\"position\":{\"x\":0,\"y\":0},\"data\":{\"removed\":false}},{\"id\":\"n_sb_legacy_entry_shot_1\",\"type\":\"storyboard\",\"shotId\":\"legacy_entry_shot_1\",\"position\":{\"x\":360,\"y\":0},\"data\":{\"primary\":true,\"model\":\"mock-image\",\"prompt\":\"\",\"selected\":null,\"stale\":false}},{\"id\":\"n_shot_legacy_entry_shot_2\",\"type\":\"shot\",\"shotId\":\"legacy_entry_shot_2\",\"position\":{\"x\":0,\"y\":480},\"data\":{\"removed\":false}},{\"id\":\"n_sb_legacy_entry_shot_2\",\"type\":\"storyboard\",\"shotId\":\"legacy_entry_shot_2\",\"position\":{\"x\":360,\"y\":480},\"data\":{\"primary\":true,\"model\":\"mock-image\",\"prompt\":\"Opening frame of the shot: A handmade cup in cafe scene 2.\",\"selected\":null,\"stale\":false}},{\"id\":\"n_shot_legacy_entry_shot_3\",\"type\":\"shot\",\"shotId\":\"legacy_entry_shot_3\",\"position\":{\"x\":0,\"y\":960},\"data\":{\"removed\":false}},{\"id\":\"n_sb_legacy_entry_shot_3\",\"type\":\"storyboard\",\"shotId\":\"legacy_entry_shot_3\",\"position\":{\"x\":360,\"y\":960},\"data\":{\"primary\":true,\"model\":\"mock-image\",\"prompt\":\"\",\"selected\":null,\"stale\":false}},{\"id\":\"n_legacy_entry_prompt\",\"type\":\"prompt\",\"position\":{\"x\":-400,\"y\":0},\"data\":{\"text\":\"Keep this unrelated prompt.\"}},{\"id\":\"n_legacy_entry_kit\",\"type\":\"kit\",\"position\":{\"x\":-400,\"y\":350},\"data\":{\"kitItems\":[]}},{\"id\":\"n_video_rvf419\",\"type\":\"video\",\"shotId\":\"legacy_entry_shot_2\",\"position\":{\"x\":750,\"y\":480},\"data\":{\"model\":\"mock-video\",\"prompt\":\"Camera and subject move naturally through the shot: A handmade cup in cafe scene 2.\",\"duration\":4}}],\"edges\":[{\"id\":\"e_n_shot_legacy_entry_shot_1_n_sb_legacy_entry_shot_1\",\"source\":\"n_shot_legacy_entry_shot_1\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_1\",\"targetHandle\":\"in:text\"},{\"id\":\"e_n_shot_legacy_entry_shot_2_n_sb_legacy_entry_shot_2\",\"source\":\"n_shot_legacy_entry_shot_2\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_2\",\"targetHandle\":\"in:text\"},{\"id\":\"e_n_shot_legacy_entry_shot_3_n_sb_legacy_entry_shot_3\",\"source\":\"n_shot_legacy_entry_shot_3\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_3\",\"targetHandle\":\"in:text\"},{\"id\":\"e_n_legacy_entry_kit_n_sb_legacy_entry_shot_1_in:kit\",\"source\":\"n_legacy_entry_kit\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_1\",\"targetHandle\":\"in:kit\"},{\"id\":\"e_n_legacy_entry_kit_n_sb_legacy_entry_shot_2_in:kit\",\"source\":\"n_legacy_entry_kit\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_2\",\"targetHandle\":\"in:kit\"},{\"id\":\"e_n_legacy_entry_kit_n_sb_legacy_entry_shot_3_in:kit\",\"source\":\"n_legacy_entry_kit\",\"sourceHandle\":\"out\",\"target\":\"n_sb_legacy_entry_shot_3\",\"targetHandle\":\"in:kit\"},{\"id\":\"e_n_sb_legacy_entry_shot_2_n_video_rvf419_in:start\",\"source\":\"n_sb_legacy_entry_shot_2\",\"sourceHandle\":\"out\",\"target\":\"n_video_rvf419\",\"targetHandle\":\"in:start\"}],\"viewport\":{\"x\":0,\"y\":0,\"zoom\":1}}}",
+      "at": 1793834870745
     },
     {
       "method": "PUT",
       "path": "/api/ideas/legacy-entry-approved/edit",
       "body": "{\"version\":0,\"project\":{\"fps\":30,\"width\":1080,\"height\":1920,\"clips\":[],\"texts\":[],\"captions\":{\"enabled\":true},\"music\":null,\"voiceover\":[],\"primaries\":{},\"showLogo\":false,\"logoSize\":\"medium\",\"logoCorner\":\"top-right\"}}",
-      "at": 1793833664526
+      "at": 1793834871531
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/cut",
       "body": null,
-      "at": 1793833664554
+      "at": 1793834871557
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice/pending",
       "body": null,
-      "at": 1793833664554
+      "at": 1793834871557
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "body": null,
-      "at": 1793833664555
+      "at": 1793834871557
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit",
       "body": null,
-      "at": 1793833664555
+      "at": 1793834871557
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/sources",
       "body": null,
-      "at": 1793833664556
+      "at": 1793834871558
     },
     {
       "method": "GET",
       "path": "/api/gen/models",
       "body": null,
-      "at": 1793833664556
+      "at": 1793834871558
     },
     {
       "method": "GET",
       "path": "/api/gen/budget",
       "body": null,
-      "at": 1793833664556
+      "at": 1793834871558
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "body": null,
-      "at": 1793833664557
+      "at": 1793834871558
     },
     {
       "method": "GET",
       "path": "/api/clients/legacy-entry-e2e/kit",
       "body": null,
-      "at": 1793833664557
+      "at": 1793834871558
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "body": null,
-      "at": 1793833664557
+      "at": 1793834871559
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/canvas",
       "body": null,
-      "at": 1793833664557
+      "at": 1793834871559
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/cut",
       "body": null,
-      "at": 1793833664608
+      "at": 1793834871606
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice/pending",
       "body": null,
-      "at": 1793833664609
+      "at": 1793834871607
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "body": null,
-      "at": 1793833664609
+      "at": 1793834871607
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit",
       "body": null,
-      "at": 1793833664609
+      "at": 1793834871607
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/sources",
       "body": null,
-      "at": 1793833664609
+      "at": 1793834871607
     },
     {
       "method": "GET",
       "path": "/api/gen/models",
       "body": null,
-      "at": 1793833664610
+      "at": 1793834871608
     },
     {
       "method": "GET",
       "path": "/api/gen/budget",
       "body": null,
-      "at": 1793833664610
+      "at": 1793834871608
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "body": null,
-      "at": 1793833664610
+      "at": 1793834871608
     },
     {
       "method": "GET",
       "path": "/api/clients/legacy-entry-e2e/kit",
       "body": null,
-      "at": 1793833664611
+      "at": 1793834871608
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "body": null,
-      "at": 1793833664611
+      "at": 1793834871608
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/cut",
       "body": null,
-      "at": 1793833664652
+      "at": 1793834871656
     },
     {
       "method": "GET",
       "path": "/api/health",
       "body": null,
-      "at": 1793833665137
+      "at": 1793834872535
     },
     {
       "method": "GET",
       "path": "/api/production",
       "body": null,
-      "at": 1793833665164
+      "at": 1793834872546
     },
     {
       "method": "GET",
       "path": "/api/clients",
       "body": null,
-      "at": 1793833665165
+      "at": 1793834872547
     },
     {
       "method": "GET",
       "path": "/api/ideas",
       "body": null,
-      "at": 1793833665166
+      "at": 1793834872547
     },
     {
       "method": "GET",
       "path": "/api/library",
       "body": null,
-      "at": 1793833665166
+      "at": 1793834872547
     },
     {
       "method": "GET",
       "path": "/api/health",
       "body": null,
-      "at": 1793833665166
+      "at": 1793834872547
     },
     {
       "method": "GET",
       "path": "/api/publishing/summary",
       "body": null,
-      "at": 1793833665493
+      "at": 1793834872667
     },
     {
       "method": "GET",
       "path": "/api/search",
       "body": null,
-      "at": 1793833665493
+      "at": 1793834872667
     },
     {
       "method": "GET",
       "path": "/api/workspaces",
       "body": null,
-      "at": 1793833665904
+      "at": 1793834873060
     },
     {
       "method": "PUT",
       "path": "/api/ideas",
-      "body": "[{\"id\":\"legacy-entry-approved\",\"videoId\":\"link-t4\",\"clientId\":\"legacy-entry-e2e\",\"status\":\"approved\",\"dueDate\":\"2026-12-01\",\"notes\":\"\",\"shots\":[{\"id\":\"legacy_entry_shot_1\",\"time\":\"1s\",\"shot\":\"Cafe scene 1\",\"text\":\"Scene 1\",\"line\":\"A handmade cup in cafe scene 1.\"},{\"id\":\"legacy_entry_shot_2\",\"time\":\"2s\",\"shot\":\"Cafe scene 2\",\"text\":\"Scene 2\",\"line\":\"A handmade cup in cafe scene 2.\"},{\"id\":\"legacy_entry_shot_3\",\"time\":\"3s\",\"shot\":\"Cafe scene 3\",\"text\":\"Scene 3\",\"line\":\"A handmade cup in cafe scene 3.\"}],\"updatedAt\":1793833660881},{\"id\":\"legacy-entry-delayed\",\"videoId\":\"legacy-entry-delayed-video\",\"clientId\":\"legacy-entry-e2e\",\"status\":\"approved\",\"dueDate\":\"2026-12-02\",\"notes\":\"\",\"updatedAt\":1793833665063,\"shots\":[{\"time\":\"0–2s\",\"shot\":\"Top-down: tofu cubes drop into hot oil\",\"text\":\"Crispy tofu in 5 min\",\"id\":\"s1\"},{\"time\":\"2–6s\",\"shot\":\"Close-up: cubes turning golden, tongs flipping\",\"id\":\"s2\"},{\"time\":\"6–10s\",\"shot\":\"Sauce poured over, quick toss in the pan\",\"id\":\"s3\"},{\"time\":\"10–14s\",\"shot\":\"Plated, one piece pulled apart to show the crunch\",\"text\":\"Save this\",\"id\":\"s4\"}]}]",
-      "at": 1793833666287
+      "body": "[{\"id\":\"legacy-entry-approved\",\"videoId\":\"link-t4\",\"clientId\":\"legacy-entry-e2e\",\"status\":\"approved\",\"dueDate\":\"2026-12-01\",\"notes\":\"\",\"shots\":[{\"id\":\"legacy_entry_shot_1\",\"time\":\"1s\",\"shot\":\"Cafe scene 1\",\"text\":\"Scene 1\",\"line\":\"A handmade cup in cafe scene 1.\"},{\"id\":\"legacy_entry_shot_2\",\"time\":\"2s\",\"shot\":\"Cafe scene 2\",\"text\":\"Scene 2\",\"line\":\"A handmade cup in cafe scene 2.\"},{\"id\":\"legacy_entry_shot_3\",\"time\":\"3s\",\"shot\":\"Cafe scene 3\",\"text\":\"Scene 3\",\"line\":\"A handmade cup in cafe scene 3.\"}],\"updatedAt\":1793834867043},{\"id\":\"legacy-entry-delayed\",\"videoId\":\"legacy-entry-delayed-video\",\"clientId\":\"legacy-entry-e2e\",\"status\":\"approved\",\"dueDate\":\"2026-12-02\",\"notes\":\"\",\"updatedAt\":1793834872464,\"shots\":[{\"time\":\"0–2s\",\"shot\":\"Top-down: tofu cubes drop into hot oil\",\"text\":\"Crispy tofu in 5 min\",\"id\":\"s1\"},{\"time\":\"2–6s\",\"shot\":\"Close-up: cubes turning golden, tongs flipping\",\"id\":\"s2\"},{\"time\":\"6–10s\",\"shot\":\"Sauce poured over, quick toss in the pan\",\"id\":\"s3\"},{\"time\":\"10–14s\",\"shot\":\"Plated, one piece pulled apart to show the crunch\",\"text\":\"Save this\",\"id\":\"s4\"}]}]",
+      "at": 1793834873440
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/canvas",
       "body": null,
-      "at": 1793833666608
+      "at": 1793834873762
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/canvas",
       "body": null,
-      "at": 1793833668618
+      "at": 1793834875770
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/canvas",
       "body": null,
-      "at": 1793833670628
+      "at": 1793834877780
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/edit",
       "body": null,
-      "at": 1793833670662
+      "at": 1793834877817
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/edit/sources",
       "body": null,
-      "at": 1793833670663
+      "at": 1793834877817
     },
     {
       "method": "GET",
       "path": "/api/gen/models",
       "body": null,
-      "at": 1793833670663
+      "at": 1793834877817
     },
     {
       "method": "GET",
       "path": "/api/gen/budget",
       "body": null,
-      "at": 1793833670663
+      "at": 1793834877818
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/edit/voice",
       "body": null,
-      "at": 1793833670663
+      "at": 1793834877818
     },
     {
       "method": "GET",
       "path": "/api/clients/legacy-entry-e2e/kit",
       "body": null,
-      "at": 1793833670664
+      "at": 1793834877818
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/edit/voice",
       "body": null,
-      "at": 1793833670664
+      "at": 1793834877818
     }
   ],
   "responses": [
@@ -451,475 +451,475 @@
       "method": "GET",
       "path": "/api/auth/me",
       "status": 401,
-      "at": 1793833659963
+      "at": 1793834866149
     },
     {
       "method": "GET",
       "path": "/api/health",
       "status": 200,
-      "at": 1793833659978
+      "at": 1793834866167
     },
     {
       "method": "GET",
       "path": "/api/auth/config",
       "status": 200,
-      "at": 1793833660067
+      "at": 1793834866259
     },
     {
       "method": "GET",
       "path": "/api/search",
       "status": 401,
-      "at": 1793833660098
+      "at": 1793834866291
     },
     {
       "method": "POST",
       "path": "/api/auth/login",
       "status": 200,
-      "at": 1793833660226
+      "at": 1793834866403
     },
     {
       "method": "GET",
       "path": "/api/auth/me",
       "status": 200,
-      "at": 1793833660245
+      "at": 1793834866444
     },
     {
       "method": "GET",
       "path": "/api/health",
       "status": 200,
-      "at": 1793833660270
+      "at": 1793834866444
     },
     {
       "method": "GET",
       "path": "/api/library",
       "status": 200,
-      "at": 1793833660270
+      "at": 1793834866445
     },
     {
       "method": "GET",
       "path": "/api/clients",
       "status": 200,
-      "at": 1793833660270
+      "at": 1793834866445
     },
     {
       "method": "GET",
       "path": "/api/ideas",
       "status": 200,
-      "at": 1793833660270
-    },
-    {
-      "method": "PUT",
-      "path": "/api/library",
-      "status": 200,
-      "at": 1793833660303
+      "at": 1793834866448
     },
     {
       "method": "PUT",
       "path": "/api/clients",
       "status": 200,
-      "at": 1793833660304
+      "at": 1793834866467
+    },
+    {
+      "method": "PUT",
+      "path": "/api/library",
+      "status": 200,
+      "at": 1793834866468
     },
     {
       "method": "GET",
       "path": "/api/health",
       "status": 200,
-      "at": 1793833660973
+      "at": 1793834867126
     },
     {
       "method": "GET",
       "path": "/api/auth/me",
       "status": 200,
-      "at": 1793833660974
+      "at": 1793834867126
     },
     {
       "method": "GET",
       "path": "/api/health",
       "status": 200,
-      "at": 1793833660987
-    },
-    {
-      "method": "GET",
-      "path": "/api/clients",
-      "status": 200,
-      "at": 1793833660997
-    },
-    {
-      "method": "GET",
-      "path": "/api/library",
-      "status": 200,
-      "at": 1793833660997
+      "at": 1793834867141
     },
     {
       "method": "GET",
       "path": "/api/ideas",
       "status": 200,
-      "at": 1793833660997
+      "at": 1793834867143
+    },
+    {
+      "method": "GET",
+      "path": "/api/library",
+      "status": 200,
+      "at": 1793834867144
+    },
+    {
+      "method": "GET",
+      "path": "/api/clients",
+      "status": 200,
+      "at": 1793834867145
     },
     {
       "method": "GET",
       "path": "/api/search",
       "status": 503,
-      "at": 1793833661323
+      "at": 1793834867482
     },
     {
       "method": "GET",
       "path": "/api/publishing/summary",
       "status": 200,
-      "at": 1793833661324
+      "at": 1793834867484
     },
     {
       "method": "GET",
       "path": "/api/production",
       "status": 200,
-      "at": 1793833661761
+      "at": 1793834867921
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/canvas",
       "status": 200,
-      "at": 1793833662362
+      "at": 1793834868637
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/cut",
       "status": 200,
-      "at": 1793833662417
+      "at": 1793834868683
     },
     {
       "method": "GET",
       "path": "/api/gen/models",
       "status": 200,
-      "at": 1793833662422
+      "at": 1793834868695
     },
     {
       "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit",
+      "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "status": 200,
-      "at": 1793833662423
+      "at": 1793834868698
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice/pending",
       "status": 200,
-      "at": 1793833662424
+      "at": 1793834868699
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit",
+      "status": 200,
+      "at": 1793834868699
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/sources",
       "status": 200,
-      "at": 1793833662593
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit/voice",
-      "status": 200,
-      "at": 1793833662593
+      "at": 1793834868700
     },
     {
       "method": "GET",
       "path": "/api/gen/budget",
       "status": 200,
-      "at": 1793833662593
+      "at": 1793834868851
     },
     {
       "method": "GET",
       "path": "/api/clients/legacy-entry-e2e/kit",
       "status": 200,
-      "at": 1793833662593
+      "at": 1793834868851
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "status": 200,
-      "at": 1793833662593
+      "at": 1793834868853
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "status": 200,
-      "at": 1793833662593
+      "at": 1793834868853
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/cut",
       "status": 200,
-      "at": 1793833662621
+      "at": 1793834868877
     },
     {
       "method": "POST",
       "path": "/api/ideas/legacy-entry-approved/agent/plan",
       "status": 200,
-      "at": 1793833663411
+      "at": 1793834870036
     },
     {
       "method": "PUT",
       "path": "/api/ideas/legacy-entry-approved/canvas",
       "status": 200,
-      "at": 1793833664137
+      "at": 1793834870754
     },
     {
       "method": "PUT",
       "path": "/api/ideas/legacy-entry-approved/edit",
       "status": 200,
-      "at": 1793833664534
+      "at": 1793834871538
     },
     {
       "method": "GET",
       "path": "/api/gen/models",
       "status": 200,
-      "at": 1793833664564
+      "at": 1793834871566
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/cut",
       "status": 200,
-      "at": 1793833664572
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit/voice/pending",
-      "status": 200,
-      "at": 1793833664580
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit/voice",
-      "status": 200,
-      "at": 1793833664580
+      "at": 1793834871573
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit",
       "status": 200,
-      "at": 1793833664585
+      "at": 1793834871583
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit/voice/pending",
+      "status": 200,
+      "at": 1793834871583
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/sources",
       "status": 200,
-      "at": 1793833664586
+      "at": 1793834871588
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit/voice",
+      "status": 200,
+      "at": 1793834871588
     },
     {
       "method": "GET",
       "path": "/api/gen/budget",
       "status": 200,
-      "at": 1793833664586
+      "at": 1793834871589
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit/voice",
+      "status": 200,
+      "at": 1793834871592
     },
     {
       "method": "GET",
       "path": "/api/clients/legacy-entry-e2e/kit",
       "status": 200,
-      "at": 1793833664589
+      "at": 1793834871592
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/edit/voice",
       "status": 200,
-      "at": 1793833664589
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit/voice",
-      "status": 200,
-      "at": 1793833664591
+      "at": 1793834871593
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/canvas",
       "status": 200,
-      "at": 1793833664592
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/cut",
-      "status": 200,
-      "at": 1793833664618
+      "at": 1793834871594
     },
     {
       "method": "GET",
       "path": "/api/gen/models",
       "status": 200,
-      "at": 1793833664619
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit",
-      "status": 200,
-      "at": 1793833664628
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit/voice/pending",
-      "status": 200,
-      "at": 1793833664646
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit/voice",
-      "status": 200,
-      "at": 1793833664646
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit/sources",
-      "status": 200,
-      "at": 1793833664652
-    },
-    {
-      "method": "GET",
-      "path": "/api/clients/legacy-entry-e2e/kit",
-      "status": 200,
-      "at": 1793833664653
-    },
-    {
-      "method": "GET",
-      "path": "/api/gen/budget",
-      "status": 200,
-      "at": 1793833664653
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit/voice",
-      "status": 200,
-      "at": 1793833664654
-    },
-    {
-      "method": "GET",
-      "path": "/api/ideas/legacy-entry-approved/edit/voice",
-      "status": 200,
-      "at": 1793833664654
+      "at": 1793834871615
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-approved/cut",
       "status": 200,
-      "at": 1793833664661
+      "at": 1793834871626
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit",
+      "status": 200,
+      "at": 1793834871633
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit/voice",
+      "status": 200,
+      "at": 1793834871633
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit/voice/pending",
+      "status": 200,
+      "at": 1793834871647
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit/sources",
+      "status": 200,
+      "at": 1793834871647
+    },
+    {
+      "method": "GET",
+      "path": "/api/gen/budget",
+      "status": 200,
+      "at": 1793834871648
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit/voice",
+      "status": 200,
+      "at": 1793834871648
+    },
+    {
+      "method": "GET",
+      "path": "/api/clients/legacy-entry-e2e/kit",
+      "status": 200,
+      "at": 1793834871648
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/edit/voice",
+      "status": 200,
+      "at": 1793834871651
+    },
+    {
+      "method": "GET",
+      "path": "/api/ideas/legacy-entry-approved/cut",
+      "status": 200,
+      "at": 1793834871664
     },
     {
       "method": "GET",
       "path": "/api/health",
       "status": 200,
-      "at": 1793833665144
+      "at": 1793834872539
     },
     {
       "method": "GET",
       "path": "/api/auth/me",
       "status": 200,
-      "at": 1793833665144
+      "at": 1793834872539
     },
     {
       "method": "GET",
       "path": "/api/health",
       "status": 200,
-      "at": 1793833665173
-    },
-    {
-      "method": "GET",
-      "path": "/api/library",
-      "status": 200,
-      "at": 1793833665178
+      "at": 1793834872561
     },
     {
       "method": "GET",
       "path": "/api/clients",
       "status": 200,
-      "at": 1793833665178
+      "at": 1793834872561
     },
     {
       "method": "GET",
       "path": "/api/production",
       "status": 200,
-      "at": 1793833665182
+      "at": 1793834872561
+    },
+    {
+      "method": "GET",
+      "path": "/api/library",
+      "status": 200,
+      "at": 1793834872561
     },
     {
       "method": "GET",
       "path": "/api/ideas",
       "status": 200,
-      "at": 1793833665182
+      "at": 1793834872562
     },
     {
       "method": "GET",
       "path": "/api/search",
       "status": 503,
-      "at": 1793833665501
+      "at": 1793834872674
     },
     {
       "method": "GET",
       "path": "/api/publishing/summary",
       "status": 200,
-      "at": 1793833665501
+      "at": 1793834872675
     },
     {
       "method": "GET",
       "path": "/api/workspaces",
       "status": 200,
-      "at": 1793833665909
+      "at": 1793834873073
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/canvas",
       "status": 409,
-      "at": 1793833666614
+      "at": 1793834873766
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/canvas",
       "status": 409,
-      "at": 1793833668623
+      "at": 1793834875775
     },
     {
       "method": "PUT",
       "path": "/api/ideas",
       "status": 200,
-      "at": 1793833668947
+      "at": 1793834876096
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/canvas",
       "status": 200,
-      "at": 1793833670635
+      "at": 1793834877787
     },
     {
       "method": "GET",
       "path": "/api/gen/models",
       "status": 200,
-      "at": 1793833670686
+      "at": 1793834877840
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/edit",
       "status": 200,
-      "at": 1793833670687
+      "at": 1793834877840
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/edit/sources",
       "status": 200,
-      "at": 1793833670687
+      "at": 1793834877840
     },
     {
       "method": "GET",
       "path": "/api/clients/legacy-entry-e2e/kit",
       "status": 200,
-      "at": 1793833670687
+      "at": 1793834877840
     },
     {
       "method": "GET",
       "path": "/api/gen/budget",
       "status": 200,
-      "at": 1793833670687
+      "at": 1793834877841
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/edit/voice",
       "status": 200,
-      "at": 1793833670687
+      "at": 1793834877841
     },
     {
       "method": "GET",
       "path": "/api/ideas/legacy-entry-delayed/edit/voice",
       "status": 200,
-      "at": 1793833670687
+      "at": 1793834877841
     }
   ]
 }

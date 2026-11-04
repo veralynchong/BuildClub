@@ -13,7 +13,7 @@ Goal active；使用者已核准無人值守 Multi Agent 實作、commit、push�
 | T2 | 完成 | task_5209fcd0805d／ctx_b9df19f20eb6；來源07d3d93，唯讀，測試 NOT RUN |
 | T3 | 完成並接受 | source0b64468已整合；親跑1021+2skip GREEN與真HTTP→MP4→token核准；非外部模型驗收 |
 | T4 | 功能實作完成，最終審查待收尾 | source01a907b三項legacy回歸已review ACCEPT、整合4e92a14並真UI3/3通過；port padding干擾已修、實測13px |
-| T5 | 19項／組真UI通過，backend重啟待驗 | main11/recovery5/legacy-entry3全部PASS、errors/routeErrors空、cleanup survivors={}；真正server restart seam另由ctx_3e8c3418f667實作 |
+| T5 | 本機／mock驗收完成，最終審查待接受 | main13/recovery5/legacy-entry3全部PASS；兩次真backend restart保留核准/退回、圖/生成/edit/voice/public JSON與media SHA256；cleanup全部survivors={} |
 | T6 | 最終提交與視覺審查待完成 | 暫定整合3項P2已由ctx_906ad7ad326f接受修復且實測；最新容器/Inspector/Assistant/menu有圖，須固定commit複審 |
 | T7 | 未完成 | local全部checkpoint尚未push、尚未開產品PR，不merge；最終清單與外部待驗須列明 |
 
@@ -50,14 +50,13 @@ T2 來源 07d3d93，完整訊息 msg_ea7f2a8dcca4。分類依來源，不推測 
 
 ## 下一步
 
-1. 接受並獨立review自有backend restart驗證seam，實際重啟後比對workspace/生成/剪輯/審批與媒體。
-2. 對完整checkpoint做視覺複審與最終程式delta審查，補剩餘阻擋後重測適當範圍。
-3. 最後完整gate/build/lint及必要UI綠，更新所有任務與變更清單、push全部commits、開PR到origin/main，不merge。
-4. 真實模型需逐次報價/cap/yes；外部provider、真發布與其內容品質仍NOT RUN。
+1. 對最終程式與證據checkpoint做獨立整合及視覺複審，處理剩餘阻擋。
+2. 審查接受後推送全部提交、開PR到origin/main，不merge；更新PR連結與最後handoff。
+3. 後續真模型品質／等待／費用測試由代理執行前，逐次報價/cap並取得明確yes；本輪未執行。
 
 ## 尚未驗證
 
-程式/本機HTTP/媒體與19項／組真UI已通過，並非外部模型驗收。尚缺真正backend程序重啟後資料保留的實測；已安排獨立runner writer。最新視覺及最終提交審查、push、產品PR亦未完成。沒有整體交付完成聲明。
+離線程式/HTTP/媒體與21項／組真UI已通過，含真正backend重啟；最終程式/視覺審查、push、PR仍待完成。真實外部provider、真發布、供應商品質／延遲／實際計費未驗證，不能用mock成果替代。
 
 ## 本機測試入口準備
 
@@ -153,3 +152,5 @@ Integrator檢查點：source01a907b6290fa4db645fed2fe72930c602f11331/baseafd55b5
 舊計畫專用真UI3/3 PASS（/tmp/freeform-legacy-entry-proof-real-4e92a14）：Make the video無editor直接進真剪輯器且圖不變；真本機assistant route shotId/demo response/apply保存重開；hold App真正PUT使GET409至少2次，再原樣release後無手動Reload自動恢復穩定shotIDs。已移除writer腳本的代填plan回應，API回應非fabricated；初始null ideas fixture與reload保留editor入口依真行為調整。cleanup survivors={}，QA legacy-entry-*保存，auth request bodies不存入QA。恢復套件加入穩定viewport/量測/命中實際port診斷後最新session52144執行中，先前失敗畫面為框選而非連線，未宣稱該次通過。
 
 最後恢復套件於4e92a14+portpadding工作樹全5組PASS（/tmp/freeform-recovery-hitchecked-final）：已等待viewport穩定/節點量測並記錄elementFromPoint命中真正source/target，legacy音訊確實進editor；非forceclick，非框選。主11與legacy3也已真通過。完成audit另識別Tasks T5「重啟保留」尚只有瀏覽器重開，缺真backendprocessrestart，故T5仍不標Done；新增獨立runner writer補自有tempbackend重啟seam與兩次重啟專項驗證，之後主UI以真MP4/approval狀態再驗重啟，保持sandbox/ownedidentity/cleanup不放寬。
+
+整合紀錄：restart source9504e286/base88c12ca，reviewerctx_5bd86db2e69e ACCEPT且親跑兩次真重啟，lead讀兩檔diff後接受並整合6e65cb1。主UI新增核准/退回各一次重啟，13項全部PASS，oldExit=-15、media SHA256前後一致、public review JSON與state不變。視覺review72b1c75最初兩finding中，header裁切由ctx_5515cfc812d9核對相同blob1e9366e後明確撤回；僅legacy card overlap成立。source9c7a781/base01a由ctx_1b2227b4ed9b ACCEPT（18unit親跑）、lead接受整合f0f97c9；新legacy UI3PASS，card geometry image右緣920.98/video左緣940.86、overlaps=false，既有節點位置不變。f0f97c9親跑full1023passed2skipped in34.26s/frontendPASS/buildlint0；最終獨立程式與視覺審查尚待新checkpoint。
