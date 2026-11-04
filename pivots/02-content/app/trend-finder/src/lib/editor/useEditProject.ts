@@ -1,3 +1,4 @@
+import { createOperationQueue } from '../canvas/operations.ts'
 import { type ResourceInput } from '../canvas/resource.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getProject, putProject, StaleProject } from './api.ts'
@@ -26,6 +27,7 @@ export interface EditHook {
 export function useEditProject(ideaId: ResourceInput, readOnly: boolean): EditHook {
   const [writing, setWriting] = useState(false)
   const persisting = useRef(false)
+  const directWrites = useRef(createOperationQueue()).current
   const [committedProject, setCommittedProject] = useState<EditProject | null>(null)
   const [project, setProject] = useState<EditProject | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -54,7 +56,7 @@ export function useEditProject(ideaId: ResourceInput, readOnly: boolean): EditHo
 
   const run = useCallback((): Promise<void> => {
     if (inflight.current) return inflight.current
-    if (!dirty.current || blocked.current || readOnlyRef.current || !latest.current) return Promise.resolve()
+    if (!mounted.current || !dirty.current || blocked.current || readOnlyRef.current || !latest.current) return Promise.resolve()
     const snap = latest.current
     const p = (async () => {
       if (mounted.current) setSave('saving')
@@ -119,7 +121,7 @@ export function useEditProject(ideaId: ResourceInput, readOnly: boolean): EditHo
     [run],
   )
 
-  const flush = useCallback(async () => {
+  const flushAutosave = useCallback(async () => {
     clearTimeout(timer.current)
     while (inflight.current || (dirty.current && !blocked.current && !readOnlyRef.current)) {
       const before = version.current
@@ -129,43 +131,53 @@ export function useEditProject(ideaId: ResourceInput, readOnly: boolean): EditHo
     return flushOutcome({ dirty: dirty.current, blocked: blocked.current, readOnly: readOnlyRef.current })
   }, [run])
 
-  // Leaving the screen with an unsaved change: save it now.
+  // Navigation flushes explicitly; cleanup never starts an untracked write.
   useEffect(
     () => () => {
       clearTimeout(timer.current)
-      void run()
     },
     [run],
   )
 
   const reload = useCallback(() => {
-    clearTimeout(timer.current)
-    setProject(null)
-    setLoadKey((k) => k + 1)
-  }, [])
+    void directWrites.wait().then(async () => {
+      if (inflight.current) await inflight.current
+      if (!mounted.current) return
+      clearTimeout(timer.current)
+      setProject(null)
+      setLoadKey((k) => k + 1)
+    })
+  }, [directWrites])
 
   const current = useCallback(() => latest.current, [])
 
   const persist = async (next: EditProject): Promise<boolean> => {
-    if (persisting.current || readOnlyRef.current || blocked.current) return false
+    if (!mounted.current || persisting.current || readOnlyRef.current || blocked.current) return false
     const before = latest.current
     persisting.current = true
+    clearTimeout(timer.current)
     setWriting(true)
-    try {
-      if ((await flush()) !== 'saved' || latest.current !== before) return false
-      setSave('saving')
-      version.current = await putProject(ideaId, version.current, next)
-      latest.current = next
-      dirty.current = false
-      setProject(next)
-      setCommittedProject(next)
-      setSave('saved')
-      return true
-    } catch (e) {
-      if (e instanceof StaleProject) { blocked.current = true; setStale(true) }
-      setSave('failed')
-      return false
-    } finally { persisting.current = false; setWriting(false) }
+    return directWrites.run(async () => {
+      try {
+        if ((await flushAutosave()) !== 'saved' || latest.current !== before || !mounted.current) return false
+        setSave('saving')
+        version.current = await putProject(ideaId, version.current, next)
+        latest.current = next
+        dirty.current = false
+        setProject(next)
+        setCommittedProject(next)
+        setSave('saved')
+        return true
+      } catch (e) {
+        if (e instanceof StaleProject) { blocked.current = true; setStale(true) }
+        setSave('failed')
+        return false
+      } finally { persisting.current = false; if (mounted.current) setWriting(false) }
+    })
   }
+  const flush = useCallback(async () => {
+    await directWrites.wait()
+    return flushAutosave()
+  }, [directWrites, flushAutosave])
   return { writing, committedProject, persist, project, loadError, save, stale, update, flush, current, reload }
 }

@@ -1,6 +1,7 @@
 import type { CanvasDoc, CanvasState, Generation } from './types.ts'
 import type { VoiceInfo } from '../editor/api.ts'
 import { ff } from '../strings/freeform.ts'
+import { mergeVoiceOwnership } from './voices.ts'
 import { markStale } from './graph.ts'
 
 export interface CanvasDraft { doc: CanvasDoc; version: number }
@@ -95,13 +96,13 @@ interface SelectionIO {
 export async function selectGeneration(gen: Generation, io: SelectionIO): Promise<boolean> {
   const node = io.current().nodes.find((n) => n.id === gen.nodeId)
   if (!node || gen.status !== 'done') return false
-  const voice = gen.kind === 'voice' ? io.voices.find((v) => v.genId === gen.id && v.nodeId === gen.nodeId) ?? await io.importVoice(gen.id, gen.nodeId) : null
+  const voice = gen.kind === 'voice' ? mergeVoiceOwnership(io.current(), io.voices).find((v) => v.genId === gen.id && v.nodeId === gen.nodeId) ?? await io.importVoice(gen.id, gen.nodeId) : null
   const mappedVoice = voice ? { ...voice, genId: gen.id, nodeId: gen.nodeId } : null
   if (mappedVoice) io.onVoice(mappedVoice)
   // Re-read after importing: editing while the request was in flight must survive.
   const next = { ...io.current(), nodes: io.current().nodes.map((n) => {
     if (n.id !== gen.nodeId) return n
-    const data = { ...n.data, ...(io.matchesInputs?.(gen) && !gen.inputs.inputStamp ? { stale: false } : {}), selected: gen.id, ...(mappedVoice ? { voiceId: mappedVoice.id } : {}) }
+    const data = { ...n.data, ...(io.matchesInputs?.(gen) && !gen.inputs.inputStamp ? { stale: false } : {}), selected: gen.id, ...(mappedVoice ? { voiceId: mappedVoice.id, voiceSources: { ...n.data.voiceSources, [gen.id]: mappedVoice.id }, voiceIds: [...new Set([...(n.data.voiceIds ?? []), mappedVoice.id])] } : {}) }
     if (data.awaiting === gen.id) delete data.awaiting
     return { ...n, data }
   }) }

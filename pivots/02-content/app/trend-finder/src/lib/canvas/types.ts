@@ -16,6 +16,8 @@ export interface NodeData {
   awaiting?: string // the generation being waited for; the chosen version stays until it finishes
   stale?: boolean // an input changed after the last version was made
   media?: 'image' | 'video' | 'audio' // upload
+  voiceIds?: string[] // every voice file explicitly owned by this node
+  voiceSources?: Record<string, string> // generation id -> imported voice id
   voiceId?: string
   takeId?: string // upload of a video
   duration?: number

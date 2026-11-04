@@ -154,10 +154,24 @@ export default function App() {
   useEffect(() => {
     viewRef.current = view
   }, [view])
-  const setView = useCallback((next: View) => {
-    if (next === viewRef.current) return setViewRaw(next)
-    withScreenTransition(() => setViewRaw(next))
+  const canvasLeaveGuard = useRef<(() => Promise<boolean>) | null>(null)
+  const registerCanvasLeaveGuard = useCallback((guard: () => Promise<boolean>) => {
+    canvasLeaveGuard.current = guard
+    return () => { if (canvasLeaveGuard.current === guard) canvasLeaveGuard.current = null }
   }, [])
+  const withCanvasLeave = useCallback((apply: () => void) => {
+    const guard = viewRef.current === 'canvas' ? canvasLeaveGuard.current : null
+    if (guard) void guard().then((ok) => { if (ok) apply() })
+    else apply()
+  }, [])
+  const setView = useCallback((next: View) => {
+    const apply = () => {
+      if (next === viewRef.current) return setViewRaw(next)
+      withScreenTransition(() => setViewRaw(next))
+    }
+    if (next !== 'canvas') withCanvasLeave(apply)
+    else apply()
+  }, [withCanvasLeave])
   const [menuOpen, setMenuOpen] = useState(false)
   const [query, setQuery] = useState<Query>(defaultQuery)
   const [sort, setSort] = useState<Sort>('outlier')
@@ -518,20 +532,22 @@ export default function App() {
   const lastSearch = workspace === 'all' ? null : (lastSearches[workspace] ?? null)
 
   // Opens a client's workspace. Picking a client starts on Find ideas; Home is one click away.
-  const enterClient = (id: string, to: View = 'search') => {
+  const enterClient = (id: string, to: View = 'search') => withCanvasLeave(() => {
     setWorkspaceRaw(id)
     setLastClient(id)
     setOpenVideoId(null)
     // The search box shows this client's own last search, not the previous client's.
     setQuery((q) => ({ ...q, keyword: lastSearches[id] ?? '' }))
-    setView(to)
-  }
+    withScreenTransition(() => setViewRaw(to))
+  })
 
   const setWorkspace = (w: Workspace) => {
     if (w !== 'all') return enterClient(w)
-    setWorkspaceRaw('all')
-    setOpenVideoId(null)
-    setView('overview')
+    withCanvasLeave(() => {
+      setWorkspaceRaw('all')
+      setOpenVideoId(null)
+      withScreenTransition(() => setViewRaw('overview'))
+    })
   }
 
   // A remembered client that no longer exists: go to All clients instead of showing a different client.
@@ -1754,6 +1770,7 @@ export default function App() {
             <Suspense fallback={<p className="muted">{t('canvas.loading')}</p>}>
               <CanvasScreen
                 context={canvasContext}
+                registerLeaveGuard={registerCanvasLeaveGuard}
                 onShotsChange={(shots) => {
                   if (canvasContext.resource.kind !== 'legacy-plan') return
                   const id = canvasContext.resource.id
