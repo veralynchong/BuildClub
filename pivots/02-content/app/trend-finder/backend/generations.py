@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 import cutting
 import gen_providers
 import subtitles
+import workspaces
 
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS generations (id TEXT PRIMARY KEY, idea_id TEXT NOT NULL, node_id TEXT NOT NULL, "
@@ -52,7 +53,8 @@ MAX_VOICE_CHARS = 1000
 MAX_VOICE_UNITS = 480  # width units (a CJK character is 2): the mock speaks 0.25 s per unit, so 120 s at most
 BAD_VOICE_TEXT = "Type the words to say: 1 to 1000 characters, and short enough for 2 minutes of speech."
 FILE_TYPES = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "webp": "image/webp",
-              "mp4": "video/mp4", "mp3": "audio/mpeg"}
+              "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm",
+              "mp3": "audio/mpeg", "wav": "audio/wav", "m4a": "audio/mp4", "ogg": "audio/ogg"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 UPLOAD_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
 NOT_IMAGE = "Upload a PNG, JPEG or WebP image."
@@ -153,7 +155,7 @@ def read_inputs(inputs: dict) -> dict:
 def to_json(row) -> dict:
     (gid, idea_id, node_id, kind, model, inputs, _hash, status, est, actual, file, source_url, err,
      created, finished, after) = row
-    url = source_url or (f"/api/ideas/{idea_id}/gen/{gid}/file" if file and status == "done" else None)
+    url = source_url or (f"/api/{'workspaces' if idea_id.startswith('ws_') else 'ideas'}/{idea_id}/gen/{gid}/file" if file and status == "done" else None)
     return {"id": gid, "ideaId": idea_id, "nodeId": node_id, "kind": kind, "model": model,
             "inputs": stored_inputs(inputs), "status": status, "estUsd": est, "actualUsd": actual, "url": url,
             "error": err, "createdAt": created, "finishedAt": finished, "after": after}
@@ -508,7 +510,7 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
     router.jobs = GenJobs(db, media_dir, refund)  # server.py keeps it as gen_jobs
 
     def find_idea(idea_id: str):
-        return next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
+        return workspaces.resolve(db, load, idea_id)
 
     def one(idea_id: str, gen_id: str):
         with db() as conn:
@@ -649,8 +651,22 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         found = find_idea(idea_id)
         if found is None:
             return error(404, "That plan doesn't exist.")
-        if found["status"] != "approved":
+        if not workspaces.editable(found):
             return error(409, "Only an approved plan can generate.")
+        independent = found.get('kind') == 'workspace'
+        stamp = None
+        if independent:
+            with db() as conn:
+                version, _ = workspaces.graph(conn, idea_id)
+                if type(body.get('canvasVersion')) is not int:
+                    return error(422, 'Send the version and the canvas.')
+                if body['canvasVersion'] != version:
+                    return error(409, 'The canvas changed somewhere else. Reload it.')
+                try:
+                    _, resolved, stamp = workspaces.inputs(conn, idea_id, body.get('nodeId'), load)
+                except ValueError as e:
+                    return error(422, str(e))
+            body = {**body, **resolved}
         node_id, prompt = body.get("nodeId"), body.get("prompt", "")
         start, duration = body.get("startFrame"), body.get("duration")
         refs = body.get("references")
@@ -662,14 +678,28 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                                      start, refs, duration)
         if bad is not None:
             return bad
-        part, bad = prepare_refs(found, idea_id, prompt, refs)
+        part, bad = prepare_refs(found, idea_id, prompt, refs, copy=not independent)
         if bad is not None:
             return bad
         est = estimate_usd(model, duration)
+        if independent and body.get('confirm') is not True:
+            remaining = {kind: round(max(0, values['cap'] - values['spent']), 4)
+                         for kind, values in router.remaining().items()}
+            return {'total': est, 'remaining': remaining, 'items': [{'nodeId': node_id, 'model': model['id'], 'usd': est}],
+                    'canvasVersion': version, 'inputStamp': stamp, 'inputs': {**resolved, **part}}
+        if independent:
+            if body.get('inputStamp') != stamp:
+                return error(409, 'The canvas changed somewhere else. Reload it.')
+            try:
+                copy_kit_images(kit, media_dir(), found['clientId'], idea_id, part['references'])
+            except OSError:
+                return error(422, 'An input image is missing.')
         blocked = router.budget(model["kind"], est)  # spends the estimate; a failed job gives it back
         if blocked is not None:
             return blocked
         inputs = {"prompt": prompt, "startFrame": start, "duration": duration, **part}
+        if independent:
+            inputs.update(inputStamp=stamp, canvasVersion=version)
         try:
             with db() as conn:
                 out = enqueue(conn, idea_id, node_id, model["kind"], model["id"], inputs, est)
@@ -695,8 +725,10 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         found = find_idea(idea_id)
         if found is None:
             return error(404, "That plan doesn't exist.")
-        if found["status"] != "approved":
+        if not workspaces.editable(found):
             return error(409, "Only an approved plan can generate.")
+        if found.get('kind') == 'workspace':
+            return error(422, workspaces.CHAIN_UNSUPPORTED)
         if body.get("reference") is not None or body.get("videoReference") is not None:
             return error(422, "Run the whole shot doesn't send reference images yet. Use Generate on each node.")
         refs = body.get("references")  # for the storyboard image only; the video starts from that image
@@ -778,19 +810,24 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         found = find_idea(idea_id)
         if found is None:
             return error(404, "That plan doesn't exist.")
-        if found["status"] != "approved":
+        if not workspaces.editable(found):
             return error(409, "Only an approved plan can take uploads.")
         with db() as conn:
             canvas_row = conn.execute("SELECT doc FROM canvases WHERE idea_id = ?", (idea_id,)).fetchone()
         nodes = json.loads(canvas_row[0])["nodes"] if canvas_row else []
         if not any(n.get("id") == nodeId and n.get("type") == "upload" for n in nodes):
             return error(422, "That node isn't an upload node on this plan's canvas.")
-        ext = UPLOAD_TYPES.get(request.headers.get("content-type", "").split(";")[0].strip().lower())
+        content_type = request.headers.get('content-type', '').split(';')[0].strip().lower()
+        video_types = {'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm'}
+        is_video = found.get('kind') == 'workspace' and content_type in video_types
+        ext = video_types[content_type] if is_video else UPLOAD_TYPES.get(content_type)
         if ext is None:
             return error(415, NOT_IMAGE)
+        max_bytes = gen_providers.MAX_BYTES['video'] if is_video else MAX_UPLOAD_BYTES
+        limit_text = 'The file is over the 200 MB limit.' if is_video else UPLOAD_LIMIT
         declared = request.headers.get("content-length", "")
-        if declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
-            return error(413, UPLOAD_LIMIT)
+        if declared.isdigit() and int(declared) > max_bytes:
+            return error(413, limit_text)
         folder = gen_folder(media_dir(), idea_id)
         if folder is None:
             return error(404, "That plan doesn't exist.")
@@ -802,15 +839,23 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             with part.open("wb") as f:
                 async for chunk in request.stream():
                     size += len(chunk)
-                    if size > MAX_UPLOAD_BYTES:
+                    if size > max_bytes:
                         break
                     f.write(chunk)
-            if size > MAX_UPLOAD_BYTES:
+            if size > max_bytes:
                 part.unlink(missing_ok=True)
-                return error(413, UPLOAD_LIMIT)
+                return error(413, limit_text)
             with part.open("rb") as f:
                 head = f.read(12)
-            if not image_header_ok(ext, head):
+            if is_video:
+                try:
+                    info = cutting.probe(part)
+                    if not info.get('width') or not info.get('height') or info.get('duration', 0) <= 0:
+                        raise cutting.CutError("The model returned something that isn't an image/video.")
+                except cutting.CutError:
+                    part.unlink(missing_ok=True)
+                    return error(415, "The model returned something that isn't an image/video.")
+            elif not image_header_ok(ext, head):
                 part.unlink(missing_ok=True)
                 return error(415, NOT_IMAGE)
             os.replace(part, folder / name)
@@ -818,19 +863,29 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             part.unlink(missing_ok=True)
             raise
         with db() as conn:
-            return insert_done(conn, idea_id, nodeId, "image", "upload", file=name)
+            return insert_done(conn, idea_id, nodeId, "video" if is_video else "image", "upload", file=name)
 
     @router.get("/api/ideas/{idea_id}/gen")
     def listing(idea_id: str):
         with db() as conn:
             rows = conn.execute(f"SELECT {COLUMNS} FROM generations WHERE idea_id = ? ORDER BY created_at, rowid",
                                 (idea_id,)).fetchall()
-        return [to_json(r) for r in rows]
+            out = [to_json(r) for r in rows]
+            if workspaces.workspace(conn, idea_id):
+                for gen in out:
+                    gen['stale'] = workspaces.generation_stale(conn, idea_id, gen, load)
+        return out
 
     @router.get("/api/ideas/{idea_id}/gen/{gen_id}")
     def get_one(idea_id: str, gen_id: str):
         row = one(idea_id, gen_id)
-        return to_json(row) if row else error(404, "That generation doesn't exist.")
+        if row is None:
+            return error(404, "That generation doesn't exist.")
+        out = to_json(row)
+        with db() as conn:
+            if workspaces.workspace(conn, idea_id):
+                out['stale'] = workspaces.generation_stale(conn, idea_id, out, load)
+        return out
 
     @router.get("/api/ideas/{idea_id}/gen/{gen_id}/file")
     def file(idea_id: str, gen_id: str):
@@ -844,4 +899,4 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         return FileResponse(path, media_type=FILE_TYPES.get(ext, "application/octet-stream"),
                             headers=CSP if ext == "svg" else None)
 
-    return router
+    return workspaces.aliases(router, db)
