@@ -391,18 +391,22 @@ class ChannelJobs:
         if not JOB_ID.fullmatch(job_id):
             return None
         work = CHANNELS_DIR / job_id
-        meta = read_json(work / "meta.json")
-        if not meta:
-            return None
+        # Keep the file and live state in one snapshot while a worker finishes or a
+        # submission replaces a cached result.
+        with self._lock:
+            meta = read_json(work / "meta.json")
+            if not meta:
+                return None
+            live = self._live.get(job_id)
+            result = result_for(job_id, work) if meta.get("status") == "done" else None
         steps = STEPS if meta["platform"] == "tiktok" else STEPS[1:]
         offset = len(STEPS) - len(steps)
-        live = self._live.get(job_id)
         if meta.get("status") == "done":
-            result = result_for(job_id, work)
             if result:
                 return ChannelJob(job=job_id, status="done", step="Done", steps=steps,
                                   stepIndex=len(steps) - 1, result=result)
             meta = {**meta, "status": "failed", "error": "The saved summary is missing. Start it again."}
+            live = None
         if live is None and meta["status"] in ("queued", "running"):  # the API restarted mid-job
             meta = {**meta, "status": "failed", "error": "The API restarted before this finished. Start it again to continue."}
         status = live["status"] if live else meta["status"]

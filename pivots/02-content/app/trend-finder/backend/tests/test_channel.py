@@ -1,6 +1,8 @@
 import json
 import subprocess
+import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,6 +11,49 @@ import server
 from conftest import fake_subprocess
 
 IDS = ["aaa111", "bbb222", "ccc333"]
+
+
+@pytest.fixture(autouse=True)
+def owned_channel_workers(offline, monkeypatch):
+    """Drain and stop only this test's workers before its patched files and fakes go away."""
+    workers = []
+    stop = object()
+
+    class WorkerStopped(Exception):
+        pass
+
+    def start_worker(*args, **kwargs):
+        jobs = kwargs["target"].__self__
+        get = jobs._q.get
+
+        def next_job():
+            job = get()
+            if job is stop:
+                raise WorkerStopped
+            return job
+
+        monkeypatch.setattr(jobs._q, "get", next_job)
+        target = kwargs["target"]
+
+        def run():
+            try:
+                target()
+            except WorkerStopped:
+                pass
+
+        thread = threading.Thread(*args, **{**kwargs, "target": run})
+        workers.append((jobs, thread))
+        return thread
+
+    monkeypatch.setattr(channels, "threading", SimpleNamespace(**{**vars(threading), "Thread": start_worker}))
+    previous = server.channel_jobs
+    monkeypatch.setattr(server, "channel_jobs", channels.ChannelJobs(previous._spend, previous._left))
+    yield workers
+    for jobs, thread in workers:
+        jobs._q.put(stop)
+    for _, thread in workers:
+        thread.join(timeout=5)
+        assert not thread.is_alive(), "owned channel worker did not finish"
 
 
 def put(path, obj):
@@ -397,9 +442,7 @@ def test_a_channel_is_cached_for_seven_days(money, decoder):
     meta_path.write_text(json.dumps({**meta, "finishedAt": time.time() - 8 * 86400}))
     jobs2 = make_jobs(money)
     assert jobs2.submit("youtube", "chan") == job_id
-    wait_for = time.time() + 5
-    while len(decoder.calls) == n and time.time() < wait_for:
-        time.sleep(0.02)
+    assert wait(jobs2, job_id).status == "done"
     assert len(decoder.calls) > n  # stale: decoded again
 
 
@@ -410,14 +453,69 @@ def test_asking_for_more_videos_than_the_cached_run_decodes_again(money, decoder
     n = len(decoder.calls)
     assert jobs.submit("youtube", "chan", 5) == job_id and len(decoder.calls) == n
     jobs.submit("youtube", "chan", 100)
-    end = time.time() + 5
-    while len(decoder.calls) == n and time.time() < end:
-        time.sleep(0.02)
+    assert wait(jobs, job_id).status == "done"
     fetch = [c for c in decoder.calls if "fetch" in c][-1]
     assert fetch[fetch.index("--max-videos") + 1] == "100"
 
 
 # -- the HTTP API
+
+def test_polling_during_completion_never_returns_done_without_a_result(client, money, decoder, monkeypatch):
+    jobs = make_jobs(money)
+    monkeypatch.setattr(server, "channel_jobs", jobs)
+    aggregate, release, terminal = threading.Event(), threading.Event(), threading.Event()
+    original_set, original_read = jobs._set, channels.read_json
+
+    def blocked_decoder(cmd, **kwargs):
+        if "aggregate" in cmd:
+            aggregate.set()
+            assert release.wait(5)
+        return decoder(cmd, **kwargs)
+
+    def finishing(job_id, **fields):
+        if fields.get("status") == "done":
+            # Complete the live update before returning the old file snapshot when
+            # unprotected; otherwise let the reader finish while the worker waits.
+            if jobs._lock.acquire(blocking=False):
+                jobs._lock.release()
+                original_set(job_id, **fields)
+                terminal.set()
+                return
+            terminal.set()
+        original_set(job_id, **fields)
+
+    def old_snapshot(path):
+        data = original_read(path)
+        if path.name == "meta.json" and threading.current_thread().name != "channel-worker":
+            assert data["status"] == "queued"
+            release.set()
+            assert terminal.wait(5)
+        return data
+
+    monkeypatch.setattr(channels, "subprocess", fake_subprocess(blocked_decoder))
+    monkeypatch.setattr(jobs, "_set", finishing)
+    job_id = jobs.submit("youtube", "chan")
+    assert aggregate.wait(5)
+    monkeypatch.setattr(channels, "read_json", old_snapshot)
+    try:
+        body = client.get(f"/api/channel/{job_id}").json()
+        assert body["status"] in ("running", "done")
+        if body["status"] == "done":
+            assert body["result"]["formats"][0]["format"] == "Taste test"
+    finally:
+        release.set()
+        monkeypatch.setattr(channels, "read_json", original_read)
+    assert wait(jobs, job_id).result["formats"][0]["format"] == "Taste test"
+
+
+def test_a_missing_finished_summary_is_failed_even_with_live_done_state(money, decoder):
+    jobs = make_jobs(money)
+    job_id = jobs.submit("youtube", "chan")
+    assert wait(jobs, job_id).status == "done"
+    (channels.CHANNELS_DIR / job_id / "analysis.json").unlink()
+    job = jobs.get(job_id)
+    assert job.status == "failed" and "saved summary is missing" in job.error
+
 
 def test_the_api_starts_polls_and_serves_thumbnails(client, money, decoder, monkeypatch):
     monkeypatch.setattr(server, "channel_jobs", make_jobs(money))
