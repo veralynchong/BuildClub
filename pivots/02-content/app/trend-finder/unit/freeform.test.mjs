@@ -96,3 +96,12 @@ test('freeform labels are translated in both UI languages', async()=>{
  const {ff}=await import('../src/lib/strings/freeform.ts')
  try{setActiveLang('en');assert.equal(ff('create'),'Create canvas');setActiveLang('zh-Hant');for(const k of ['create','storyboard','voice','editor','assistant','quote','composeHint']) assert.match(ff(k),/[\u4e00-\u9fff]/)}finally{setActiveLang('en')}
 })
+
+test('workspace scope and graph errors reach the Chinese UI translated', async()=>{
+ const {setActiveLang}=await import('../src/lib/i18n.ts')
+ const {serverText}=await import('../src/lib/serverText.ts')
+ try {
+  setActiveLang('zh-Hant')
+  for(const message of ['An upstream image is stale. Generate it again.','Choose a voice from this workspace node.','Editor input edges are derived from the edit project.','This input has too many connections.','Run each workspace node with canvasVersion and confirm.']) assert.match(serverText(message),/[\u4e00-\u9fff]/)
+ }finally{setActiveLang('en')}
+})
