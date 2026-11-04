@@ -15,6 +15,8 @@ interface Props {
   hint?: string
   // What the cell shows when not editing (defaults to the text).
   children?: ReactNode
+  // A visible "Edit hook" link after the text, which also starts editing (the text itself stays clickable).
+  editLabel?: string
   // Called only when the text changed.
   onSave: (next: string) => void
 }
@@ -76,7 +78,11 @@ export function EditableText(p: Props) {
   }
 
   const empty = !p.value.trim()
-  return (
+  const start = () => {
+    skipBlur.current = false
+    setDraft(p.value)
+  }
+  const view = (
     <button
       type="button"
       className={`rs-edit-view${empty ? ' is-empty' : ''}`}
@@ -86,13 +92,20 @@ export function EditableText(p: Props) {
           el.focus()
         }
       }}
-      onClick={() => {
-        skipBlur.current = false
-        setDraft(p.value)
-      }}
+      onClick={start}
     >
       {empty ? <span className="rs-edit-empty">{p.empty}</span> : (p.children ?? <span className="rs-edit-text">{p.value}</span>)}
-      {!empty && <span className="sr-only">{` · ${t('research.edit.hint', { field: p.field })}`}</span>}
+      {!empty && !p.editLabel && <span className="sr-only">{` · ${t('research.edit.hint', { field: p.field })}`}</span>}
     </button>
+  )
+  if (!p.editLabel || empty) return view
+  return (
+    <span className="rs-edit-wrap">
+      {view}
+      <button type="button" className="rs-edit-link" onClick={start}>
+        {p.editLabel}
+        <span className="sr-only">{` · ${p.label}`}</span>
+      </button>
+    </span>
   )
 }
