@@ -27,8 +27,6 @@ import { applyDecision, type Decision } from './lib/memory'
 import { SettingsScreen } from './components/SettingsScreen'
 import { PreferencesScreen } from './components/PreferencesScreen'
 import { ChannelScreen } from './components/ChannelScreen'
-import { CompareScreen } from './components/CompareScreen'
-import type { PickVideo } from './components/CompareScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { LandingAltitude } from './components/landing/LandingAltitude'
 import type { Client, ContentType, Format, Platform, Shot, Video } from './types'
@@ -92,7 +90,6 @@ import type { RowPick } from './components/research/ResearchScreen'
 import { SaveToVideo } from './components/research/SaveToVideo'
 import { entryFromVideo, newSlot, planDueDate, planHasWork, planOf, researchId, researchStatus, slotSummary, videoFromLink, withPlanRows } from './lib/research'
 import type { LinkInput, ResearchEntry } from './lib/research'
-import { pickLabel } from './lib/compare'
 
 // The platforms Find ideas can search, offered by Research's "Add from link".
 const SEARCH_PLATFORMS: Platform[] = ['tiktok', 'instagram', 'youtube', 'reddit', 'x']
@@ -1262,25 +1259,6 @@ export default function App() {
   const blockedFormatIds = new Set(
     [...formatById.values()].filter((f) => f.needs.some((n) => client.cannot.includes(n))).map((f) => f.id),
   )
-  // Videos the Compare screen offers: the saved plans' videos (this client's, or everyone's from All
-  // clients), then the latest live search results. Only real videos with a link can be compared.
-  const comparePicks = (() => {
-    const label = (v: Video) => pickLabel(v.handle, v.hook || v.caption || '')
-    const pick = (v: Video): PickVideo => ({ url: v.url!, label: label(v), thumbnail: v.thumbnail })
-    const seen = new Set<string>()
-    const fresh = (v: Video | undefined): v is Video => {
-      if (!v?.url || seen.has(v.url)) return false
-      seen.add(v.url)
-      return true
-    }
-    const shortlist = shownIdeas
-      .filter((i) => workspace === 'all' || i.clientId === client.id)
-      .map((i) => videoById.get(i.videoId))
-      .filter(fresh)
-      .map(pick)
-    const results = liveStore.videos.filter(fresh).slice(0, 30).map(pick)
-    return { shortlist, results }
-  })()
   const backLabel: Record<View, string> = {
     overview: t('shell.back.overview'),
     home: t('shell.back.home'),
@@ -1511,7 +1489,6 @@ export default function App() {
 
           {view === 'channel' && <ChannelScreen />}
 
-          {view === 'compare' && <CompareScreen shortlist={comparePicks.shortlist} results={comparePicks.results} />}
 
           {view === 'preferences' && <PreferencesScreen />}
 

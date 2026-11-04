@@ -5,6 +5,7 @@ import type { Workspace } from '../state'
 import { useApp } from '../lib/appContext'
 import { t } from '../lib/i18n'
 import { useElapsed } from '../lib/useElapsed'
+import { PlayMarkTicker } from './PlayMarkLoader'
 
 export type View =
   | 'overview'
@@ -162,7 +163,7 @@ function SearchTicker({ q, startedAt }: { q: string; startedAt: number }) {
   const seconds = useElapsed(startedAt)
   return (
     <span className="side-search" role="status" aria-label={t('find.bg.status', { query: q })}>
-      <span className="spin" aria-hidden="true" />
+      <PlayMarkTicker startedAt={startedAt} seconds={seconds} />
       <span aria-hidden="true">{t('find.bg.seconds', { seconds })}</span>
     </span>
   )
@@ -234,7 +235,6 @@ export function Sidebar(p: Props) {
               )}
               {/* Research = the sheet of saved reference videos; plans are made from it */}
               {item('research', 'research', t('shell.side.research'), p.counts.research)}
-              {item('compare', 'compare', t('shell.side.compare'))}
               {/* Plans = the board of plans + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan', 'board'].includes(p.view))}
               {item('canvas', 'canvas', t('shell.side.canvas'), undefined, p.view === 'canvas' || p.view === 'canvasPick')}
@@ -246,7 +246,6 @@ export function Sidebar(p: Props) {
             <>
               {/* All clients Home (the view is still called 'overview' inside the app) */}
               {item('overview', 'home', t('shell.side.home'))}
-              {item('compare', 'compare', t('shell.side.compare'))}
               {item('channel', 'channel', t('shell.side.channel'))}
               <p className="side-hint">{t('shell.side.pickClient')}</p>
             </>
@@ -254,16 +253,10 @@ export function Sidebar(p: Props) {
         </nav>
 
         <div className="side-foot">
-          <a className="link-btn" href="/method" target="_blank" rel="noreferrer">
-            {t('shell.side.method')}
-          </a>
-          {p.live ? (
+          {/* "How we calculate this" and the "Sample data" pill were taken off the menu (4 Nov 2026); live data still says so. */}
+          {p.live && (
             <span className="live-pill" title={t('shell.side.liveTip')}>
               {t('shell.side.live')}
-            </span>
-          ) : (
-            <span className="sample-pill" title={t('shell.side.sampleTip')}>
-              {t('shell.side.sample')}
             </span>
           )}
           {item('preferences', 'settings', t('shell.side.settings'))}
