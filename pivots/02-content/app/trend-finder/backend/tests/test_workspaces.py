@@ -352,3 +352,196 @@ def test_editor_output_and_unknown_target_ports_are_rejected(client):
         assert refused.json()['code'] == 'invalid_graph'
     assert client.get(base).json()['version'] == 2
     assert client.get(base).json()['doc']['edges'] == []
+
+
+def test_confirm_rechecks_cross_process_graph_before_spending(client, monkeypatch):
+    import concurrent.futures
+    import json
+    import subprocess
+    import sys
+    import threading
+    import workspaces
+    staff(client)
+    submissions = []
+    monkeypatch.setattr(server.gen_jobs, 'submit', submissions.append)
+    for kind, route in [('storyboard', '/gen'), ('voice', '/edit/voice/tts')]:
+        base, doc = setup_graph(client, [node('p', 'prompt', text='Bicycle'),
+            node('target', kind, model='mock-image' if kind == 'storyboard' else 'mock-voice')], [connect('p', 'target')])
+        body = {'nodeId': 'target', 'canvasVersion': 2}
+        quote = client.post(base + route, json=body).json()
+        original = workspaces.inputs
+        checked, changed = threading.Event(), threading.Event()
+        first = True
+        def barrier(*args, **kwargs):
+            nonlocal first
+            result = original(*args, **kwargs)
+            if first:
+                first = False
+                checked.set()
+                assert changed.wait(10), 'graph writer did not release barrier'
+            return result
+        monkeypatch.setattr(workspaces, 'inputs', barrier)
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future = pool.submit(client.post, base + route, json={**body, 'inputStamp': quote['inputStamp'], 'confirm': True})
+            assert checked.wait(10), 'confirm did not read graph'
+            doc['nodes'][0]['data']['text'] = 'Changed by another process'
+            script = ('import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); '
+                      'c.execute("UPDATE canvases SET version=3,doc=? WHERE idea_id=?",(sys.argv[2],sys.argv[3])); c.commit()')
+            result = subprocess.run([sys.executable, '-I', '-c', script, str(server.DB_PATH), json.dumps(doc), base.rsplit('/', 1)[1]], capture_output=True, text=True)
+            changed.set()
+            assert result.returncode == 0, result.stderr
+            refused = future.result(timeout=10)
+        monkeypatch.setattr(workspaces, 'inputs', original)
+        assert refused.status_code == 409, refused.text
+        assert client.get(base + '/gen').json() == []
+    assert submissions == []
+    assert not server.load('spend:' + server.today())
+
+
+def test_upload_media_matches_node_and_rechecks_after_stream(client):
+    import json
+    staff(client)
+    base, doc = setup_graph(client, [node('image', 'upload', media='image'), node('video', 'upload', media='video'),
+        node('audio', 'upload', media='audio')])
+    for nid, mime, data in [('video', 'image/png', b'\x89PNGimage'), ('audio', 'image/png', b'\x89PNGimage'),
+                            ('image', 'video/mp4', b'video'), ('audio', 'video/mp4', b'video')]:
+        response = client.post(base + '/gen/upload?nodeId=' + nid, content=data, headers={'content-type': mime})
+        assert response.status_code == 422, response.text
+    rid = base.rsplit('/', 1)[1]
+    def stream():
+        yield b'\x89PNGimage'
+        doc['nodes'] = [n for n in doc['nodes'] if n['id'] != 'image']
+        with server.db() as conn:
+            conn.execute('UPDATE canvases SET version=3,doc=? WHERE idea_id=?', (json.dumps(doc), rid))
+    response = client.post(base + '/gen/upload?nodeId=image', content=stream(), headers={'content-type': 'image/png'})
+    assert response.status_code == 422, response.text
+    assert client.get(base + '/gen').json() == []
+    folder = server.MEDIA_DIR / rid / 'gen'
+    assert not folder.exists() or not list(folder.iterdir())
+
+
+def test_confirmation_wallet_and_enqueue_roll_back_together(client, monkeypatch):
+    import generations
+    import pytest
+    import sqlite3
+    staff(client)
+    original_models = generations.load_models
+    monkeypatch.setattr(generations, 'load_models', lambda: [
+        {**m, 'price': {'per': 'image', 'usd': 0.1}} if m['id'] == 'mock-image' else m for m in original_models()])
+    submissions = []
+    monkeypatch.setattr(server.gen_jobs, 'submit', submissions.append)
+    base, _ = setup_graph(client, [node('s', 'storyboard', prompt='Bicycle', model='mock-image')])
+    body = {'nodeId': 's', 'canvasVersion': 2}
+    quote = client.post(base + '/gen', json=body).json()
+    assert quote['total'] == 0.1
+    original_enqueue = generations.enqueue
+    def fail(*args, **kwargs):
+        raise sqlite3.IntegrityError('injected enqueue failure')
+    monkeypatch.setattr(generations, 'enqueue', fail)
+    with pytest.raises(sqlite3.IntegrityError, match='injected enqueue failure'):
+        client.post(base + '/gen', json={**body, 'confirm': True, 'inputStamp': quote['inputStamp']})
+    assert not server.load('spend:' + server.today())
+    assert client.get(base + '/gen').json() == [] and submissions == []
+    monkeypatch.setattr(generations, 'enqueue', original_enqueue)
+    monkeypatch.setattr(server, 'DAILY_GEN_IMAGE_USD', 0.05)
+    refused = client.post(base + '/gen', json={**body, 'confirm': True, 'inputStamp': quote['inputStamp']})
+    assert refused.status_code == 429
+    assert not server.load('spend:' + server.today())
+    assert client.get(base + '/gen').json() == [] and submissions == []
+
+
+def test_confirm_sqlite_writer_boundary_blocks_other_process_changes(client, monkeypatch):
+    import concurrent.futures
+    import generations
+    import subprocess
+    import sys
+    import threading
+    staff(client)
+    monkeypatch.setattr(server.gen_jobs, 'submit', lambda gid: None)
+    base, _ = setup_graph(client, [node('s', 'storyboard', model='mock-image', prompt='Bicycle')])
+    body = {'nodeId': 's', 'canvasVersion': 2}
+    quote = client.post(base + '/gen', json=body).json()
+    reserved, attempted = threading.Event(), threading.Event()
+    original = generations.enqueue
+    def barrier(*args, **kwargs):
+        reserved.set()
+        assert attempted.wait(10), 'external writer did not test transaction boundary'
+        return original(*args, **kwargs)
+    monkeypatch.setattr(generations, 'enqueue', barrier)
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        future = pool.submit(client.post, base + '/gen', json={**body, 'confirm': True, 'inputStamp': quote['inputStamp']})
+        assert reserved.wait(10), 'confirm did not reserve wallet'
+        script = '''import sqlite3,sys
+c=sqlite3.connect(sys.argv[1],timeout=0)
+for sql in ("UPDATE canvases SET version=version+1", "UPDATE store SET value=value WHERE key='clients'"):
+    try:
+        c.execute(sql)
+        c.commit()
+    except sqlite3.OperationalError as error:
+        assert 'locked' in str(error), str(error)
+        c.rollback()
+    else:
+        raise AssertionError('writer crossed confirmation transaction')
+'''
+        result = subprocess.run([sys.executable, '-I', '-c', script, str(server.DB_PATH)], capture_output=True, text=True)
+        attempted.set()
+        assert result.returncode == 0, result.stderr
+        made = future.result(timeout=10)
+    assert made.status_code == 201, made.text
+    assert client.get(base).json()['version'] == 2
+
+
+def test_confirm_rechecks_kit_changes_before_wallet(client, monkeypatch):
+    import concurrent.futures
+    import json
+    import threading
+    import workspaces
+    from test_takes import A
+    staff(client)
+    item = {'id': 'k_bicycle', 'kind': 'product', 'name': 'Bicycle', 'note': 'Red frame', 'images': [], 'updatedAt': 1}
+    client_data = {**A, 'id': 'client-a', 'kit': {'items': [item]}}
+    with server.db() as conn:
+        conn.execute("UPDATE store SET value=? WHERE key='clients'", (json.dumps([client_data]),))
+    base, _ = setup_graph(client, [node('k', 'kit', kitItems=['k_bicycle']), node('s', 'storyboard', model='mock-image', prompt='Bicycle')], [connect('k', 's', 'in:kit')])
+    body = {'nodeId': 's', 'canvasVersion': 2}
+    quote = client.post(base + '/gen', json=body).json()
+    original = workspaces.inputs
+    checked, changed = threading.Event(), threading.Event()
+    first = True
+    def barrier(*args, **kwargs):
+        nonlocal first
+        result = original(*args, **kwargs)
+        if first:
+            first = False
+            checked.set()
+            assert changed.wait(10)
+        return result
+    monkeypatch.setattr(workspaces, 'inputs', barrier)
+    submissions = []
+    monkeypatch.setattr(server.gen_jobs, 'submit', submissions.append)
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        future = pool.submit(client.post, base + '/gen', json={**body, 'inputStamp': quote['inputStamp'], 'confirm': True})
+        assert checked.wait(10)
+        updated = client.patch('/api/clients/client-a/kit/items/k_bicycle', json={'note': 'Blue frame'})
+        changed.set()
+        assert updated.status_code == 200, updated.text
+        refused = future.result(timeout=10)
+    assert refused.status_code == 409, refused.text
+    assert client.get(base + '/gen').json() == [] and submissions == []
+    assert not server.load('spend:' + server.today())
+
+
+def test_upload_rechecks_media_changed_during_stream(client):
+    import json
+    staff(client)
+    base, doc = setup_graph(client, [node('u', 'upload', media='image')])
+    rid = base.rsplit('/', 1)[1]
+    def stream():
+        yield b'\x89PNGimage'
+        doc['nodes'][0]['data']['media'] = 'video'
+        with server.db() as conn:
+            conn.execute('UPDATE canvases SET version=3,doc=? WHERE idea_id=?', (json.dumps(doc), rid))
+    refused = client.post(base + '/gen/upload?nodeId=u', content=stream(), headers={'content-type': 'image/png'})
+    assert refused.status_code == 422
+    assert client.get(base + '/gen').json() == []
+    assert not list((server.MEDIA_DIR / rid / 'gen').iterdir())
