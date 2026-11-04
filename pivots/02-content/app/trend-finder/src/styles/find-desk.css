@@ -284,3 +284,59 @@
   :root[data-ui="altitude"] .toast.fd-toast { animation: none; }
 }
 :root[data-ui="altitude"] .fd-go > span { display: inline-block; }
+
+/* ---------- Recent searches, open layout (founder pick, 4 Nov 2026: find-ui/find-ideas-directions.html C) ----------
+   No box: it sits on the page's dots. Intro on the left, ruled rows on the right. */
+:root[data-ui="altitude"] .rs-recent { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: var(--space-3xl) calc(var(--space-3xl) + var(--space-sm)); align-items: start; min-width: 0; }
+:root[data-ui="altitude"] .rs-intro { display: grid; gap: var(--space-base); align-content: start; min-width: 0; }
+:root[data-ui="altitude"] .rs-label { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.12em; text-transform: uppercase; color: var(--label); }
+:root[data-ui="altitude"] .rs-intro h2 { margin: 0; font-family: var(--font-serif); font-weight: 400; font-size: var(--text-3xl); line-height: 1.1; letter-spacing: -0.02em; color: var(--fg); }
+:root[data-ui="altitude"] .rs-intro p { margin: 0; font-size: var(--text-ms); line-height: 1.55; color: var(--muted); }
+:root[data-ui="altitude"] .rs-count { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg); }
+
+:root[data-ui="altitude"] .rs-table { display: grid; min-width: 0; }
+:root[data-ui="altitude"] :is(.rs-head, .rs-row) { display: grid; grid-template-columns: 44px minmax(0, 1fr) 200px 84px 76px; column-gap: var(--space-base); align-items: center; }
+:root[data-ui="altitude"] .rs-head {
+  padding-bottom: var(--space-sm); border-bottom: 1px solid var(--fg);
+  font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+}
+:root[data-ui="altitude"] .rs-row { padding: var(--space-base) 0; border-bottom: 1px solid var(--line); font-size: var(--text-ms); }
+:root[data-ui="altitude"] .rs-n { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+:root[data-ui="altitude"] .rs-q { display: flex; align-items: center; gap: var(--space-base); min-width: 0; }
+:root[data-ui="altitude"] .rs-tile {
+  flex: none; width: 46px; height: 46px; border-radius: 11px; padding: 9px; box-sizing: border-box;
+  display: grid; grid-template-columns: 1fr 1fr; place-items: center; gap: 2px;
+  background: linear-gradient(135deg, var(--navy), var(--accent)); color: var(--on-navy-muted);
+}
+:root[data-ui="altitude"] .rs-tile svg { width: 13px; height: 13px; }
+:root[data-ui="altitude"] .rs-tile.is-one { grid-template-columns: 1fr; }
+:root[data-ui="altitude"] .rs-tile.is-one svg { width: 18px; height: 18px; }
+:root[data-ui="altitude"] .rs-words { display: grid; gap: 2px; min-width: 0; }
+:root[data-ui="altitude"] .rs-words b { font-family: var(--font-serif); font-weight: 400; font-size: var(--text-xl); line-height: 1.15; letter-spacing: -0.01em; color: var(--fg); overflow-wrap: anywhere; }
+:root[data-ui="altitude"] .rs-words small { font-size: var(--text-sm); color: var(--muted); }
+:root[data-ui="altitude"] .rs-since { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); color: var(--fg); }
+:root[data-ui="altitude"] .rs-since small { flex-basis: 100%; font-size: var(--text-xs); color: var(--muted); }
+:root[data-ui="altitude"] .rs-new {
+  padding: 2px 6px; border-radius: var(--radius-xs); background: var(--mustard); color: var(--on-mustard, var(--ink));
+  font-family: var(--font-mono); font-size: var(--text-3xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+}
+:root[data-ui="altitude"] .rs-saved { color: var(--fg); white-space: nowrap; }
+:root[data-ui="altitude"] .rs-act { justify-self: end; }
+:root[data-ui="altitude"] .rs-open {
+  display: inline-flex; align-items: center; gap: var(--space-2xs); min-height: 40px; padding: 0; border: 0; background: none;
+  color: var(--accent); font: inherit; font-size: var(--text-ms); font-weight: 500; white-space: nowrap; cursor: pointer;
+}
+:root[data-ui="altitude"] .rs-open:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+@media (max-width: 900px) {
+  :root[data-ui="altitude"] .rs-recent { grid-template-columns: minmax(0, 1fr); gap: var(--space-xl); }
+}
+@media (max-width: 640px) {
+  :root[data-ui="altitude"] .rs-head { display: none; }
+  :root[data-ui="altitude"] .rs-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "q act" "since saved"; row-gap: var(--space-xs); }
+  :root[data-ui="altitude"] .rs-n { display: none; }
+  :root[data-ui="altitude"] .rs-q { grid-area: q; }
+  :root[data-ui="altitude"] .rs-since { grid-area: since; font-size: var(--text-sm); }
+  :root[data-ui="altitude"] .rs-saved { grid-area: saved; justify-self: end; font-size: var(--text-sm); }
+  :root[data-ui="altitude"] .rs-act { grid-area: act; }
+}
