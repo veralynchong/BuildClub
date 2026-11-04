@@ -21,6 +21,8 @@ export interface ResearchEntry {
   // Editable in the sheet.
   keywords: string[]
   hook: string
+  // The video's title (its caption on TikTok and Instagram). Shown in the Sheet's Title column.
+  title?: string
   // "Other info": free text.
   notes: string
   loggedAt: number
@@ -116,6 +118,7 @@ export function entryFromVideo(
     url: v.url,
     keywords: mergeKeywords(v.keywords, v.hashtags),
     hook: v.hook,
+    title: v.caption,
     notes: '',
     loggedAt: now,
     source,

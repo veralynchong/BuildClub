@@ -1654,6 +1654,7 @@ export default function App() {
               onOpenVideo={(videoId) => {
                 if (videoById.has(videoId)) openVideoDrawer(videoId)
               }}
+              videoOf={(videoId) => videoById.get(videoId)}
               onFindIdeas={() => navTo('search')}
               platforms={SEARCH_PLATFORMS}
               slots={researchSlots.filter((s) => s.clientId === client.id).sort((a, b) => a.number - b.number)}

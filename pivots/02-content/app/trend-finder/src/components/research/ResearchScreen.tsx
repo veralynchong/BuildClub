@@ -1,13 +1,17 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { Client, Platform } from '../../types'
+import type { Client, Platform, Video } from '../../types'
 import type { LinkInput, ResearchEntry, ResearchSlot, ResearchStatus, SlotSummary } from '../../lib/research'
 import { getActiveLang, t, tp } from '../../lib/i18n'
 import type { Key } from '../../lib/i18n'
 import { compact, platformName } from '../../lib/metrics'
 import { AddFromLink } from './AddFromLink'
 import { ConfirmRemoveSlot } from './ConfirmRemoveSlot'
+import { ConfirmRemoveRow } from './ConfirmRemoveRow'
 import { EditableText } from './EditableText'
 import { NewSlotForm } from './NewSlotForm'
+import { PlatformGlyph } from './PlatformGlyph'
+import { ResearchSheet } from './ResearchSheet'
+import type { PickInfo, SheetKit } from './ResearchSheet'
 import type { NewVideo } from './NewSlotForm'
 import {
   DEFAULT_SORT,
@@ -34,8 +38,11 @@ export interface ResearchScreenProps {
   // This client's rows only.
   entries: ResearchEntry[]
   statusOf: (e: ResearchEntry) => ResearchStatus
-  // Edits from the sheet: keywords, hook and other info only.
-  onUpdate: (id: string, patch: Partial<Pick<ResearchEntry, 'keywords' | 'hook' | 'notes'>>) => void
+  // Edits from the cards (hook) and the Sheet view (every column: platform, followers, views, keywords, hook, other info).
+  onUpdate: (
+    id: string,
+    patch: Partial<Pick<ResearchEntry, 'platform' | 'followers' | 'views' | 'keywords' | 'hook' | 'notes'>>,
+  ) => void
   onRemove: (id: string) => void
   // The Status control. 'picked' makes the row's plan (Still planning) without leaving the page; the video's
   // earlier pick steps down to Backup and its plan is deleted. 'none' / 'backup' on a picked row deletes its plan.
@@ -55,6 +62,8 @@ export interface ResearchScreenProps {
   onAddFromLink: (input: LinkInput, slotId?: string) => void
   // Opens the video's breakdown, when the app has it.
   onOpenVideo: (videoId: string) => void
+  // The saved video behind a row (for its cover and length in the Video layout), when the app still has it.
+  videoOf?: (videoId: string) => Video | undefined
   onFindIdeas: () => void
   // Platforms "Add from link" offers.
   platforms: Platform[]
@@ -113,56 +122,32 @@ const cross = (
   </svg>
 )
 
-// The platform's mark in white line work, for the navy tile on each reference card.
-function PlatformGlyph({ platform }: { platform: Platform }) {
-  const common = { 'aria-hidden': true, width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' } as const
-  switch (platform) {
-    case 'tiktok':
-      return (
-        <svg {...common}>
-          <path d="M14 4v10.5a3.5 3.5 0 1 1-3.5-3.5" />
-          <path d="M14 4c.4 2.6 2.2 4.3 5 4.5" />
-        </svg>
-      )
-    case 'youtube':
-      return (
-        <svg {...common}>
-          <rect x="3" y="6" width="18" height="12" rx="4" />
-          <path d="M10.5 9.5v5l4-2.5z" fill="currentColor" />
-        </svg>
-      )
-    case 'instagram':
-      return (
-        <svg {...common}>
-          <rect x="4" y="4" width="16" height="16" rx="5" />
-          <circle cx="12" cy="12" r="3.6" />
-          <circle cx="16.8" cy="7.2" r=".9" fill="currentColor" stroke="none" />
-        </svg>
-      )
-    case 'reddit':
-      return (
-        <svg {...common}>
-          <ellipse cx="12" cy="14" rx="7.5" ry="5" />
-          <path d="M12 9l1.5-5 4 1" />
-          <circle cx="9.3" cy="13.5" r=".8" fill="currentColor" stroke="none" />
-          <circle cx="14.7" cy="13.5" r=".8" fill="currentColor" stroke="none" />
-        </svg>
-      )
-    case 'x':
-      return (
-        <svg {...common}>
-          <path d="M5 5l14 14M19 5L5 19" />
-        </svg>
-      )
-  }
-}
-
 const searchIcon = (
   <svg className="rs-search-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
     <circle cx="11" cy="11" r="7" />
     <path d="M20 20l-4-4" />
   </svg>
 )
+
+// Cards (index + detail) or Sheet (one ledger of every video and its references), remembered in this browser.
+// 'video': the Sheet's video layout (founder, 4 Nov 2026), a shelf of covers per video instead of table rows.
+type View = 'cards' | 'sheet' | 'video'
+const VIEW_KEY = 'remake.research.view'
+function readView(): View {
+  try {
+    const v = globalThis.localStorage?.getItem(VIEW_KEY)
+    return v === 'cards' || v === 'video' ? v : 'sheet'
+  } catch {
+    return 'sheet'
+  }
+}
+function writeView(v: View): void {
+  try {
+    globalThis.localStorage?.setItem(VIEW_KEY, v)
+  } catch {
+    /* private window or blocked storage: the view just won't be remembered */
+  }
+}
 
 export function ResearchScreen(p: ResearchScreenProps) {
   const id = useId()
@@ -185,6 +170,15 @@ export function ResearchScreen(p: ResearchScreenProps) {
   const [sent, setSent] = useState<{ id: string; account: string } | null>(null)
   // The slot asking "Remove slot 3?".
   const [removingSlot, setRemovingSlot] = useState<string | null>(null)
+  const [view, setViewState] = useState<View>(readView)
+  const setView = (v: View) => {
+    setViewState(v)
+    writeView(v)
+  }
+  // Sheet view: which videos are dropped down. Untouched videos follow the default (Videos 1 and 2, and Unsorted).
+  // While searching, every video with matches starts open; toggles then apply to that search only.
+  const [sheetOpen, setSheetOpen] = useState<Record<string, boolean>>({})
+  const [searchOpen, setSearchOpen] = useState<{ q: string; map: Record<string, boolean> }>({ q: '', map: {} })
   const addBtn = useRef<HTMLButtonElement>(null)
   const slotBtn = useRef<HTMLButtonElement>(null)
   const lang = getActiveLang()
@@ -211,6 +205,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
   if (selClient !== clientId) {
     setSelClient(clientId)
     setSelected(null)
+    setSheetOpen({})
   }
   const select = (groupId: string) => setSelected({ id: groupId, q: filterKey })
 
@@ -233,6 +228,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
   useEffect(() => {
     if (!focusRowId || !focusGroup) return
     setSelected({ id: focusGroup, q: '' })
+    setSheetOpen((m) => ({ ...m, [focusGroup]: true }))
     setFlash(focusRowId)
     onFocused?.()
     const raf = requestAnimationFrame(() =>
@@ -322,7 +318,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
   const field = (key: Key, e: ResearchEntry) => t('research.edit.field', { field: t(key), account: e.account })
   const accountCell = (e: ResearchEntry) => (
     <span className="rs-account">
-      <button type="button" className="rs-account-btn" title={t('research.openVideo')} onClick={() => p.onOpenVideo(e.videoId)}>
+      <button type="button" className="rs-account-btn" title={`${e.account} · ${t('research.openVideo')}`} onClick={() => p.onOpenVideo(e.videoId)}>
         {e.account}
       </button>
       {e.url && (
@@ -380,7 +376,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
   // and moves it to the top of its video. A plan past Still planning is locked here: it changes on Plans, where the
   // manager approves. Un-picking deletes the plan and asks first; picking another row in the same video asks only
   // when the earlier pick's plan has work in it.
-  const pickControl = (e: ResearchEntry, group: Group) => {
+  const pickInfo = (e: ResearchEntry, group: Group): PickInfo => {
     const s = statusOf(e)
     const value: RowPick = s !== 'none' ? 'picked' : e.backup ? 'backup' : 'none'
     const locked = s !== 'none' && s !== 'planning'
@@ -395,8 +391,36 @@ export function ResearchScreen(p: ResearchScreenProps) {
       if (sent?.id === e.id) setSent(null)
       p.onPick(e.id, to)
     }
+    return { status: s, isPicked: value === 'picked', locked, otherLocked, choose }
+  }
+  // "This deletes the plan for …": Continue / Cancel, under the pick control.
+  const askBox = (e: ResearchEntry) => {
+    if (asking?.id !== e.id) return null
+    return (
+      <span className="rs-remove-ask" role="group" aria-label={asking.text}>
+        <span className="small">{asking.text}</span>
+        <button
+          type="button"
+          className="link-btn rs-remove-yes"
+          autoFocus
+          onClick={() => {
+            setAsking(null)
+            if (asking.to === 'picked') return pick(e)
+            if (sent?.id === e.id) setSent(null)
+            p.onPick(e.id, asking.to)
+          }}
+        >
+          {t('research.pick.yes')}
+        </button>
+        <button type="button" className="link-btn" onClick={() => setAsking(null)}>
+          {t('research.pick.no')}
+        </button>
+      </span>
+    )
+  }
+  const pickControl = (e: ResearchEntry, group: Group) => {
+    const { status: s, isPicked, locked, otherLocked, choose } = pickInfo(e, group)
     // One button (founder, 4 Nov 2026): "Pick this", or "★ Picked" to take the pick back.
-    const isPicked = value === 'picked'
     return (
       <span className="rs-pick-wrap">
         <button
@@ -410,53 +434,15 @@ export function ResearchScreen(p: ResearchScreenProps) {
           {t(isPicked ? 'research.pick.picked' : 'research.pick.pickThis')}
         </button>
         {locked && <span className="rs-locked small muted">{t('research.pick.locked', { status: statusText(s) })}</span>}
-        {asking?.id === e.id && (
-          <span className="rs-remove-ask" role="group" aria-label={asking.text}>
-            <span className="small">{asking.text}</span>
-            <button
-              type="button"
-              className="link-btn rs-remove-yes"
-              autoFocus
-              onClick={() => {
-                setAsking(null)
-                if (asking.to === 'picked') return pick(e)
-                if (sent?.id === e.id) setSent(null)
-                p.onPick(e.id, asking.to)
-              }}
-            >
-              {t('research.pick.yes')}
-            </button>
-            <button type="button" className="link-btn" onClick={() => setAsking(null)}>
-              {t('research.pick.no')}
-            </button>
-          </span>
-        )}
+        {askBox(e)}
       </span>
     )
   }
-  const removeCell = (e: ResearchEntry) => {
+  // Removing a row now asks in a pop-up (ConfirmRemoveRow), so nothing shows inline.
+  const removeAsk = (): null => null
+  // The ✕ (rows not planned only).
+  const removeBtn = (e: ResearchEntry) => {
     if (statusOf(e) !== 'none') return null
-    if (removing === e.id)
-      return (
-        <span className="rs-remove-ask" role="group" aria-label={t('research.removeAsk')}>
-          <span className="small">{t('research.removeAsk')}</span>
-          <button
-            type="button"
-            className="link-btn rs-remove-yes"
-            autoFocus
-            onClick={() => {
-              setRemoving(null)
-              p.onRemove(e.id)
-              requestAnimationFrame(() => document.getElementById(`${id}-search`)?.focus())
-            }}
-          >
-            {t('research.remove')}
-          </button>
-          <button type="button" className="link-btn" onClick={() => setRemoving(null)}>
-            {t('research.removeKeep')}
-          </button>
-        </span>
-      )
     return (
       <button
         type="button"
@@ -469,6 +455,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
       </button>
     )
   }
+  const removeCell = (e: ResearchEntry) => removeBtn(e)
   // "Move to": only on Unsorted rows (e.g. saved as "Not sure yet"), to file them under one of the videos.
   const moveCell = (e: ResearchEntry) => (
     <label className="rs-move">
@@ -652,11 +639,57 @@ export function ResearchScreen(p: ResearchScreenProps) {
     return <ul className="rs-rc-list">{g.rows.map((e) => refCard(e, g))}</ul>
   }
 
+  // The Sheet view: every video (and Unsorted when it has references); while searching, only those with matches.
+  const sheetGroups = indexGroups.filter((g) => !filtered || g.rows.length > 0)
+  const isOpen = (groupId: string) => {
+    if (filtered) return (searchOpen.q === filterKey ? searchOpen.map[groupId] : undefined) ?? true
+    // Every video starts closed (founder, 4 Nov 2026); while searching, videos with matches open.
+    return sheetOpen[groupId] ?? false
+  }
+  const toggleOpen = (groupId: string) => {
+    const next = !isOpen(groupId)
+    if (filtered)
+      setSearchOpen((o) => ({ q: filterKey, map: { ...(o.q === filterKey ? o.map : {}), [groupId]: next } }))
+    else setSheetOpen((m) => ({ ...m, [groupId]: next }))
+  }
+  const kit: SheetKit = {
+    accountCell,
+    pickInfo,
+    askBox,
+    statusBadge,
+    removeBtn,
+    removeAsk,
+    moveCell: (e) => (p.slots.length > 0 ? moveCell(e) : null),
+    statusText,
+  }
+
   const noEntries = p.entries.length === 0
   const empty = noEntries && p.slots.length === 0
 
   return (
-    <section className="client research">
+    <section className={`client research${view !== 'cards' ? ' is-sheet' : ''}`}>
+      {/* Sheet or Video (founder, 4 Nov 2026): the same videos as table rows or as a shelf of covers. */}
+      {/* Always shown, so it's easy to find (founder, 4 Nov 2026); from Cards it jumps to that layout. */}
+      {!empty && (
+        <div className="rs-layout" role="group" aria-label={t('research.layout.aria')}>
+          <span className="rs-viewswitch-k" aria-hidden="true">
+            {t('research.view.label')}
+          </span>
+          <button type="button" aria-pressed={view === 'sheet'} onClick={() => setView('sheet')}>
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 5h18M3 12h18M3 19h18" />
+            </svg>
+            {t('research.view.sheet')}
+          </button>
+          <button type="button" aria-pressed={view === 'video'} onClick={() => setView('video')}>
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+              <rect x="3" y="4" width="7" height="16" rx="2" />
+              <rect x="14" y="4" width="7" height="16" rx="2" />
+            </svg>
+            {t('research.layout.video')}
+          </button>
+        </div>
+      )}
       <header className="rs-hero">
         <h1>{t('research.title')}</h1>
         {!noEntries && (
@@ -712,8 +745,10 @@ export function ResearchScreen(p: ResearchScreenProps) {
             platforms={p.platforms}
             onCancel={closeSlotForm}
             onCreate={(video) => {
-              // Show the new video.
-              select(p.onCreateSlot(video))
+              // Show the new video (and drop it down in the Sheet view).
+              const slotId = p.onCreateSlot(video)
+              select(slotId)
+              setSheetOpen((m) => ({ ...m, [slotId]: true }))
               closeSlotForm()
             }}
           />
@@ -723,6 +758,23 @@ export function ResearchScreen(p: ResearchScreenProps) {
       <p className="sr-only" role="status" aria-live="polite">
         {announce}
       </p>
+
+      {removing &&
+        (() => {
+          const row = p.entries.find((x) => x.id === removing)
+          if (!row) return null
+          return (
+            <ConfirmRemoveRow
+              account={row.account}
+              onCancel={() => setRemoving(null)}
+              onConfirm={() => {
+                setRemoving(null)
+                p.onRemove(row.id)
+                requestAnimationFrame(() => document.getElementById(`${id}-search`)?.focus())
+              }}
+            />
+          )
+        })()}
 
       {removingSlot &&
         (() => {
@@ -778,6 +830,27 @@ export function ResearchScreen(p: ResearchScreenProps) {
             {t('research.filter.clear')}
           </button>
         </div>
+      ) : view !== 'cards' ? (
+        <ResearchSheet
+          uid={id}
+          layout={view === 'video' ? 'shelf' : 'rows'}
+          videoOf={p.videoOf}
+          onOpenVideo={p.onOpenVideo}
+          caption={t('research.caption', { client: p.client.name })}
+          groups={sheetGroups}
+          filtered={filtered}
+          isOpen={isOpen}
+          onToggle={toggleOpen}
+          flash={flash}
+          onUpdate={p.onUpdate}
+          onUpdateSlot={p.onUpdateSlot}
+          onAskRemoveSlot={setRemovingSlot}
+          onFindIdeas={p.onFindIdeas}
+          onAddFromLink={(slotId) => setAdding({ slotId })}
+          addingSlotId={adding?.slotId}
+          addPanel={addPanel}
+          kit={kit}
+        />
       ) : (
         <div className="rs-body">
           <div className="rs-labelrow">
@@ -854,6 +927,30 @@ export function ResearchScreen(p: ResearchScreenProps) {
                 </>
               )}
             </section>
+          </div>
+        </div>
+      )}
+
+      {!empty && (
+        <div className="rs-viewswitch-wrap">
+          <div className="rs-viewswitch" role="group" aria-label={t('research.view.aria')}>
+            <span className="rs-viewswitch-k" aria-hidden="true">
+              {t('research.view.label')}
+            </span>
+            <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="7" height="18" rx="2" />
+                <rect x="14" y="3" width="7" height="8" rx="2" />
+                <rect x="14" y="14" width="7" height="7" rx="2" />
+              </svg>
+              {t('research.view.cards')}
+            </button>
+            <button type="button" aria-pressed={view !== 'cards'} onClick={() => view === 'cards' && setView('sheet')}>
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M3 5h18M3 12h18M3 19h18" />
+              </svg>
+              {t('research.view.sheet')}
+            </button>
           </div>
         </div>
       )}
