@@ -3,7 +3,7 @@ import { Background, MiniMap, ReactFlow, ReactFlowProvider, applyNodeChanges, us
 import '@xyflow/react/dist/style.css'
 import type { CanvasContext as CanvasResource } from '../../lib/canvas/resource'
 import type { CanvasDoc, CanvasNode, CanvasState, GenModel, Generation, NodeData, NodeKind, Budget } from '../../lib/canvas/types'
-import { getCanvas, getKit, getModels, getBudget, putCanvas, StaleCanvas, quoteNode, startGen, pollGen, uploadMedia } from '../../lib/canvas/api'
+import { getCanvas, getKit, getModels, getBudget, putCanvas, StaleCanvas, NoShots, quoteNode, startGen, pollGen, uploadMedia } from '../../lib/canvas/api'
 import type { Kit, Shot } from '../../types'
 import { syncKit, kitTargets } from '../../lib/canvas/kit'
 import { legacyGenerationRequest, legacyInputsMatch, applyLegacyFrames } from '../../lib/canvas/legacy'
@@ -12,7 +12,8 @@ import { KitPanel } from './KitPanel'
 import { mergeVoiceOwnership } from '../../lib/canvas/voices'
 import { createOperationQueue, prepareCanvasLeave } from '../../lib/canvas/operations'
 import { createCanvasSession, draftStore, reconcileGenerations, selectGeneration, rememberGeneration } from '../../lib/canvas/session'
-import { genRequest, markStale, priceOf, selectedGen } from '../../lib/canvas/graph'
+import { genRequest, markStale, staleIds, priceOf, selectedGen } from '../../lib/canvas/graph'
+import { askAgent, applyAgentPlan, type AgentPlan } from '../../lib/canvas/agent'
 import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
 import { apiBase } from '../../lib/canvas/resource'
 import { toolbarPosition } from '../../lib/canvas/placement'
@@ -49,9 +50,22 @@ export default function CanvasScreen(props: Props) {
   const resource = props.context.resource
   useEffect(() => {
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const load = (retries: number) => {
+      getCanvas(resource).then((s) => { if (!cancelled) { setState(s); setError('') } }, (e) => {
+        if (cancelled) return
+        // Opening an older plan queues its first shot save before navigating here.
+        if (resource.kind === 'legacy-plan' && e instanceof NoShots && retries < 5) {
+          timer = setTimeout(() => load(retries + 1), 2000)
+          return
+        }
+        setError(String(e.message))
+      })
+    }
     setState(null)
-    getCanvas(resource).then((s) => { if (!cancelled) { setState(s); setError('') } }, (e) => !cancelled && setError(String(e.message)))
-    return () => { cancelled = true }
+    setError('')
+    load(0)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [resource, attempt])
   if (!state) return <section className="fc-loading"><button onClick={props.onBack}>← {ff('back')}</button>{error ? <div role="alert">{error}<button onClick={() => setAttempt((a) => a + 1)}>{ff('reload')}</button></div> : t('canvas.loading')}</section>
   return <ReactFlowProvider><Board key={`${resource.kind}:${resource.id}:${attempt}`} {...props} initial={state} reload={() => setAttempt((a) => a + 1)} /></ReactFlowProvider>
@@ -80,13 +94,13 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   const [menu, setMenu] = useState<{ x: number; y: number; from?: string; at?: { x: number; y: number } } | null>(null)
   const [search, setSearch] = useState('')
   const [pan, setPan] = useState(false)
-  const [editing, setEditing] = useState(openEditor && initial.doc.nodes.some((n) => n.type === 'editor'))
+  const [editing, setEditing] = useState(openEditor && (resource.kind === 'legacy-plan' || initial.doc.nodes.some((n) => n.type === 'editor')))
   const [note, setNote] = useState('')
   const [save, setSave] = useState<'saved' | 'saving' | 'failed'>('saved')
   const [stale, setStale] = useState(false)
   const [busy, setBusy] = useState<Set<string>>(new Set())
   const busyRef = useRef(new Set<string>())
-  const [plan, setPlan] = useState<PromptPlan | null>(null)
+  const [plan, setPlan] = useState<PromptPlan | (AgentPlan & { canvasVersion: number }) | null>(null)
   const [quote, setQuote] = useState<{ id: string; usd: number; remaining: number | null; signature: string; inputStamp?: string } | null>(null)
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
@@ -351,6 +365,14 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
 
   }, true)
   const ask = async () => withBusy('assistant', async () => {
+    if (resource.kind === 'legacy-plan') {
+      const node = selected.length === 1 ? session.doc().nodes.find((n) => n.id === selected[0]) : undefined
+      if (!node?.shotId || !shots.some((s) => s.id === node.shotId) || !session.doc().nodes.some((n) => n.type === 'shot' && n.shotId === node.shotId && !n.data.removed)) throw new Error(ff('assistantLegacyHint'))
+      if (!await flush()) throw new Error(ff('saveFirst'))
+      const canvasVersion = session.version()
+      setPlan({ ...await askAgent(resource.id, node.shotId), canvasVersion })
+      return
+    }
     const id = selected.find((id) => session.doc().nodes.find((n) => n.id === id)?.type === 'prompt')
     if (!id) throw new Error(ff('assistantHint'))
     if (!await flush()) throw new Error(ff('saveFirst'))
@@ -368,6 +390,18 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   const nodes: FreeNode[] = useMemo(() => doc.nodes.map((node) => ({ id: node.id, type: 'freeform', position: node.position, data: { node }, selected: selected.includes(node.id), deletable: node.type !== 'shot' })), [doc.nodes, selected])
   const edges = [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null, voices)].map((e) => ({ ...e, selected: selectedEdges.includes(e.id), className: `fc-edge media-${doc.nodes.find((n) => n.id === e.source)?.type === 'voice' ? 'audio' : 'image'}` }))
   const picked = doc.nodes.find((n) => selected.length === 1 && n.id === selected[0])
+  const assistantShots = shots.filter((s) => doc.nodes.some((n) => n.type === 'shot' && n.shotId === s.id && !n.data.removed))
+  const canAsk = resource.kind === 'legacy-plan' ? assistantShots.some((s) => s.id === picked?.shotId) : picked?.type === 'prompt'
+  const applyAssistant = () => {
+    if (!plan) return
+    if (session.version() !== plan.canvasVersion || session.doc() !== session.saved()) { setNote(ff('changed')); return }
+    if ('shotId' in plan) {
+      const made = applyAgentPlan(session.doc(), plan.shotId, plan, models)
+      const stale = new Set(made.changed.flatMap((id) => staleIds(made.doc, id, gens, true)))
+      change({ ...made.doc, nodes: made.doc.nodes.map((n) => stale.has(n.id) ? { ...n, data: { ...n.data, stale: true } } : n) })
+    } else change(applyPromptPlan(session.doc(), plan))
+    setPlan(null); setDock(null)
+  }
   const menuKinds = menu?.from ? compatibleKinds(doc, menu.from).map((o) => o.kind) : kinds
   const endConnect = (event: MouseEvent | TouchEvent, connection: FinalConnectionState) => {
     const source = drag.current; drag.current = null
@@ -454,7 +488,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
         {dock && <aside className="fc-dock" aria-label={ff(dock)}><header><h2>{ff(dock)}</h2><button aria-label={ff('close')} onClick={() => setDock(null)}>×</button></header>
           {dock === 'inspect' && (picked ? <><h3>{ff(picked.type)}</h3>{picked.type === 'kit' && (kit ? <fieldset disabled={actions.readonly} className="fc-kit-management"><KitPanel clientId={clientId} kit={kit} selected={picked.data.kitItems ?? []} onKit={applyKit} onSelected={(ids) => { update(picked.id, { kitItems: ids }); for (const id of kitTargets(session.doc(), picked.id)) change(markStale(session.doc(), id, gens)) }} onClose={() => setDock(null)} /></fieldset> : <p>{ff('kitUnavailable')}</p>)}{['prompt', 'storyboard', 'video', 'voice'].includes(picked.type) && <NodeSettings node={picked} actions={actions} />}{picked.type === 'storyboard' && kit && doc.edges.some((e) => e.target === picked.id && e.targetHandle === 'in:kit') && <div className="fc-kit-picks"><h4>{ff('kit')}</h4>{kit.items.filter((item) => { const source = doc.edges.find((e) => e.target === picked.id && e.targetHandle === 'in:kit')?.source; return doc.nodes.find((n) => n.id === source)?.data.kitItems?.includes(item.id) }).map((item) => <label key={item.id}><input type="checkbox" checked={!picked.data.kitOff?.includes(item.id)} disabled={actions.readonly} onChange={(e) => update(picked.id, { kitOff: e.target.checked ? (picked.data.kitOff ?? []).filter((id) => id !== item.id) : [...(picked.data.kitOff ?? []), item.id] })} />{item.name}</label>)}<p>{legacyGenerationRequest(doc, picked.id, shots, gens, kit, models.find((m) => m.id === picked.data.model) ?? models.find((m) => m.kind === 'image')!).kitPreview}</p></div>}<h4>{ff('ports')}</h4>{PORTS_LABEL(picked)}{edges.filter((e) => e.target === picked.id).map((e) => <div className="fc-input-wire" key={e.id}><span>{ff(doc.nodes.find((n) => n.id === e.source)!.type)}</span><button disabled={actions.readonly} aria-label={ff('delete')} onClick={() => void removeEdges([e])}>×</button></div>)}{['storyboard', 'video', 'voice'].includes(picked.type) && <button className="fc-primary" disabled={actions.readonly || busy.has(picked.id)} onClick={() => void begin(picked.id)}>▶ {ff('run')}</button>}</> : <p>{ff('noSelection')}</p>)}
           {dock === 'history' && <><div className="fc-wallet"><h3>{ff('budget')}</h3>{budget && Object.entries(budget).map(([k, b]) => <p key={k}><span>{ff(k as 'image' | 'video' | 'voice')}</span><b>{usd(Math.max(0, b.cap - b.spent))}</b></p>)}</div>{gens.length === 0 && <p>{ff('noHistory')}</p>}{[...gens].reverse().map((g) => <article className="fc-history" key={g.id}>{g.url && g.kind === 'image' && <img src={g.url} alt="" />}<strong>{g.model}</strong><span>{ff(g.status)} · {usd(g.actualUsd ?? g.estUsd)}</span>{g.status === 'done' && <button disabled={actions.readonly} onClick={() => void withBusy(g.nodeId, async () => { const knownVoices = await getVoices(resource); setVoices(mergeVoiceOwnership(session.doc(), knownVoices)); if (!await selectGeneration(g, selectionIO(knownVoices))) throw new Error(ff('saveFirst')); setSelected([g.nodeId]); await refresh() }, true)}>{ff('version')}</button>}{g.error && <p>{serverText(g.error)}</p>}</article>)}</>}
-          {dock === 'assistant' && <><p>{ff('assistantHint')}</p><button className="fc-primary" disabled={actions.readonly || busy.has('assistant') || !picked || picked.type !== 'prompt'} onClick={() => void ask()}>{ff('preview')}</button>{plan && <div className="fc-agent-plan"><span className="fc-demo">{plan.source === 'demo' ? ff('demo') : `${ff('source')}: ${plan.source}`}</span><h3>{ff('storyboard')}</h3><p>{plan.storyboard.prompt}</p><small>{plan.storyboard.model}</small><h3>{ff('video')}</h3><p>{plan.video.prompt}</p><small>{plan.video.model} · {seconds(plan.video.duration)} · {usd(plan.planUsd)}</small><p>{ff('noAuto')}</p><button className="fc-primary" disabled={actions.readonly} onClick={() => { if (session.version() !== plan.canvasVersion || session.doc() !== session.saved()) { setNote(ff('changed')); return }; change(applyPromptPlan(session.doc(), plan)); setPlan(null); setDock(null) }}>{ff('apply')}</button></div>}</>}
+          {dock === 'assistant' && <><p>{ff(resource.kind === 'legacy-plan' ? 'assistantLegacyHint' : 'assistantHint')}</p>{resource.kind === 'legacy-plan' && <label>{ff('assistantShot')}<select aria-label={ff('assistantShot')} value={picked?.shotId ?? ''} disabled={actions.readonly || busy.has('assistant')} onChange={(e) => { const node = doc.nodes.find((n) => n.type === 'shot' && n.shotId === e.target.value); setSelected(node ? [node.id] : []) }}><option value="">{ff('assistantChooseShot')}</option>{assistantShots.map((s, i) => <option key={s.id} value={s.id}>{i + 1}. {s.line}</option>)}</select></label>}<button className="fc-primary" disabled={actions.readonly || busy.has('assistant') || !canAsk} onClick={() => void ask()}>{ff('preview')}</button>{plan && <div className="fc-agent-plan"><span className="fc-demo">{plan.source === 'demo' ? ff('demo') : `${ff('source')}: ${plan.source}`}</span>{'shotId' in plan && <h3>{ff('assistantShot')}: {shots.find((s) => s.id === plan.shotId)?.line}</h3>}<h3>{ff('storyboard')}</h3><p>{plan.storyboard.prompt}</p><small>{plan.storyboard.model}</small><h3>{ff('video')}</h3><p>{plan.video.prompt}</p><small>{plan.video.model} · {seconds(plan.video.duration)} · {usd(plan.planUsd)}</small><p>{ff(resource.kind === 'legacy-plan' ? 'assistantLegacyApply' : 'noAuto')}</p><button className="fc-primary" disabled={actions.readonly} onClick={applyAssistant}>{ff('apply')}</button></div>}</>}
         </aside>}
       </div>
       </FreeformContext.Provider>
