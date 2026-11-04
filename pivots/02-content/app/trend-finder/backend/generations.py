@@ -500,13 +500,14 @@ def error(status: int, message: str) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
 
 
-def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd: None, refund=lambda kind, usd: None,
+def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd, conn=None: None, refund=lambda kind, usd: None,
                 remaining=lambda: {"image": {"spent": 0, "cap": 0}, "video": {"spent": 0, "cap": 0},
-                                   "voice": {"spent": 0, "cap": 0}}) -> APIRouter:
+                                   "voice": {"spent": 0, "cap": 0}}, confirmation_lock=None) -> APIRouter:
     import kit  # here, not at the top: kit imports this module
 
     router = APIRouter()
     router.budget, router.refund, router.remaining = budget, refund, remaining  # used by the generate routes
+    router.confirmation_lock = confirmation_lock or threading.Lock()
     router.jobs = GenJobs(db, media_dir, refund)  # server.py keeps it as gen_jobs
 
     def find_idea(idea_id: str):
@@ -640,6 +641,32 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                 return None, error(422, "An input image is missing.")
         return {"references": stored, "kitStamp": stamp, "sentPrompt": sent}, None
 
+    def confirm_workspace(idea_id, node_id, version, stamp, model, inputs, usd, prepare=None):
+        # Global lock order: kit/brand -> wallet -> SQLite writer. Never call the legacy
+        # separate-connection wallet writer while holding SQLite's write transaction.
+        with kit.lock, router.confirmation_lock, db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            try:
+                current_version, _, current_stamp = workspaces.inputs(conn, idea_id, node_id, workspaces.stored_load(conn))
+            except ValueError:
+                return error(409, 'The canvas changed somewhere else. Reload it.')
+            if current_version != version or current_stamp != stamp:
+                return error(409, 'The canvas changed somewhere else. Reload it.')
+            if prepare:
+                bad = prepare()
+                if bad is not None:
+                    return bad
+            blocked = router.budget(model['kind'], usd, conn=conn)
+            if blocked is not None:
+                return blocked
+            # A failed enqueue rolls the wallet and row back together. The queue starts only
+            # after the context commits, so no worker can observe uncommitted media jobs.
+            out = enqueue(conn, idea_id, node_id, model['kind'], model['id'], inputs, usd)
+        router.jobs.submit(out['id'])
+        return JSONResponse(out, status_code=201)
+
+    router.confirm_workspace = confirm_workspace
+
     @router.post("/api/ideas/{idea_id}/gen")
     async def create(idea_id: str, request: Request):
         try:
@@ -687,19 +714,21 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                          for kind, values in router.remaining().items()}
             return {'total': est, 'remaining': remaining, 'items': [{'nodeId': node_id, 'model': model['id'], 'usd': est}],
                     'canvasVersion': version, 'inputStamp': stamp, 'inputs': {**resolved, **part}}
+        inputs = {"prompt": prompt, "startFrame": start, "duration": duration, **part}
         if independent:
             if body.get('inputStamp') != stamp:
                 return error(409, 'The canvas changed somewhere else. Reload it.')
-            try:
-                copy_kit_images(kit, media_dir(), found['clientId'], idea_id, part['references'])
-            except OSError:
-                return error(422, 'An input image is missing.')
+            inputs.update(inputStamp=stamp, canvasVersion=version)
+            def prepare():
+                try:
+                    copy_kit_images(kit, media_dir(), found['clientId'], idea_id, part['references'])
+                except OSError:
+                    return error(422, 'An input image is missing.')
+                return None
+            return confirm_workspace(idea_id, node_id, version, stamp, model, inputs, est, prepare)
         blocked = router.budget(model["kind"], est)  # spends the estimate; a failed job gives it back
         if blocked is not None:
             return blocked
-        inputs = {"prompt": prompt, "startFrame": start, "duration": duration, **part}
-        if independent:
-            inputs.update(inputStamp=stamp, canvasVersion=version)
         try:
             with db() as conn:
                 out = enqueue(conn, idea_id, node_id, model["kind"], model["id"], inputs, est)
@@ -823,6 +852,12 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
         ext = video_types[content_type] if is_video else UPLOAD_TYPES.get(content_type)
         if ext is None:
             return error(415, NOT_IMAGE)
+        upload_media = 'video' if is_video else 'image'
+        def matching_node(doc):
+            return any(n.get('id') == nodeId and n.get('type') == 'upload' and
+                       workspaces.media(n) == upload_media for n in doc['nodes'])
+        if found.get('kind') == 'workspace' and not matching_node({'nodes': nodes}):
+            return error(422, "That node isn't an upload node on this plan's canvas.")
         max_bytes = gen_providers.MAX_BYTES['video'] if is_video else MAX_UPLOAD_BYTES
         limit_text = 'The file is over the 200 MB limit.' if is_video else UPLOAD_LIMIT
         declared = request.headers.get("content-length", "")
@@ -858,12 +893,18 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             elif not image_header_ok(ext, head):
                 part.unlink(missing_ok=True)
                 return error(415, NOT_IMAGE)
-            os.replace(part, folder / name)
+            with db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                if found.get('kind') == 'workspace' and not matching_node(workspaces.graph(conn, idea_id)[1]):
+                    part.unlink(missing_ok=True)
+                    return error(422, "That node isn't an upload node on this plan's canvas.")
+                os.replace(part, folder / name)
+                out = insert_done(conn, idea_id, nodeId, upload_media, "upload", file=name)
+            return out
         except BaseException:
             part.unlink(missing_ok=True)
+            (folder / name).unlink(missing_ok=True)
             raise
-        with db() as conn:
-            return insert_done(conn, idea_id, nodeId, "video" if is_video else "image", "upload", file=name)
 
     @router.get("/api/ideas/{idea_id}/gen")
     def listing(idea_id: str):
