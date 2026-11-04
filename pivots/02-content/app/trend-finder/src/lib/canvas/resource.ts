@@ -17,6 +17,11 @@ export interface Workspace {
   createdAt: number
   updatedAt: number
 }
+
+export function hasMissingLegacyPlan(view: string, resource: ResourceRef | undefined, planReady: boolean): boolean {
+  return (view === 'plan' || view === 'board' || (view === 'canvas' && resource?.kind !== 'workspace')) && !planReady
+}
+
 // Strings keep existing callers on the legacy route, even if an id resembles a workspace.
 export function apiBase(ref: ResourceInput): string {
   const r = typeof ref === 'string' ? { kind: 'legacy-plan', id: ref } : ref
