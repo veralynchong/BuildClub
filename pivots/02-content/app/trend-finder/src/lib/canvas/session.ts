@@ -102,7 +102,10 @@ export async function selectGeneration(gen: Generation, io: SelectionIO): Promis
   // Re-read after importing: editing while the request was in flight must survive.
   const next = { ...io.current(), nodes: io.current().nodes.map((n) => {
     if (n.id !== gen.nodeId) return n
-    const data = { ...n.data, ...(io.matchesInputs?.(gen) && !gen.inputs.inputStamp ? { stale: false } : {}), selected: gen.id, ...(mappedVoice ? { voiceId: mappedVoice.id, voiceSources: { ...n.data.voiceSources, [gen.id]: mappedVoice.id }, voiceIds: [...new Set([...(n.data.voiceIds ?? []), mappedVoice.id])] } : {}) }
+    // Preserve the explicit legacy pair before changing the selected version.
+    const previousPair = n.type === 'voice' && n.data.selected && n.data.voiceId ? { [n.data.selected]: n.data.voiceId } : {}
+    const voiceSources = { ...previousPair, ...n.data.voiceSources, ...(mappedVoice ? { [gen.id]: mappedVoice.id } : {}) }
+    const data = { ...n.data, ...(io.matchesInputs?.(gen) && !gen.inputs.inputStamp ? { stale: false } : {}), selected: gen.id, ...(mappedVoice ? { voiceId: mappedVoice.id, voiceSources, voiceIds: [...new Set([...(n.data.voiceIds ?? []), ...(n.data.voiceId ? [n.data.voiceId] : []), ...Object.values(voiceSources), mappedVoice.id])] } : {}) }
     if (data.awaiting === gen.id) delete data.awaiting
     return { ...n, data }
   }) }
