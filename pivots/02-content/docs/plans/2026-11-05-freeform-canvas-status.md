@@ -11,9 +11,12 @@ Goal active；使用者已核准無人值守 Multi Agent 實作、commit、push�
 | T0 | 完成 | Lead：新分支、本機三份計畫文件、安全離線驗證保護；起始 gate GREEN：984 passed, 2 skipped，frontend PASS |
 | T1 | 完成 | task_9671d805b114／ctx_3b4ed7ce46f5；三份唯讀契約回報，NOT RUN tests，已整合 Plan |
 | T2 | 完成 | task_5209fcd0805d／ctx_b9df19f20eb6；來源07d3d93，唯讀，測試 NOT RUN |
-| T3 | 執行中 | task_e0cfdcc6e808／ctx_53453c5ad8cc；freeform-canvas-backend；base a521141；backend唯一writer |
-| T4 | 執行中 | task_e8f98ecfcaeb／ctx_95a4a3a4957b；freeform-canvas-frontend；base a521141；src/unit唯一writer，先視覺再核對API |
-| T5–T7 | 待整合 | 本機E2E／review／交付 |
+| T3 | 完成並接受 | source0b64468已整合；親跑1021+2skip GREEN與真HTTP→MP4→token核准；非外部模型驗收 |
+| T4 | 功能實作完成，最終審查待收尾 | source01a907b三項legacy回歸已review ACCEPT、整合4e92a14並真UI3/3通過；port padding干擾已修、實測13px |
+| T5 | 19項／組真UI通過，backend重啟待驗 | main11/recovery5/legacy-entry3全部PASS、errors/routeErrors空、cleanup survivors={}；真正server restart seam另由ctx_3e8c3418f667實作 |
+| T6 | 最終提交與視覺審查待完成 | 暫定整合3項P2已由ctx_906ad7ad326f接受修復且實測；最新容器/Inspector/Assistant/menu有圖，須固定commit複審 |
+| T7 | 未完成 | local全部checkpoint尚未push、尚未開產品PR，不merge；最終清單與外部待驗須列明 |
+
 
 ## 已核對
 
@@ -47,14 +50,14 @@ T2 來源 07d3d93，完整訊息 msg_ea7f2a8dcca4。分類依來源，不推測 
 
 ## 下一步
 
-1. 接收 T3 先行CRUD/auth/DTO回報，核對固定契約後轉交T4；任何變更集中由lead整合。
-2. 兩位writer各自驗證提交，lead讀完整base..head、指派唯讀review、修正後整合。
-3. T5使用自有8872後端／8892渲染環境、單一browser owner、外部網路封鎖、暫存DB與真實本機媒體輸出驗收。
-4. 最終更新本表、根STATUS與handoff，推送並開PR，留下明早真實測試清單。
+1. 接受並獨立review自有backend restart驗證seam，實際重啟後比對workspace/生成/剪輯/審批與媒體。
+2. 對完整checkpoint做視覺複審與最終程式delta審查，補剩餘阻擋後重測適當範圍。
+3. 最後完整gate/build/lint及必要UI綠，更新所有任務與變更清單、push全部commits、開PR到origin/main，不merge。
+4. 真實模型需逐次報價/cap/yes；外部provider、真發布與其內容品質仍NOT RUN。
 
 ## 尚未驗證
 
-新版 Canvas 尚未實作；外部模型、配音及真實發布本輪禁止測試。沒有任何新版產品完成聲明。
+程式/本機HTTP/媒體與19項／組真UI已通過，並非外部模型驗收。尚缺真正backend程序重啟後資料保留的實測；已安排獨立runner writer。最新視覺及最終提交審查、push、產品PR亦未完成。沒有整體交付完成聲明。
 
 ## 本機測試入口準備
 
@@ -122,3 +125,31 @@ Source8fb8da0，base5a27180，scope為bin runner與isolation/timeout/lifecycle�
 仍須前端兩類修正複審、backend+frontend+collector整合雙語gate，並親跑完整UI/freeform.cjs；這次HTTP/媒體不替代UI可操作性與Magnific視覺檢查。
 
 Backend輸出另外親跑ffmpeg volumedetect：兩視覺clip已muted，仍有連入voice可聽（>-50dB）；腳本已加入相同斷言，保留backend-voice-volume.txt。
+
+正式UI E2E草稿補上實際editor trim/split/reorder/text、第二次export清前次approval、signed-out Send back與原版resend409、zh-Hant重開及1440 overflow斷言；node --check PASS，尚未執行，不列產品通過。前端最後兩類已實作的進度回報：node.data.voiceSources/voiceIds持久映射、實際Board操作queue等待upload→edit.persist→canvas保存及App離頁guard，真hook deferred PUT先紅後綠；待固定新SHA與複審。
+
+前端dafee8b已完成voiceSources/voiceIds與operation queue。更正：lead曾誤把gens.check的VOICE_NODE參數當enqueue身份；實際accepted backend用body.nodeId入列。額外identity normalization要求已撤回，worker只撤本次自己新增的假設code，未動daf修正；HEAD1689b3a乾淨、無額外commit，full1021+2skip/frontendGREEN。
+
+為解除停止hook的翻譯相依，lead（非writer）在已乾淨dafee8b前端分支依序cherry-pick已接受backend六commit，並套用/提交collector擴充1689b3a（backend/test_server_text.py僅7增3刪，保留雙向assert）。前端環境HEAD1689b3a，親跑full GREEN1021passed2skipped in34.50s/frontendPASS，不再以known-red延後處理。根整合分支仍81c3c29，尚未整合src/unit。後續只需從原frontend選src/unit commits及collector1689整合，不重複cherry同一backend六commit。
+
+Source1689最後複審ctx_ac630449c153：導航/operation queue與collector ACCEPT；僅舊明確pair {selected:g1,voiceId:v1}未播種進voiceSources/voiceIds，換版後可能遺失歷史ownership。已交原writer ctx_03e901e4d98f/task_dce147f932ba做最小fallback與覆寫前持久保存，禁猜editor-owned音訊，不擴API。
+
+已把backend真HTTP/ffprobe/音訊/cleanup JSON與實際輸出frame保存到`pivots/02-content/docs/demo-qa/2026-11-05-freeform/`供review，不依賴tmp唯一副本。這是本機mock/testsrc媒體證據，非真模型內容品質；正式UI截圖/結果待整合後補。
+
+Frontend舊明確pair小修固定3220c0dc（parent1689）：僅voices.ts一行fallback、session.ts保存previousPair（5增1刪）及legacyVoicePair.test.mjs三測。先紅重import409／g1v1遺失，後聚焦三測綠、全560unit/build/lint/full1021+2skip/frontendGREEN；工作樹乾淨。已分派獨立小scope複審，仍未接受或整合src。
+
+使用者確認續行後起始完整gate再次GREEN：1021passed2skipped in37.91s、frontendPASS；Playwright MCP tabs list呼叫成功。真實模型測試改為本機完成後另行報價/上限並逐次取得確認，尚未執行或花費。兩個worker均收到ready，尚無完成聲明。
+
+續行檢查點：入口source18a2a876經ctx_d59284531e2e獨立ACCEPT並整合6a8bb1b。重新build後真UI可建立並進空白workspace，證據/tmp/freeform-ui-proof-build-6a8bb1b；下一步wire因測試handle selector錯誤而停，已依實際ReactFlow source/target classes修正。截圖另揭露toolbar新增節點重疊，原writer follow-up ctx_254a43452cbf修placement，禁止透過測試搬位掩蓋。補充recovery腳本sourcebb79c683整合560bc51，僅靜態檢查非browserPASS。root stop-hook另1020pass1fail2skip，channel get已由ctx_38fdddd77272 barrier確定重現meta running/live done造成done卻resultNone，lead已授權最小channels.py+regression修正，等待commit/review。尚未整體綠燈或完成UI。
+
+9418915整合驗證GREEN：1023passed2skipped in38.34s，frontendPASS/buildlint0。正式主UI全10PASS（/tmp/freeform-ui-proof-stable-9418915/results.json、cleanup survivors={}），含輸出1080x1920/AAC/配音可聽、signedout核准/退回/禁止原檔重送、zhHant重開，QA已保存main-ui-*。補充recovery首次通過助手/相容拖接/拒絕，後停voice Run被minimap遮擋，改選節點浮動工具列Run後待重跑。視覺ctx_e1ae84ad6a14 REJECT預設容器白邊與底部超出900，workerctx_626ac468b1aa在獨立worktree補Canvas限定容器，不宣稱視覺已驗收；Inspector/Assistant/menu截圖亦待補。
+
+2026-11-05續行：磁碟已由外部狀態恢復50Gi，lead沒有清理或刪除Chrome/pytest快取。afd55b5親跑full GREEN1023passed2skipped in46.71s、frontendPASS；Playwright tools可呼叫。補充UI先後通過demo助手/相容拖接/拒絕、失敗重試與done-away voice、雙分頁409 restore/discard。舊計畫fixture null ideas及第二次run舊結果競速皆屬腳本，已修為空陣列及等待新201工作/awaitingID再驗結果；最新執行session26791、證據/tmp/freeform-recovery-proof-newrun-afd55b5。三項legacy產品修復workerctx_51ca342203fd仍在執行。
+
+afd55b5補充真UI全5組PASS：demo助手/相容空白拖接/不相容拒絕、failed→repair/done-awayvoice/importonce、兩分頁CAS409 restore/discard、legacy voicehistory/kit refs/framewriteback/stale、媒體及editPUT gate導航等待/跨workspace不污染。errors=[]、routeErrors=[]、cleanup survivors={}，證據/tmp/freeform-recovery-proof-owned-afd55b5與QA recovery-*。尚未覆蓋整合review三項legacy入口/助手/NoShots修復，須待新SHA實測；新版主UI與geometry正跑session63014。
+
+Integrator檢查點：source01a907b6290fa4db645fed2fe72930c602f11331/baseafd55b5的三項legacy修復，reviewerctx_906ad7ad326f ACCEPT（實跑7專項+20相關unit、無阻擋），lead檢查3檔差異與scope未有未提交變更後接受並整合4e92a14。親跑full1023passed2skipped in35.70s/frontendPASS/buildlint0。4e92a14加fc-port padding:0修正（workingtree待checkpoint）主UI11PASS，真拖動/viewport還原、PNG→video保留舊版本、port13px/padding0、canvas44/0/1396/900、editor ruler在900內、Inspector#ededed、MP4/審核/繁中全部通過，cleanup survivors={}，QA main-ui-*已更新。Recovery5組於新整合版正跑session18666；legacy入口3組腳本workerctx_34f96b5e0ed4仍在準備，未宣稱通過。
+
+舊計畫專用真UI3/3 PASS（/tmp/freeform-legacy-entry-proof-real-4e92a14）：Make the video無editor直接進真剪輯器且圖不變；真本機assistant route shotId/demo response/apply保存重開；hold App真正PUT使GET409至少2次，再原樣release後無手動Reload自動恢復穩定shotIDs。已移除writer腳本的代填plan回應，API回應非fabricated；初始null ideas fixture與reload保留editor入口依真行為調整。cleanup survivors={}，QA legacy-entry-*保存，auth request bodies不存入QA。恢復套件加入穩定viewport/量測/命中實際port診斷後最新session52144執行中，先前失敗畫面為框選而非連線，未宣稱該次通過。
+
+最後恢復套件於4e92a14+portpadding工作樹全5組PASS（/tmp/freeform-recovery-hitchecked-final）：已等待viewport穩定/節點量測並記錄elementFromPoint命中真正source/target，legacy音訊確實進editor；非forceclick，非框選。主11與legacy3也已真通過。完成audit另識別Tasks T5「重啟保留」尚只有瀏覽器重開，缺真backendprocessrestart，故T5仍不標Done；新增獨立runner writer補自有tempbackend重啟seam與兩次重啟專項驗證，之後主UI以真MP4/approval狀態再驗重啟，保持sandbox/ownedidentity/cleanup不放寬。

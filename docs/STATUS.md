@@ -4,7 +4,7 @@
 
 使用者已核准：深色Magnific式空白畫布直接取代舊Canvas、六類節點能力與既有助手、全站接線盤點並優先素材→剪輯→輸出→送審；無人值守Multi Agent、commit/push/開PR，不合併，不做外部API測試、不花費、不安裝依賴。計畫／逐項任務／執行狀態位於 `pivots/02-content/docs/plans/2026-11-05-freeform-canvas-{plan,tasks,status}.md`。
 
-整合分支 `feat/freeform-canvas`，worktree `/Users/tommy/orca/workspaces/BuildClub/freeform-canvas`，從origin/main e442b3a分出。已整合並接受安全本機E2E lifecycle保護與獨立workspace後端，2026-11-05本分支 `bash bin/verify.sh full` GREEN：1021passed2skipped、frontendPASS。真實本機HTTP→mock生成/音訊→Remotion MP4（4.011s）→signed-out token核准亦通過；前端仍在獨立worktree修正與review，未整合、未跑新版完整UI/E2E、未開產品PR，不可當作新版已完成。細節以任務Status最新紀錄為準，舊PR／8805等下方歷史不代表本輪狀態。
+整合分支 `feat/freeform-canvas`，worktree /Users/tommy/orca/workspaces/BuildClub/freeform-canvas，base origin/main e442b3a。三項legacy整合回歸已獨立review接受並整合4e92a14；親跑full GREEN：1023passed2skipped、frontendPASS，build/lint0。主11、恢復5、legacy入口3項／組真UI全PASS，含真MP4/可聽配音、核准/退回、CAS restore/discard、Kit/歷史/導航保存、NoShots延遲自動恢復，非真provider測試。容器及對比已修且畫布44/0/1396/900、時間軸在視窗內、port13px實測。完成audit仍缺真正backend程序重啟驗證（已派writer）；最終程式/視覺審查與push/PR待完成。磁碟外部恢復50Gi，lead未刪Chrome/pytest快取。以下舊PR與測試環境不代表本輪交付。
 
 Read first: `docs/todo.md` (open keys and tasks) and `docs/test-log.md` (every test run; skip a test that already passed at an unchanged commit). Demo branch: `chore/demo-integrate-main-1104`, PR #49 (draft, do not merge yet).
 

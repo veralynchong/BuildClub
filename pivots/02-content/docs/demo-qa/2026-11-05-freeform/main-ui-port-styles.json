@@ -1,0 +1,137 @@
+[
+  {
+    "node": "n_prompt_w2f4o3",
+    "handle": "in:text",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_prompt_w2f4o3",
+    "handle": "out",
+    "width": "25px",
+    "height": "25px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_storyboard_gbtzir",
+    "handle": "in:text",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_storyboard_gbtzir",
+    "handle": "in:ref",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_storyboard_gbtzir",
+    "handle": "in:kit",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_storyboard_gbtzir",
+    "handle": "out",
+    "width": "25px",
+    "height": "25px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_video_4rctvu",
+    "handle": "in:text",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_video_4rctvu",
+    "handle": "in:start",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_video_4rctvu",
+    "handle": "in:ref",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_video_4rctvu",
+    "handle": "out",
+    "width": "25px",
+    "height": "25px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_voice_l06ox9",
+    "handle": "in:text",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_voice_l06ox9",
+    "handle": "out",
+    "width": "25px",
+    "height": "25px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_editor",
+    "handle": "in:clips",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_editor",
+    "handle": "in:audio",
+    "width": "13px",
+    "height": "13px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  },
+  {
+    "node": "n_upload_nb87uy",
+    "handle": "out",
+    "width": "25px",
+    "height": "25px",
+    "minWidth": "5px",
+    "minHeight": "5px",
+    "padding": "0px"
+  }
+]

@@ -479,7 +479,7 @@
 .fc-screen .fc-run { border-radius:50%; background:#d7d7d7; color:#222; width:30px; height:30px; padding:0; display:grid; place-items:center; font-size:12px; }
 .fc-floating { background:#1d1d1d; border:1px solid #343434; border-radius:12px; padding:3px; display:flex; box-shadow:0 4px 20px #0006; }
 .fc-floating button { width:31px; height:28px; padding:0; color:#aaa; font-size:15px; }
-.fc-port { width:25px!important; height:25px!important; background:#232323!important; border:1px solid #6d6590!important; border-radius:50%!important; display:grid!important; place-items:center; color:#b4a3e2; right:-38px!important; z-index:3; }
+.fc-port { width:25px!important; height:25px!important; background:#232323!important; border:1px solid #6d6590!important; border-radius:50%!important; display:grid!important; place-items:center; color:#b4a3e2; right:-38px!important; padding:0!important; z-index:3; }
 .fc-port.react-flow__handle-left { left:-38px!important; right:auto!important; width:13px!important; height:13px!important; }
 .fc-port.react-flow__handle-left span { position:absolute; right:20px; padding:4px 7px; border-radius:4px; color:#999; font-size:8px; opacity:0; background:#242424; white-space:nowrap; }
 .fc-port.react-flow__handle-left:hover span { opacity:1; }

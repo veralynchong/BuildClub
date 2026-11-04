@@ -59,7 +59,7 @@ async function main() {
     page.setDefaultTimeout(15000)
     page.on('pageerror', error => pageerrors.push(error.message))
     page.on('request', r => {
-      if (new URL(r.url()).pathname.startsWith('/api/')) requests.push({ method: r.method(), path: new URL(r.url()).pathname, body: r.postData(), at: Date.now() })
+      if (new URL(r.url()).pathname.startsWith('/api/') && !new URL(r.url()).pathname.startsWith('/api/auth/')) requests.push({ method: r.method(), path: new URL(r.url()).pathname, body: r.postData(), at: Date.now() })
     })
     page.on('response', r => {
       if (new URL(r.url()).pathname.startsWith('/api/')) responses.push({ method: r.request().method(), path: new URL(r.url()).pathname, status: r.status(), at: Date.now() })
@@ -92,7 +92,7 @@ async function main() {
     }
     await api('/api/library', 'PUT', merged)
     const idea = { id: 'legacy-entry-approved', videoId: 'link-t4', clientId: client.id, status: 'approved', dueDate: '2026-12-01', notes: '', shots: [1, 2, 3].map(shot) }
-    await api('/api/ideas', 'PUT', [...await api('/api/ideas'), idea])
+    await api('/api/ideas', 'PUT', [...((await api('/api/ideas')) ?? []), idea])
     const base = `/api/ideas/${idea.id}`, canvas = base + '/canvas'
     const initial = await api(canvas)
     assert.ok(initial.doc.nodes.length > 0)
@@ -144,24 +144,16 @@ async function main() {
     assert.ok(selectedShot.id)
     assert.notEqual(selectedShot.id, extra[0].id)
     const before = await api(canvas), kitBefore = await api(`/api/clients/${client.id}/kit`)
-    const plan = {
-      source: 'demo', shotId: selectedShot.id,
-      storyboard: { prompt: 'Demo: a red handmade cup on a cafe table.', model: 'mock-image' },
-      video: { prompt: 'Demo: slowly move around the red cup.', model: 'mock-video', duration: 4 }, planUsd: 0,
-    }
-    let posted
-    const planHandler = async route => {
-      const r = route.request()
-      if (new URL(r.url()).pathname !== base + '/agent/plan' || r.method() !== 'POST') return route.fallback()
-      posted = r.postDataJSON()
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan) })
-    }
-    await page.route('**/*', planHandler)
     await page.getByRole('button', { name: /Assistant/ }).click()
     await page.getByRole('combobox', { name: 'Plan shot', exact: true }).selectOption(selectedShot.id)
     const preview = page.waitForResponse(r => new URL(r.url()).pathname === base + '/agent/plan' && r.request().method() === 'POST')
     await page.getByRole('button', { name: 'Preview plan', exact: true }).click()
-    assert.equal((await preview).status(), 200)
+    const previewResponse = await preview
+    assert.equal(previewResponse.status(), 200)
+    const posted = previewResponse.request().postDataJSON()
+    const plan = await previewResponse.json()
+    assert.equal(plan.source, 'demo')
+    assert.equal(plan.shotId, selectedShot.id)
     assert.deepEqual(posted, { shotId: selectedShot.id })
     assert.ok(!Object.hasOwn(posted, 'promptNodeId'))
     await page.getByText('Demo plan · no AI call', { exact: true }).waitFor()
@@ -185,10 +177,11 @@ async function main() {
     assert.ok(!requests.some(r => r.method === 'POST' && /\/(gen|generate|run)(\/|$)/.test(r.path)), 'no generation queued')
     await fit()
     await snap('02-assistant-applied')
-    await page.unroute('**/*', planHandler)
     const reloaded = page.waitForResponse(r => new URL(r.url()).pathname === canvas && r.request().method() === 'GET' && r.status() === 200)
     await page.getByRole('button', { name: 'Reload', exact: true }).click()
     await reloaded
+    await page.locator('.fc-screen').waitFor()
+    if (await page.locator('.fc-editor').isVisible()) await page.getByRole('button', { name: '← Back to canvas', exact: true }).click()
     await page.locator('.fc-flow').waitFor()
     assert.deepEqual((await api(canvas)).doc, applied.s.doc)
     assert.deepEqual((await api(canvas)).generations, before.generations)
@@ -202,7 +195,7 @@ async function main() {
     const latestLibrary = await api('/api/library')
     await api('/api/library', 'PUT', { ...latestLibrary, videos: [...latestLibrary.videos, delayedVideo] })
     const delayedIdea = { id: 'legacy-entry-delayed', videoId: delayedVideo.id, clientId: client.id, status: 'approved', dueDate: '2026-12-02', notes: '' }
-    await api('/api/ideas', 'PUT', [...await api('/api/ideas'), delayedIdea])
+    await api('/api/ideas', 'PUT', [...((await api('/api/ideas')) ?? []), delayedIdea])
     const delayedCanvas = `/api/ideas/${delayedIdea.id}/canvas`
     await picker()
     const gate = await holdIdeasPut(page)

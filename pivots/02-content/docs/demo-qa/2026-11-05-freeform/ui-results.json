@@ -1,0 +1,5 @@
+{
+  "passed": [],
+  "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.fc-screen') to be visible\n\n    at main (/Users/tommy/orca/workspaces/BuildClub/freeform-canvas/pivots/02-content/app/trend-finder/e2e/freeform.cjs:60:38)",
+  "errors": []
+}

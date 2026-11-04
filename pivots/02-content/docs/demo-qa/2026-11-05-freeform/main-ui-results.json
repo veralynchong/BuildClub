@@ -1,0 +1,17 @@
+{
+  "passed": [
+    "UI creates a genuinely empty workspace without a plan or approval",
+    "actual node drag and wheel zoom persist and render after reload",
+    "UI typed connections actually supply saved prompt and selected image to mock generation",
+    "generated voice is persisted and connected to the actual edit project",
+    "real video upload is durable without creating shots or takes and enters the timeline",
+    "reload/reopen preserves graph, selected outputs, clips and connected audio",
+    "real editor UI trims, splits, reorders and saves a text overlay",
+    "UI export produces real 1080x1920 AAC MP4 of timeline length with connected voice audible",
+    "signed-out client review plays and approves workspace export without creating or approving a plan",
+    "new export clears old approval and signed-out send-back blocks unchanged resend",
+    "zh-Hant workspace UI reloads existing content at 1440 without page overflow"
+  ],
+  "workspaceId": "ws_03c6efe460404ac588117585f5b2a0d0",
+  "errors": []
+}

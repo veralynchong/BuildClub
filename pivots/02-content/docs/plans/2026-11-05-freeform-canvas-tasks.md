@@ -33,3 +33,5 @@ T3真實本機HTTP/媒體驗收（lead已執行PASS，沒有UI）：
 python3 /Users/tommy/.agents/skills/test-slot/scripts/test_slot.py --resource local:127.0.0.1:8872:buildclub-e2e with-command --wait 10 --timeout 650 -- python3 bin/freeform-e2e.py --script pivots/02-content/app/trend-finder/e2e/freeform-backend.cjs --evidence /tmp/freeform-backend-proof --timeout 600
 ```
 預期空白workspace→實際mock queue→圖/影/配音與上傳→真MP4→signed-out核准四步PASS、cleanup-audit survivors={}；clips muted時音量>-50dB證明voice確實進輸出。這不替代T5真實UI操作。
+
+2026-11-05整合驗收更新：4ca5884完整gate1021passed2skipped、frontendPASS、build/lint0；T5正式UI首次FAILED，App.tsx:1390舊planMissing把獨立workspace導回Plans。失敗截圖/results/cleanup已保存於docs/demo-qa/2026-11-05-freeform/ui-*；自有程序survivors={}。須先修正入口並加回歸驗證，再重跑完整UI；尚未通過的助手套用、拖到空白新增相容節點、兩分頁CAS與恢復、legacy UI、實際1440視覺均不得用單元測試取代產品驗收。

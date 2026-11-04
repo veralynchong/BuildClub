@@ -1,0 +1,6 @@
+{
+  "clipAudioMuted": true,
+  "connectedVoiceMeanDb": -24.5,
+  "source": "ffmpeg volumedetect on actual backend-workspace.mp4",
+  "externalProviders": "NOT RUN"
+}

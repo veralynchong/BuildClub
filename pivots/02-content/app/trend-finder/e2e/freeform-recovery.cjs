@@ -8,7 +8,7 @@ const BASE = process.env.BASE
 const evidence = process.env.FREEFORM_EVIDENCE_DIR
 assert.ok(BASE && evidence && process.env.FREEFORM_WORK_DIR && process.env.REMOTION_BROWSER_EXECUTABLE, 'use the isolated runner')
 assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(BASE).hostname), 'loopback only')
-const checks = [], errors = [], gates = []
+const checks = [], errors = [], gates = [], routeErrors = []
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const ok = name => { checks.push(name); console.log('PASS', name) }
 async function until(name, read, timeout = 30000) {
@@ -24,16 +24,29 @@ async function until(name, read, timeout = 30000) {
 async function gate(page, matches) {
   let release, entered = 0, open = false
   const wait = new Promise(resolve => { release = () => { open = true; resolve() } })
-  const handler = async route => {
+  const pending = new Set()
+  const handler = route => {
     if (!matches(route.request())) return route.fallback()
-    entered++
-    await wait
-    try { await route.continue() } catch (error) {
-      if (!page.isClosed() && !/closed|cancel|abort|Target/i.test(error.message)) throw error
-    }
+    const task = (async () => {
+      entered++
+      await wait
+      try { await route.fallback() } catch (error) {
+        const failure = route.request().failure()
+        const cancelled = page.isClosed() || /abort|cancel|closed/i.test(failure?.errorText ?? '')
+        const detail = { url: route.request().url(), message: error.message, failure, cancelled }
+        fs.appendFileSync(path.join(evidence, 'route-events.jsonl'), JSON.stringify(detail) + '\n')
+        if (!cancelled) routeErrors.push(detail)
+      }
+    })()
+    pending.add(task)
+    return task.finally(() => pending.delete(task))
   }
   await page.route('**/*', handler)
-  const control = { release, entered: () => entered, open: () => open, remove: async () => { release(); await page.unroute('**/*', handler) } }
+  const control = { release, entered: () => entered, open: () => open, remove: async () => {
+    release()
+    await Promise.allSettled([...pending])
+    await page.unroute('**/*', handler)
+  } }
   gates.push(control)
   return control
 }
@@ -41,11 +54,22 @@ async function main() {
   let browser, context
   const pages = [], spaces = []
   let active = 'setup'
-  const result = () => ({ passed: checks, errors, workspaces: spaces, active })
+  const result = () => ({ passed: checks, errors, routeErrors, workspaces: spaces, active })
   try {
     browser = await chromium.launch({ executablePath: process.env.REMOTION_BROWSER_EXECUTABLE, headless: true })
     context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-    await context.route('**/*', route => new URL(route.request().url()).origin === new URL(BASE).origin ? route.continue() : route.abort())
+    await context.route('**/*', async route => {
+      try {
+        if (new URL(route.request().url()).origin === new URL(BASE).origin) await route.continue()
+        else await route.abort()
+      } catch (error) {
+        const failure = route.request().failure()
+        const cancelled = /abort|cancel|closed/i.test(failure?.errorText ?? '')
+        const detail = { url: route.request().url(), message: error.message, failure, cancelled, stage: 'context' }
+        fs.appendFileSync(path.join(evidence, 'route-events.jsonl'), JSON.stringify(detail) + '\n')
+        if (!cancelled) routeErrors.push(detail)
+      }
+    })
     const newPage = async () => {
       const p = await context.newPage()
       p.on('pageerror', error => errors.push({ page: pages.indexOf(p), message: error.message }))
@@ -71,7 +95,8 @@ async function main() {
     await api('/api/clients', 'PUT', [...clients, client])
     const home = async p => {
       await p.goto(BASE)
-      await p.getByRole('button', { name: client.name, exact: true }).first().click()
+      await p.locator('.switcher-btn').click()
+      await p.getByRole('menuitem').filter({ hasText: client.name }).click()
       await p.getByRole('button', { name: 'Canvas', exact: true }).first().click()
       await p.locator('.fc-picker').waitFor()
     }
@@ -92,12 +117,22 @@ async function main() {
     const node = (p, id) => p.locator(`.react-flow__node[data-id=${JSON.stringify(id)}]`)
     const fit = async p => {
       await p.getByRole('button', { name: 'Fit to screen', exact: true }).click()
-      await sleep(250) // ZoomBar animates fitView for 200 ms; measure handles after it settles.
+      let previous, stable = 0
+      await until('fit viewport and node measurements settle', async () => {
+        const current = await p.locator('.react-flow__viewport').getAttribute('style')
+        const measured = await p.locator('.react-flow__node').evaluateAll(els => els.every(el => el.offsetWidth > 0 && el.offsetHeight > 0 && getComputedStyle(el).visibility === 'visible'))
+        stable = measured && current === previous ? stable + 1 : 0
+        previous = current
+        return stable >= 3
+      })
     }
     const add = async (p, base, kind, label) => {
       const before = new Set((await api(base)).doc.nodes.map(n => n.id))
       await p.getByRole('button', { name: label, exact: true }).first().click()
-      return until('save new ' + kind, async () => (await api(base)).doc.nodes.find(n => n.type === kind && !before.has(n.id)))
+      const created = await until('save new ' + kind, async () => (await api(base)).doc.nodes.find(n => n.type === kind && !before.has(n.id)))
+      await node(p, created.id).waitFor()
+      await p.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      return created
     }
     const input = (p, n) => node(p, n.id).getByRole('textbox', { name: 'Prompt', exact: true })
     const text = async (p, base, n, value) => {
@@ -110,9 +145,16 @@ async function main() {
     }
     const drag = async (p, from, target) => {
       await fit(p)
-      const a = await node(p, from).locator('.react-flow__handle-source[data-handleid="out"]').boundingBox()
+      const a = await node(p, from).locator('.react-flow__handle.source[data-handleid="out"]').boundingBox()
       const b = typeof target === 'function' ? await target() : await target.boundingBox()
       assert.ok(a && b, 'visible drag endpoints')
+      const hit = await p.evaluate(({ a, b }) => {
+        const read = box => { const el = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); const port = el?.closest('.react-flow__handle'); return { node: port?.getAttribute('data-nodeid'), handle: port?.getAttribute('data-handleid'), tag: el?.tagName, classes: el?.getAttribute('class') } }
+        return { source: read(a), target: read(b), a, b, viewport: document.querySelector('.react-flow__viewport')?.getAttribute('style') }
+      }, { a, b })
+      fs.appendFileSync(path.join(evidence, 'drag-targets.jsonl'), JSON.stringify(hit) + '\n')
+      assert.equal(hit.source.node, from, 'drag starts on its real output port')
+      if (typeof target !== 'function') assert.ok(hit.target.handle, 'drag ends on its real input port')
       await p.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
       await p.mouse.down()
       await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 20 })
@@ -120,7 +162,23 @@ async function main() {
     }
     const run = async (p, n) => {
       await fit(p)
-      await node(p, n.id).getByRole('button', { name: 'Run', exact: true }).last().click()
+      await node(p, n.id).locator('.fc-node-title').click()
+      const started = p.waitForResponse(r => {
+        if (r.request().method() !== 'POST' || !/\/(gen|edit\/voice\/tts)$/.test(new URL(r.url()).pathname)) return false
+        const body = r.request().postDataJSON()
+        return body.nodeId === n.id && body.confirm === true
+      })
+      await p.locator('.fc-floating').getByRole('button', { name: 'Run', exact: true }).click()
+      const response = await started
+      assert.equal(response.status(), 201)
+      const job = await response.json()
+      const resource = new URL(response.url()).pathname.replace(/\/(gen|edit\/voice\/tts)$/, '')
+      const canvas = resource.startsWith('/api/workspaces/') ? resource : resource + '/canvas'
+      await until('new run is recorded on its node', async () => {
+        const current = (await api(canvas)).doc.nodes.find(x => x.id === n.id)
+        return current.data.awaiting === job.id || current.data.selected === job.id
+      })
+      return job
     }
     const selected = (base, n) => until('selected real done ' + n.type, async () => {
       const s = await api(base), current = s.doc.nodes.find(x => x.id === n.id)
@@ -143,6 +201,7 @@ async function main() {
     const plan = await response.json()
     assert.equal(plan.source, 'demo')
     await page.getByText('Demo plan · no AI call', { exact: true }).waitFor()
+    await page.screenshot({ path: path.join(evidence, 'assistant-preview-1440.png') })
     assert.deepEqual((await api(base)).doc, before.doc)
     assert.deepEqual((await api(base)).generations, before.generations)
     await page.getByRole('button', { name: 'Apply to canvas', exact: true }).click()
@@ -165,6 +224,7 @@ async function main() {
     })
     const menu = page.locator('.fc-create-menu')
     await menu.waitFor()
+    await page.screenshot({ path: path.join(evidence, 'filtered-create-menu-1440.png') })
     assert.deepEqual((await menu.getByRole('button').evaluateAll(buttons => buttons.map(button => [...button.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('').trim()))).sort(), ['Prompt', 'Image generator', 'Video generator', 'Voiceover'].sort())
     await menu.getByRole('button', { name: /Voiceover/ }).click()
     const voice = await until('menu creates voice and autoedge', async () => {
@@ -172,7 +232,7 @@ async function main() {
       return v && s.doc.edges.some(e => e.source === prompt.id && e.target === v.id && e.targetHandle === 'in:text') && v
     })
     const stable = await api(base)
-    await drag(page, voice.id, node(page, image.id).locator('.react-flow__handle-target[data-handleid="in:ref"]'))
+    await drag(page, voice.id, node(page, image.id).locator('.react-flow__handle.target[data-handleid="in:ref"]'))
     await page.locator('.fc-notice').getByText('These ports cannot connect.', { exact: true }).waitFor()
     const refused = await api(base)
     assert.deepEqual(refused.doc, stable.doc)
@@ -193,7 +253,30 @@ async function main() {
     await page.getByRole('button', { name: /History/ }).click()
     assert.ok(await page.locator('.fc-history').count() >= 2)
     await page.getByRole('button', { name: /History/ }).click()
-    const polls = await gate(page, r => r.method() === 'GET' && new URL(r.url()).pathname.startsWith(base + '/gen/'))
+    // Hold delivery of the genuine fetch response, not the network route: navigating
+    // aborts polling, so an intercepted request must not be continued twice.
+    await page.evaluate(base => {
+      const original = window.fetch
+      let release, entered = 0
+      const wait = new Promise(resolve => { release = resolve })
+      const wrapper = async (...args) => {
+        const response = await original.apply(window, args)
+        const request = args[0], options = args[1]
+        const url = new URL(typeof request === 'string' ? request : request.url, location.href)
+        if ((options?.method ?? request?.method ?? 'GET') === 'GET' && url.pathname.startsWith(base + '/gen/')) {
+          entered++
+          await wait
+          if (options?.signal?.aborted) throw new DOMException('Polling was cancelled', 'AbortError')
+        }
+        return response
+      }
+      window.fetch = wrapper
+      window.__freeformPollGate = { entered: () => entered, release, restore: () => { release(); window.fetch = original } }
+    }, base)
+    const polls = {
+      entered: () => page.evaluate(() => window.__freeformPollGate.entered()),
+      remove: () => page.evaluate(() => window.__freeformPollGate.restore()),
+    }
     await run(page, voice)
     const awaiting = await until('awaiting is really persisted', async () => {
       const s = await api(base), v = s.doc.nodes.find(n => n.id === voice.id)
@@ -226,7 +309,7 @@ async function main() {
     const conflict = tab.waitForResponse(r => r.url() === BASE + base && r.request().method() === 'PUT' && r.status() === 409)
     await input(tab, prompt).fill('Draft B')
     await conflict
-    await tab.locator('.fc-banner').getByText('This canvas changed elsewhere. Reload to continue.', { exact: true }).waitFor()
+    await tab.locator('.fc-banner').filter({ hasText: 'This canvas changed elsewhere. Reload to continue.' }).waitFor()
     assert.equal((await api(base)).doc.nodes.find(n => n.id === prompt.id).data.text, 'Server A')
     const draftText = p => p.evaluate(id => {
       const tab = sessionStorage.getItem('remake.canvas.tab')
@@ -262,7 +345,7 @@ async function main() {
     }
     await api('/api/library', 'PUT', merged)
     const ideaId = 'recovery-legacy', legacyBase = `/api/ideas/${ideaId}`, canvas = legacyBase + '/canvas'
-    const ideas = await api('/api/ideas')
+    const ideas = (await api('/api/ideas')) ?? []
     await api('/api/ideas', 'PUT', [...ideas, {
       id: ideaId, videoId: 'link-t4', clientId: client.id, status: 'approved', dueDate: '2026-12-01', notes: '',
       shots: [1, 2, 3].map(i => ({ time: i + 's', shot: 'Shot ' + i, text: 'text ' + i, line: 'A simple cafe story, scene ' + i })),
@@ -296,11 +379,12 @@ async function main() {
     await until('older voice stays selected', async () => (await legacyState()).doc.nodes.find(n => n.id === legacyVoice.id).data.voiceId === firstVoice.node.data.voiceId)
     await page.getByRole('button', { name: /History/ }).click()
     const editor = await add(page, canvas, 'editor', 'Editor & output')
-    await drag(page, legacyVoice.id, node(page, editor.id).locator('.react-flow__handle-target[data-handleid="in:audio"]'))
+    await drag(page, legacyVoice.id, node(page, editor.id).locator('.react-flow__handle.target[data-handleid="in:audio"]'))
     await until('legacy audio enters real project', async () => (await api(legacyBase + '/edit')).project.voiceover.some(v => v.id === firstVoice.node.data.voiceId))
     const voices = (await api(legacyBase + '/edit/voice')).voices
-    assert.equal(voices.filter(v => v.genId === firstVoice.generation.id && v.nodeId === legacyVoice.id).length, 1)
-    assert.equal(voices.filter(v => v.genId === secondVoice.generation.id && v.nodeId === legacyVoice.id).length, 1)
+    // Legacy DTOs intentionally omit node/gen owners; durable ownership is in the canvas below.
+    assert.equal(voices.filter(v => v.id === firstVoice.node.data.voiceId).length, 1)
+    assert.equal(voices.filter(v => v.id === secondVoice.node.data.voiceId).length, 1)
     const ownedNode = (await legacyState()).doc.nodes.find(n => n.id === legacyVoice.id)
     assert.equal(ownedNode.data.voiceSources[firstVoice.generation.id], firstVoice.node.data.voiceId)
     assert.equal(ownedNode.data.voiceSources[secondVoice.generation.id], secondVoice.node.data.voiceId)
@@ -362,10 +446,10 @@ async function main() {
       const n = (await legacyState()).doc.nodes.find(n => n.id === upload.id)
       return n.data.voiceId && n
     })
-    assert.ok((await api(legacyBase + '/edit/voice')).voices.some(v => v.id === uploadedVoice.data.voiceId && v.nodeId === upload.id))
+    assert.equal((await api(legacyBase + '/edit/voice')).voices.filter(v => v.id === uploadedVoice.data.voiceId).length, 1)
     await openLegacy(page)
     const editGate = await gate(page, r => r.method() === 'PUT' && new URL(r.url()).pathname === legacyBase + '/edit')
-    await drag(page, upload.id, node(page, editor.id).locator('.react-flow__handle-target[data-handleid="in:audio"]'))
+    await drag(page, upload.id, node(page, editor.id).locator('.react-flow__handle.target[data-handleid="in:audio"]'))
     await until('real edit PUT is held', () => editGate.entered())
     await page.getByRole('button', { name: 'Back to canvases', exact: true }).click()
     await sleep(350)
@@ -391,6 +475,7 @@ async function main() {
     ok('navigation waits for actual media/edit PUT release; legacy graph, editor audio and shot frame persist without contaminating either workspace')
     await page.screenshot({ path: path.join(evidence, 'recovery-final-1440.png') })
     assert.deepEqual(errors, [])
+    assert.deepEqual(routeErrors, [])
     active = 'complete'
     fs.writeFileSync(path.join(evidence, 'recovery-results.json'), JSON.stringify(result(), null, 2))
   } catch (error) {
@@ -400,7 +485,7 @@ async function main() {
     fs.writeFileSync(path.join(evidence, 'recovery-results.json'), JSON.stringify({ ...result(), error: error.stack }, null, 2))
     throw error
   } finally {
-    for (const g of gates) g.release()
+    for (const g of gates) await g.remove()
     try { if (context) await context.close() }
     finally { if (browser) await browser.close() }
   }

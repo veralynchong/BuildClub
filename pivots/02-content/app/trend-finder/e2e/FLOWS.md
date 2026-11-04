@@ -111,6 +111,16 @@ These checks supersede the old requirement to seed an approved plan before enter
 - Recovery: stale concurrent saves get 409 without silently overwriting; failed requests leave recoverable edits; no approved fake plan is created to bypass legacy guards. Unauthenticated routes retain protection.
 - Cleanup: close only test-owned contexts in `finally`, stop owned backend/render processes, release the test slot. Keep screenshots and command evidence in the task report. External provider correctness and pricing remain explicitly NOT RUN for the user's morning test.
 
+### Reproducible local acceptance
+
+Build the current frontend first. The isolated runner copies the existing dist and never builds it implicitly. Run each suite with its own temporary backend, in sequence under the same test-slot lease:
+
+- Main flow: default bin/freeform-e2e.py. Includes actual node movement and wheel zoom/reload, image-to-video upload replacement with history retained, typed inputs, voice in MP4, timeline editing, signed-out approval/send-back, English/zh-Hant, viewport/timeline bounds, inspector contrast and typed-port computed dimensions.
+- Recovery and legacy media: pass --script pivots/02-content/app/trend-finder/e2e/freeform-recovery.cjs. Covers assistant demo/apply, compatible empty drop, invalid connection, failed generation/retry, completion while away, true two-tab CAS restore/discard, legacy voice history/kit references/frame/stale, held real media/edit writes and navigation, and cross-workspace isolation. Timing gates defer genuine responses or requests and do not fabricate successful backend data.
+- Legacy entry: pass --script pivots/02-content/app/trend-finder/e2e/freeform-legacy-entry.cjs. Covers Make the video without an editor node, the real local shot-based assistant response/application, and delayed first shot persistence with automatic NoShots recovery. It never fulfills a fake API response.
+
+The canonical test-slot command and evidence paths live in the dated Freeform Tasks/Status. A test source or unit result is not browser acceptance. Keep both the result JSON and cleanup-audit; survivors must be empty. No mobile checks are required.
+
 ## Known gaps (do not report again as new)
 - The review page is English only.
 - Voiceover "Record" needs a microphone; the test machine has none that works.

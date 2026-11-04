@@ -1,0 +1,16 @@
+{
+  "passed": [
+    "demo preview does not generate; Apply preserves prompt and adds exact graph; empty drag filters compatible kinds and autoedges; invalid edge is visibly rejected",
+    "failed mock job retains history after prompt repair; navigation/reopen recovers actual completed awaiting voice and imports once",
+    "real 409 preserves server A and tab-local B; Keep/reload/Restore commits B; discard keeps server B and removes only losing draft",
+    "approved legacy fixture merges existing data; voice history preserves ownership with one import per job; kit UI saves, supplies real references, writes shot frame and marks changed inputs stale",
+    "navigation waits for actual media/edit PUT release; legacy graph, editor audio and shot frame persist without contaminating either workspace"
+  ],
+  "errors": [],
+  "routeErrors": [],
+  "workspaces": [
+    "ws_a0de7edbbee94d26af82548486527ef7",
+    "ws_88ecab3da6ae4168b5203554f0a37cc3"
+  ],
+  "active": "complete"
+}

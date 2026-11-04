@@ -1,0 +1,9 @@
+{
+  "passed": [
+    "authenticated HTTP workspace is empty and has no fabricated plan",
+    "real queued mock adapters consume saved graph prompt/image and create/import voice",
+    "actual local HTTP export creates playable timeline-length 1080x1920 AAC MP4",
+    "signed-out token approves the real workspace export without any plan"
+  ],
+  "workspaceId": "ws_2e42a052ea8d4410a118fefa28cd7d25"
+}
