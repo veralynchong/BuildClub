@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Trend Finder backend for a person testing with REAL fal models (demo prep). Like isolated-backend.sh,
-# but passes FAL_KEY from the trend-finder .env and allows fal spend up to US$0.50 images + US$1.00 video a day.
-# Claude, Apify, voice budgets stay 0. Data is a throwaway temp dir: a restart wipes it.
+# but passes FAL_KEY and generation budgets from the trend-finder .env.
+# Exported generation budgets take precedence. Claude and Apify budgets stay 0.
+# Data is a throwaway temp dir: a restart wipes it.
 # Usage: [REMOTION_PORT=<port>] bash bin/real-fal-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>]
 #   (runs in foreground; Ctrl-C or kill <pid> cleans up)
 #   --demo-data  also copy the finished breakdowns (jobs/<id>/) of the pinned searches' videos, found in
@@ -11,7 +12,37 @@
 #   MOCK_GEN_DELAY_S  if set, passed through too: how long a mock generation takes (default 2)
 set -eu
 cd "$(dirname "$0")/.."
+
+generation_cap() {
+  python3 -I - "$1" "$2" "$3" <<'PY'
+import math
+import os
+from pathlib import Path
+import sys
+
+name, default, path = sys.argv[1:]
+value = os.environ.get(name)
+if value is None:
+    value = default
+    for line in Path(path).read_text().splitlines():
+        key, sep, candidate = line.partition("=")
+        if sep and key.strip() == name:
+            value = candidate.strip()
+            break
+try:
+    amount = float(value)
+    if not math.isfinite(amount) or amount < 0:
+        raise ValueError
+except ValueError:
+    sys.exit(f"error: {name} must be a finite, non-negative USD amount")
+print(amount)
+PY
+}
+
 [ -f pivots/02-content/app/trend-finder/.env ] || { echo "error: no pivots/02-content/app/trend-finder/.env (FAL_KEY lives there)" >&2; exit 1; }
+image_cap="$(generation_cap DAILY_GEN_IMAGE_USD 0.50 pivots/02-content/app/trend-finder/.env)"
+video_cap="$(generation_cap DAILY_GEN_VIDEO_USD 1.00 pivots/02-content/app/trend-finder/.env)"
+voice_cap="$(generation_cap DAILY_GEN_VOICE_USD 0 pivots/02-content/app/trend-finder/.env)"
 FAL_KEY="$(sed -n 's/^FAL_KEY=//p' pivots/02-content/app/trend-finder/.env | head -1)"; FAL_KEY="${FAL_KEY%\"}"; FAL_KEY="${FAL_KEY#\"}"
 
 usage="usage: bash bin/real-fal-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>]"
@@ -74,11 +105,11 @@ rm -f "$tmp/.env" "$tmp/backend/.env"
 demo_env=(); [ "$demo" != 1 ] || demo_env=(REMAKE_DEMO=1)
 remotion_env=(); [ -z "${REMOTION_PORT:-}" ] || remotion_env=(REMOTION_PORT="$REMOTION_PORT")
 mock_env=(); [ -z "${MOCK_GEN_DELAY_S:-}" ] || mock_env=(MOCK_GEN_DELAY_S="$MOCK_GEN_DELAY_S")
-# Clean environment, dummy token, zero budgets: any paid call is rejected before it happens.
+# Clean environment: only fal credentials and the selected generation budgets are passed through.
 cd "$tmp"
 # The backend runs from a copy, so it can't find render/ and node_modules by itself: point it at this checkout.
 clean_env=(env -i HOME="$HOME" PATH="$PATH" REMOTION_APP_DIR="$app_dir"
-  ${demo_env[@]+"${demo_env[@]}"} ${remotion_env[@]+"${remotion_env[@]}"} ${mock_env[@]+"${mock_env[@]}"} APIFY_TOKEN=dummy DAILY_APIFY_USD=0 DAILY_CLAUDE_USD=0 DAILY_JEV_USD=0 DAILY_GEN_IMAGE_USD=0.50 DAILY_GEN_VIDEO_USD=1.00 FAL_KEY="$FAL_KEY" DAILY_GEN_VOICE_USD=0 DAILY_SCRAPECREATORS_CREDITS=0)
+  ${demo_env[@]+"${demo_env[@]}"} ${remotion_env[@]+"${remotion_env[@]}"} ${mock_env[@]+"${mock_env[@]}"} APIFY_TOKEN=dummy DAILY_APIFY_USD=0 DAILY_CLAUDE_USD=0 DAILY_JEV_USD=0 DAILY_GEN_IMAGE_USD="$image_cap" DAILY_GEN_VIDEO_USD="$video_cap" FAL_KEY="$FAL_KEY" DAILY_GEN_VOICE_USD="$voice_cap" DAILY_SCRAPECREATORS_CREDITS=0)
 "${clean_env[@]}" "$venv/bin/uvicorn" server:app --app-dir backend --port "$port" >"$tmp/server.log" 2>&1 &
 pid=$!
 echo "temp dir: $tmp"; echo "url:      http://127.0.0.1:$port"; echo "pid:      $pid  (kill $pid to stop)"
