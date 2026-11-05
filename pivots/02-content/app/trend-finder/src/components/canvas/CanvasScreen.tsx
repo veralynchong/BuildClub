@@ -74,8 +74,21 @@ const freeformNodeTypes = { freeform: FreeformNode }
 const kinds: NodeKind[] = ['prompt', 'upload', 'storyboard', 'video', 'voice', 'editor']
 const glyphs = ['T', '↑', '▧', '▷', '♫', '▤']
 type Dock = 'inspect' | 'history' | 'assistant' | null
+function canvasTheme(): 'dark' | 'light' {
+  const choice = document.documentElement.dataset.theme
+  return choice === 'dark' || choice === 'light' ? choice : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
 function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName, onBack, openEditor = false, fullscreen, onFullscreen, reload }: Props & { initial: CanvasState; reload: () => void }) {
   const { resource, shots, readOnly, clientId, title } = context
+  const [theme, setTheme] = useState(canvasTheme)
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const sync = () => setTheme(canvasTheme())
+    const observer = new MutationObserver(sync)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    media.addEventListener('change', sync)
+    return () => { observer.disconnect(); media.removeEventListener('change', sync) }
+  }, [])
   const [doc, setDoc] = useState(initial.doc)
   const [takes, setTakes] = useState<Take[]>(initial.takes)
   const [gens, setGens] = useState(initial.generations)
@@ -443,7 +456,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     else setReloadAsk(true)
   }
   const back = async () => { if (await prepareLeave()) onBack(); else setNote(ff('saveFirst')) }
-  return <section className="fc-screen">
+  return <section className="fc-screen" data-theme={theme}>
     {editing && !recoveryOpen && !reloadAsk ? <div className="fc-editor"><EditorPanel ideaId={resource} clientId={clientId} shots={shots} edit={edit} sources={sources} timeline={timeline} doc={doc} gens={gens} takes={takes} readOnly={readOnly || stale || replacing || navigating} onBack={() => setEditing(false)} onJumpToNode={(id) => { setSelected([id]); setEditing(false) }} /></div> : null}
     <div className="fc-board" hidden={editing && !recoveryOpen && !reloadAsk}>
       <header className="fc-top"><button className="fc-back" aria-label={ff('back')} onClick={() => void back()}>‹</button><div className="fc-crumb"><span className="fc-project-dot" />{clientName}<span>›</span><strong>{title}</strong></div><div className="fc-top-actions">
@@ -461,7 +474,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
           <ReactFlow<FreeNode> nodes={nodes} edges={edges} nodeTypes={freeformNodeTypes}
             defaultViewport={doc.viewport ?? { x: 0, y: 0, zoom: 1 }} minZoom={0.15} maxZoom={2}
             nodesDraggable={!actions.readonly} nodesConnectable={!actions.readonly} deleteKeyCode={null}
-            selectionOnDrag={!pan} panOnDrag={pan ? true : [1, 2]} colorMode="dark"
+            selectionOnDrag={!pan} panOnDrag={pan ? true : [1, 2]} colorMode={theme}
             onNodesChange={(changes) => {
               let next = session.doc()
               const moved = applyNodeChanges(changes.filter((c) => c.type === 'position'), nodes)
@@ -478,7 +491,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
             onPaneClick={() => { setMenu(null); setSelected([]) }}
             onKeyDown={(e) => { const el = e.target as HTMLElement; if (el.closest('input,textarea,select,button')) return; if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); if (selected.length) remove(selected); if (selectedEdges.length) void removeEdges(edges.filter((e) => selectedEdges.includes(e.id))) } if (e.key === 'Escape') { setMenu(null); setDock(null) } }}
             aria-label={t('canvas.flow.label')}>
-            <Background gap={24} size={1} color="#292929" /><MiniMap pannable zoomable /><ZoomBar />
+            <Background gap={24} size={1} color={theme === 'light' ? '#d4d4d8' : '#292929'} /><MiniMap pannable zoomable /><ZoomBar />
           </ReactFlow>
           {doc.nodes.length === 0 && <div className="fc-empty"><div className="fc-empty-mark">✧</div><h1>{ff('emptyTitle')}</h1><p>{ff('emptyBody')}</p><button className="fc-primary" onClick={() => add('prompt')}>＋ {ff('prompt')}</button><span>{ff('navigation')}</span></div>}
           <nav className="fc-rail" aria-label={ff('add')}>

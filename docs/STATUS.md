@@ -1,5 +1,42 @@
 # STATUS
 
+## 2026-11-05：Canvas 收尾、職責界線與下一階段
+
+本輪重做與離線驗收已完成，交付 PR #53（不合併）。本次收尾將已驗證的 Canvas 全站主題同步增量納入同一功能分支；沒有另做全站設計。使用者已指示下一階段以後端為主、前端以隊友 Veralyn 的設計為準。
+
+### 後續協作界線（使用者明確要求）
+
+- 本人的主要範圍：後端架構、API／provider 接線、資料保存、生成任務狀態、錯誤處理、素材／剪輯／送審主路徑與可觀察驗收。
+- 前端以 Veralyn 的設計與既有元件為準。僅修改完成後端串接必需的資料綁定、狀態／錯誤呈現與可重現 bug；先沿用既有排版、字型、配色和設計系統。
+- 超出已核准 Canvas 重做的外觀／導覽／操作流程變更，先列出影響與理由並討論，不自行延伸重設計、不主動回退隊友內容。不改 AGENTS.md／CLAUDE.md。
+
+### 昨晚至本次交付
+
+- 空白自由 Canvas、Prompt／上傳／圖片／影片／配音／editor 節點、既有助手介面；素材→Canvas→剪輯→真 MP4 輸出→送審；全站未接線功能盤點。
+- 已修入口 plan guard、非同步保存後導航、CAS 草稿恢復、舊 plan 直開 editor、legacy 助手 shot 契約、voice ownership／匯入、卡片重疊、typed port padding、畫布版面與暗色標題、channel 狀態競態／test worker 清理。
+- 已交付本機 Plan／Tasks／Status、完整124檔變更及53來源 hash 的既有 QA checkpoint、固定程式及視覺獨立審查。21項／組1440桌面 UI 全通過，含真 Remotion MP4、核准與退回後各一次真正重啟並保留資料／媒體。
+- 今天追加主題同步：Canvas 跟隨全站「設定→外觀」淺／深／系統，移除獨立切換／偏好。選系統時即時跟隨 OS，明確主題優先於 OS；保留畫布內容。既有 QA checkpoint 是追加前的固定來源，不宣稱它涵蓋新主題增量。
+
+### 前端範圍覆核
+
+唯讀審查 base e442b3a→1f8da77：src 共36檔、+1548／−1494行，主要集中 CanvasScreen 重做。CanvasPick 改成獨立畫布入口，FreeformNode／CSS 為新畫布視覺；這不是僅改後端，但符合本輪核准範圍。App、SharedReviewPage、EditorPanel、ExportBar、ShotClips、MusicTool、VoiceTool 等另有入口／保存／剪輯／審核接線修改。沒有改 Landing、Home、Overview、Sidebar、ClientHome、全站 theme CSS、logo／品牌資產。仍需 Veralyn 確認 Canvas／CanvasPick 外觀，以及 workspace VoiceTool 改由 Canvas 節點接入、隱藏舊錄音／上傳／TTS 控制的流程決定；不把這一項說成純型別調整。
+
+### 驗證與未驗事項
+
+2026-11-05 本次收尾親跑 `bash bin/verify.sh full` GREEN：1023 passed、2 skipped（31.55s）、frontend PASS；主題增量 build／lint exit 0（只有既有 large chunk warning）。1440瀏覽器實測全站深淺色、OS即時變更／優先順序、reload重開、繁中設定、內容保留、無獨立切換／無pageerror，全部PASS；證據 `/tmp/buildclub-app-theme-qa`，cleanup survivors={}。真 provider 圖片／影片／配音品質、等待、實際費用與真發布仍未驗，US$0；mock 不是真實服務驗收。全站盤點另有 Research本機儲存、board fallback／objectURL、發布adapter及dashboard placeholder等後續，不代表全站全部修完。
+
+### 清理與保留
+
+使用者授權清理後，47個Git工作區移除16個已合併origin/main、乾淨、無執行工作／cwd引用、無其他工作區依賴且沒有DB／素材的舊工作區；無force、無遠端分支刪除，15個具名本機分支仍保留。移除：bg-search, board-3col, breakdown-fields, content-types, demo-fe6496, filter-panel, fix-local-covers, fix-yt-channel-url, landing-real-videos, landing-shots, logo-to-landing, phase3-plan, reanalyse-fix, research-p3, shot-framing, verify-numbers。剩31個。`integrate-1102` 的共用 node_modules、`w2-grade-subs-backend` 的共用 venv 必須保留；compare-videos／demo-35b436b／integrate-main／verify-fe6496 含本機資料，保留。Canvas worker 分支未合併main，保留待 PR 決定後再清；其他dirty／活躍／研究工作區未碰。清理明細與收據 `/tmp/buildclub-wrap-cleanup-results.json`。
+
+mini 隔離預覽 http://127.0.0.1:8875 持續供使用者看，前端已更新；MacBook loopback8875經 SSH reverse tunnel接 mini8875，已從MacBook健康檢查通過。保留預覽DB／素材；沒有關閉使用者瀏覽器或他人8871服務。
+
+### 下一個 session 建議（本輪不執行）
+
+1. 先核對 PR／交接與乾淨狀態；確認要測的 provider 憑證是否由既有服務安全提供，不讀／印key、不source秘密設定、不安裝依賴。
+2. 優先逐項真實後端測試：先一張圖片，再一段影片，再配音，每次先列模型／帳戶用途／估價／硬上限並等明確yes；記錄成功輸出、等待、錯誤／重試、實際費用與可取得餘額。不在本輪花費。
+3. 用真素材走同一條Canvas→剪輯→輸出→送審與reload保存；真實provider接線確認後，再操作Magnific比較同一流程的UX與等待體驗，先整理差距供隊友討論，不直接重做前端。
+
 ## 2026-11-05：空白自由畫布重做進行中
 
 使用者已核准：深色Magnific式空白畫布直接取代舊Canvas、六類節點能力與既有助手、全站接線盤點並優先素材→剪輯→輸出→送審；無人值守Multi Agent、commit/push/開PR，不合併，不做外部API測試、不花費、不安裝依賴。計畫／逐項任務／執行狀態位於 `pivots/02-content/docs/plans/2026-11-05-freeform-canvas-{plan,tasks,status}.md`。

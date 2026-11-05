@@ -571,3 +571,40 @@
 .fc-kit-picks p { white-space:pre-line; font-size:11px; }
 .fc-kit-summary { padding:24px; min-height:180px; font-size:12px; }
 .fc-kit-summary p { font-size:11px; color:#999; }
+
+/* Canvas follows the app appearance setting without changing saved graph data. */
+.fc-screen[data-theme="light"] { --fc-bg:#f4f4f5; --fc-panel:#fff; --fc-line:#d4d4d8; --fc-fg:#27272a; --fc-muted:#64646d; color-scheme:light; }
+.fc-screen[data-theme="light"] .fc-flow .react-flow { background:var(--fc-bg); }
+.fc-screen[data-theme="light"] .fc-top { background:#fff; border-color:#dedee3; }
+.fc-screen[data-theme="light"] .fc-scene { border-color:#fff; }
+.fc-screen[data-theme="light"] :is(.fc-crumb, .fc-node, .fc-prompt, .fc-settings textarea, .fc-settings select, .fc-create-menu input, .fc-modal input, .fc-wallet b) { color:var(--fc-fg); }
+.fc-screen[data-theme="light"] .fc-crumb strong { color:var(--fc-fg); }
+.fc-screen[data-theme="light"] :is(.fc-card, .fc-dock, .fc-create-menu, .fc-modal, .fc-floating, .fc-multi) { background:var(--fc-panel); border-color:var(--fc-line); box-shadow:0 3px 14px #0000000d; }
+.fc-screen[data-theme="light"] .fc-node.is-selected .fc-card { border-color:var(--fc-blue); box-shadow:0 0 0 2px var(--fc-blue); }
+.fc-screen[data-theme="light"] :is(.fc-rail, .fc-page, .fc-flow .cv-zoom, .fc-settings select, .fc-modal input) { background:#fff; border-color:var(--fc-line); color:var(--fc-fg); }
+.fc-screen[data-theme="light"] .fc-back { background:#ededf0!important; }
+.fc-screen[data-theme="light"] .fc-board button:hover:not(:disabled), .fc-screen[data-theme="light"] .fc-top-actions .is-active { background:#e8e8ed; }
+.fc-screen[data-theme="light"] .fc-rail button.is-active { background:#27272a; color:#fff; }
+.fc-screen[data-theme="light"] .fc-primary { background:#27272a!important; color:#fff!important; }
+.fc-screen[data-theme="light"] .fc-primary:hover:not(:disabled) { background:#45454d!important; }
+.fc-screen[data-theme="light"] :is(.fc-empty, .fc-empty-mark, .fc-empty>span, .fc-node-title>span, .fc-node-title small, .fc-settings label>span, .fc-run-row, .fc-floating button, .fc-composition p, .fc-composition-count, .fc-dock p, .fc-dock h4, .fc-history>span, .fc-agent-plan small, .fc-preview-note, .fc-preview-icon, .fc-create-menu button>span, .fc-create-menu small, .fc-top-actions .fc-save, .fc-flow .cv-zoom button, .fc-upload) { color:var(--fc-muted); }
+.fc-screen[data-theme="light"] .fc-empty h1 { color:var(--fc-fg); }
+.fc-screen[data-theme="light"] :is(.fc-prompt, .fc-settings textarea)::placeholder { color:#71717a; }
+.fc-screen[data-theme="light"] :is(.fc-rail hr, .fc-settings textarea, .fc-settings select, .fc-wallet, .fc-history, .fc-history button, .fc-create-menu input, .fc-upload) { border-color:var(--fc-line); }
+.fc-screen[data-theme="light"] .fc-port { background:#fff!important; color:#7052a3; }
+.fc-screen[data-theme="light"] .fc-port.react-flow__handle-left span { background:#fff; color:var(--fc-fg); }
+.fc-screen[data-theme="light"] .fc-port.media-image { color:#425f92; }
+.fc-screen[data-theme="light"] .fc-port.media-video { color:#38694f; }
+.fc-screen[data-theme="light"] .fc-port.media-audio { color:#835e28; }
+.fc-screen[data-theme="light"] .fc-preview.is-running { background:linear-gradient(110deg,#f4f4f5 25%,#e4e4e7 40%,#f4f4f5 65%); background-size:250% 100%; }
+.fc-screen[data-theme="light"] .fc-flow .react-flow__minimap { background:#fff; border-color:var(--fc-line); }
+.fc-screen[data-theme="light"] .fc-flow .react-flow__minimap-mask { fill:#d4d4d866; }
+.fc-screen[data-theme="light"] .fc-flow .react-flow__minimap-node { fill:#a1a1aa; }
+.fc-screen[data-theme="light"] .fc-stale { color:#8a5c10; }
+.fc-screen[data-theme="light"] .fc-node-error, .fc-screen[data-theme="light"] .fc-error-button { color:#ab3030!important; }
+.fc-screen[data-theme="light"] .fc-audio-ready { color:#78602f; }
+.fc-screen[data-theme="light"] .fc-demo, .fc-screen[data-theme="light"] .fc-banner { background:#fff3d6; color:#795512; border-color:#dfc68e; }
+.fc-screen[data-theme="light"] .fc-notice { background:#fff0f0; color:#8b3434; border-color:#e4b6b6; }
+.fc-screen[data-theme="light"] .fc-modal p { color:var(--fc-muted); }
+.fc-screen[data-theme="light"] .fc-kit-management { --fg:#27272a; --muted:#64646d; --surface:#fff; --surface-2:#f4f4f5; --line-strong:#d4d4d8; }
+.fc-screen[data-theme="light"] .fc-kit-management :is(input, textarea, select) { color:var(--fc-fg); background:#fff; border-color:var(--fc-line); }
