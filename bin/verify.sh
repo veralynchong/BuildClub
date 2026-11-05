@@ -14,6 +14,8 @@ run_step() {
   fi
 }
 
+run_step "project rules are present and shared" bash -c 'test -s AGENTS.md && grep -Fxq "@AGENTS.md" CLAUDE.md'
+
 TF=pivots/02-content/app/trend-finder
 run_step "trend-finder backend compiles" "$TF/backend/.venv/bin/python" -m py_compile "$TF/backend/server.py"
 run_step "trend-finder backend loads" "$TF/backend/.venv/bin/python" -c "import sys; sys.path.insert(0, '$TF/backend'); import server"
