@@ -27,7 +27,9 @@
 
 ### 清理與保留
 
-使用者授權清理後，47個Git工作區移除16個已合併origin/main、乾淨、無執行工作／cwd引用、無其他工作區依賴且沒有DB／素材的舊工作區；無force、無遠端分支刪除，15個具名本機分支仍保留。移除：bg-search, board-3col, breakdown-fields, content-types, demo-fe6496, filter-panel, fix-local-covers, fix-yt-channel-url, landing-real-videos, landing-shots, logo-to-landing, phase3-plan, reanalyse-fix, research-p3, shot-framing, verify-numbers。剩31個。`integrate-1102` 的共用 node_modules、`w2-grade-subs-backend` 的共用 venv 必須保留；compare-videos／demo-35b436b／integrate-main／verify-fe6496 含本機資料，保留。Canvas worker 分支未合併main，保留待 PR 決定後再清；其他dirty／活躍／研究工作區未碰。清理明細與收據 `/tmp/buildclub-wrap-cleanup-results.json`。
+使用者授權清理後，47個Git工作區移除16個已合併origin/main、乾淨、無執行工作／cwd引用、無其他工作區依賴且沒有DB／素材的舊工作區；無force、無遠端分支刪除，15個具名本機分支仍保留。移除：bg-search, board-3col, breakdown-fields, content-types, demo-fe6496, filter-panel, fix-local-covers, fix-yt-channel-url, landing-real-videos, landing-shots, logo-to-landing, phase3-plan, reanalyse-fix, research-p3, shot-framing, verify-numbers。剩31個。`integrate-1102` 的共用 node_modules、`w2-grade-subs-backend` 的共用 venv 必須保留；compare-videos／demo-35b436b／integrate-main／verify-fe6496 含本機資料，保留。其他dirty／活躍／研究工作區未碰。清理明細與收據 `/tmp/buildclub-wrap-cleanup-results.json`。
+
+使用者進一步指定清理側欄 Canvas worker 後，追加移除9個已完成且乾淨的worker工作區，保留全部9個原分支與提交（它們經cherry-pick整合，不冒稱原branch已合併main）；共清25個、47→22個。移除：freeform-legacy-entry-e2e、freeform-restart-verification、freeform-canvas-backend、freeform-canvas-frontend、freeform-channel-test-fix、freeform-entry-fix、freeform-legacy-integration-fix、freeform-recovery-e2e、freeform-test-lifecycle。刪除前核對agent皆done／無dirty／無DB素材／無其他工作區依賴引用，刪後核對branch HEAD不變、目錄及Git註冊消失；無force、無branch刪除。收據 `/tmp/buildclub-worker-cleanup-results.json`。整合工作區freeform-canvas及預覽保留，未讀通知已清除；其他專案不動。
 
 mini 隔離預覽 http://127.0.0.1:8875 持續供使用者看，前端已更新；MacBook loopback8875經 SSH reverse tunnel接 mini8875，已從MacBook健康檢查通過。保留預覽DB／素材；沒有關閉使用者瀏覽器或他人8871服務。
 
