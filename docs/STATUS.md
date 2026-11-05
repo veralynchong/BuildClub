@@ -1,5 +1,16 @@
 # STATUS
 
+## 2026-11-05：Claude 已補 Magnific 帳戶選單實測
+
+使用者要求派Claude後，Orca在MacBook啟動Sonnet worker（dispatch `ctx_7d8a209a3a7a`，task `task_554b52e8e1ad`）。首次因session無tab group未開始，root說明既有測試授權涵蓋自建可回收group後，worker以Claude in Chrome建立自己的group／tab並成功開啟指定Untitled space。root已讀worker_done與確切transcript，確認開啟的Magnific URL、自建tab關閉、group自動移除與設定恢復；不宣稱瀏覽器已確認為Brave（Chrome UA不能區分）。本段補足下段原本Magnific操作NOT RUN的部分範圍，不追溯改寫原始阻礙。
+
+- OBSERVED：模型選單約50個選項，含搜尋框／Featured與All Models分組及New/Beta標記；搜尋輸入後是否正確過濾未確證，未見價格或不可用原因。Auto張數1–10、即時自動保存；Auto比例10種、Size為1K／2K／4K；Nano Banana 2.1另有21:9／8:1／4:1／1:4／1:8等比例；GPT 2.5另顯示子變體、品質與Transparent控制。以上為worker帳戶畫面觀察，不代表provider真輸出或所有模型能力已驗。
+- 卡片內+開參考圖選擇modal，含History／Uploads／Stock／Style／Character等來源；只開啟、未選取／上傳任何素材。已看toolbar、連線下拉的下游node選單、更多／Inspector／History入口；沒有拖線建立node或檢查History全部分頁。
+- 起訖均為1個空白Image Generator #1，已恢復Auto／x1／1:1／1K；原使用者tab保留，自建tab關閉，沒有按Run／生成、沒有付費API，paid_calls=0。viewport1132×1042、DPR2、app zoom83%，不與不同zoom的BuildClub截圖作像素大小判定。
+- NOT RUN／未見：真生成品質／延遲／排隊／失敗狀態、卡片價格或credits、模型不可用原因、拖線建node、History的Assets／Nodes分頁。不能因此聲稱Magnific沒有價格功能。
+- 報告在MacBook `/tmp/buildclub-claude-magnific-2026-11-05/`（report.md／report.json／40張screenshots）；參考圖modal截圖含使用者私人素材，留在該機、不外傳。Mini的既有比較報告屬先前文件／程式盤點，應連同本段實測補充閱讀。
+- 整合建議（待使用者決定，尚未修產品）：先修已確認的Editor深色可讀性與搜尋失敗無提示；再補模型能力感知的比例／解析度選擇（需node保存、API驗證、報價、預算與歷史契約同步）；之後做卡片參考圖入口與模型資訊呈現、多張結果及總報價。未自動把其他模型全部加入或重做全站。
+
 ## 2026-11-05：全站 UI 稽核與 Magnific 比較（待討論修改）
 
 使用者核准順序：恢復隔離環境／瀏覽器連線→BuildClub全站UI與Magnific操作平行比較→共同決定修改清單→修改後重測及逐次批准真生成。使用者進一步澄清 Canvas 前端由本人設計，可直接討論 Canvas 外觀與流程；全站其他頁面仍遵循 Veralyn 的設計。本輪兩個唯讀agent取證，沒有修產品或呼叫付費provider。
