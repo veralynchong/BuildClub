@@ -10,6 +10,21 @@ shows no change to the code it covers, do not run it again.
 
 | Date (AEDT) | Branch @ sha | What ran | Result | Cost | Evidence |
 |---|---|---|---|---|---|
+| 2026-11-05 | Productdiff221c6446; Canvas picker theme fix | Root full/build/lint; actual1440Light/Dark served CSS; no backend restart | 1076 passed,2skipped33.72s;frontendPASS;build/lint0;white form/input/card Light;Dark themed;pageerrors=[];ownedbrowserclosed | US$0 | /tmp/buildclub-picker-theme-full.log; /tmp/buildclub-picker-theme-2026-11-05/check-served.cjs, served-results.json, served-picker-*.png |
+| 2026-11-05 | Final product067e9b87 unchanged | Unknown UI actual ResultLost worker transition/reload/restart/no retry/history; root artifact verify | PASS exit0;50newhashes+old964/130unchanged;3rows/3submit;.01virtualreservation retained;cleanupempty;VP8 1440x90036.40s | US$0/mock | /tmp/buildclub-canvas-unknown-ui-2026-11-05/report.md; verify-artifacts.py |
+| 2026-11-05 | Magnific authenticated owned workflow, no Run | Front operation stage capture completion plus prior back-half | OBSERVED/non-generating workflow complete;5 stepGIFs41/35/11/13/47frames+prior50;continuousvideo BLOCKED(toolonlygif_creator);realgeneration NOTRUN | US$0 | MacBook:/tmp/buildclub-magnific-recording-completion-2026-11-05/report.md; sha256.txt; root exactworker transcript |
+| 2026-11-05 | Final product067e9b87 unchanged | Remaining Legacy tail, active reload, downstream stale, price-only drift, malformed graph; root artifact verifier | Five groups PASS / each exit0;130hashes;9cleanup empty;ports empty/leases released;five full1440x900VP8 clips | US$0/mock | /tmp/buildclub-canvas-gap-completion-2026-11-05/report.md; verify-artifacts.py |
+| 2026-11-05 | Final product067e9b87 | Root reran frozen UI artifact verification and diff check | exit0; 964 hashes PASS; raw failures retained; all cleanup survivors={}; MP4/WebM formats PASS; git diff --check exit0. UI tail NOT RUN stays explicit | US$0 | python3 /tmp/buildclub-canvas-controls-2026-11-05/verify-ui-report.py; ui/report.md; ui/final-cleanup.json |
+| 2026-11-05 | feat/canvas-generation-controls @b651e6d + final product diff 067e9b87 / unit6fd5ba6c | Root full after picker click and ReactFlow measurement fixes; isolated build/lint | 1076 passed, 2 skipped in36.13s; frontend PASS; verify GREEN; build/lint exit0 | US$0/mock | /tmp/buildclub-canvas-controls-2026-11-05/final-measured-{full,build,lint}.log |
+| 2026-11-05 | Final product diff067e9b87 | Original upload abort/same-node retry/reference path; measurement save/Editor-return/workspace isolation; excess API | Upload retry/ref PASS and nodes visible; measurement4 PASS, errors=[]; excess genuine422 no added generations | US$0/mock | ui/upload-excess-measurement-fix; ui/measurement-walkthrough-final; ui/excess-api-422; final ui/report.md |
+| 2026-11-05 | Picker fix product e7477f52 and later measurement-only fix | Mouse picker close, smallcap/no-ref/ref preservation, active-child manual choice and history, search error clear | Picker targeted checks PASS; history2 PASS; search3 PASS; independent active UI agent provisional ACCEPT for both final fixes | US$0/mock | ui/picker-gaps; ui/history-gaps; ui/search-gaps; final ui/report.md |
+| 2026-11-05 | Original integrated source731da3b7 | Main local MP4/approval/sendback/two real restarts; contrast; refs; batch chronology | main13/13; contrast16 elements per4 themes >=4.5; refs5; chronology3; mixed2; legacy-entry3 PASS; first export transient failure retained | US$0/mock | ui/renderer-diagnostic/workspace.mp4, ffprobe.json, restart evidence; ui/report.md |
+| 2026-11-05 | Final product diff067e9b87 | Continuous UI screen recording through mock batch/reload/refs/Editor, visibility/workspace checks | VP8 1440x900 11.72s; partial walkthrough, not full end-to-end recording or exported MP4 | US$0/mock | ui/measurement-walkthrough-final/page@1d954e0fed90e09d9be5193ee0cbc13f.webm |
+| 2026-11-05 | Same integrated product source | Navigation, saved brief/research, cached search, uncached429 alert, themes and en/zh | 21/21 PASS; pageerrors=[]; external fonts/embeds blocked intentionally; no live search | US$0/mock | /tmp/buildclub-canvas-controls-2026-11-05/ui/navigation/navigation-results.json |
+| 2026-11-05 | Same integrated product source; controls-v3 | Actual mock ratio/size/count SVGs, ModelPicker keyboard, saved settings/selected reload | 5 checks PASS; 5 SVGs; pageerrors=[]; cleanup survivors={}. Earlier selected mismatch was missing reconcile wait, original comparison retained | US$0/mock | /tmp/buildclub-canvas-controls-2026-11-05/ui/controls-v3; selection-states.jsonl |
+| 2026-11-05 | feat/canvas-generation-controls @b651e6d + reviewed dirty product diff 731da3b7 / new test 403f17b5 | Integrated offline full after bug/backend/frontend v3 patches | 1076 passed, 2 skipped in37.15s; frontend PASS; verify GREEN | US$0/mock | /tmp/buildclub-canvas-controls-2026-11-05/integrated-full.log; STATUS source hashes |
+| 2026-11-05 | Same integrated product source | Build and lint in isolated deny-network temp copy, existing dependencies | build exit0; lint exit0; existing large chunk warning | US$0 | Same local directory/integrated-build.log, integrated-lint.log |
+| 2026-11-05 | Same integrated product source | UI controls first attempt, actual browser runtime callable | NOT ACCEPTED: old served build showed native model select, Ratio timed out; runner finally cleanup; isolated rebuild/retest in progress | US$0/mock | Original UI agent; progress.json; final UI report pending |
 | 2026-11-05 | feat/freeform-canvas @2776a19 | Final offline closing verification before PR53 | 1023 passed, 2 skipped in33.08s; frontend PASS | US$0 | Same product tree as f0; final code/visual ACCEPT |
 | 2026-11-05 | feat/freeform-canvas @f0f97c9 | Full offline gate, build/lint after accepted legacy card placement | 1023 passed, 2 skipped; frontend PASS; build/lint0 | US$0 | Freeform Status |
 | 2026-11-05 | @6e65cb1 + restart driver assertions | Main UI plus true server restart in approved/rejected states | 13 PASS; state/public JSON/media SHA256 unchanged; survivors={} | US$0/mock | QA main-ui-results/restart-*.json |
@@ -38,6 +53,37 @@ shows no change to the code it covers, do not run it again.
 | 2026-11-03 | feat/canvas-p3-editor | P3a E2E, Remotion export timing (cold 10.4 s / hot 10.8 s) | pass; one bug fixed (c6b2e34) | Mock | `.superpowers/sdd/2026-11-03-canvas-p3-plan/task-7-report.md` |
 | 2026-11-03 | feat/canvas-p2-models @ dad12ba | verify, browser E2E 5 scenarios | GREEN, 5/5 | Mock | `docs/STATUS.md` |
 | 2026-11-02 | main 4343366 | verify, tsc, lint, build, E2E at 1440 and 390 (filters, numbers source, Compare, framing, zh-Hant) | all pass | Mock | `docs/STATUS.md` 2026-11-02 |
+
+## 2026-11-05 Canvas 本輪修改清單（未提交）
+
+- `docs/STATUS.md`
+- `docs/test-log.md`
+- `pivots/02-content/app/trend-finder/backend/gen_models.json`
+- `pivots/02-content/app/trend-finder/backend/gen_providers.py`
+- `pivots/02-content/app/trend-finder/backend/generations.py`
+- `pivots/02-content/app/trend-finder/backend/tests/test_gen_providers.py`
+- `pivots/02-content/app/trend-finder/backend/tests/test_generations.py`
+- `pivots/02-content/app/trend-finder/backend/tests/test_workspaces.py`
+- `pivots/02-content/app/trend-finder/backend/workspaces.py`
+- `pivots/02-content/app/trend-finder/src/App.tsx`
+- `pivots/02-content/app/trend-finder/src/components/ResultsScreen.tsx`
+- `pivots/02-content/app/trend-finder/src/components/canvas/CanvasScreen.tsx`
+- `pivots/02-content/app/trend-finder/src/components/canvas/FreeformNode.tsx`
+- `pivots/02-content/app/trend-finder/src/components/canvas/ModelPicker.tsx`
+- `pivots/02-content/app/trend-finder/src/components/canvas/freeformContext.ts`
+- `pivots/02-content/app/trend-finder/src/lib/canvas/api.ts`
+- `pivots/02-content/app/trend-finder/src/lib/canvas/graph.ts`
+- `pivots/02-content/app/trend-finder/src/lib/canvas/legacy.ts`
+- `pivots/02-content/app/trend-finder/src/lib/canvas/session.ts`
+- `pivots/02-content/app/trend-finder/src/lib/canvas/types.ts`
+- `pivots/02-content/app/trend-finder/src/lib/strings/freeform.ts`
+- `pivots/02-content/app/trend-finder/src/lib/strings/server.ts`
+- `pivots/02-content/app/trend-finder/src/styles/canvas.css`
+- `pivots/02-content/app/trend-finder/src/styles/editor.css`
+- `pivots/02-content/app/trend-finder/unit/searchStatus.test.mjs`
+- 新增：`pivots/02-content/app/trend-finder/unit/canvasControls.test.mjs`
+
+共 26 檔，無刪除；不含只存於 /tmp 的驗收產物。沒有 commit／push／merge。
 
 ## Never run yet (do not assume these work)
 - Real models inside the app UI (Run all / ✦ on a real backend); fal Kling and Omni Flash; Gemini Nano Banana (no key yet). Only fal Seedream + Hailuo were called directly (2026-11-04)

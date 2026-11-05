@@ -504,3 +504,25 @@ def test_mock_voice_is_mp3(tmp_path, monkeypatch):
     out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(f)],
                          capture_output=True, text=True).stdout
     assert abs(float(out) - 1.0) < 0.2  # 4 width units x 0.25 s
+
+
+@pytest.mark.parametrize('ratio,width,height', [('1:1', 2048, 2048), ('9:16', 1152, 2048), ('16:9', 2048, 1152)])
+@pytest.mark.parametrize('resolution,factor', [('1K', 0.5), ('2K', 1), ('4K', 2)])
+def test_mock_image_effective_settings(ratio, width, height, resolution, factor, monkeypatch):
+    import xml.etree.ElementTree as ET
+    monkeypatch.setattr(gp, 'MOCK_DELAY_S', 0)
+    job = gp.Job({'kind': 'image'}, 'Bike', None, [], None, aspectRatio=ratio, resolution=resolution)
+    adapter = gp.adapter_for('mock')
+    svg = ET.fromstring(adapter.poll(job, adapter.submit(job)).data)
+    assert int(svg.attrib['width']) == width * factor and int(svg.attrib['height']) == height * factor
+
+
+def test_openrouter_selected_options_one_request(monkeypatch):
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'or-test-key')
+    http = FakeHttp({('POST', OPENROUTER_URL): jr({'data': [{'b64_json': base64.b64encode(PNG).decode()}]})})
+    job = gp.Job(OPENROUTER_MODEL, 'p', None, [], None, aspectRatio='1:1', resolution='4K', count=3)
+    gp.adapter_for('openrouter', http).submit(job)
+    assert len(http.calls) == 1
+    body = http.calls[0]['body']
+    assert body['n'] == 1 and body['resolution'] == '4K' and body['aspect_ratio'] == '1:1'
+    assert body['provider'] == {'allow_fallbacks': False}

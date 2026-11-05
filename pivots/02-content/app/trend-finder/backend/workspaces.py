@@ -116,6 +116,14 @@ def check_graph(doc):
             expected = {'storyboard': 'image', 'video': 'video', 'voice': 'voice'}[n['type']]
             if mid is not None and (mid not in models or models[mid]['kind'] != expected or models[mid].get('retired')):
                 return 'That model cannot make this node.', 'invalid_graph'
+        if n['type'] == 'storyboard':
+            model = models.get(data.get('model') or 'mock-image', {})
+            try:
+                generations.image_options(model, data)
+            except ValueError as e:
+                return str(e), 'invalid_graph'
+        elif 'count' in data and (type(data['count']) is not int or data['count'] != 1):
+            return 'This node does not support batches.', 'invalid_graph'
     for e in doc['edges']:
         src, dst, port = nodes[e['source']], nodes[e['target']], e.get('targetHandle')
         if dst['type'] == 'editor':
@@ -218,9 +226,12 @@ def inputs(conn, rid, node_id, load):
     if duration is None and kind == 'video':
         duration = (model.get('durations') or [4])[0]
     resolved = {'prompt': prompt_text(doc, node_id), 'model': model_id, 'startFrame': start, 'references': refs, 'duration': duration}
+    if kind == 'image':
+        resolved.update(generations.image_options(model, data))
     client = next((c for c in load('clients') or [] if c['id'] == workspace(conn, rid)['clientId']), {})
     used = {r.get('itemId') for r in refs if r.get('source') == 'kit'}
-    stamp_data = {**resolved, 'kit': [i for i in (client.get('kit') or {}).get('items') or [] if i['id'] in used]}
+    stamp_data = {**{k: v for k, v in resolved.items() if k not in ('aspectRatio', 'resolution', 'count')},
+                  **generations.semantic_options(resolved), 'kit': [i for i in (client.get('kit') or {}).get('items') or [] if i['id'] in used]}
     stamp = hashlib.sha256(json.dumps(stamp_data, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
     return version, resolved, stamp
 

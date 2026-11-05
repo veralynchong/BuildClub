@@ -112,8 +112,64 @@ export async function selectGeneration(gen: Generation, io: SelectionIO): Promis
   io.change(markStale(next, gen.nodeId, [...(io.generations ?? []), gen]))
   return io.flush()
 }
-export async function reconcileGenerations(gens: Generation[], io: SelectionIO): Promise<void> {
+export async function reconcileGenerations(gens: Generation[], io: SelectionIO, { restoreBatches = false }: { restoreBatches?: boolean } = {}): Promise<void> {
+  if (restoreBatches) {
+    // Reconstruct only the latest request in the complete node history. A historic
+    // batch must not erase a newer count1 awaiting, including a completed one.
+    for (const n of io.current().nodes) {
+      const history = gens.filter((g) => g.nodeId === n.id).sort((a, b) => a.createdAt - b.createdAt)
+      const latest = history[history.length - 1]
+      if (!latest) continue
+      const awaiting = history.find((g) => g.id === n.data.awaiting)
+      if (awaiting && !awaiting.inputs.batchId && awaiting.createdAt >= latest.createdAt) {
+        if (n.data.awaitingBatch !== undefined && !await rememberGeneration(awaiting, io)) throw new Error(ff('saveFirst'))
+        continue
+      }
+      if (!latest.inputs.batchId) {
+        const active = ['queued', 'running', 'waiting'].includes(latest.status)
+        if ((active || (!n.data.selected && latest.status === 'done')) &&
+          (n.data.awaiting !== latest.id || n.data.awaitingBatch !== undefined)) {
+          if (!await rememberGeneration(latest, io)) throw new Error(ff('saveFirst'))
+        }
+        continue
+      }
+      const children = history.filter((g) => g.inputs.batchId === latest.inputs.batchId)
+      if (children.some((g) => ['queued', 'running', 'waiting'].includes(g.status)) ||
+        (!n.data.selected && children.some((g) => g.status === 'done'))) {
+        if (!await rememberBatch(children, io)) throw new Error(ff('saveFirst'))
+      }
+    }
+  }
   for (const n of io.current().nodes) {
+    if (n.data.awaitingBatch !== undefined) {
+      // Read the current selection for every child, including choices made during polling.
+      for (const id of n.data.awaitingBatch) {
+        const gen = gens.find((g) => g.id === id && g.nodeId === n.id)
+        if (!gen || ['queued', 'running', 'waiting'].includes(gen.status)) continue
+        const current = io.current().nodes.find((node) => node.id === n.id)
+        if (gen.status === 'done' && !current?.data.selected) {
+          if (!await selectGeneration(gen, io)) throw new Error(ff('saveFirst'))
+        }
+        io.change({ ...io.current(), nodes: io.current().nodes.map((node) => {
+          if (node.id !== n.id) return node
+          const data = { ...node.data }
+          const remaining = (data.awaitingBatch ?? []).filter((child) => child !== id)
+          if (remaining.length) data.awaitingBatch = remaining
+          else delete data.awaitingBatch
+          return { ...node, data }
+        }) })
+        if (!await io.flush()) throw new Error(ff('saveFirst'))
+      }
+      if (io.current().nodes.find((node) => node.id === n.id)?.data.awaitingBatch?.length === 0) {
+        io.change({ ...io.current(), nodes: io.current().nodes.map((node) => {
+          if (node.id !== n.id) return node
+          const data = { ...node.data }; delete data.awaitingBatch
+          return { ...node, data }
+        }) })
+        if (!await io.flush()) throw new Error(ff('saveFirst'))
+      }
+      continue
+    }
     const orphan = !n.data.selected && ['storyboard', 'video', 'voice'].includes(n.type) ? gens.filter((g) => g.nodeId === n.id && g.status === 'done').sort((a, b) => b.createdAt - a.createdAt)[0] : null
     const awaiting = n.data.awaiting ?? orphan?.id
     if (!awaiting) continue
@@ -128,7 +184,19 @@ export async function reconcileGenerations(gens: Generation[], io: SelectionIO):
   }
 }
 
+export async function rememberBatch(gens: Generation[], io: Pick<SelectionIO, 'current' | 'change' | 'flush'>): Promise<boolean> {
+  const nodeId = gens[0]?.nodeId
+  if (!nodeId || gens.some((g) => g.nodeId !== nodeId)) return false
+  io.change({ ...io.current(), nodes: io.current().nodes.map((n) => {
+    if (n.id !== nodeId) return n
+    const data = { ...n.data, awaitingBatch: gens.map((g) => g.id) }
+    delete data.awaiting
+    return { ...n, data }
+  }) })
+  return io.flush()
+}
+
 export async function rememberGeneration(gen: Generation, io: Pick<SelectionIO, 'current' | 'change' | 'flush'>): Promise<boolean> {
-  io.change({ ...io.current(), nodes: io.current().nodes.map((n) => n.id === gen.nodeId ? { ...n, data: { ...n.data, awaiting: gen.id } } : n) })
+  io.change({ ...io.current(), nodes: io.current().nodes.map((n) => n.id === gen.nodeId ? { ...n, data: { ...n.data, awaitingBatch: undefined, awaiting: gen.id } } : n) })
   return io.flush()
 }

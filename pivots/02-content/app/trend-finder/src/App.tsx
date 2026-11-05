@@ -1602,6 +1602,7 @@ export default function App() {
 
           {inClient && view === 'results' && (
             <ResultsScreen
+              error={searchError}
               failed={live ? searchFailed : []}
               empty={live ? searchEmpty : []}
               scoring={live && scoring === liveQuery}

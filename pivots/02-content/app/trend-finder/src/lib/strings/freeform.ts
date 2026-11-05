@@ -1,6 +1,12 @@
 import { getActiveLang } from '../i18n.ts'
 
 const words = {
+  estimate: ['Estimate', '預估'],
+  ratio: ['Ratio', '比例'], size: ['Size', '尺寸'], count: ['Count', '張數'], modelDefault: ['Model default', '模型預設'],
+  refsUnsupported: ['This model cannot use the connected references. Remove their connections first.', '此模型不支援已連接的參考圖片，請先移除連線。'], tooManyRefs: ['Connected references exceed this model’s limit', '已連接的參考圖片超過模型上限'], startUnsupported: ['This model cannot use the connected start frame.', '此模型不支援已連接的起始畫面。'],
+  uploadImage: ['Upload image', '上傳圖片'], existingImage: ['Existing canvas image', '畫布既有圖片'], addReference: ['Add reference', '新增參考圖片'], removeReference: ['Remove connection', '移除連線'], previous: ['Previous version', '上一版本'], next: ['Next version', '下一版本'], reuse: ['Reuse settings', '重用設定'], noImages: ['No ready images to connect.', '尚無可連接的圖片。'],
+  capabilities: ['Supported', '支援'], references: ['References', '參考圖片'], batch: ['Batch', '批次'], needsKey: ['Provider is unavailable. Configure its account before running.', '服務尚未啟用，請先設定帳戶。'],
+
   queued: ['Queued', '排隊中'], waiting: ['Waiting', '等待中'], done: ['Done', '已完成'], failed: ['Failed', '失敗'], unknown: ['Result unknown', '結果不明'], image: ['Image', '圖片'], audio: ['Audio', '音訊'],
   canvasVoice: ['Add voice nodes or upload audio on the canvas, then connect them to the editor.', '請在畫布新增配音節點或上傳音訊，再連接至剪輯器。'],
   unavailable: ['Unavailable', '無法使用'], navigation: ['⌘ + scroll to zoom', '⌘ + 捲動縮放'], runAll: ['Run all', '全部執行'], stop: ['Stop after this node', '完成此節點後停止'], textPort: ['Text', '文字'], startPort: ['Start frame', '起始畫面'], referencePort: ['References', '參考圖片'], kitPort: ['Kit', '素材組'],

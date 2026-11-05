@@ -77,6 +77,9 @@ class Job:
     references: list
     duration: Optional[int]
     scratch: Optional[Path] = None  # a folder the mock may keep temp files in
+    aspectRatio: str = "9:16"
+    resolution: Optional[str] = None
+    count: int = 1
 
 
 @dataclass
@@ -210,7 +213,12 @@ class MockAdapter:
             return self._voice(job, request_id)
         if job.model["kind"] == "image":
             refs = f"{len(job.references)} refs" if job.references else ""
-            return Poll("done", data=storyboard.placeholder_svg("body", job.prompt, refs, 0).encode(), ext="svg")
+            svg = storyboard.placeholder_svg("body", job.prompt, refs, 0)
+            long_side = {'1K': 1024, '2K': 2048, '4K': 4096}[job.resolution or '1K']
+            w, h = (int(v) for v in job.aspectRatio.split(':'))
+            width, height = round(long_side * w / max(w, h)), round(long_side * h / max(w, h))
+            svg = svg.replace('width="360" height="640"', f'width="{width}" height="{height}" preserveAspectRatio="none"', 1)
+            return Poll("done", data=svg.encode(), ext="svg")
         duration = job.duration or job.model["durations"][0]
         folder = job.scratch
         if folder is not None:
@@ -425,7 +433,7 @@ class OpenRouterAdapter:
             raise ProviderError("This model doesn't take a start frame.")
         headers = {"Authorization": f"Bearer {key_from('OPENROUTER_API_KEY')}", "Content-Type": "application/json"}
         body = {"model": job.model["endpoint"], "prompt": job.prompt, "n": 1,
-                "resolution": "1K", "aspect_ratio": ASPECT, "provider": {"allow_fallbacks": False}}
+                "resolution": job.resolution or "1K", "aspect_ratio": job.aspectRatio, "provider": {"allow_fallbacks": False}}
         if job.references:
             body["input_references"] = [{"type": "image_url", "image_url": {"url": data_uri(ref)}}
                                         for ref in job.references]

@@ -267,7 +267,8 @@ def test_workspace_confirm_requires_quote_stamp_and_does_not_charge(client, monk
     base, doc = setup_graph(client, [node('p', 'prompt', prompt='Bike'), node('s', 'storyboard', model='mock-image')], [connect('p', 's')])
     body = {'nodeId': 's', 'canvasVersion': 2}
     quote = client.post(base + '/gen', json={**body, 'confirm': False}).json()
-    assert quote['total'] == 0 and quote['items'] == [{'nodeId': 's', 'model': 'mock-image', 'usd': 0}]
+    assert quote['total'] == 0 and quote['items'] == [{'nodeId': 's', 'model': 'mock-image', 'usd': 0,
+        'count': 1, 'unitUsd': 0, 'aspectRatio': '9:16', 'resolution': '1K'}]
     assert submissions == []
     for extra in ({}, {'inputStamp': 'forged'}):
         assert client.post(base + '/gen', json={**body, 'confirm': True, **extra}).status_code == 409
@@ -787,3 +788,212 @@ def test_workspace_tts_keeps_scope_when_metadata_disappears_after_gate(client, m
     assert submissions == []
     assert not server.load('spend:' + server.today())
     assert_no_new_voice_media(rid)
+
+
+@pytest.mark.parametrize('changed', [{'aspectRatio': '16:9'}, {'resolution': '4K'}, {'count': 3}])
+def test_image_default_options_preserve_legacy_stamp_and_settings_stale_downstream(client, monkeypatch, changed):
+    staff(client)
+    monkeypatch.setattr(server.gen_jobs, 'submit', lambda gid: None)
+    base, doc = setup_graph(client, [node('s', 'storyboard', prompt='Bike', model='mock-image'),
+        node('v', 'video', prompt='Move', model='mock-video')], [connect('s', 'v', 'in:start')])
+    original = client.post(base + '/gen', json={'nodeId': 's', 'canvasVersion': 2}).json()
+    import hashlib
+    import json
+    legacy = {'prompt': 'Bike', 'model': 'mock-image', 'startFrame': None, 'references': [], 'duration': None, 'kit': []}
+    expected = hashlib.sha256(json.dumps(legacy, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
+    assert original['inputStamp'] == expected
+    image = client.post(base + '/gen', json={'nodeId': 's', 'canvasVersion': 2, 'confirm': True,
+        'inputStamp': original['inputStamp']}).json()
+    finish(image)
+    doc['nodes'][0]['data'].update(selected=image['id'], aspectRatio='9:16', resolution='1K', count=1)
+    assert client.put(base, json={'version': 2, 'doc': doc}).status_code == 200
+    current = client.post(base + '/gen', json={'nodeId': 's', 'canvasVersion': 3}).json()
+    assert current['inputStamp'] == original['inputStamp']
+    video = run_node(client, base, 'v', 3).json()
+    finish(video, 'video')
+    doc['nodes'][1]['data']['selected'] = video['id']
+    doc['nodes'][0]['data'].update(changed)
+    assert client.put(base, json={'version': 3, 'doc': doc}).status_code == 200
+    assert all(g['stale'] for g in client.get(base).json()['generations'])
+
+
+@pytest.mark.parametrize('settings', [{'count': True}, {'count': 0}, {'count': 11}, {'count': 1.5},
+    {'aspectRatio': '4:3'}, {'aspectRatio': False}, {'resolution': '8K'}, {'resolution': True},
+    {'model': 'seedream-4.5', 'count': 2}, {'model': 'seedream-4.5', 'resolution': '2K'}])
+def test_image_invalid_saved_options_do_not_spend(client, monkeypatch, settings):
+    staff(client)
+    submissions = []
+    monkeypatch.setattr(server.gen_jobs, 'submit', submissions.append)
+    base, doc = setup_graph(client, [node('s', 'storyboard', prompt='Bike', model='mock-image')])
+    doc['nodes'][0]['data'].update(settings)
+    assert client.put(base, json={'version': 2, 'doc': doc}).status_code == 422
+    assert not server.load('spend:' + server.today()) and submissions == []
+    assert client.get(base + '/gen').json() == []
+
+
+def image_batch_quote(client, monkeypatch, count=3):
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'test-key')
+    monkeypatch.setattr(server, 'DAILY_GEN_IMAGE_USD', 10)
+    staff(client)
+    base, doc = setup_graph(client, [node('s', 'storyboard', prompt='Bike', model='openrouter-nano-banana-2',
+        aspectRatio='16:9', resolution='2K', count=count)])
+    body = {'nodeId': 's', 'canvasVersion': 2, 'aspectRatio': '1:1', 'resolution': '4K', 'count': 10}
+    result = client.post(base + '/gen', json=body)
+    assert result.status_code == 200, result.text
+    return base, doc, body, result.json()
+
+
+def test_image_batch_quote_settings_total_and_stamp(client, monkeypatch):
+    import generations
+    submissions = []
+    monkeypatch.setattr(server.gen_jobs, 'submit', submissions.append)
+    base, doc, body, quote = image_batch_quote(client, monkeypatch)
+    assert quote['total'] == 0.6 and quote['count'] == 3 and quote['unitUsd'] == 0.2
+    assert quote['aspectRatio'] == '16:9' and quote['resolution'] == '2K'
+    assert quote['items'][0]['usd'] == 0.6 and quote['items'][0]['count'] == 3
+    confirm = {**body, 'confirm': True, 'inputStamp': quote['inputStamp']}
+    assert client.post(base + '/gen', json=confirm).status_code == 409
+    assert client.post(base + '/gen', json={**confirm, 'quoteStamp': 'old-price'}).status_code == 409
+    response = client.post(base + '/gen', json={**confirm, 'quoteStamp': quote['quoteStamp']})
+    assert response.status_code == 201, response.text
+    batch = response.json()
+    assert batch['count'] == 3 and len(batch['items']) == 3
+    assert submissions == [g['id'] for g in batch['items']]
+    assert all(g['estUsd'] == 0.2 for g in batch['items'])
+    for index, gen in enumerate(batch['items']):
+        assert gen['inputs']['batchId'] == batch['batchId'] and gen['inputs']['batchIndex'] == index
+        assert gen['inputs']['requestedCount'] == gen['inputs']['count'] == 3
+        assert gen['inputs']['aspectRatio'] == '16:9' and gen['inputs']['resolution'] == '2K'
+    with server.db() as conn:
+        assert len({r[0] for r in conn.execute('SELECT input_hash FROM generations')}) == 1
+    finish(batch['items'][0])
+    original = generations.load_models
+    monkeypatch.setattr(generations, 'load_models', lambda: [{**m, 'price': {**m['price'],
+        'byResolutionUsd': {'1K': 0.1, '2K': 0.3, '4K': 0.4}}} if m['id'] == 'openrouter-nano-banana-2' else m
+        for m in original()])
+    updated = client.post(base + '/gen', json=body).json()
+    assert updated['inputStamp'] == quote['inputStamp'] and updated['quoteStamp'] != quote['quoteStamp']
+    assert client.post(base + '/gen', json={**confirm, 'quoteStamp': quote['quoteStamp']}).status_code == 409
+    assert not client.get(base).json()['generations'][0]['stale']
+
+
+def test_image_batch_insufficient_total_and_nth_enqueue_are_atomic(client, monkeypatch):
+    import generations
+    import sqlite3
+    submissions = []
+    monkeypatch.setattr(server.gen_jobs, 'submit', submissions.append)
+    base, _, body, quote = image_batch_quote(client, monkeypatch)
+    confirm = {**body, 'confirm': True, 'inputStamp': quote['inputStamp'], 'quoteStamp': quote['quoteStamp']}
+    monkeypatch.setattr(server, 'DAILY_GEN_IMAGE_USD', 0.5)
+    assert client.post(base + '/gen', json=confirm).status_code == 429
+    assert not server.load('spend:' + server.today()) and client.get(base + '/gen').json() == []
+    monkeypatch.setattr(server, 'DAILY_GEN_IMAGE_USD', 10)
+    original, calls = generations.enqueue, []
+    def fail_second(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 2:
+            raise sqlite3.IntegrityError('batch child failed')
+        return original(*args, **kwargs)
+    monkeypatch.setattr(generations, 'enqueue', fail_second)
+    with pytest.raises(sqlite3.IntegrityError, match='batch child failed'):
+        client.post(base + '/gen', json=confirm)
+    assert len(calls) == 2 and submissions == []
+    assert not server.load('spend:' + server.today()) and client.get(base + '/gen').json() == []
+
+
+def test_image_batch_partial_results_refund_only_failed_child_and_reload(client, monkeypatch):
+    import gen_providers
+    import generations
+    from test_generations import PNG_BYTES
+    queued, submits, polls = [], [], []
+    monkeypatch.setattr(server.gen_jobs, 'submit', queued.append)
+    base, _, body, quote = image_batch_quote(client, monkeypatch)
+    class Adapter:
+        def submit(self, job):
+            submits.append(job)
+            return str(len(submits))
+        def poll(self, job, rid):
+            polls.append(rid)
+            if rid == '1':
+                return gen_providers.Poll('done', data=PNG_BYTES, ext='png', actual_usd=0.123)
+            if rid == '2':
+                return gen_providers.Poll('failed', error='Explicit refusal')
+            raise gen_providers.ResultLost('Unconfirmed provider result')
+    monkeypatch.setattr(gen_providers, 'adapter_for', lambda provider: Adapter())
+    made = client.post(base + '/gen', json={**body, 'confirm': True, 'inputStamp': quote['inputStamp'],
+        'quoteStamp': quote['quoteStamp']})
+    assert made.status_code == 201, made.text
+    assert len(queued) == 3
+    for gid in queued:
+        server.gen_jobs.run(gid)
+    rows = [client.get(base + '/gen/' + gid).json() for gid in queued]
+    assert [g['status'] for g in rows] == ['done', 'failed', 'unknown']
+    assert rows[0]['actualUsd'] == 0.123 and client.get(rows[0]['url']).content == PNG_BYTES
+    assert all(g['url'] is None for g in rows[1:])
+    assert server.load('spend:' + server.today())['gen_image'] == 0.4
+    assert all(j.aspectRatio == '16:9' and j.resolution == '2K' and j.count == 3 for j in submits)
+    for gid in queued:
+        server.gen_jobs.run(gid)
+    assert len(client.get(base).json()['generations']) == 3
+    generations.recover(server.db, server.gen_jobs)
+    assert len(submits) == 3 and polls == ['1', '2', '3'] and len(queued) == 3
+    assert server.load('spend:' + server.today())['gen_image'] == 0.4
+
+
+def test_image_batch_restart_never_resubmits_unconfirmed_children(client, monkeypatch):
+    import gen_providers
+    import generations
+    queued, polls = [], []
+    monkeypatch.setattr(server.gen_jobs, 'submit', queued.append)
+    base, _, body, quote = image_batch_quote(client, monkeypatch)
+    response = client.post(base + '/gen', json={**body, 'confirm': True, 'inputStamp': quote['inputStamp'],
+        'quoteStamp': quote['quoteStamp']})
+    assert response.status_code == 201, response.text
+    with server.db() as conn:
+        conn.execute("UPDATE generations SET status='running',provider_request_id=? WHERE id=?", (generations.SUBMITTING, queued[1]))
+        conn.execute("UPDATE generations SET status='running',provider_request_id='lost-cache' WHERE id=?", (queued[2],))
+    class Adapter:
+        def submit(self, job):
+            raise AssertionError('Restart must never submit again')
+        def poll(self, job, rid):
+            polls.append(rid)
+            raise gen_providers.ResultLost('Lost in-memory result')
+    monkeypatch.setattr(gen_providers, 'adapter_for', lambda provider: Adapter())
+    monkeypatch.setattr(server.gen_jobs, 'submit', server.gen_jobs.run)
+    generations.recover(server.db, server.gen_jobs)
+    generations.recover(server.db, server.gen_jobs)
+    rows = [client.get(base + '/gen/' + gid).json() for gid in queued]
+    assert [g['status'] for g in rows] == ['failed', 'unknown', 'unknown']
+    assert polls == ['lost-cache'] and server.load('spend:' + server.today())['gen_image'] == 0.4
+
+
+@pytest.mark.parametrize('drift', ['price', 'version', 'settings'])
+def test_image_batch_rechecks_current_quote_inside_transaction(client, monkeypatch, drift):
+    import generations
+    import json
+    import workspaces
+    submitted = []
+    monkeypatch.setattr(server.gen_jobs, 'submit', submitted.append)
+    base, _, body, quote = image_batch_quote(client, monkeypatch)
+    original_inputs, original_models = workspaces.inputs, generations.load_models
+    calls, changed = [], []
+    monkeypatch.setattr(generations, 'load_models', lambda: [{**m, 'price': {**m['price'],
+        'byResolutionUsd': {'1K': 0.1, '2K': 0.3, '4K': 0.4}}} if changed and m['id'] == 'openrouter-nano-banana-2' else m
+        for m in original_models()])
+    def barrier(conn, rid, node_id, load):
+        calls.append(1)
+        if len(calls) == 2:
+            changed.append(True)
+            if drift == 'version':
+                conn.execute('UPDATE canvases SET version=version+1 WHERE idea_id=?', (rid,))
+            elif drift == 'settings':
+                _, doc = workspaces.graph(conn, rid)
+                doc['nodes'][0]['data']['resolution'] = '4K'
+                conn.execute('UPDATE canvases SET doc=? WHERE idea_id=?', (json.dumps(doc), rid))
+        return original_inputs(conn, rid, node_id, load)
+    monkeypatch.setattr(workspaces, 'inputs', barrier)
+    refused = client.post(base + '/gen', json={**body, 'confirm': True, 'inputStamp': quote['inputStamp'],
+        'quoteStamp': quote['quoteStamp']})
+    assert refused.status_code == 409, refused.text
+    assert changed and submitted == [] and client.get(base + '/gen').json() == []
+    assert not server.load('spend:' + server.today())

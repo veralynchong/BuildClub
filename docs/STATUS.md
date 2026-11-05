@@ -1,5 +1,65 @@
 # STATUS
 
+2026-11-05 MacBook 預覽轉接修復：原自有終端 SSH 已 exit255、MacBook8875無listener，mini網站正常；改為獨立背景SSH master（自有control socket記progress，未關其他轉接），先驗master running、MacBook `/api/health` live=true及首頁HTTP200，再重開網址。後端／DB／素材未重啟或修改，保留新轉接給使用者。
+
+## 2026-11-05：Canvas 列表白底主題修正
+
+使用者依截圖要求新增區塊／卡片預覽配合白色背景。僅改 `src/styles/canvas.css` 的 Canvas picker 顏色：新增form、input、label、placeholder、primary button、preview/dots沿用現有surface／fg／muted／line／accent tokens；淺色白底、深色自動對應，未改排版／功能。
+
+- 親跑 `bash bin/verify.sh full` GREEN：1076 passed、2 skipped（33.72s）、frontend PASS；隔離build／lint exit0（既有chunk warning）。產品diff更新為 `221c64465c9679c881416456fd98fe54a8a778b3175b1d26fb537321f94a7dd1`，舊UI證據仍綁各自原來源，不追溯改寫。
+- 實際CanvasPick DOM1440瀏覽器Light／Dark PASS：Light form/input/card preview為rgb(255,255,255)，Dark跟隨主題，input/button文字與底色不同，pageerrors=[]；owned browser關閉，使用者瀏覽器未碰。初次登入定位大小寫及未等色彩transition的harness失敗先取CSS規則／token新證據後調測試，沒有為測試改產品邏輯。
+- 僅把重建dist更新到自有8875暫存preview的dist及本工作區ignored dist；沒有重啟後端、沒有改DB／素材。更新後用真served CSS重驗Light／Dark（無style注入）PASS。使用者重新整理即可看到，MacBook轉接保留。
+- 證據 `/tmp/buildclub-picker-theme-2026-11-05/`：check-served.cjs、served-results.json、served-picker-light-1440.png／dark、frontend-build.log／lint.log；full原始log `/tmp/buildclub-picker-theme-full.log`。本次只改產品CSS與既有STATUS／test-log，本機progress更新；未commit／push／merge，US$0。
+
+
+2026-11-05 使用者先跳過 Magnific 原生連續錄影（登入／錄影閘門未完成，未開始操作）；免費 Canvas 驗收已完成。依要求在 MacBook 打開 http://127.0.0.1:8875/，因原轉接無 listener，新建自有 SSH reverse tunnel 後 MacBook health live=true／demo=true，open-on-macbook exit0。保留預覽與新轉接終端；句柄記本機 progress，不碰其他服務。
+
+## 2026-11-05：免費 Canvas 剩餘驗收全部通過；Magnific 操作／分段擷取完成
+
+本段為最新結論，補足下方原先的未測事項；沒有新增產品變更或 commit／push／merge。來源仍 product diff `067e9b879bb439d2cb891c13664b58a7fb448f8d197b3518933f235ba80a2aac`／unit `6fd5ba6ce3e0031160a0c601be36838ff25846e98b886eda4bc54fdfa5915593`。原完整驗證 1076 passed／2 skipped、frontend PASS、build／lint exit0 仍適用，後續只有 tmp 驗收與既有文件更新。
+
+- Canvas 原五組剩餘項已全 PASS（下段詳列），unknown UI 也已補驗 PASS：root 批准自有 tmp mock adapter 僅 marker prompt 的 poll raise 現成 ResultLost，仍經真 quote／confirm→worker→DB unknown→UI loss alert；舊 selected/output 保留，reload／reopen 及 PID 82492→84023 真重啟後 unknown 保留，3 rows／3 submit 不重送，虛擬 .01 reservation 不退／不重扣，其他成功歷史可選。未改 repo、未偽造 HTTP、未接真 provider。
+- root 親跑 `python3 /tmp/buildclub-canvas-unknown-ui-2026-11-05/verify-artifacts.py` exit0：50 新 artifact hashes、原964／130檔凍結 hash、產品/unit/dist不變、unknown/restart/rows/wallet行為、cleanup survivors={}／4ports空及leases釋放、完整 VP8 1440×900 36.40s影片全 PASS。報告／影片位於 `/tmp/buildclub-canvas-unknown-ui-2026-11-05/`，原五段影片仍在 gap-completion 目錄。8875 健康檢查 live=true／demo=true，保留給使用者。
+- Magnific 完成非生成操作比較：模型搜尋／Provider/Features 篩選、張數、比例／解析度及換模型正規化、合成PNG參考圖與typed連線、Image→Video／互斥提示、Video控制、History／save／reload／remove／Undo。兩位不同任務 worker 分別交付，沒有重啟已done worker；paidCalls=0，連 tooltip 顯示0credits的Run也未按。
+- Magnific 前段補錄 A–E 五段 **step-captured GIF**（41／35／11／13／47 frames，worker用ffprobe與sha256驗證），加上原50frame後段GIF，所有段低於50frame上限，未被滾動截斷。每段≤25frame目標未達，原因與真實frame數已保留，不影響各段覆蓋。**不是連續螢幕錄影**：工具只有gif_creator，連續MP4／WebM標BLOCKED，沒有安裝或擴增桌面／ScreenRecording權限。MacBook報告與片段索引在 `/tmp/buildclub-magnific-recording-completion-2026-11-05/report.md`；原操作報告／41screenshots／52s後段GIF在 `/tmp/buildclub-magnific-flow-comparison-2026-11-05/`。root讀確切worker transcript核對格式、清理與限制，私有截圖未傳到mini。
+- 比較後優先缺口：1 模型搜尋及Provider/Features篩選（現有BuildClub ModelPicker只有kind清單／tier）；2 模型特有quality與隨參考圖變化的品質控制（現有NodeData／GenModel未建quality欄位）；3 Magnific Video end-image／audio／reference-video等輸入需另行設計／provider能力接線，不能只照抄選項。比例／解析度／張數正規化、typed refs、手選歷史與批次保存已具備，不再列為全缺。BuildClub總報價／重新確認有真mock證據；Magnific僅觀察到x1/x10皆Run0credits，無法推論付費重報價是否存在。這些是比較建議，不是新增改版授權。
+- 清理：Magnific owned testnodes移除、Image Generator回Auto/x1/1:1/1K／空prompt，ownedtab/group已關；合成asset可能仍留Assets，未刪他人素材。原使用者瀏覽器／其他服務未碰。
+- 最終剩餘：Magnific連續影片受工具能力阻擋；真 provider 生成／等待／品質／實際帳單、Magnific付費生成及真發布不在本次US$0授權。逐次列模型、帳戶用途、估價與硬上限，取得當次明確yes才可做。不能把mock驗收冒稱真服務驗收。所有現有免費Canvas UI待驗項已補完。
+
+
+## 2026-11-05：剩餘五組 UI 補驗全通過；Magnific 已操作，補錄前段中
+
+本段補足下方原先未測 tail／邊界，產品來源仍 `067e9b879bb439d2cb891c13664b58a7fb448f8d197b3518933f235ba80a2aac`、unit `6fd5ba6ce3e0031160a0c601be36838ff25846e98b886eda4bc54fdfa5915593`，沒有修改產品、commit／push／merge。
+
+- 新獨立 agent 補完五項，最終皆 exit0：Legacy Kit rename/item/reference/frame/stale 與 media/edit PUT hold 時不得離開、release 後才導航；新 batch 仍 active 時 reload 恢復三 child／保留舊 selected／不重送；image→video 真連線後換圖使 downstream stale 而不生成；純 copied catalogue price 改動不影響原 output／stale，但 quote 期間改價須重確認；非法 saved graph 顯示合法 fallback、raw quote422/0rows，合法 model 選擇 normalize 保存並完成 mock。
+- 每組有完整未加速 1440×900 VP8 錄影（30.84／27.32／26.48／11.56／12.72 秒），索引 `/tmp/buildclub-canvas-gap-completion-2026-11-05/report.md`。root 親跑 `python3 /tmp/buildclub-canvas-gap-completion-2026-11-05/verify-artifacts.py` exit0：130 hashes、五組PASS、9cleanup survivors={}、四測試埠空／leases釋放、產品與unit hash不變、五段影片格式通過；8875保留。原130／964檔證據不覆寫。
+- 原 mock 無 unknown route；root 已批准最小隔離 tmp FakeAdapter/ResultLost fixture，走真正後端 worker／持久化／UI polling，不偽造 HTTP 成功或 unknown。新有界 agent 補驗中，不改產品、不呼叫真 provider；與已done worker分開。
+- Magnific：新 Claude worker 在自建 group/tab 實際驗模型搜尋／篩選、張數1–10、能力正規化、合成PNG參考／typed ports、Video首尾輸入互斥提示、History、reload保存、remove／Undo；paidCalls=0、未按Run。41張截圖與50-frame約52秒逐動作GIF位於MacBook `/tmp/buildclub-magnific-flow-comparison-2026-11-05/`，GIF只有後段，不能說完整連續錄影。設定及自建節點已恢復、owned tab關閉；合成asset可能仍在Assets，未碰私有素材。
+- 正補錄 Magnific 缺少的前段，以分段擷取避免50frame滾動截斷；若工具只支援逐動作GIF，會明列連續影片能力阻礙，不安裝／擴權。比較需以當前BuildClub已有能力為準：比例／解析度／張數正規化、typed refs、歷史手選、總quote/requote已實作，不照抄舊版「全部缺少」建議。真生成／等待／品質／扣點仍未測，付費批准額US$0。
+
+
+## 2026-11-05：Canvas 控制項與 UI 修正已驗證；部分舊恢復項未測（未提交）
+
+使用者要求手動驗證後，已由最終來源重新隔離 build（exit0）並啟動 mini http://127.0.0.1:8875/，Orca 預覽已登入合成測試帳戶、開啟 `Canvas controls verification` 的 Image generator；實際可見模型／比例／解析度／張數／參考圖且 Saved。所有付費預算 0，保留此自有預覽供使用者操作；啟動器停止會清除其暫存 DB／素材，不當正式資料保存。啟動終端與 browserPage 記於本機 progress；未碰其他服務。
+
+本段為目前狀態，取代下方「待討論修改」的下一步。使用者已授權兩項 bug、模型能力／比例／解析度／張數、卡片參考圖、多張結果與歷史切換；最新指示完成既有任務並更新本地紀錄，不擴大範圍、不修改 demo-flow-qa。分支 `feat/canvas-generation-controls`，HEAD `b651e6d1312db6ec3d86235b01360953fa2d0cf7`；未 stage／commit／push，沒有 merge 授權。
+
+- 任務→交付：bug worker 的深色 Editor／搜尋失敗提示、backend worker 的選項驗證／整批報價與原子預留、frontend worker 第三版的能力設定／參考圖／批次與歷史均已交付。三份 patch 獨立覆核 provisional ACCEPT 後套入；已完成 worker 未重啟。
+- Review→整合：原 24 檔功能版本跨層 spec／quality provisional ACCEPT，無 blocking findings。原 tracked binary diff SHA256 `731da3b792679102b3661bd801f4be78eaba8fce88d51011d89c70720afc2045`，原新增 unit SHA256 `403f17b525df3558ec54e5f69712c55a0693c691e2606631831a07305753182e`。已修空批次恢復、listbox destructive key 冒泡、舊失敗批次覆蓋新單張追蹤；focused 19/19。
+- UI 新發現並修正：模型 option click 受祖先 label 隱式 activation 影響，選完模型後 menu 重開。root 僅改 ModelPicker 的 option click `preventDefault`，既有實際 component handler 測試先 RED、後 19/19 GREEN；仍 active UI agent 唯讀認可這一行及測試合理，瀏覽器新版確認進行中。新產品 diff SHA256 `e7477f5226227f5b5b19344c74accb89da64f90384a54ae407a40d11180a84bd`，新 unit SHA256 `6fd5ba6ce3e0031160a0c601be36838ff25846e98b886eda4bc54fdfa5915593`。原跨層 review 不追溯涵蓋這項追加。
+- 最終追加修正：實際抓到 100% zoom 卡片外層 `visibility:hidden`、節點及結果仍在。CanvasScreen 重建受控 ReactFlow nodes 時未保留 measured，且忽略 dimensions events；依已安裝套件 adoptUserNodes 的明確重設機制，改為 Board 本地正 finite 尺寸 cache，僅尺寸變化更新並帶回 FreeNode，不寫入 canonical doc。Board resource key 重掛會清 cache，沒有 force visible 或鎖死高度。原 upload abort→同 node retry→參考連線已通，三節點全 visible；新量測四項含 batch／設定／選圖保存、Editor 返回、跨 workspace 新節點及重開皆 PASS，保存 JSON 沒有 measured／width／height。原疑點已有針對性修正及實際重驗；不以一次錄影未重現當結案。
+- 最終來源：product-only tracked diff SHA256 `067e9b879bb439d2cb891c13664b58a7fb448f8d197b3518933f235ba80a2aac`，unit SHA256 `6fd5ba6ce3e0031160a0c601be36838ff25846e98b886eda4bc54fdfa5915593`。同一仍 active UI agent 對 picker 一行與量測追加差異獨立唯讀 review provisional ACCEPT，並以新 tmp build 驗證；已 done worker 未重啟。原大 patch review 與新版增量證據分列。
+- 最新 root 親跑：`bash bin/verify.sh full` GREEN，1076 passed、2 skipped（36.13s）、frontend PASS。相同最終來源的 deny-network 暫存副本 `npm run build`／`npm run lint` 均 exit 0（既有 large chunk warning）；沒有安裝依賴。輸出 `final-measured-full.log`／`final-measured-build.log`／`final-measured-lint.log`。
+- 原整合版本 UI 已通過：controls-v3 5 項（五張 SVG 真尺寸、鍵盤、設定／選圖 reload）；navigation 21/21（429 alert／保留舊結果、EN／繁中、主題）；contrast 四種狀態各 16 元素最低比 4.9226／6.3111／4.9226／6.3111；mixed 2 項（一失敗兩成功、手選保存）；refs-final 5 項（取消、既有圖、移除保留來源、真上傳連線、fixture Kit／繁中）；chronology-final 3 項（新單張及 POST 後 tracking 未存就 reload）；legacy-entry 3 項。synthetic quote 三項實際通過（價格變更重確認、第一次 rows0、超額429 rows0），不把後半失敗的整組宣稱全綠。
+- 主流程 renderer-diagnostic 13/13 PASS：mock provider 實際圖片／影片／音訊檔、PNG→MP4 upload replacement、剪輯／字幕、真本地 Remotion H264/AAC 1080×1920 3.52s、匿名播放／核准／退回，以及 approved／rejected 兩次真正後端重啟保留 byte-identical media。不是 live provider 或真人素材驗收。原 main-v2 曾因 `No available ports found` 失敗；相同 policy 加被動 listen 記錄後通過，使用 8892／8893，根因仍未確證。獨立探測 3000 被拒不能推論 renderer 實際用它；未擴權或關其他服務。
+- 最終新增 UI 證據：picker 點選後關閉、small-cap 正規化、no-ref 停用入口／保留既有 refs、鍵盤 PASS；history 兩項 PASS，含 card previous／next 與 History 選中相同、active 三 children 完成不搶手選；search 三項 PASS，含下一 request pending 清 error、cached 真 200 後沒有 stale error。upload 真 network abort→alert→同 Upload node retry／done／edge PASS；超額 graph 實際 422 拒絕且沒有新增 generation。原預期 400／multipart 415 等 harness 失敗保留，不改產品配合測試。
+- 錄影：最終 `ui/measurement-walkthrough-final/page@1d954e0fed90e09d9be5193ee0cbc13f.webm` 為 VP8 1440×900、11.72s 短連續操作，含 mock batch、reload、refs、Editor 與 visibility／workspace 檢查；不是全站／完整送審錄影。前兩版短錄影保留。產品 MP4 另在 `ui/renderer-diagnostic/workspace.mp4`，有 ffprobe、frame、音量與重啟證據。
+- 尚未完成／未測：recovery 前三組及後半兩次 mock TTS、匯入、舊 voice ownership、實際 audio→Editor 連線／重開子斷言通過；但 Kit Settings 被 header 遮擋，Kit rename／stale 與最後 critical media/edit leave-gates 未到，合組 exit1 保留，不能聲稱整組通過。該環境 finally 已關閉；直接接手步驟：用原 saved fixture 只跑 tail，先正常 pan Kit 到 viewport 中央、等縮放動畫穩定並 hit-test，再驗 Kit rename／stale 與 critical leave-gates，不 force click、不重跑已過 voice。
+- 其餘未測：unknown provider outcome UI 沒有合法可控 mock 路徑，只能引用 backend unit，不能偽造結果；raw invalid saved settings 的完整 UI、部分未完成 child 的 POST/reload 窗口以最終 ui/report 矩陣為準。真 provider 品質／延遲／帳單、Magnific 完整生成錄影、真發布／analytics、真人素材、麥克風均未測。付費批准額 US$0、付費呼叫 0；真本地 MP4 不代表真 provider 或真人素材。
+- 證據保存：`/tmp/buildclub-canvas-controls-2026-11-05/` 的 `progress.json`、三份 worker patch／report、contract、各 verification log、`ui/report.md`／report.json、group 原命令／截圖／清理紀錄；來源清單被 hook 攔下未重試。一次 tmp build 的 hook adapter 因 cwd 尚不存在失敗，後改先在既有 cwd 建自有 tmp 再 build，沒有繞過權限或秘密規則。所有已結束 runner 的 cleanup survivors={}；最終清理與來源／artifact manifest 由 UI 報告提供。
+- 最終證據核對：UI agent 已完成報告與清理，root 親跑 `python3 /tmp/buildclub-canvas-controls-2026-11-05/verify-ui-report.py` exit 0：964 檔 hash、raw failures 保留、所有 survivors={}、產品 MP4 H264/AAC 1080×1920 3.52s、UI WebM VP8 1440×900 11.72s 全 PASS。測試專用 8872／8892／8893／8894 無 listener、lease held=false。26 檔完整修改／新增清單在 `docs/test-log.md` 與本機 progress；無檔案刪除、無 commit／push／merge。
+- 未測／界線：真 provider 品質／延遲／帳單、Magnific 完整生成錄影、真發布／analytics、真人素材及麥克風；當次付費批准額 US$0、付費呼叫 0。只 offline／mock；保留其他服務、使用者瀏覽器及共用依賴。未提交、未推送、未合併；不能把仍未測 tail 標成完成。
+
 ## 2026-11-05：Claude 已補 Magnific 帳戶選單實測
 
 使用者要求派Claude後，Orca在MacBook啟動Sonnet worker（dispatch `ctx_7d8a209a3a7a`，task `task_554b52e8e1ad`）。首次因session無tab group未開始，root說明既有測試授權涵蓋自建可回收group後，worker以Claude in Chrome建立自己的group／tab並成功開啟指定Untitled space。root已讀worker_done與確切transcript，確認開啟的Magnific URL、自建tab關閉、group自動移除與設定恢復；不宣稱瀏覽器已確認為Brave（Chrome UA不能區分）。本段補足下段原本Magnific操作NOT RUN的部分範圍，不追溯改寫原始阻礙。

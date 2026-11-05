@@ -1368,3 +1368,29 @@ def test_generate_adds_a_version_only_to_that_node(gen):
     assert after["n_vid_s1"] == before["n_vid_s1"] + 1
     assert after["n_sb_s1"] == before["n_sb_s1"] >= 1
     assert {k: v for k, v in after.items() if k != "n_vid_s1"} == {k: v for k, v in before.items() if k != "n_vid_s1"}
+
+
+def test_legacy_image_and_chain_reject_batch_before_spend(real):
+    assert post(real, count=2).status_code == 422
+    response = real.post('/api/ideas/ia/gen/chain', json={'imageNodeId': 'n_sb_s1', 'videoNodeId': 'n_vid_s1',
+        'imageModel': 'mock-image', 'videoModel': 'mock-video', 'prompt': 'Bike', 'count': 3, 'confirm': True})
+    assert response.status_code == 422
+    assert real.spent == [] and real.adapter.submits == 0
+
+
+def test_semantic_hash_options_excludes_batch_metadata():
+    h = generations.input_hash
+    original = h('m', 'p', None, [], None)
+    defaults = {'aspectRatio': '9:16', 'resolution': '1K', 'count': 1, 'batchId': 'a', 'batchIndex': 0}
+    assert original == h('m', 'p', None, [], None, defaults)
+    for key, value in [('aspectRatio', '1:1'), ('resolution', '2K'), ('count', 3)]:
+        assert original != h('m', 'p', None, [], None, {**defaults, key: value})
+    assert h('m', 'p', None, [], None, {'count': 3, 'batchId': 'a', 'batchIndex': 0}) == \
+        h('m', 'p', None, [], None, {'count': 3, 'batchId': 'b', 'batchIndex': 2})
+
+
+@pytest.mark.parametrize('bad', [{'maxCount': True}, {'maxCount': 0}, {'maxCount': 1.5},
+    {'resolutions': ['1K', '2K'], 'price': {'usd': 0.1, 'byResolutionUsd': {'1K': 0.1}}},
+    {'resolutions': ['1K'], 'price': {'usd': 0.1, 'byResolutionUsd': {'1K': -1}}}])
+def test_catalogue_rejects_inconsistent_image_capabilities(bad):
+    assert generations.validate_models([{'id': 'test', 'kind': 'image', 'provider': 'mock', 'aspects': ['9:16'], **bad}])

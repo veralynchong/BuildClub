@@ -65,7 +65,16 @@ export async function listGens(ideaId: ResourceInput): Promise<Generation[]> {
   return send(await fetch(`${base(ideaId)}/gen`), t('canvas.err.gens'))
 }
 
+export interface GenerationBatch { batchId: string; count: number; items: Generation[] }
+export function generationItems(result: Generation | GenerationBatch): Generation[] {
+  return 'items' in result ? result.items : [result]
+}
+
 export interface StartGenBody {
+  aspectRatio?: string
+  resolution?: string
+  count?: number
+  quoteStamp?: string
   inputStamp?: string
   canvasVersion?: number
   confirm?: boolean
@@ -77,7 +86,7 @@ export interface StartGenBody {
   duration?: number
 }
 
-export async function startGen(ideaId: ResourceInput, body: StartGenBody): Promise<Generation> {
+export async function startGen(ideaId: ResourceInput, body: StartGenBody): Promise<Generation | GenerationBatch> {
   const r = await fetch(`${base(ideaId)}/gen`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -202,11 +211,19 @@ export async function uploadMedia(resource: ResourceInput, nodeId: string, file:
 }
 
 export interface NodeQuote {
+  quoteStamp?: string
+  count?: number
+  unitUsd?: number
+  aspectRatio?: string
+  resolution?: string
   total: number
   remaining: Record<string, number>
   items: { nodeId: string; model: string; usd: number }[]
   inputStamp: string
   canvasVersion: number
+}
+export function nodeQuoteMatches(shown: { usd: number; inputStamp?: string; quoteStamp?: string } | null, current: { total: number; inputStamp?: string; quoteStamp?: string }): boolean {
+  return !!shown && shown.usd === current.total && shown.inputStamp === current.inputStamp && shown.quoteStamp === current.quoteStamp
 }
 export async function quoteNode(resource: ResourceInput, nodeId: string, canvasVersion: number): Promise<NodeQuote> {
   return send(await fetch(`${base(resource)}/gen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nodeId, canvasVersion, confirm: false }) }), t('canvas.err.start'))
