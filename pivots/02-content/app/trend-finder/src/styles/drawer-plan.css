@@ -363,3 +363,14 @@
 .shot-frame-x { top: var(--space-xs); right: var(--space-xs); width: 30px; height: 30px; }
 /* Locked plans: the picked hook keeps its "Picked" pill, as a label (not a button). */
 .hook-option .hook-picked-tag { justify-self: start; align-self: end; cursor: default; pointer-events: none; }
+
+/* Script (PlanScript.tsx): the shot cards again, one per shot, with what is said and the words on screen. */
+.plan-panel > .plan-script { margin-top: var(--space-xl); }
+.plan-sec-head #plan-script-title { font-weight: 600; }
+.script-frames { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+.script-frame { grid-template-rows: none; }
+.script-field { display: grid; gap: var(--space-3xs); min-width: 0; }
+.script-label { font-size: var(--text-xs); font-weight: 500; color: var(--muted); }
+.script-frame .script-onscreen { min-height: calc(1lh + 2 * var(--space-xs)); }
+.plan-script-stale { margin-top: 0; }
+.plan-script-confirm { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); margin: 0; }

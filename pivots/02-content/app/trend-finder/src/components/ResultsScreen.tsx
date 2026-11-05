@@ -7,8 +7,8 @@ import type { Query, Sort } from '../state'
 import type { FormatTrend } from '../lib/metrics'
 import type { Interpretation } from '../lib/parseQuery'
 import type { Answer } from '../lib/answer'
-import { byFollowers, compact, hasDate, scoreBase, groupFailures, hasScore, outlierScore, platformName, tierOf } from '../lib/metrics'
-import { beatUsual, daysAgoWords, platformsText, spreadSentence, viewsLabel } from './find/words'
+import { byFollowers, compact, scoreBase, groupFailures, hasScore, outlierScore, platformName, tierOf } from '../lib/metrics'
+import { beatUsual, platformsText } from './find/words'
 import { t, tp } from '../lib/i18n'
 import { VideoTile } from './VideoTile'
 import { BestVideo } from './BestVideo'
@@ -20,11 +20,9 @@ import { SearchBox } from './SearchBox'
 import type { PulseInfo } from './ClientChips'
 import type { ChipGroup } from '../lib/clientChips'
 import { useManagerName } from '../lib/appContext'
-import { FilterButtonPanel, FilterChips } from './find/FilterPanel'
 import { DEFAULT_FILTERS, applyFilters, followersPending, type ResultFilters } from '../lib/resultFilters'
 import type { SavedRow, TypeAheadItem } from '../lib/findDesk'
 import { DeskBlock } from './find/DeskBlock'
-import { SavedStrip } from './find/SavedStrip'
 import { dayWord } from './find/words'
 
 export type Chip =
@@ -96,7 +94,8 @@ interface Props {
 
 export function ResultsScreen(p: Props) {
   const manager = useManagerName()
-  const [filters, setFilters] = useState<ResultFilters>(DEFAULT_FILTERS)
+  // The default filters still apply; their tags were taken off this page.
+  const [filters] = useState<ResultFilters>(DEFAULT_FILTERS)
   const byFormat = p.formatFilter ? p.results.filter((v) => v.formatId === p.formatFilter) : p.results
   const filtered = applyFilters(byFormat, filters)
   // New since the last run first (keeping the chosen order within each part).
@@ -126,7 +125,6 @@ export function ResultsScreen(p: Props) {
   })
   const proven = open.filter((v) => ['early', 'rising'].includes(trendOf(v)?.stage ?? ''))
   const best = proven[0] ?? open[0] ?? ranked[0]
-  const bestTrend = best && trendOf(best)
   const bestStatus = best ? p.ideaStatus.get(best.id) : undefined
   const platformCounts = (['tiktok', 'instagram', 'youtube', 'reddit', 'x'] as Platform[])
     .map((pl) => {
@@ -142,21 +140,6 @@ export function ResultsScreen(p: Props) {
   const i = p.interp
   const queryLabel = i.source ? '' : i.text.trim()
 
-  // What we understood from the search, as plain removable words (no coloured tags).
-  const chips: { chip: Chip; label: string }[] = [
-    ...(i.source ? [{ chip: { kind: 'source' } as Chip, label: t('find.res.likeChip', { label: i.source.label }) }] : []),
-    ...i.keywords.map((k) => ({ chip: { kind: 'keyword', value: k } as Chip, label: k })),
-    ...(i.source ? [] : i.topics).map((tp2) => ({
-      chip: { kind: 'topic', formatId: tp2.formatId } as Chip,
-      // Show the word she typed ("crispy"), not the internal format name.
-      label: tp2.word,
-    })),
-    ...(i.audience ? [{ chip: { kind: 'audience' } as Chip, label: t('find.res.forAudience', { audience: i.audience }) }] : []),
-    ...(i.days ? [{ chip: { kind: 'days' } as Chip, label: t('find.res.lastDays', { days: i.days }) }] : []),
-    ...(i.platforms ? [{ chip: { kind: 'platforms' } as Chip, label: i.platforms.map((x) => platformName[x]).join(' + ') }] : []),
-    ...(i.maxLength ? [{ chip: { kind: 'length' } as Chip, label: t('find.res.underSeconds', { n: i.maxLength }) }] : []),
-  ]
-
   const filterControls = (
     <>
       <select
@@ -170,27 +153,6 @@ export function ResultsScreen(p: Props) {
         <option value={90}>{t('find.res.last90')}</option>
         <option value={3650}>{t('find.res.anyTime')}</option>
       </select>
-      <select
-        id="toolbar-length"
-        aria-label={t('find.res.videoLength')}
-        value={p.query.maxLength}
-        onChange={(e) => p.setQuery({ ...p.query, maxLength: Number(e.target.value) })}
-      >
-        <option value={0}>{t('find.res.anyLength')}</option>
-        <option value={15}>{t('find.res.under15')}</option>
-        <option value={30}>{t('find.res.under30')}</option>
-        <option value={60}>{t('find.res.under60')}</option>
-      </select>
-      <label className="sort">
-        <span>{t('find.res.sortBy')}</span>
-        <select id="toolbar-sort" value={p.sort} onChange={(e) => p.setSort(e.target.value as Sort)}>
-          <option value="outlier">{t('find.res.sortOutlier')}</option>
-          <option value="views">{t('find.filter.sortViews')}</option>
-          <option value="ratio">{t('find.res.sortRatio')}</option>
-          <option value="newest">{t('find.res.sortNewest')}</option>
-          <option value="fastest">{t('find.res.sortFastest')}</option>
-        </select>
-      </label>
     </>
   )
 
@@ -219,24 +181,6 @@ export function ResultsScreen(p: Props) {
           <ErrorText text={p.error} onSearch={p.onSearch} />
         </p>
       )}
-
-      <div className="understood">
-        <span className="field-label">{t('find.res.searchingFor')}</span>
-        {chips.length === 0 && <span className="muted small">{t('find.res.nothingYet')}</span>}
-        {chips.map(({ chip, label }) => (
-          <span key={label} className="q-chip">
-            {label}
-            <button
-              type="button"
-              className="q-chip-x"
-              aria-label={t('find.res.remove', { label })}
-              onClick={() => p.onRemoveChip(chip)}
-            >
-              ✕
-            </button>
-          </span>
-        ))}
-      </div>
 
       {groupFailures(p.failed).map((g) => (
         <p key={g.platforms.join()} className="error" role="alert">
@@ -314,22 +258,11 @@ export function ResultsScreen(p: Props) {
             )}
           </p>
           <TopicResults text={queryLabel ?? ''} />
-          <FilterChips
-            filters={filters}
-            setFilters={setFilters}
-            kept={shown.length}
-            extra={<FilterButtonPanel filters={filters} setFilters={setFilters} sort={p.sort} setSort={p.setSort} videos={byFormat} />}
-          />
 
           {best && (
-            <DeskBlock tab={t('find.desk.best.tab')} id="fd-best" className="fd-best">
+            <DeskBlock tab={t('find.desk.best.tab')} id="fd-best" className="fd-best" hideTab>
             <div className="best-head">
               <h1 className="best-title">{t('find.res.bestTitle', { client: p.clientName })}</h1>
-              <p className="best-why">
-                {bestTrend && ['early', 'rising'].includes(bestTrend.stage)
-                  ? t('find.res.bestWhyTrend')
-                  : t('find.res.bestWhyTop')}
-              </p>
             </div>
             <div className="best">
               {/* The same Save pill as the video tiles below: "+ Save", then "✓ Video 2", planned or not. */}
@@ -350,16 +283,9 @@ export function ResultsScreen(p: Props) {
                 </button>
               </div>
               <div className="best-body">
-                {bestTrend && <p className="best-trend">{spreadSentence(bestTrend)}.</p>}
                 <strong className="best-hook">"{best.hook}"</strong>
+                <span className="best-handle">{best.handle}</span>
                 <EvidenceChip video={best} cohort={p.cohorts.get(best.id)} />
-                <span className="small muted">
-                  {hasScore(best) && best.platform !== 'reddit'
-                    ? t('find.res.viewsFromFollowers', { views: compact(best.views), followers: compact(best.followers) })
-                    : t('find.res.viewsWord', { views: compact(best.views), word: viewsLabel(best) })}
-                  {best.comments !== undefined && t('find.res.commentsSentence', { count: compact(best.comments) })}
-                  {t('find.res.postedBy', { handle: best.handle, when: hasDate(best) ? t('find.res.postedWhen', { when: daysAgoWords(best.daysAgo) }) : '' })}
-                </span>
                 {/* Usual → this video, so the jump reads without decoding the × score. Keyed so it animates once per pick. */}
                 {hasScore(best) && <BestCompare key={best.id} video={best} />}
                 <div className="best-actions">
@@ -390,11 +316,6 @@ export function ResultsScreen(p: Props) {
                   {p.live ? t('find.res.allVideos') : activeTrend ? activeTrend.format.name : t('find.res.allVideos')}{' '}
                   <span className="muted">· {shown.length}</span>
                 </h3>
-                <p className="section-sub">
-                  {p.live
-                    ? t('find.res.gridSubLive')
-                    : t('find.res.gridSubDemo')}
-                </p>
               </div>
               <div className="filters">
                 {filterControls}
@@ -419,7 +340,6 @@ export function ResultsScreen(p: Props) {
         </>
       )}
 
-      <SavedStrip rows={p.saved} justSaved={p.justSaved} onOpenResearch={p.onGoResearch} />
     </section>
   )
 }

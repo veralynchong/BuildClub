@@ -253,4 +253,21 @@ export interface SavedIdea {
   updatedAt?: number
   // Planning board: each shot's place on the canvas, in shot order. Missing or out of date means "lay them out".
   boardLayout?: BoardPos[]
+  // The script written from the shot list (lib/script.ts). Old plans have none.
+  script?: PlanScript
+}
+
+// One line of the script per shot, in shot order: what is said, and any words shown on screen.
+export interface ScriptLine {
+  say: string
+  onScreen: string
+}
+
+export interface PlanScript {
+  lines: ScriptLine[]
+  // The shot list it was written from (scriptBasis in lib/script.ts). A different list means "out of date".
+  basedOn: string
+  // The user changed a line, so writing it again asks first.
+  edited?: boolean
+  writtenAt: number
 }

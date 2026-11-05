@@ -30,5 +30,6 @@
 @import './styles/shots.css'; /* camera tags and selects on shots, and the From script panel */
 @import './styles/board.css'; /* planning board: shots as cards on a canvas (React Flow), on the theme-remake tokens */
 @import './styles/find-desk.css'; /* Find ideas desk: blueprint blocks, typing drop-down, saved strip and toast */
+@import './styles/playmark.css'; /* search loading: the play mark on the loading card and the sidebar ticker */
 @import './styles/entry-screens.css'; /* Log in, All clients Home and Add client in the Broadsheet look; scoped to those screens */
 @import './styles/interactive.css'; /* hover system: one motion for every clickable control. Keep last. */

@@ -10,6 +10,13 @@ test('approvedPlans: this client approved plans only, soonest due first', () => 
   assert.deepEqual(approvedPlans([], 'c'), [])
 })
 
+test('boardPlans: every plan of this client, soonest due first', async () => {
+  const { boardPlans } = await import('../src/lib/canvasPick.ts')
+  const ideas = [mk('a', 'approved', '2026-11-20'), mk('b', 'waiting', '2026-11-01'), mk('c', 'saved', '2026-11-05'), mk('d', 'saved', '2026-11-02', 'other')]
+  assert.deepEqual(boardPlans(ideas, 'c').map((i) => i.id), ['b', 'c', 'a'])
+  assert.deepEqual(boardPlans([], 'c'), [])
+})
+
 test('planProgress counts the shots and those with a storyboard frame', () => {
   const idea = { shots: [{ id: 'a', time: '0-3s', shot: 'x', frameImage: '/f' }, { id: 'b', time: '3-6s', shot: 'y' }] }
   assert.deepEqual(planProgress(idea, []), { shots: 2, ready: 1 })

@@ -179,3 +179,16 @@ test('which shots the board opens with, and when it can be changed', () => {
   assert.equal(boardEditable({ status: 'waiting', approvedAt: 1 }), true)
   assert.equal(boardEditable({ status: 'approved', approvedAt: 1 }), false)
 })
+
+test('planCardsAt: hooks just left of shot 1, the script under every card', async () => {
+  const { planCardsAt, HOOKS_W, NODE_H, NODE_W, GAP_Y } = await import('../src/lib/shotBoard.ts')
+  const b = fresh()
+  const at = planCardsAt(b)
+  assert.deepEqual(at.hooks, { x: -HOOKS_W - (STEP_X - NODE_W), y: 0 })
+  assert.deepEqual(at.script, { x: 0, y: NODE_H + GAP_Y })
+  const moved = setPosition(b, b.order[0].id, 500, 40)
+  assert.deepEqual(planCardsAt(moved).hooks, { x: 500 - HOOKS_W - (STEP_X - NODE_W), y: 40 })
+  const withLoose = addLoose(b, { time: '', shot: 'clip' }, idMaker('l'))
+  assert.equal(planCardsAt(withLoose).script.y, withLoose.loose[0].y + NODE_H + GAP_Y)
+  assert.deepEqual(planCardsAt({ order: [], loose: [] }), { hooks: { x: -HOOKS_W - (STEP_X - NODE_W), y: 0 }, script: { x: 0, y: 0 } })
+})

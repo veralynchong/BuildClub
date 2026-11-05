@@ -6,11 +6,12 @@ import {
   ReactFlowProvider,
   applyNodeChanges,
   useReactFlow,
+  type Edge,
   type NodeChange,
   type OnNodeDrag,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { BoardPos, Client, Format, SavedIdea, Shot } from '../../types'
+import type { BoardPos, Client, Format, SavedIdea, Shot, Video } from '../../types'
 import { t, tp } from '../../lib/i18n'
 import {
   NODE_H,
@@ -28,6 +29,7 @@ import {
   insertBetween,
   moveNode,
   placeLoose,
+  planCardsAt,
   removeNode,
   replaceShots,
   setPosition,
@@ -38,14 +40,26 @@ import {
 } from '../../lib/shotBoard'
 import { MAX_PROMPT, insertShot, rewriteShots, type Assisted } from '../../lib/boardAssist'
 import { footageFromFile } from '../../lib/boardMedia'
+import { hookCards, type HookCard } from '../../lib/hooks'
+import { savedScript, scriptOutOfDate } from '../../lib/script'
 import { ShotNode } from './ShotNode'
+import { HooksNode, ScriptNode } from './PlanNodes'
 import { SeqEdge } from './SeqEdge'
-import { BoardActionsContext, type BoardActions, type SeqFlowEdge, type ShotFlowNode } from './boardContext'
+import {
+  BoardActionsContext,
+  type BoardActions,
+  type BoardFlowNode,
+  type ExtraFlowNode,
+  type SeqFlowEdge,
+  type ShotFlowNode,
+} from './boardContext'
 
 interface Props {
   idea: SavedIdea
   format: Format
   client: Client
+  // The reference video, for the suggested hooks' wording (same hooks as the plan page).
+  video?: Pick<Video, 'hook'>
   // Sample mode (no local API) skips the AI routes and edits from simple rules.
   live: boolean
   // Saves the ordered shots (and where each card sits) into the plan, the same way the plan page saves shots.
@@ -55,7 +69,9 @@ interface Props {
   onSend?: () => void
 }
 
-const nodeTypes = { shot: ShotNode }
+const nodeTypes = { shot: ShotNode, hooks: HooksNode, script: ScriptNode }
+const HOOKS_ID = 'plan-hooks'
+const SCRIPT_ID = 'plan-script'
 const edgeTypes = { seq: SeqEdge }
 
 // React Flow's cards from the board. What React Flow measured and selected is kept from the cards it had.
@@ -73,6 +89,20 @@ function buildNodes(board: Board, prev: ShotFlowNode[], editable: boolean): Shot
   return [...board.order.map((bn, i) => make(bn, i)), ...board.loose.map((bn) => make(bn, null))]
 }
 
+// The suggested hooks and the script, as cards beside the shots. Fixed in place (they follow the shots) and
+// shown only; they are changed on the plan page.
+function buildExtras(board: Board, prev: ExtraFlowNode[], hooks: HookCard[], script: SavedIdea['script']): ExtraFlowNode[] {
+  const old = new Map(prev.map((n) => [n.id, n]))
+  const at = planCardsAt(board)
+  const saved = savedScript(script)
+  const shots = board.order.map((n) => n.shot)
+  const base = { draggable: false, selectable: false, connectable: false } as const
+  return [
+    { ...old.get(HOOKS_ID), ...base, id: HOOKS_ID, type: 'hooks', position: at.hooks, data: { hooks } },
+    { ...old.get(SCRIPT_ID), ...base, id: SCRIPT_ID, type: 'script', position: at.script, data: { script: saved, stale: !!saved && scriptOutOfDate(saved, shots) } },
+  ]
+}
+
 const sampleNote = (r: Assisted<unknown>): string | undefined =>
   r.source === 'sample' ? (r.reason === 'failed' ? t('board.sample.failed') : t('board.sample.offline')) : undefined
 
@@ -82,13 +112,15 @@ interface Message {
   undo?: boolean
 }
 
-function BoardScreen({ idea, format, live, onSave, onBack, onSend }: Props) {
+function BoardScreen({ idea, format, client, video, live, onSave, onBack, onSend }: Props) {
   const editable = boardEditable(idea)
   const [makeId] = useState(() => idMaker('n'))
   const [board, setBoard] = useState(() => boardFromShots(boardShots(idea, format.shotList), idea.boardLayout, makeId))
   // The latest board, for handlers that run after an await or during a drag.
   const boardRef = useRef(board)
   const [rfNodes, setRfNodes] = useState<ShotFlowNode[]>(() => buildNodes(board, [], editable))
+  const hooksFor = (b: Board) => hookCards(b.order.map((n) => n.shot), format, video ?? { hook: '' }, client)
+  const [extraNodes, setExtraNodes] = useState<ExtraFlowNode[]>(() => buildExtras(board, [], hooksFor(board), idea.script))
   const [undo, setUndo] = useState<Board | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
   const [dropEdge, setDropEdge] = useState<string | null>(null)
@@ -120,6 +152,7 @@ function BoardScreen({ idea, format, live, onSave, onBack, onSend }: Props) {
     boardRef.current = next
     setBoard(next)
     setRfNodes((nds) => buildNodes(next, nds, editable))
+    setExtraNodes((nds) => buildExtras(next, nds, hooksFor(next), idea.script))
     if (opts.undoable) setUndo(prev)
     else if (text !== undefined) setUndo(null)
     if (opts.save !== false && editable) onSave(toPlan(next))
@@ -129,15 +162,19 @@ function BoardScreen({ idea, format, live, onSave, onBack, onSend }: Props) {
 
   const selectedId = rfNodes.find((n) => n.selected)?.id ?? null
 
-  const edges: SeqFlowEdge[] = useMemo(
-    () =>
-      edgesOf(board).map((e, i) => ({
+  const edges: (SeqFlowEdge | Edge)[] = useMemo(
+    () => [
+      ...edgesOf(board).map((e, i) => ({
         ...e,
-        type: 'seq',
+        type: 'seq' as const,
         data: { a: i + 1, b: i + 2, dropTarget: e.id === dropEdge },
       })),
+      // The hooks lead into shot 1.
+      ...(board.order[0] ? [{ id: `e-${HOOKS_ID}`, source: HOOKS_ID, target: board.order[0].id, className: 'board-edge', selectable: false }] : []),
+    ],
     [board, dropEdge],
   )
+  const allNodes: BoardFlowNode[] = useMemo(() => [...extraNodes, ...rfNodes], [extraNodes, rfNodes])
 
   const nameOf = (s: Shot) => s.footage?.name ?? s.shot
 
@@ -175,23 +212,26 @@ function BoardScreen({ idea, format, live, onSave, onBack, onSend }: Props) {
     },
   }
 
-  const onNodesChange = (changes: NodeChange<ShotFlowNode>[]) =>
-    setRfNodes((nds) => applyNodeChanges(changes.filter((c) => c.type !== 'remove'), nds))
+  const onNodesChange = (changes: NodeChange<BoardFlowNode>[]) => {
+    const kept = changes.filter((c) => c.type !== 'remove')
+    setRfNodes((nds) => applyNodeChanges(kept as NodeChange<ShotFlowNode>[], nds))
+    setExtraNodes((nds) => applyNodeChanges(kept as NodeChange<ExtraFlowNode>[], nds))
+  }
 
-  const center = (n: ShotFlowNode) => ({
+  const center = (n: BoardFlowNode) => ({
     x: n.position.x + (n.measured?.width ?? NODE_W) / 2,
     y: n.position.y + (n.measured?.height ?? NODE_H) / 2,
   })
   const isLoose = (id: string) => boardRef.current.loose.some((n) => n.id === id)
 
   // While an upload is dragged, light up the link it would land on.
-  const onNodeDrag: OnNodeDrag<ShotFlowNode> = (_, node) => {
+  const onNodeDrag: OnNodeDrag<BoardFlowNode> = (_, node) => {
     if (!isLoose(node.id)) return
     const c = center(node)
     setDropEdge(edgeAt(boardRef.current, c.x, c.y)?.id ?? null)
   }
 
-  const onNodeDragStop: OnNodeDrag<ShotFlowNode> = (_, node, moved) => {
+  const onNodeDragStop: OnNodeDrag<BoardFlowNode> = (_, node, moved) => {
     setDropEdge(null)
     let b = boardRef.current
     if (isLoose(node.id)) {
@@ -320,15 +360,15 @@ function BoardScreen({ idea, format, live, onSave, onBack, onSend }: Props) {
       <div className="board-layout">
         <div className="board-canvas">
           <BoardActionsContext.Provider value={actions}>
-            <ReactFlow<ShotFlowNode, SeqFlowEdge>
-              nodes={rfNodes}
+            <ReactFlow<BoardFlowNode, SeqFlowEdge | Edge>
+              nodes={allNodes}
               edges={edges}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
               onNodesChange={onNodesChange}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
-              onEdgeClick={(_, edge) => editable && actions.openInsert(edge.source, edge.target)}
+              onEdgeClick={(_, edge) => editable && edge.type === 'seq' && actions.openInsert(edge.source, edge.target)}
               nodesDraggable={editable}
               nodesConnectable={false}
               deleteKeyCode={null}

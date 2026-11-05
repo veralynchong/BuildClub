@@ -1,7 +1,7 @@
 import type { Client, Format, HookType, Shot, Video } from '../types'
 import type { Key } from './i18n.ts'
 import { inLang, t } from './i18n.ts'
-import { classifyHookEmotion } from './hookEmotion.ts'
+import { classifyHookEmotion, hookEmotion as hookEmotionOf } from './hookEmotion.ts'
 import type { HookEmotion } from './hookEmotion.ts'
 import { editLine } from './storyboard.ts'
 import type { WrittenShot } from './storyboard.ts'
@@ -129,4 +129,29 @@ export function withHookOptions(shots: Shot[], written: WrittenShot): Shot[] {
   }
   if (seen.length === 0) return shots
   return shots.map((s, i) => (i === 0 ? { ...s, options: seen.slice(0, 4), purpose: s.purpose ?? 'hook' } : s))
+}
+
+// ---- the hooks on the planning board -------------------------------------------------------------
+
+export interface HookCard {
+  text: string
+  emotion: HookEmotion
+  picked: boolean
+  // The picked line is the user's own, not one of the suggestions.
+  own?: boolean
+}
+
+// The same hooks the plan page shows, for the planning board: every suggestion with what the viewer feels,
+// the picked one marked, and the user's own line added at the end when that is the one picked.
+export function hookCards(
+  shots: Pick<Shot, 'line' | 'options'>[],
+  format: Pick<Format, 'short' | 'name' | 'why'>,
+  video: Pick<Video, 'hook'>,
+  client: Pick<Client, 'name'>,
+): HookCard[] {
+  const current = clean(shots[0]?.line)
+  const ideas = suggestedHooks(shots, format, video, client)
+  const cards: HookCard[] = ideas.map((h) => ({ text: h.text, emotion: hookEmotionOf(h), picked: !!current && same(h.text, current) }))
+  if (current && !cards.some((c) => c.picked)) cards.push({ text: current, emotion: hookEmotionOf({ text: current }), picked: true, own: true })
+  return cards
 }

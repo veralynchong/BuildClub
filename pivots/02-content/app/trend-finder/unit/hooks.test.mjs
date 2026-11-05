@@ -91,6 +91,20 @@ test('withHookOptions: the writer answer becomes shot 1 options and the picked l
   assert.deepEqual(withHookOptions([], { line: 'A' }), [])
 })
 
+test('hookCards: every suggestion with its emotion, the picked one marked, the user\'s own line added', async () => {
+  const { hookCards } = await import('../src/lib/hooks.ts')
+  const f = format()
+  const ideas = inLang('en', () => suggestedHooks([], f, video, client))
+  const none = inLang('en', () => hookCards([], f, video, client))
+  assert.equal(none.length, ideas.length)
+  assert.ok(none.every((c) => !c.picked && typeof c.emotion === 'string'))
+  const picked = inLang('en', () => hookCards([{ line: ideas[1].text }], f, video, client))
+  assert.deepEqual(picked.map((c) => c.picked), [false, true, false])
+  const own = inLang('en', () => hookCards([{ line: 'Stop scrolling, this is tofu' }], f, video, client))
+  assert.equal(own.length, ideas.length + 1)
+  assert.deepEqual(own.at(-1), { text: 'Stop scrolling, this is tofu', emotion: 'alarm', picked: true, own: true })
+})
+
 test('captionless TikTok keeps its brand casing in subjects and sample openings', () => {
   const f = format({ short: 'TikTok video', name: 'TikTok video' })
   const v = { hook: 'TikTok video' }

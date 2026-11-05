@@ -27,9 +27,39 @@ const row = (
 ): ResearchEntry => {
   const video = videos.find((v) => v.id === videoId)
   if (!video) throw new Error(`sampleResearch: no sample video ${videoId}`)
-  const entry = { ...entryFromVideo(clientId, video, 'sample', today - daysAgo * DAY + hour * HOUR), keywords, notes }
+  const entry = {
+    ...entryFromVideo(clientId, video, 'sample', today - daysAgo * DAY + hour * HOUR),
+    keywords,
+    notes,
+    title: SAMPLE_TITLES[videoId],
+  }
   return slot ? { ...entry, slotId: slotId(clientId, slot) } : entry
 }
+
+// SAMPLE DATA. Made-up titles (the post's caption) for the sample videos used in Research.
+const SAMPLE_TITLES: Record<string, string> = {
+  t1: '5-minute crispy tofu (sound on)',
+  t3: 'Tofu chips you will want every night',
+  t4: 'Crispy tofu on a student budget, under $5',
+  i1: 'Crispy tofu without an air fryer',
+  y1: 'The crispiest tofu I have ever made',
+  y2: 'Tofu 3 ways in 30 seconds',
+  t9: '3-ingredient chocolate mousse (the secret is tofu)',
+  t10: 'High-protein pudding made from tofu',
+  t11: 'No-bake tofu cheesecake in 4 steps',
+  i5: 'The silkiest 3-ingredient mousse',
+  i7: 'My kids could not tell it was tofu',
+  y4: 'Tofu chocolate mousse, ready in 10 minutes',
+  t6: 'Is this chicken? Street taste test',
+  t14: 'No tofu press? Use this instead',
+  i2: 'We fooled George St with tofu',
+  t8: 'Guess the meat (it is not meat)',
+  i4: 'Blind taste test at Central Station',
+  t7: 'Nobody guessed it was tofu',
+}
+
+// A row's title: its own, or the sample title for rows saved before titles were kept.
+export const titleOf = (e: ResearchEntry): string => e.title || SAMPLE_TITLES[e.videoId] || ''
 
 // Stable ids for the sample slots, e.g. 'evergreen-slot-3'.
 const slotId = (clientId: string, n: number) => `${clientId}-slot-${n}`

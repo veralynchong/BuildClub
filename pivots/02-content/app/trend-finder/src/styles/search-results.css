@@ -152,6 +152,8 @@
   font-size: clamp(22px, 2.3vw, 30px); font-weight: 700; line-height: 1.18; letter-spacing: var(--tracking-tight);
   text-wrap: balance; max-width: 30ch; overflow-wrap: anywhere;
 }
+/* The account sits right under the title, before followers → views. */
+.best-handle { margin-top: -8px; font-size: var(--text-sm); color: var(--muted); overflow-wrap: anywhere; }
 .best-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .best-actions .btn { padding: 11px 18px; }
 
@@ -258,6 +260,7 @@
 .tile-cmp { column-gap: 8px; row-gap: 2px; margin: 0 0 2px; }
 /* Space between the account name and followers → views, on result tiles and plan cards. */
 :is(.tile-body, .board-card-body) .tile-cmp { margin-top: var(--space-base); }
+.best-handle ~ .best-compare { margin-top: var(--space-xs); }
 .tile-cmp .cmp-to { font-size: 24px; }
 .tile-cmp .cmp-from { font-size: 16px; }
 .tile-cmp .cmp-arrow { font-size: 14px; }

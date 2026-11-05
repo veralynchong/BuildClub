@@ -8,6 +8,9 @@ import { BestVideo } from './BestVideo'
 import type { PlayerControl } from './BestVideo'
 import { FromScript } from './FromScript'
 import { PlanHooks } from './PlanHooks'
+import { PlanScript } from './PlanScript'
+import { draftScript, savedScript, scriptOutOfDate } from '../lib/script'
+import { suggestedHooks } from '../lib/hooks'
 import { looksLikeInterview } from '../lib/shots'
 import { lastSentBack } from '../lib/memory'
 import { ShotChecklist } from './ShotChecklist'
@@ -94,6 +97,31 @@ export function PlanScreen(p: Props) {
   ) : null
 
   const setShots = (next: Shot[]) => onChange({ shots: next })
+
+  // The script, written from the shot list (lib/script.ts). Old plans have none.
+  const script = savedScript(idea.script)
+  const scriptStale = !!script && scriptOutOfDate(script, shots)
+  const [writing, setWriting] = useState(false)
+  // Writing it again over the user's own changes asks first.
+  const [confirmFor, setConfirmFor] = useState<string | null>(null)
+  const confirmRewrite = confirmFor === idea.id
+  // "Script written", for the plan it was written for, until the shot list changes.
+  const [writtenFor, setWrittenFor] = useState<string | null>(null)
+  const writeScriptNow = async () => {
+    setConfirmFor(null)
+    setWriting(true)
+    try {
+      // Shot 1 says the picked hook; with none picked yet, the first suggested one.
+      const hook = shots[0]?.line?.trim() || suggestedHooks(shots, format, video, client)[0]?.text || ''
+      const next = await draftScript(idea.id, { shots, hook, client })
+      onChange({ script: next })
+      setWrittenFor(idea.id)
+      requestAnimationFrame(() => document.getElementById('plan-script')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+    } finally {
+      setWriting(false)
+    }
+  }
+  const askWriteScript = () => (script?.edited ? setConfirmFor(idea.id) : void writeScriptNow())
   const updateShot = (i: number, patch: Partial<Shot>) => setShots(shots.map((s, j) => (j === i ? { ...s, ...patch } : s)))
 
   return (
@@ -243,9 +271,41 @@ export function PlanScreen(p: Props) {
                     }}
                   />
                 )}
+                {/* Write the script from the finished shot list (lib/script.ts); it shows under the shot list. */}
+                {editable && (
+                  <button type="button" className="btn btn-ghost" disabled={shots.length === 0 || writing} onClick={askWriteScript}>
+                    {writing ? t('plan.script.writing') : script ? t('plan.script.rewrite') : t('plan.script.write')}
+                  </button>
+                )}
+                {editable && writtenFor === idea.id && script && !scriptStale && !confirmRewrite && (
+                  <span className="small muted" role="status">
+                    {t('plan.script.written')}
+                  </span>
+                )}
+                {editable && confirmRewrite && (
+                  <p className="plan-script-confirm" role="alert">
+                    <span className="small">{t('plan.script.replaceQ')}</span>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => void writeScriptNow()}>
+                      {t('plan.script.replace')}
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmFor(null)}>
+                      {t('plan.script.keep')}
+                    </button>
+                  </p>
+                )}
               </div>
             )}
           </section>
+
+          {script && (
+            <PlanScript
+              script={script}
+              stale={scriptStale}
+              editable={editable}
+              onChange={(next) => onChange({ script: next })}
+              onRewrite={askWriteScript}
+            />
+          )}
 
           {/* Production: once the plan is approved, footage takes, the video (made on the canvas) and publishing. */}
           {idea.status === 'approved' && (
