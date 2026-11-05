@@ -1,0 +1,252 @@
+{
+  "scope": "Native backend engineering proof; not campaign, human speech or new Canvas acceptance",
+  "date": "2026-11-05",
+  "baseHead": "e442b3ae80964ee53fda7265df61d18a210f66b3",
+  "work": "/tmp/buildclub-native-chain-ooc5gsg_",
+  "source": "pivots/02-content/app/trend-finder/public/media/remake-tour.mp4",
+  "sourceSha256": "9490813e79d83a5f1fc7a43d5985d8099ef14c823676da9dd3e720a70b4d3f9b",
+  "outputSha256": "630696aa11bb5f42282394d1a93988f7c827deab080c9a135192af8e2e7dff63",
+  "sourceRanges": [
+    [
+      0,
+      3
+    ],
+    [
+      8,
+      11
+    ],
+    [
+      16,
+      19
+    ]
+  ],
+  "takes": [
+    {
+      "id": "H0zNzqzWBlr_",
+      "ideaId": "ia",
+      "shot": 0,
+      "shotId": "s1",
+      "name": "repo-tour-shot-1.mp4",
+      "size": 6078212,
+      "chosen": true,
+      "createdAt": 1793860997922,
+      "cleanedFrom": null,
+      "url": "/api/ideas/ia/takes/H0zNzqzWBlr_/file"
+    },
+    {
+      "id": "hipChLlsbvm6",
+      "ideaId": "ia",
+      "shot": 1,
+      "shotId": "s2",
+      "name": "repo-tour-shot-2.mp4",
+      "size": 6078212,
+      "chosen": false,
+      "createdAt": 1793860997943,
+      "cleanedFrom": null,
+      "url": "/api/ideas/ia/takes/hipChLlsbvm6/file"
+    },
+    {
+      "id": "QP3O3vubXVSG",
+      "ideaId": "ia",
+      "shot": 1,
+      "shotId": "s2",
+      "name": "repo-tour-alternate.mp4",
+      "size": 6078212,
+      "chosen": true,
+      "createdAt": 1793860997983,
+      "cleanedFrom": null,
+      "url": "/api/ideas/ia/takes/QP3O3vubXVSG/file"
+    },
+    {
+      "id": "n_dPd_Q_uAQ2",
+      "ideaId": "ia",
+      "shot": 2,
+      "shotId": "s3",
+      "name": "repo-tour-shot-3.mp4",
+      "size": 6078212,
+      "chosen": true,
+      "createdAt": 1793860997964,
+      "cleanedFrom": null,
+      "url": "/api/ideas/ia/takes/n_dPd_Q_uAQ2/file"
+    }
+  ],
+  "project": {
+    "fps": 30,
+    "width": 1080,
+    "height": 1920,
+    "clips": [
+      {
+        "id": "c0",
+        "source": {
+          "kind": "take",
+          "id": "H0zNzqzWBlr_",
+          "shotId": "s1"
+        },
+        "in": 0,
+        "out": 3,
+        "volume": 1,
+        "muted": false,
+        "caption": "Engineering proof: native take 1"
+      },
+      {
+        "id": "c1",
+        "source": {
+          "kind": "take",
+          "id": "QP3O3vubXVSG",
+          "shotId": "s2"
+        },
+        "in": 8,
+        "out": 11,
+        "volume": 1,
+        "muted": false,
+        "caption": "Engineering proof: native take 2"
+      },
+      {
+        "id": "c2",
+        "source": {
+          "kind": "take",
+          "id": "n_dPd_Q_uAQ2",
+          "shotId": "s3"
+        },
+        "in": 16,
+        "out": 19,
+        "volume": 1,
+        "muted": false,
+        "caption": "Engineering proof: native take 3"
+      }
+    ],
+    "texts": [],
+    "captions": {
+      "enabled": true
+    },
+    "music": null,
+    "voiceover": [],
+    "primaries": {
+      "s1": {
+        "kind": "take",
+        "id": "H0zNzqzWBlr_",
+        "shotId": "s1"
+      },
+      "s2": {
+        "kind": "take",
+        "id": "QP3O3vubXVSG",
+        "shotId": "s2"
+      },
+      "s3": {
+        "kind": "take",
+        "id": "n_dPd_Q_uAQ2",
+        "shotId": "s3"
+      }
+    },
+    "showLogo": false,
+    "logoSize": "medium",
+    "logoCorner": "top-right"
+  },
+  "state": {
+    "status": "done",
+    "progress": 1.0,
+    "step": "Done",
+    "speed": 1.0,
+    "stale": false,
+    "music": null,
+    "review": null,
+    "source": "editor",
+    "output": {
+      "url": "/api/ideas/ia/cut/file?v=1793861007670979344",
+      "size": 2722583,
+      "durationSec": 9.024
+    }
+  },
+  "ffprobe": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1080,
+        "height": 1920,
+        "r_frame_rate": "30/1"
+      },
+      {
+        "codec_name": "aac",
+        "sample_rate": "48000",
+        "channels": 2,
+        "r_frame_rate": "0/0"
+      }
+    ],
+    "format": {
+      "duration": "9.024000"
+    }
+  },
+  "fullDecodeExit": 0,
+  "trace": [
+    {
+      "method": "post",
+      "path": "/api/ideas/ia/takes/QP3O3vubXVSG/choose",
+      "status": 200
+    },
+    {
+      "method": "get",
+      "path": "/api/ideas/ia/edit/sources",
+      "status": 200
+    },
+    {
+      "method": "put",
+      "path": "/api/ideas/ia/edit",
+      "status": 200
+    },
+    {
+      "method": "get",
+      "path": "/api/ideas/ia/edit",
+      "status": 200
+    },
+    {
+      "method": "post",
+      "path": "/api/ideas/ia/edit/export",
+      "status": 202
+    },
+    {
+      "method": "get",
+      "path": "/api/ideas/ia/cut/file?v=1793861007670979344",
+      "status": 200
+    }
+  ],
+  "persistence": "PASS same DB/media across two TestClient lifespans; no separate process restart",
+  "providerNetworkSpyCalls": 0,
+  "budgets": {
+    "DAILY_APIFY_USD": "0",
+    "DAILY_CLAUDE_USD": "0",
+    "DAILY_GEN_IMAGE_USD": "0",
+    "DAILY_GEN_VIDEO_USD": "0",
+    "DAILY_GEN_VOICE_USD": "0",
+    "DAILY_JEV_USD": "0",
+    "DAILY_SCRAPECREATORS_CREDITS": "0"
+  },
+  "wallet": null,
+  "notes": [
+    "Real native API and renderer, no fake probe/export/output",
+    "Landscape product tour is center-cropped by native Reel cover; captions are authored labels",
+    "No HTTP backend listener, backend copy, paid credentials or dependency installation",
+    "Renderer uses existing browser and own local cache; Python network spy does not instrument child Chromium",
+    "Browser playback and subjective audio review not included in this command"
+  ],
+  "browserPlayback": {
+    "ended": true,
+    "currentTime": 9.024,
+    "duration": 9.024,
+    "width": 1080,
+    "height": 1920,
+    "error": null,
+    "muted": false
+  },
+  "visualReview": "Midpoint screenshot inspected: native center crop cuts landscape tour text; technical proof only, not campaign-ready.",
+  "browserInitialFailure": "about:blank media load: NotSupportedError; same-origin localhost static page playback subsequently passed.",
+  "verification": {
+    "zeroSpend": "32 passed in 0.40s",
+    "fullVerify": "RED with all seven budget env vars 0: backend 92 failed, 910 passed, 2 skipped; other three steps PASS",
+    "focusedFailure": "test_frame_poll_failed_refunds: expected fake-provider 502, actual zero-budget guard 429; 1 failed in 0.17s",
+    "limitation": "Only this representative failure diagnosed; remaining 91 failures not individually classified. No budget raised."
+  },
+  "freshProcessReopen": "PASS: new Python process, same DB/media, edit/takes/output hash match; provider/network spy 0, wallet empty",
+  "cleanup": "Owned tab closed, static server stopped; 8891/8892 no listeners; browser/static/render test slots held=false. Only owned static Python server received SIGINT."
+}
