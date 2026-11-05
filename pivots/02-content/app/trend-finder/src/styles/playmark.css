@@ -1,0 +1,30 @@
+/* The play-mark search loader (PlayMarkLoader.tsx): the landing hero's tiles filling the play mark while a live
+   search runs, on the loading card and as the 16px ticker in the sidebar. Spec: the approved mockup
+   docs/design-review/remake-review/remake-mark/loading.html (4 Nov 2026).
+   Six colours only: navy, blue, mustard, beige, black, white. Beige is the mark's own empty-slot colour from the
+   approved hero; the others are the theme-remake tokens. The canvas reads these once when it starts. */
+.pm-mark,
+.pm-ticker {
+  --pm-navy: var(--navy, #060a47);
+  --pm-blue: var(--blue, #1a33f2);
+  --pm-mustard: var(--mustard, #f2b705);
+  --pm-beige: #f6f1e7;
+  --pm-black: #000000;
+  --pm-white: #ffffff;
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* On the loading card: in place of the old shimmer tiles, centred above the title. */
+.reading-inline .pm-mark { width: 260px; height: 272px; max-width: 100%; justify-self: center; }
+
+/* Sidebar ticker: replaces the spinner beside "Find ideas"; the seconds text is unchanged. */
+.side-search .pm-ticker { width: 16px; height: 16px; flex: none; }
+
+/* Results have arrived and the mark is playing its ~2s resolve: what comes after the card (the results)
+   waits underneath, then takes the card's place when App removes it. Instant (cached) results skip this. */
+.search-inline.is-resolving ~ * { visibility: hidden; }
+
+@media (max-width: 640px) {
+  .reading-inline .pm-mark { width: 180px; height: 188px; }
+}

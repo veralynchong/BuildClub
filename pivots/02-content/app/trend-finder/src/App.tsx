@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgencySettings, ClientEvent, IdeaStatus, Role, SavedIdea } from './types'
+import { approverNote } from './lib/approverNote'
 import { clients as sampleClients, formats, sampleIdeas, videos } from './data/sample'
 import { formatTrend, groupFailures, hasDate, outlierScore, platformList, platformName, stageOrder, viewsPerDay, viewsPerFollower } from './lib/metrics'
 import { defaultAgency, defaultQuery, inTwoWeeks, useResearch, useResearchSlots, useSavedIdeas, useStored } from './state'
@@ -27,8 +28,6 @@ import { applyDecision, type Decision } from './lib/memory'
 import { SettingsScreen } from './components/SettingsScreen'
 import { PreferencesScreen } from './components/PreferencesScreen'
 import { ChannelScreen } from './components/ChannelScreen'
-import { CompareScreen } from './components/CompareScreen'
-import type { PickVideo } from './components/CompareScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { LandingAltitude } from './components/landing/LandingAltitude'
 import type { Client, ContentType, Format, Platform, Shot, Video } from './types'
@@ -57,6 +56,7 @@ import {
 import { buildChipGroups, clientTopic, pulseFrom } from './lib/clientChips'
 import type { Pulse } from './lib/clientChips'
 import { isOnSearchPage } from './lib/searchStatus'
+import { useSearchResolve } from './lib/useSearchResolve'
 import { LiveLoading } from './components/LiveLoading'
 import { SearchToast, type SearchNotice } from './components/SearchToast'
 import { SavedToast } from './components/find/SavedStrip'
@@ -70,7 +70,7 @@ import { AppContext } from './lib/appContext'
 import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
 import { CanvasPick } from './components/CanvasPick'
-import { approvedPlans } from './lib/canvasPick'
+import { approvedPlans, boardPlans } from './lib/canvasPick'
 import { AddClientScreen } from './components/AddClientScreen'
 import { logout, me, type Account } from './lib/auth'
 import { nextView, onUnauthorized } from './lib/authGate'
@@ -92,7 +92,6 @@ import type { RowPick } from './components/research/ResearchScreen'
 import { SaveToVideo } from './components/research/SaveToVideo'
 import { entryFromVideo, newSlot, planDueDate, planHasWork, planOf, researchId, researchStatus, slotSummary, videoFromLink, withPlanRows } from './lib/research'
 import type { LinkInput, ResearchEntry } from './lib/research'
-import { pickLabel } from './lib/compare'
 
 // The platforms Find ideas can search, offered by Research's "Add from link".
 const SEARCH_PLATFORMS: Platform[] = ['tiktok', 'instagram', 'youtube', 'reddit', 'x']
@@ -123,7 +122,7 @@ function restoreTab(workspace: Workspace): View {
   if (workspace === 'all') return 'overview'
   if (saved === 'results') return 'search'
   if (saved === 'plan' || saved === 'canvas' || saved === 'board' || saved === 'review') return 'shortlist'
-  if (saved === 'home' || saved === 'search' || saved === 'research' || saved === 'shortlist' || saved === 'settings') return saved
+  if (saved === 'home' || saved === 'search' || saved === 'research' || saved === 'shortlist' || saved === 'settings' || saved === 'boardPick') return saved
   return 'search'
 }
 
@@ -738,7 +737,23 @@ export default function App() {
   }
 
   // `usePlatforms`: run on these platforms instead of the toggles (a recent search opened again).
-  const runSearch = (text: string, usePlatforms?: Platform[]) => {
+  const runSearch = (text: string, usePlatforms?: Platform[], devNoDelay = false) => {
+    // Dev only: ?slowSearch=30 makes a sample search wait that many seconds behind the loading card, as a live
+    // search would (sample results are instant). Removed from production builds.
+    if (import.meta.env.DEV && !live && !devNoDelay) {
+      const slow = Number(new URLSearchParams(window.location.search).get('slowSearch'))
+      if (slow > 0 && !interpretMedia(text, null, formats)) {
+        if (searching) return
+        const seq = ++searchSeq.current
+        setSearching({ q: text, platforms: usePlatforms ?? query.platforms, clientId: client.id, startedAt: Date.now() })
+        window.setTimeout(() => {
+          if (seq !== searchSeq.current) return
+          setSearching(null)
+          runSearch(text, usePlatforms, true)
+        }, slow * 1000)
+        return
+      }
+    }
     if (usePlatforms) setQuery((q) => ({ ...q, platforms: usePlatforms }))
     if (live) {
       // One live search at a time (the search button is disabled meanwhile; this covers Enter, chips and voice).
@@ -903,6 +918,12 @@ export default function App() {
   // This client's Research rows, and the videos they hold.
   const myResearch = research.filter((e) => e.clientId === client.id)
   const inResearch = new Set(myResearch.map((e) => e.videoId))
+  // Which of the client's videos (1 to 12) each Research video is filed under, for the Plans cards.
+  const videoNoById = new Map<string, number>()
+  for (const e of myResearch) {
+    const slot = e.slotId ? researchSlots.find((s) => s.id === e.slotId && s.clientId === client.id) : undefined
+    if (slot) videoNoById.set(e.videoId, slot.number)
+  }
 
   // Saving or planning a real video asks the API for its AI breakdown (about a minute the first time).
   // It replaces the placeholder shot list and "why it works".
@@ -1089,6 +1110,17 @@ export default function App() {
     if (planIdeaId) setView('board')
   }
 
+  // Sidebar "Video canvas": one plan's planning board, opened straight from the sidebar or the plan chooser.
+  const openPlanBoard = (ideaId: string) => {
+    const idea = ideas.find((i) => i.id === ideaId)
+    if (!idea) return
+    breakDown(idea.videoId)
+    // The plan's Back then returns to where she was, or to Plans when she came from a board or the chooser.
+    setPlanFrom(view === 'board' || view === 'boardPick' || view === 'plan' ? 'shortlist' : view)
+    setPlanIdeaId(ideaId)
+    setView('board')
+  }
+
   // Find ideas' plan button and P key: a video with a plan opens it; any other is saved to Research (plans are
   // made from Research).
   const planFromVideo = (videoId: string) => {
@@ -1262,25 +1294,6 @@ export default function App() {
   const blockedFormatIds = new Set(
     [...formatById.values()].filter((f) => f.needs.some((n) => client.cannot.includes(n))).map((f) => f.id),
   )
-  // Videos the Compare screen offers: the saved plans' videos (this client's, or everyone's from All
-  // clients), then the latest live search results. Only real videos with a link can be compared.
-  const comparePicks = (() => {
-    const label = (v: Video) => pickLabel(v.handle, v.hook || v.caption || '')
-    const pick = (v: Video): PickVideo => ({ url: v.url!, label: label(v), thumbnail: v.thumbnail })
-    const seen = new Set<string>()
-    const fresh = (v: Video | undefined): v is Video => {
-      if (!v?.url || seen.has(v.url)) return false
-      seen.add(v.url)
-      return true
-    }
-    const shortlist = shownIdeas
-      .filter((i) => workspace === 'all' || i.clientId === client.id)
-      .map((i) => videoById.get(i.videoId))
-      .filter(fresh)
-      .map(pick)
-    const results = liveStore.videos.filter(fresh).slice(0, 30).map(pick)
-    return { shortlist, results }
-  })()
   const backLabel: Record<View, string> = {
     overview: t('shell.back.overview'),
     home: t('shell.back.home'),
@@ -1290,6 +1303,7 @@ export default function App() {
     plan: t('shell.back.plan'),
     canvas: t('shell.back.canvas'),
     canvasPick: t('shell.back.canvas'),
+    boardPick: t('shell.back.boardPick'),
     board: t('board.backLabel'),
     settings: t('shell.back.settings'),
     preferences: t('shell.back.preferences'),
@@ -1340,6 +1354,12 @@ export default function App() {
 
   // Sidebar "Find ideas": come back to this client's last results if they're still on screen, not an empty search page.
   const navTo = (v: View) => {
+    // "Video canvas" (5 Nov 2026): the planning board. One plan opens straight away; more than one, pick a plan.
+    // The 'canvas' branch below (approved plans' CanvasScreen) is no longer on the sidebar but is kept.
+    if (v === 'board') {
+      const plans = boardPlans(shownIdeas, client.id)
+      return plans.length === 1 ? openPlanBoard(plans[0].id) : setView('boardPick')
+    }
     if (v === 'canvas') {
       // One approved plan opens its canvas straight away; otherwise pick one (or see why there is none).
       const plans = approvedPlans(shownIdeas, client.id)
@@ -1354,6 +1374,16 @@ export default function App() {
   useEffect(() => {
     if (planMissing) setViewRaw('shortlist')
   }, [planMissing])
+
+  // The background search's loading card shows only on its own client's Find ideas / results page. When the
+  // results take over, the card stays ~2s more for the play mark's resolve (skipped for instant results).
+  const onSearchPage = view === 'search' || view === 'results'
+  const loadingCard =
+    searching && workspace !== 'all' && client !== NO_CLIENT && searching.clientId === client.id && onSearchPage ? searching : null
+  // The card ending while its page is still open, with no error, means the results are in: a failed search sets
+  // its error in the same update, and the switch to the results screen may land a moment later (a view transition).
+  const resolving = useSearchResolve(loadingCard, !searching && !searchError && onSearchPage)
+  const cardSearch = loadingCard ?? (resolving && resolving.card.clientId === client.id && onSearchPage ? resolving.card : null)
 
   if (auth === 'checking') return null
   // Client accounts aren't live yet (see ClientPortal), so a saved client login goes back to the login screen.
@@ -1511,19 +1541,19 @@ export default function App() {
 
           {view === 'channel' && <ChannelScreen />}
 
-          {view === 'compare' && <CompareScreen shortlist={comparePicks.shortlist} results={comparePicks.results} />}
 
           {view === 'preferences' && <PreferencesScreen />}
 
           {/* The search runs in the background: progress shows here only while its client's search page is open. */}
-          {searching && inClient && searching.clientId === client.id && (view === 'search' || view === 'results') && (
+          {cardSearch && (
             <LiveLoading
-              query={searching.q}
-              startedAt={searching.startedAt}
+              query={cardSearch.q}
+              startedAt={cardSearch.startedAt}
+              resolvedAt={loadingCard ? null : (resolving?.at ?? null)}
               title={
-                searching.step
-                  ? `${searching.step}…`
-                  : t('shell.search.searching', { platforms: searching.platforms.map((p) => platformName[p]).join(', '), q: searching.q })
+                cardSearch.step
+                  ? `${cardSearch.step}…`
+                  : t('shell.search.searching', { platforms: cardSearch.platforms.map((p) => platformName[p]).join(', '), q: cardSearch.q })
               }
             />
           )}
@@ -1654,6 +1684,7 @@ export default function App() {
               onOpenVideo={(videoId) => {
                 if (videoById.has(videoId)) openVideoDrawer(videoId)
               }}
+              videoOf={(videoId) => videoById.get(videoId)}
               onFindIdeas={() => navTo('search')}
               platforms={SEARCH_PLATFORMS}
               slots={researchSlots.filter((s) => s.clientId === client.id).sort((a, b) => a.number - b.number)}
@@ -1688,6 +1719,7 @@ export default function App() {
               onFindMore={() => setView('search')}
               onReview={() => openReview('shortlist')}
               inResearch={inResearch}
+              videoNoById={videoNoById}
               onOpenResearch={() => setView('research')}
               focus={boardFocus}
               onFocusDone={clearBoardFocus}
@@ -1723,6 +1755,18 @@ export default function App() {
               formatById={formatById}
               onPick={openPlanCanvas}
               onGoPlans={() => setView('shortlist')}
+            />
+          )}
+
+          {inClient && view === 'boardPick' && (
+            <CanvasPick
+              clientName={client.name}
+              plans={boardPlans(shownIdeas, client.id)}
+              videoById={videoById}
+              formatById={formatById}
+              onPick={openPlanBoard}
+              onGoPlans={() => setView('research')}
+              copy={{ title: t('shell.boardPick.title'), intro: t('shell.boardPick.intro'), empty: t('shell.boardPick.empty'), go: t('shell.side.research') }}
             />
           )}
 
@@ -1764,9 +1808,22 @@ export default function App() {
                 idea={planIdea}
                 format={planFormat}
                 client={planClient}
+                video={planVideo}
                 live={live}
                 onSave={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
                 onBack={() => setView('plan')}
+                // Send for approval lives on the board: the plan goes to the approver, then back to the (now locked) plan page.
+                onSend={() => {
+                  const note = planIdea.noteToApprover ?? approverNote(planClient, planFormat, 'en')
+                  setIdeas((prev) =>
+                    prev.map((i) =>
+                      i.id === planIdea.id
+                        ? { ...i, status: 'waiting', sentAt: Date.now(), noteToApprover: note, rejectReason: undefined, rejectTags: undefined }
+                        : i,
+                    ),
+                  )
+                  setView('plan')
+                }}
               />
             </Suspense>
           )}

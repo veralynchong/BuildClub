@@ -6,6 +6,7 @@ export function DeskBlock({
   tab,
   id,
   quiet,
+  hideTab,
   className = '',
   children,
 }: {
@@ -14,12 +15,14 @@ export function DeskBlock({
   id: string
   // Grey tab: an empty block that will fill in later.
   quiet?: boolean
+  // Keep the tab for screen readers only (the block's own heading already says it).
+  hideTab?: boolean
   className?: string
   children: ReactNode
 }) {
   return (
     <section className={`fd-block ${className}`} aria-labelledby={id}>
-      <h2 className={`fd-tab ${quiet ? 'fd-tab-quiet' : ''}`} id={id}>
+      <h2 className={hideTab ? 'sr-only' : `fd-tab ${quiet ? 'fd-tab-quiet' : ''}`} id={id}>
         {tab}
       </h2>
       <div className="fd-box">{children}</div>

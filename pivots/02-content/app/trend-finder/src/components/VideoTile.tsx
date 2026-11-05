@@ -19,8 +19,8 @@ interface Props {
   isNew?: boolean
 }
 
-// One video in the results grid. Under the cover, only four things: followers → views (laid out like the
-// Best to copy card), the title, the account, and a link to the video itself.
+// One video in the results grid. Under the cover, only four things: the title, the account, followers → views
+// (laid out like the Best to copy card), and a link to the video itself.
 export function VideoTile({ video, onOpen, onToggleSave, inResearch, followersLoading, where, isNew }: Props) {
   // The button pops only when it's clicked, not when a tile shows up already saved.
   const [pop, setPop] = useState(false)
@@ -38,6 +38,8 @@ export function VideoTile({ video, onOpen, onToggleSave, inResearch, followersLo
           {isNew && <span className="fd-newpin">{t('find.tile.new')}</span>}
         </span>
         <div className="tile-body">
+          <span className="tile-hook">{video.hook}</span>
+          <span className="tile-meta">{video.handle}</span>
           <span className="best-compare tile-cmp">
             <span className="cmp-num cmp-from">{fromNum}</span>
             <span className="cmp-arrow" aria-hidden="true">→</span>
@@ -46,8 +48,6 @@ export function VideoTile({ video, onOpen, onToggleSave, inResearch, followersLo
             <span />
             <span className="cmp-cap">{t('find.tile.cmpViews')}</span>
           </span>
-          <span className="tile-hook">{video.hook}</span>
-          <span className="tile-meta">{video.handle}</span>
         </div>
       </button>
       {video.url && (

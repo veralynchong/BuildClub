@@ -26,7 +26,8 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
   const [error, setError] = useState<string | null>(() => googleErrorMessage(window.location.search))
   const [busy, setBusy] = useState(false)
   const [account, setAccount] = useState<'staff' | 'client'>('staff')
-  const [staffRole, setStaffRole] = useState<'member' | 'manager'>(savedRole === 'manager' ? 'manager' : 'member')
+  // There is no role picker on this page: staff log in with the role saved on this device.
+  const staffRole = savedRole === 'manager' ? 'manager' : 'member'
 
   // Show a failed Google sign-in once, then take the reason out of the address.
   useEffect(() => {
@@ -96,14 +97,11 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
             ) : register && !real ? (
               <>Start with the <em>sample agency</em>.</>
             ) : (
-              <>Welcome back to <em>Remake</em>.</>
+              <>Welcome back to <Logo inText className="rk-title-logo" />.</>
             )}
           </h1>
-          <p className="rk-auth-lede">
-            {real
-              ? 'Use the email and password your agency set up for you.'
-              : 'Demo only. There is no password, and only the account type you pick is saved.'}
-          </p>
+          {/* The demo's "no password" note was taken off (4 Nov 2026); real sign-in still explains itself. */}
+          {real && <p className="rk-auth-lede">Use the email and password your agency set up for you.</p>}
         </header>
 
         {mode === 'client' ? (
@@ -150,28 +148,14 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
                   <strong>Staff</strong>
                   <span>Find videos, plan them and approve them.</span>
                 </label>
-                <label className="rk-choice">
-                  <input type="radio" name="account" checked={isClient} onChange={() => setAccount('client')} />
+                {/* Client login is turned off for now (4 Nov 2026): shown, but can't be picked. */}
+                <label className="rk-choice is-disabled">
+                  <input type="radio" name="account" checked={isClient} disabled onChange={() => setAccount('client')} />
                   <strong>Client</strong>
-                  <span>See your plans and how the month is going.</span>
+                  <span>See your plans and how the month is going. Coming soon.</span>
                 </label>
               </div>
             </fieldset>
-            {!isClient && (
-              <fieldset className="rk-fieldset">
-                <legend className="rk-field-label">Your role</legend>
-                <div className="rk-choices">
-                  <label className="rk-choice">
-                    <input type="radio" name="staff-role" checked={staffRole === 'member'} onChange={() => setStaffRole('member')} />
-                    <strong>Team member</strong>
-                  </label>
-                  <label className="rk-choice">
-                    <input type="radio" name="staff-role" checked={staffRole === 'manager'} onChange={() => setStaffRole('manager')} />
-                    <strong>Manager (approves)</strong>
-                  </label>
-                </div>
-              </fieldset>
-            )}
             {error && (
               <p className="field-error" role="alert">
                 {error}

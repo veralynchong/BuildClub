@@ -1,11 +1,20 @@
 import { createContext, useContext } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import type { BoardNode } from '../../lib/shotBoard'
-import type { Shot } from '../../types'
+import type { PlanScript, Shot } from '../../types'
+import type { HookCard } from '../../lib/hooks'
 
 // One card on the canvas. index is its place in the plan (0-based); null for an upload not placed yet.
 export type ShotNodeData = { node: BoardNode; index: number | null; total: number }
 export type ShotFlowNode = Node<ShotNodeData, 'shot'>
+
+// The suggested hooks (leading into shot 1) and the script (under the shots). Shown, not edited, on the board.
+export type HooksNodeData = { hooks: HookCard[] }
+export type HooksFlowNode = Node<HooksNodeData, 'hooks'>
+export type ScriptNodeData = { script: PlanScript | null; stale: boolean }
+export type ScriptFlowNode = Node<ScriptNodeData, 'script'>
+export type ExtraFlowNode = HooksFlowNode | ScriptFlowNode
+export type BoardFlowNode = ShotFlowNode | ExtraFlowNode
 
 // One link between two cards in a row: shot a → shot b (1-based, for the words on the + button).
 export type SeqEdgeData = { a: number; b: number; dropTarget: boolean }

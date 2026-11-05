@@ -1,18 +1,17 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Background,
   Controls,
-  MiniMap,
   Panel,
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
   useReactFlow,
+  type Edge,
   type NodeChange,
   type OnNodeDrag,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { BoardPos, Client, Format, SavedIdea, Shot } from '../../types'
+import type { BoardPos, Client, Format, SavedIdea, Shot, Video } from '../../types'
 import { t, tp } from '../../lib/i18n'
 import {
   NODE_H,
@@ -30,33 +29,49 @@ import {
   insertBetween,
   moveNode,
   placeLoose,
+  planCardsAt,
   removeNode,
   replaceShots,
   setPosition,
   tidy,
   toPlan,
-  totalSeconds,
   updateShot,
   type Board,
 } from '../../lib/shotBoard'
 import { MAX_PROMPT, insertShot, rewriteShots, type Assisted } from '../../lib/boardAssist'
 import { footageFromFile } from '../../lib/boardMedia'
+import { hookCards, type HookCard } from '../../lib/hooks'
+import { savedScript, scriptOutOfDate } from '../../lib/script'
 import { ShotNode } from './ShotNode'
+import { HooksNode, ScriptNode } from './PlanNodes'
 import { SeqEdge } from './SeqEdge'
-import { BoardActionsContext, type BoardActions, type SeqFlowEdge, type ShotFlowNode } from './boardContext'
+import {
+  BoardActionsContext,
+  type BoardActions,
+  type BoardFlowNode,
+  type ExtraFlowNode,
+  type SeqFlowEdge,
+  type ShotFlowNode,
+} from './boardContext'
 
 interface Props {
   idea: SavedIdea
   format: Format
   client: Client
+  // The reference video, for the suggested hooks' wording (same hooks as the plan page).
+  video?: Pick<Video, 'hook'>
   // Sample mode (no local API) skips the AI routes and edits from simple rules.
   live: boolean
   // Saves the ordered shots (and where each card sits) into the plan, the same way the plan page saves shots.
   onSave: (patch: { shots: Shot[]; boardLayout: BoardPos[] }) => void
   onBack: () => void
+  // Sends the plan to the approver. Only on a plan that can still be edited.
+  onSend?: () => void
 }
 
-const nodeTypes = { shot: ShotNode }
+const nodeTypes = { shot: ShotNode, hooks: HooksNode, script: ScriptNode }
+const HOOKS_ID = 'plan-hooks'
+const SCRIPT_ID = 'plan-script'
 const edgeTypes = { seq: SeqEdge }
 
 // React Flow's cards from the board. What React Flow measured and selected is kept from the cards it had.
@@ -74,16 +89,22 @@ function buildNodes(board: Board, prev: ShotFlowNode[], editable: boolean): Shot
   return [...board.order.map((bn, i) => make(bn, i)), ...board.loose.map((bn) => make(bn, null))]
 }
 
+// The suggested hooks and the script, as cards beside the shots. Fixed in place (they follow the shots) and
+// shown only; they are changed on the plan page.
+function buildExtras(board: Board, prev: ExtraFlowNode[], hooks: HookCard[], script: SavedIdea['script']): ExtraFlowNode[] {
+  const old = new Map(prev.map((n) => [n.id, n]))
+  const at = planCardsAt(board)
+  const saved = savedScript(script)
+  const shots = board.order.map((n) => n.shot)
+  const base = { draggable: false, selectable: false, connectable: false } as const
+  return [
+    { ...old.get(HOOKS_ID), ...base, id: HOOKS_ID, type: 'hooks', position: at.hooks, data: { hooks } },
+    { ...old.get(SCRIPT_ID), ...base, id: SCRIPT_ID, type: 'script', position: at.script, data: { script: saved, stale: !!saved && scriptOutOfDate(saved, shots) } },
+  ]
+}
+
 const sampleNote = (r: Assisted<unknown>): string | undefined =>
   r.source === 'sample' ? (r.reason === 'failed' ? t('board.sample.failed') : t('board.sample.offline')) : undefined
-
-const startsClosed = (): boolean => {
-  try {
-    return window.matchMedia('(max-width: 720px)').matches
-  } catch {
-    return false
-  }
-}
 
 interface Message {
   text: string
@@ -91,17 +112,19 @@ interface Message {
   undo?: boolean
 }
 
-function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
+function BoardScreen({ idea, format, client, video, live, onSave, onBack, onSend }: Props) {
   const editable = boardEditable(idea)
   const [makeId] = useState(() => idMaker('n'))
   const [board, setBoard] = useState(() => boardFromShots(boardShots(idea, format.shotList), idea.boardLayout, makeId))
   // The latest board, for handlers that run after an await or during a drag.
   const boardRef = useRef(board)
   const [rfNodes, setRfNodes] = useState<ShotFlowNode[]>(() => buildNodes(board, [], editable))
+  const hooksFor = (b: Board) => hookCards(b.order.map((n) => n.shot), format, video ?? { hook: '' }, client)
+  const [extraNodes, setExtraNodes] = useState<ExtraFlowNode[]>(() => buildExtras(board, [], hooksFor(board), idea.script))
   const [undo, setUndo] = useState<Board | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
   const [dropEdge, setDropEdge] = useState<string | null>(null)
-  const [toolsOpen, setToolsOpen] = useState(() => !startsClosed())
+  const [toolsOpen, setToolsOpen] = useState(false)
   // "Change the shot list"
   const [rewrite, setRewrite] = useState('')
   const [rewriteErr, setRewriteErr] = useState('')
@@ -112,12 +135,24 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
   const [busy, setBusy] = useState<'rewrite' | 'insert' | 'upload' | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const { fitView } = useReactFlow()
+  // The drawer: Esc closes it from anywhere on the page, and focus moves into it when it opens.
+  const toolsClose = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!toolsOpen) return
+    toolsClose.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setToolsOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toolsOpen])
 
   const commit = (next: Board, text?: string, opts: { undoable?: boolean; save?: boolean; note?: string; refit?: boolean } = {}) => {
     const prev = boardRef.current
     boardRef.current = next
     setBoard(next)
     setRfNodes((nds) => buildNodes(next, nds, editable))
+    setExtraNodes((nds) => buildExtras(next, nds, hooksFor(next), idea.script))
     if (opts.undoable) setUndo(prev)
     else if (text !== undefined) setUndo(null)
     if (opts.save !== false && editable) onSave(toPlan(next))
@@ -127,15 +162,19 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
 
   const selectedId = rfNodes.find((n) => n.selected)?.id ?? null
 
-  const edges: SeqFlowEdge[] = useMemo(
-    () =>
-      edgesOf(board).map((e, i) => ({
+  const edges: (SeqFlowEdge | Edge)[] = useMemo(
+    () => [
+      ...edgesOf(board).map((e, i) => ({
         ...e,
-        type: 'seq',
+        type: 'seq' as const,
         data: { a: i + 1, b: i + 2, dropTarget: e.id === dropEdge },
       })),
+      // The hooks lead into shot 1.
+      ...(board.order[0] ? [{ id: `e-${HOOKS_ID}`, source: HOOKS_ID, target: board.order[0].id, className: 'board-edge', selectable: false }] : []),
+    ],
     [board, dropEdge],
   )
+  const allNodes: BoardFlowNode[] = useMemo(() => [...extraNodes, ...rfNodes], [extraNodes, rfNodes])
 
   const nameOf = (s: Shot) => s.footage?.name ?? s.shot
 
@@ -173,23 +212,26 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
     },
   }
 
-  const onNodesChange = (changes: NodeChange<ShotFlowNode>[]) =>
-    setRfNodes((nds) => applyNodeChanges(changes.filter((c) => c.type !== 'remove'), nds))
+  const onNodesChange = (changes: NodeChange<BoardFlowNode>[]) => {
+    const kept = changes.filter((c) => c.type !== 'remove')
+    setRfNodes((nds) => applyNodeChanges(kept as NodeChange<ShotFlowNode>[], nds))
+    setExtraNodes((nds) => applyNodeChanges(kept as NodeChange<ExtraFlowNode>[], nds))
+  }
 
-  const center = (n: ShotFlowNode) => ({
+  const center = (n: BoardFlowNode) => ({
     x: n.position.x + (n.measured?.width ?? NODE_W) / 2,
     y: n.position.y + (n.measured?.height ?? NODE_H) / 2,
   })
   const isLoose = (id: string) => boardRef.current.loose.some((n) => n.id === id)
 
   // While an upload is dragged, light up the link it would land on.
-  const onNodeDrag: OnNodeDrag<ShotFlowNode> = (_, node) => {
+  const onNodeDrag: OnNodeDrag<BoardFlowNode> = (_, node) => {
     if (!isLoose(node.id)) return
     const c = center(node)
     setDropEdge(edgeAt(boardRef.current, c.x, c.y)?.id ?? null)
   }
 
-  const onNodeDragStop: OnNodeDrag<ShotFlowNode> = (_, node, moved) => {
+  const onNodeDragStop: OnNodeDrag<BoardFlowNode> = (_, node, moved) => {
     setDropEdge(null)
     let b = boardRef.current
     if (isLoose(node.id)) {
@@ -293,27 +335,40 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
         {t('board.back')}
       </button>
       <header className="board-head">
-        <span className="eyebrow">{t('board.eyebrow', { client: client.name })}</span>
         <h1>{format.name}</h1>
-        <p className="small muted">
-          {tp('board.summary', shots.length, { secs: totalSeconds(shots) })}
-          {' · '}
-          {editable ? t('board.saves') : t('board.locked')}
-        </p>
+        {/* Only an approved (view-only) board says why it can't be changed. */}
+        {!editable && <p className="small">{t('board.locked')}</p>}
+        <div className="board-head-actions">
+          {editable && onSend && (
+            <button type="button" className="btn btn-primary board-send" disabled={shots.length === 0} onClick={onSend}>
+              {t('plan.common.sendForApproval')}
+            </button>
+          )}
+          {/* The side tools are closed by default; this opens them as a drawer over the board. */}
+          <button
+            type="button"
+            className="btn btn-ghost board-tools-toggle"
+            aria-expanded={toolsOpen}
+            aria-controls="board-tools"
+            onClick={() => setToolsOpen((o) => !o)}
+          >
+            {t('board.toolsOpen')}
+          </button>
+        </div>
       </header>
 
       <div className="board-layout">
         <div className="board-canvas">
           <BoardActionsContext.Provider value={actions}>
-            <ReactFlow<ShotFlowNode, SeqFlowEdge>
-              nodes={rfNodes}
+            <ReactFlow<BoardFlowNode, SeqFlowEdge | Edge>
+              nodes={allNodes}
               edges={edges}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
               onNodesChange={onNodesChange}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
-              onEdgeClick={(_, edge) => editable && actions.openInsert(edge.source, edge.target)}
+              onEdgeClick={(_, edge) => editable && edge.type === 'seq' && actions.openInsert(edge.source, edge.target)}
               nodesDraggable={editable}
               nodesConnectable={false}
               deleteKeyCode={null}
@@ -321,11 +376,11 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
               fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
               minZoom={0.2}
               maxZoom={1.5}
+              proOptions={{ hideAttribution: true }}
               aria-label={t('board.canvasLabel', { name: format.name })}
             >
-              <Background gap={24} size={1} />
+              {/* No board dots of its own: the page's navy dots show through (one layer). */}
               <Controls showInteractive={false} />
-              <MiniMap className="board-minimap" ariaLabel={t('board.minimap')} pannable zoomable />
               {board.order.length === 0 && board.loose.length === 0 && (
                 <Panel position="top-center" className="board-empty">
                   {t('board.empty')}
@@ -367,9 +422,18 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
           </BoardActionsContext.Provider>
         </div>
 
-        <aside className="board-tools">
-          <details open={toolsOpen} onToggle={(e) => setToolsOpen(e.currentTarget.open)}>
-            <summary>{t('board.tools')}</summary>
+        <aside
+          id="board-tools"
+          className="board-tools"
+          hidden={!toolsOpen}
+          aria-labelledby="board-tools-title"
+        >
+          <div className="board-tools-head">
+            <h2 id="board-tools-title">{t('board.tools')}</h2>
+            <button ref={toolsClose} type="button" className="board-tools-close" aria-label={t('board.toolsClose')} onClick={() => setToolsOpen(false)}>
+              ✕
+            </button>
+          </div>
             <p className="small muted">{t('board.help')}</p>
 
             <form className="board-tool" onSubmit={runRewrite}>
@@ -419,7 +483,6 @@ function BoardScreen({ idea, format, client, live, onSave, onBack }: Props) {
             >
               {t('board.tidy')}
             </button>
-          </details>
         </aside>
       </div>
 

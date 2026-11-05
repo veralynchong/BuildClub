@@ -10,6 +10,8 @@ interface Props {
   formatById: Map<string, Format>
   onPick: (ideaId: string) => void
   onGoPlans: () => void
+  // Other words for the same chooser (the sidebar's "Video canvas" lists every plan, not only approved ones).
+  copy?: { title: string; intro: string; empty: string; go: string }
 }
 
 // Sidebar "Canvas" with more than one approved plan: pick the plan whose canvas to open.
@@ -18,15 +20,18 @@ export function CanvasPick(p: Props) {
     <section className="client board">
       <header className="client-head">
         <div>
-          <span className="eyebrow">{p.clientName}</span>
-          <h1>{t('shell.canvasPick.title')}</h1>
-          <p className="muted">{p.plans.length ? t('shell.canvasPick.intro') : t('shell.canvasPick.empty')}</p>
+          {/* The "Video canvas" chooser has no eyebrow (no decorative labels on new screens). */}
+          {!p.copy && <span className="eyebrow">{p.clientName}</span>}
+          <h1>{p.copy?.title ?? t('shell.canvasPick.title')}</h1>
+          <p className="muted">
+            {p.plans.length ? (p.copy?.intro ?? t('shell.canvasPick.intro')) : (p.copy?.empty ?? t('shell.canvasPick.empty'))}
+          </p>
         </div>
       </header>
       {p.plans.length === 0 ? (
         <div className="empty">
           <button type="button" className="btn btn-primary" onClick={p.onGoPlans}>
-            {t('shell.canvasPick.goPlans')}
+            {p.copy?.go ?? t('shell.canvasPick.goPlans')}
           </button>
         </div>
       ) : (

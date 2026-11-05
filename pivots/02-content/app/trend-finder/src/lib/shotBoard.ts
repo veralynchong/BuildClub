@@ -251,3 +251,21 @@ function retimeOrder(order: BoardNode[]): BoardNode[] {
 
 // Total length of the sequence in seconds (shots with a range only).
 export const totalSeconds = (shots: Shot[]): number => shots.reduce((sum, s) => sum + (secondsOf(s.time ?? '') ?? 0), 0)
+
+// ---- hooks and script cards ------------------------------------------------------------------------
+
+export const HOOKS_W = 260
+export const GAP_Y = 80
+
+// Where the suggested hooks and the script sit: the hooks just left of shot 1 (they lead into it), the script
+// under everything else, lined up with the leftmost shot. They follow the shots when those move.
+export function planCardsAt(board: Pick<Board, 'order' | 'loose'>): { hooks: BoardPos; script: BoardPos } {
+  const first = board.order[0]
+  const all = [...board.order, ...board.loose]
+  const left = all.length ? Math.min(...all.map((n) => n.x)) : 0
+  const bottom = all.length ? Math.max(...all.map((n) => n.y)) + NODE_H + GAP_Y : 0
+  return {
+    hooks: { x: (first?.x ?? 0) - HOOKS_W - (STEP_X - NODE_W), y: first?.y ?? 0 },
+    script: { x: left, y: bottom },
+  }
+}
