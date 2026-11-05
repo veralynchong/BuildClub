@@ -1,5 +1,19 @@
 # STATUS
 
+## 2026-11-05：全站 UI 稽核與 Magnific 比較（待討論修改）
+
+使用者核准順序：恢復隔離環境／瀏覽器連線→BuildClub全站UI與Magnific操作平行比較→共同決定修改清單→修改後重測及逐次批准真生成。使用者進一步澄清 Canvas 前端由本人設計，可直接討論 Canvas 外觀與流程；全站其他頁面仍遵循 Veralyn 的設計。本輪兩個唯讀agent取證，沒有修產品或呼叫付費provider。
+
+- 驗證基準 `f91d9c92eabedd89a01669148d6ea1cfd7d10d5d`，PR #54 OPEN，base `feat/freeform-canvas`；PR #53／54均不合併。agent開場full GREEN：1039 passed、2 skipped（35.13s）、frontend PASS；當前frontend build exit0（既有chunk warning）。
+- 真瀏覽器1440：main 13組、recovery 5組、legacy-entry 3組PASS；含空白Canvas、拖移／zoom／reload、typed inputs、mock圖片影片配音、上傳／剪輯／真1080x1920 AAC MP4、簽出review播放與approve/sendback、核准及退回後各真正重啟backend、資料與素材hash保留、CAS409恢復與跨workspace隔離。主suite舊深色字色斷言首次RED，僅在/tmp測試副本加明確dark前置後PASS，原始失敗及單行diff保留，不冒稱原腳本直接通過。
+- 全站導航補測覆蓋Landing/Login、client新增／保存、Home/Overview、Find/cached search/filter、Research新增／reload、Compare、Plans/Plan、Canvas、Channel、Brief保存、Settings Light/Dark/System／reload、繁中與匿名保護。最終navigation-v4為20項PASS、1項確證FAIL、pageerrors=[]。無token環境的cached搜尋503與dummy token／zero-budget環境分開取證；沒有真搜尋費用。曾有fullPage截圖觸發viewTransition拒絕；viewport-only及正常resize未重現，使用者影響仍未確證。
+- 確證問題1：深色Editor文字與選中按鈕對比不足。標籤／Clip文字對比約1.11:1，Bottom／White選中按鈕約1.10:1，Light正常；`src/styles/canvas.css` 的 `.fc-editor` 使用不存在的 `--text` 而退回#222、固定light色彩模式，需修復並重驗深淺色。
+- 確證問題2：在已有結果頁搜尋未快取關鍵字，API429後沒有可見alert/error，仍留舊tofu結果；錯誤被存入App的searchError但ResultsScreen未呈現。需保留舊結果並明確顯示此次失敗，不能讓使用者誤認新搜尋成功。
+- Magnific實際操作NOT RUN：Brave browser bridge不可達；paired MacBook desktop-control未授權，沒有繞過或擴權。ChatGPT裡開啟Magnific App不代表本Orca對話已取得工具／分頁連線。已查版本沒有可原地補grant的Settings toggle，不要指引使用者盲目重啟Orca或找不存在的開關。
+- Magnific初版10項比較依使用者截圖、官方文件與本地程式分列，不能冒稱帳戶選單實測：模型／參考圖／連線／歷史已有但入口不同；張數、比例、解析度是真缺口（OpenRouter固定n1／1K／9:16）。先討論模型能力提示、比例／解析度與報價契約，再決定批次結果／進階設定／卡片布局。Fit49%截圖不能直接跟Magnific參考圖比較字體／節點像素尺寸。
+- 證據：`/tmp/buildclub-ui-audit-2026-11-05/`、`/tmp/magnific-comparison-2026-11-05/`。root複核editor截圖與final-process-audit：10次runner記錄survivors皆{}、listeners=[]；沒有改既有服務／瀏覽器或共用依賴。發布預設fake，部分analytics為placeholder；真發布／provider品質費用／Magnific動態操作均未驗，花費US$0。
+- 下一步：接通使用者指定的Brave插件（先確認插件名稱／連線畫面），補Magnific動態選單證據；與使用者確認先修兩項bug及Canvas功能優先序，再另行實作與重測。真生成仍須模型／帳戶用途／估價／硬上限及當次明確yes。
+
 ## 2026-11-05：OpenRouter 圖片接線（離線通過，尚未付費測試）
 
 使用者已自行在主 repository 的本機設定加入 OpenRouter Key 與圖片／影片／配音每日上限；本 session 未讀取該檔案或 Key，不宣稱已確認執行中的設定。分支 `feat/openrouter-image-provider` 接續 `feat/freeform-canvas`，不合併 PR #53。
