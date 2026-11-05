@@ -1,5 +1,7 @@
 # Build Club Project Context
 
+> Historical context: this file preserves the Recite snapshot below. For current Remake work, read `docs/STATUS.md` and the relevant documents in `pivots/02-content/docs/`. Do not apply the Recite engine, customer or stage constraints to Remake.
+
 _Snapshot synced from the Miro boards on 4 Oct 2026. Product status reflects the board as of 2 Oct 2026._
 
 ## Product

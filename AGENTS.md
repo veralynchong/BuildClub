@@ -5,7 +5,8 @@ Shared by every AI tool: Codex reads this file directly, and `CLAUDE.md` imports
 
 ## Before you start
 
-- Read `PROJECT_CONTEXT.md` before doing any work. It is the source of truth for what BuildClub is and where it stands.
+- Read `docs/STATUS.md` first for the current branch's progress, verification and next steps, then the relevant product documents in `pivots/02-content/docs/` for Remake work.
+- `PROJECT_CONTEXT.md` preserves the October Recite snapshot. Read it for historical context; it does not define the current Remake scope. Older notes and handoffs do not override newer decisions or the actual Git state.
 
 ## Where things go
 
