@@ -1,5 +1,40 @@
 # STATUS
 
+## 2026-11-05：Claude 已補 Magnific 帳戶選單實測
+
+使用者要求派Claude後，Orca在MacBook啟動Sonnet worker（dispatch `ctx_7d8a209a3a7a`，task `task_554b52e8e1ad`）。首次因session無tab group未開始，root說明既有測試授權涵蓋自建可回收group後，worker以Claude in Chrome建立自己的group／tab並成功開啟指定Untitled space。root已讀worker_done與確切transcript，確認開啟的Magnific URL、自建tab關閉、group自動移除與設定恢復；不宣稱瀏覽器已確認為Brave（Chrome UA不能區分）。本段補足下段原本Magnific操作NOT RUN的部分範圍，不追溯改寫原始阻礙。
+
+- OBSERVED：模型選單約50個選項，含搜尋框／Featured與All Models分組及New/Beta標記；搜尋輸入後是否正確過濾未確證，未見價格或不可用原因。Auto張數1–10、即時自動保存；Auto比例10種、Size為1K／2K／4K；Nano Banana 2.1另有21:9／8:1／4:1／1:4／1:8等比例；GPT 2.5另顯示子變體、品質與Transparent控制。以上為worker帳戶畫面觀察，不代表provider真輸出或所有模型能力已驗。
+- 卡片內+開參考圖選擇modal，含History／Uploads／Stock／Style／Character等來源；只開啟、未選取／上傳任何素材。已看toolbar、連線下拉的下游node選單、更多／Inspector／History入口；沒有拖線建立node或檢查History全部分頁。
+- 起訖均為1個空白Image Generator #1，已恢復Auto／x1／1:1／1K；原使用者tab保留，自建tab關閉，沒有按Run／生成、沒有付費API，paid_calls=0。viewport1132×1042、DPR2、app zoom83%，不與不同zoom的BuildClub截圖作像素大小判定。
+- NOT RUN／未見：真生成品質／延遲／排隊／失敗狀態、卡片價格或credits、模型不可用原因、拖線建node、History的Assets／Nodes分頁。不能因此聲稱Magnific沒有價格功能。
+- 報告在MacBook `/tmp/buildclub-claude-magnific-2026-11-05/`（report.md／report.json／40張screenshots）；參考圖modal截圖含使用者私人素材，留在該機、不外傳。Mini的既有比較報告屬先前文件／程式盤點，應連同本段實測補充閱讀。
+- 整合建議（待使用者決定，尚未修產品）：先修已確認的Editor深色可讀性與搜尋失敗無提示；再補模型能力感知的比例／解析度選擇（需node保存、API驗證、報價、預算與歷史契約同步）；之後做卡片參考圖入口與模型資訊呈現、多張結果及總報價。未自動把其他模型全部加入或重做全站。
+
+## 2026-11-05：全站 UI 稽核與 Magnific 比較（待討論修改）
+
+使用者核准順序：恢復隔離環境／瀏覽器連線→BuildClub全站UI與Magnific操作平行比較→共同決定修改清單→修改後重測及逐次批准真生成。使用者進一步澄清 Canvas 前端由本人設計，可直接討論 Canvas 外觀與流程；全站其他頁面仍遵循 Veralyn 的設計。本輪兩個唯讀agent取證，沒有修產品或呼叫付費provider。
+
+- 驗證基準 `f91d9c92eabedd89a01669148d6ea1cfd7d10d5d`，PR #54 OPEN，base `feat/freeform-canvas`；PR #53／54均不合併。agent開場full GREEN：1039 passed、2 skipped（35.13s）、frontend PASS；當前frontend build exit0（既有chunk warning）。
+- 真瀏覽器1440：main 13組、recovery 5組、legacy-entry 3組PASS；含空白Canvas、拖移／zoom／reload、typed inputs、mock圖片影片配音、上傳／剪輯／真1080x1920 AAC MP4、簽出review播放與approve/sendback、核准及退回後各真正重啟backend、資料與素材hash保留、CAS409恢復與跨workspace隔離。主suite舊深色字色斷言首次RED，僅在/tmp測試副本加明確dark前置後PASS，原始失敗及單行diff保留，不冒稱原腳本直接通過。
+- 全站導航補測覆蓋Landing/Login、client新增／保存、Home/Overview、Find/cached search/filter、Research新增／reload、Compare、Plans/Plan、Canvas、Channel、Brief保存、Settings Light/Dark/System／reload、繁中與匿名保護。最終navigation-v4為20項PASS、1項確證FAIL、pageerrors=[]。無token環境的cached搜尋503與dummy token／zero-budget環境分開取證；沒有真搜尋費用。曾有fullPage截圖觸發viewTransition拒絕；viewport-only及正常resize未重現，使用者影響仍未確證。
+- 確證問題1：深色Editor文字與選中按鈕對比不足。標籤／Clip文字對比約1.11:1，Bottom／White選中按鈕約1.10:1，Light正常；`src/styles/canvas.css` 的 `.fc-editor` 使用不存在的 `--text` 而退回#222、固定light色彩模式，需修復並重驗深淺色。
+- 確證問題2：在已有結果頁搜尋未快取關鍵字，API429後沒有可見alert/error，仍留舊tofu結果；錯誤被存入App的searchError但ResultsScreen未呈現。需保留舊結果並明確顯示此次失敗，不能讓使用者誤認新搜尋成功。
+- Magnific實際操作NOT RUN：Brave browser bridge不可達；paired MacBook desktop-control未授權，沒有繞過或擴權。ChatGPT裡開啟Magnific App不代表本Orca對話已取得工具／分頁連線。已查版本沒有可原地補grant的Settings toggle，不要指引使用者盲目重啟Orca或找不存在的開關。
+- Magnific初版10項比較依使用者截圖、官方文件與本地程式分列，不能冒稱帳戶選單實測：模型／參考圖／連線／歷史已有但入口不同；張數、比例、解析度是真缺口（OpenRouter固定n1／1K／9:16）。先討論模型能力提示、比例／解析度與報價契約，再決定批次結果／進階設定／卡片布局。Fit49%截圖不能直接跟Magnific參考圖比較字體／節點像素尺寸。
+- 證據：`/tmp/buildclub-ui-audit-2026-11-05/`、`/tmp/magnific-comparison-2026-11-05/`。root複核editor截圖與final-process-audit：10次runner記錄survivors皆{}、listeners=[]；沒有改既有服務／瀏覽器或共用依賴。發布預設fake，部分analytics為placeholder；真發布／provider品質費用／Magnific動態操作均未驗，花費US$0。
+- 下一步：接通使用者指定的Brave插件（先確認插件名稱／連線畫面），補Magnific動態選單證據；與使用者確認先修兩項bug及Canvas功能優先序，再另行實作與重測。真生成仍須模型／帳戶用途／估價／硬上限及當次明確yes。
+
+## 2026-11-05：OpenRouter 圖片接線（離線通過，尚未付費測試）
+
+使用者已自行在主 repository 的本機設定加入 OpenRouter Key 與圖片／影片／配音每日上限；本 session 未讀取該檔案或 Key，不宣稱已確認執行中的設定。分支 `feat/openrouter-image-provider` 接續 `feat/freeform-canvas`，不合併 PR #53。
+
+- 新增 `Nano Banana 2 · OpenRouter`，使用獨立 `OPENROUTER_API_KEY` 與 Image API；一次一張、1K、9:16，支援參考圖，不自動 fallback／重送。前端沿用既有 model menu，沒有設計變更或新增依賴。
+- 與其他圖片共用每日圖片預算。每張保守預留 US$0.10，provider 按 token 計費；有回傳 `usage.cost` 時保存實際費用，每日 wallet 保留預估扣額。這不是 provider 帳單的絕對硬上限。逾時／5xx／不明結果不退額、不重送；明確 4xx 拒絕可退額；不可用圖片不退額。
+- 驗證：2026-11-05 親跑 `bash bin/verify.sh full` GREEN：1039 passed、2 skipped（31.61s），frontend unit PASS；新增16個假HTTP／API回歸案例，涵蓋格式、參考圖、Key隔離、預算拒絕、素材保存／費用、錯誤與結果只取一次。公開模型 metadata GET 確認支援1K／9:16／參考圖，無驗證 header、無生成請求。
+- 同日先前 `06d26c4` 修正 `bin/real-fal-backend.sh` 尊重設定的三項生成預算（exported env 優先），拒絕無效金額；12項合成預算測試、full GREEN（1023 passed、2 skipped）。該腳本仍只傳 fal credentials，不代表 OpenRouter 已啟動。
+- 未驗／下一步：目前沒有真服務在8875執行，原交接的暫存目錄已不存在，不能沿用舊預覽仍存活的說法。需準備安全的 OpenRouter 測試啟動環境、確認生效預算與專用Key限額，再逐次列模型／帳戶用途／估價／硬上限並取得明確yes，才可送出第一張真圖片。真provider呼叫0、花費US$0；品質／延遲／真實扣款及重啟恢復仍未驗。未碰其他服務、瀏覽器或共用依賴。
+
 ## 2026-11-05：Canvas 收尾、職責界線與下一階段
 
 本輪重做與離線驗收已完成，交付 PR #53（不合併）。本次收尾將已驗證的 Canvas 全站主題同步增量納入同一功能分支；沒有另做全站設計。使用者已指示下一階段以後端為主、前端以隊友 Veralyn 的設計為準。

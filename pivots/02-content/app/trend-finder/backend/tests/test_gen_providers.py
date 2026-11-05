@@ -332,6 +332,63 @@ def test_unknown_provider():
         gp.adapter_for("nope")
 
 
+OPENROUTER_URL = "https://openrouter.ai/api/v1/images"
+OPENROUTER_MODEL = {"id": "openrouter-nano-banana-2", "kind": "image", "provider": "openrouter",
+                    "endpoint": "google/gemini-3.1-flash-image"}
+
+
+def test_openrouter_image_request_and_result(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
+    http = FakeHttp({("POST", OPENROUTER_URL): jr({
+        "data": [{"b64_json": base64.b64encode(PNG).decode()}], "usage": {"cost": 0.068}})})
+    job = gp.Job(OPENROUTER_MODEL, "a tofu bar", None, [png_file(tmp_path)], None)
+    rid = gp.adapter_for("openrouter", http).submit(job)
+    sent = http.calls[0]
+    assert sent["headers"]["Authorization"] == "Bearer or-test-key"
+    assert sent["body"] == {
+        "model": "google/gemini-3.1-flash-image", "prompt": "a tofu bar", "n": 1,
+        "resolution": "1K", "aspect_ratio": "9:16", "provider": {"allow_fallbacks": False},
+        "input_references": [{"type": "image_url", "image_url": {"url": gp.data_uri(png_file(tmp_path))}}]}
+    result = gp.adapter_for("openrouter", http).poll(job, rid)
+    assert (result.state, result.data, result.ext, result.actual_usd) == ("done", PNG, "png", 0.068)
+    with pytest.raises(gp.ResultLost):
+        gp.adapter_for("openrouter", http).poll(job, rid)
+    assert len(http.calls) == 1
+
+
+@pytest.mark.parametrize("reply", [OSError("timeout"), jr({}, 503), jr({}), jr({"error": {"code": 500}})])
+def test_openrouter_uncertain_submit_never_retries_or_refunds(reply, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
+    http = FakeHttp({("POST", OPENROUTER_URL): reply})
+    with pytest.raises(gp.ResultLost):
+        gp.adapter_for("openrouter", http).submit(gp.Job(OPENROUTER_MODEL, "p", None, [], None))
+    assert len(http.calls) == 1
+
+
+@pytest.mark.parametrize("code", [400, 401, 402, 403, 429])
+def test_openrouter_explicit_refusal_is_refundable(code, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
+    http = FakeHttp({("POST", OPENROUTER_URL): jr({}, code)})
+    with pytest.raises(gp.ProviderError, match=gp.REFUSED):
+        gp.adapter_for("openrouter", http).submit(gp.Job(OPENROUTER_MODEL, "p", None, [], None))
+
+
+@pytest.mark.parametrize("data", ["!!", base64.b64encode(b"not an image").decode()])
+def test_openrouter_bad_image_keeps_charge(data, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
+    http = FakeHttp({("POST", OPENROUTER_URL): jr({"data": [{"b64_json": data}]})})
+    with pytest.raises(gp.FileUnusable):
+        gp.adapter_for("openrouter", http).submit(gp.Job(OPENROUTER_MODEL, "p", None, [], None))
+
+
+def test_openrouter_missing_key_sends_nothing(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    http = FakeHttp()
+    with pytest.raises(gp.ProviderError, match=gp.NO_KEY):
+        gp.adapter_for("openrouter", http).submit(gp.Job(OPENROUTER_MODEL, "p", None, [], None))
+    assert http.calls == []
+
+
 MOCK_IMAGE = {"id": "mock-image", "kind": "image", "provider": "mock"}
 MOCK_VIDEO = {"id": "mock-video", "kind": "video", "provider": "mock", "durations": [4, 6]}
 

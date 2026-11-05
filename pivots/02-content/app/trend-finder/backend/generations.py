@@ -69,7 +69,8 @@ def image_header_ok(ext: str, head: bytes) -> bool:
     return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
 
 
-KEY_ENV = {"fal": "FAL_KEY", "gemini": "GEMINI_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY"}
+KEY_ENV = {"fal": "FAL_KEY", "gemini": "GEMINI_API_KEY", "openrouter": "OPENROUTER_API_KEY",
+           "elevenlabs": "ELEVENLABS_API_KEY"}
 
 
 def migrate(conn) -> None:
@@ -103,7 +104,7 @@ def validate_models(models: list[dict]) -> list[str]:
         if mid in seen:
             errors.append(f"{mid}: duplicate id")
         seen.add(mid)
-        if m.get("provider") not in ("mock", "fal", "gemini", "elevenlabs"):
+        if m.get("provider") not in ("mock", "fal", "gemini", "openrouter", "elevenlabs"):
             errors.append(f"{mid}: unknown provider {m.get('provider')!r}")
         if m.get("kind") == "video" and "9:16" not in m.get("aspects", []):
             errors.append(f"{mid}: video model without 9:16")
@@ -447,7 +448,7 @@ class GenJobs:
                 print(f"[gen] {gen_id} could not save the file: {e}", flush=True)
                 self._fail(gen_id, kind, est, FILE_LOST, refund=False)
                 return
-            self._finish(gen_id, "done", file=name, actual_usd=est)
+            self._finish(gen_id, "done", file=name, actual_usd=result.actual_usd if result.actual_usd is not None else est)
         except gen_providers.ResultLost as e:
             print(f"[gen] {gen_id} result lost: {e}", flush=True)
             self._finish(gen_id, "unknown", error=LOST)
