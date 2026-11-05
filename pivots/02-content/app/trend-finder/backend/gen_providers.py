@@ -10,6 +10,7 @@ polling is not an error, it is `running`."""
 
 import base64
 import json
+import math
 import os
 import random
 import re
@@ -42,6 +43,7 @@ GEMINI_TIMEOUT_S = 120  # generateContent is synchronous, so it can take a while
 FAL_QUEUE = "https://queue.fal.run/"
 ELEVENLABS_BASE = "https://api.elevenlabs.io/v1/text-to-speech/"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/"
+OPENROUTER_IMAGES = "https://openrouter.ai/api/v1/images"
 ASPECT = "9:16"
 RETRY_STATUS = (408, 429)  # polling again later may work
 
@@ -83,6 +85,7 @@ class Poll:
     data: Optional[bytes] = None
     ext: Optional[str] = None
     error: Optional[str] = None
+    actual_usd: Optional[float] = None
 
 
 class Adapter(Protocol):
@@ -93,7 +96,7 @@ class Adapter(Protocol):
 
 def default_http(method: str, url: str, headers: dict, body: Optional[bytes]) -> tuple[int, dict, bytes]:
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
-    timeout = GEMINI_TIMEOUT_S if urlparse(url).hostname == "generativelanguage.googleapis.com" else HTTP_TIMEOUT_S
+    timeout = GEMINI_TIMEOUT_S if urlparse(url).hostname in ("generativelanguage.googleapis.com", "openrouter.ai") else HTTP_TIMEOUT_S
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, dict(r.headers), r.read(MAX_BYTES["video"] + 1)
@@ -408,6 +411,55 @@ class GeminiAdapter:
         return Poll("done", data=found[0], ext=found[1])
 
 
+class OpenRouterAdapter:
+    """One synchronous Image API request, with no fallback or automatic resubmit.
+    Like Gemini, a cached result lost on restart is unknown and must not be refunded."""
+
+    _results: dict = {}
+
+    def __init__(self, http: Http):
+        self._http = http
+
+    def submit(self, job: Job) -> str:
+        if job.start is not None:
+            raise ProviderError("This model doesn't take a start frame.")
+        headers = {"Authorization": f"Bearer {key_from('OPENROUTER_API_KEY')}", "Content-Type": "application/json"}
+        body = {"model": job.model["endpoint"], "prompt": job.prompt, "n": 1,
+                "resolution": "1K", "aspect_ratio": ASPECT, "provider": {"allow_fallbacks": False}}
+        if job.references:
+            body["input_references"] = [{"type": "image_url", "image_url": {"url": data_uri(ref)}}
+                                        for ref in job.references]
+        try:
+            status, _h, data = call(self._http, "POST", OPENROUTER_IMAGES, headers, json.dumps(body).encode())
+        except _Transient:
+            raise ResultLost("OpenRouter didn't return a confirmed result.")
+        if status >= 300:
+            raise ProviderError(REFUSED)
+        reply = json_body(data)
+        images = reply.get("data")
+        if not isinstance(images, list) or not images or not isinstance(images[0], dict):
+            raise ResultLost("OpenRouter returned no confirmed image result.")
+        encoded = images[0].get("b64_json")
+        if not isinstance(encoded, str):
+            raise FileUnusable(NOT_MEDIA)
+        try:
+            image, ext = check_media(base64.b64decode(encoded, validate=True), "image")
+        except (ValueError, ProviderError):
+            raise FileUnusable(NOT_MEDIA)
+        cost = (reply.get("usage") or {}).get("cost")
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)) or not math.isfinite(cost) or cost < 0:
+            cost = None
+        rid = f"openrouter-{uuid.uuid4().hex}"
+        self._results[rid] = Poll("done", data=image, ext=ext, actual_usd=cost)
+        return rid
+
+    def poll(self, job: Job, request_id: str) -> Poll:
+        found = self._results.pop(request_id, None)
+        if found is None:
+            raise ResultLost("The image is no longer in memory.")
+        return found
+
+
 class ElevenLabsAdapter:
     """ElevenLabs text to speech. The call is synchronous: submit does the work and keeps the MP3 in memory
     (shared by every adapter object) until poll takes it. After a restart the audio is gone: ResultLost."""
@@ -453,7 +505,8 @@ class ElevenLabsAdapter:
         return Poll("done", data=found[0], ext=found[1])
 
 
-ADAPTERS = {"mock": MockAdapter, "fal": FalAdapter, "gemini": GeminiAdapter, "elevenlabs": ElevenLabsAdapter}
+ADAPTERS = {"mock": MockAdapter, "fal": FalAdapter, "gemini": GeminiAdapter, "openrouter": OpenRouterAdapter,
+            "elevenlabs": ElevenLabsAdapter}
 
 
 def adapter_for(provider: str, http: Http = default_http) -> Adapter:

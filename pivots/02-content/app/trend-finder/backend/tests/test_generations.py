@@ -378,6 +378,34 @@ def test_create_spends_estimate(real):
     assert request_id(row["id"]) == "req-1"
 
 
+def test_openrouter_model_availability_uses_its_own_key(gen, monkeypatch):
+    model = next(m for m in generations.load_models() if m["id"] == "openrouter-nano-banana-2")
+    assert generations.validate_models([model]) == []
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-only")
+    assert not generations.is_available(model)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
+    assert generations.is_available(model)
+
+
+def test_openrouter_uses_image_wallet_and_records_reported_cost(real, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
+    real.adapter = FakeAdapter(polls=[gen_providers.Poll("done", data=PNG_BYTES, ext="png", actual_usd=0.068)])
+    result = post(real, model="openrouter-nano-banana-2")
+    assert result.status_code == 201
+    row = row_of(real, result.json()["id"])
+    assert row["status"] == "done" and row["estUsd"] == 0.10 and row["actualUsd"] == 0.068
+    assert real.spent == [("image", 0.10)]
+    assert real.get(row["url"]).content == PNG_BYTES
+
+
+def test_openrouter_over_budget_sends_nothing(real, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
+    monkeypatch.setattr(server.gen_router, "budget", lambda kind, usd: generations.error(429, "Budget used up."))
+    assert post(real, model="openrouter-nano-banana-2").status_code == 429
+    assert real.adapter.submits == 0
+
+
 def test_over_budget_429_writes_no_row(real, monkeypatch):
     monkeypatch.setattr(server.gen_router, "budget",
                         lambda kind, usd: generations.error(429, "Today's image generation budget has US$0.01 left."))

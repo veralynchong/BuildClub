@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-11-05：OpenRouter 圖片接線（離線通過，尚未付費測試）
+
+使用者已自行在主 repository 的本機設定加入 OpenRouter Key 與圖片／影片／配音每日上限；本 session 未讀取該檔案或 Key，不宣稱已確認執行中的設定。分支 `feat/openrouter-image-provider` 接續 `feat/freeform-canvas`，不合併 PR #53。
+
+- 新增 `Nano Banana 2 · OpenRouter`，使用獨立 `OPENROUTER_API_KEY` 與 Image API；一次一張、1K、9:16，支援參考圖，不自動 fallback／重送。前端沿用既有 model menu，沒有設計變更或新增依賴。
+- 與其他圖片共用每日圖片預算。每張保守預留 US$0.10，provider 按 token 計費；有回傳 `usage.cost` 時保存實際費用，每日 wallet 保留預估扣額。這不是 provider 帳單的絕對硬上限。逾時／5xx／不明結果不退額、不重送；明確 4xx 拒絕可退額；不可用圖片不退額。
+- 驗證：2026-11-05 親跑 `bash bin/verify.sh full` GREEN：1039 passed、2 skipped（31.61s），frontend unit PASS；新增16個假HTTP／API回歸案例，涵蓋格式、參考圖、Key隔離、預算拒絕、素材保存／費用、錯誤與結果只取一次。公開模型 metadata GET 確認支援1K／9:16／參考圖，無驗證 header、無生成請求。
+- 同日先前 `06d26c4` 修正 `bin/real-fal-backend.sh` 尊重設定的三項生成預算（exported env 優先），拒絕無效金額；12項合成預算測試、full GREEN（1023 passed、2 skipped）。該腳本仍只傳 fal credentials，不代表 OpenRouter 已啟動。
+- 未驗／下一步：目前沒有真服務在8875執行，原交接的暫存目錄已不存在，不能沿用舊預覽仍存活的說法。需準備安全的 OpenRouter 測試啟動環境、確認生效預算與專用Key限額，再逐次列模型／帳戶用途／估價／硬上限並取得明確yes，才可送出第一張真圖片。真provider呼叫0、花費US$0；品質／延遲／真實扣款及重啟恢復仍未驗。未碰其他服務、瀏覽器或共用依賴。
+
 ## 2026-11-05：Canvas 收尾、職責界線與下一階段
 
 本輪重做與離線驗收已完成，交付 PR #53（不合併）。本次收尾將已驗證的 Canvas 全站主題同步增量納入同一功能分支；沒有另做全站設計。使用者已指示下一階段以後端為主、前端以隊友 Veralyn 的設計為準。
