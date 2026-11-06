@@ -1,5 +1,7 @@
 # STATUS
 
+Current (2026-11-06 AEDT): `fix/median-migration-race` fixes the full-verification SQLite duplicate-column failure in `migrate_medians`. A deterministic two-connection regression reproduced the failure before the fix; the migration now accepts only a confirmed concurrent addition and still propagates other database errors. Independent read-only review: ACCEPT. Last verification: `bash bin/verify.sh full` GREEN, all five steps PASS, under the shared backend test lease. Git preservation audit (2026-11-06 AEDT): full `bash bin/verify.sh` rerun GREEN, all five steps PASS. This repair and the existing per-run verification-log isolation are ready for commit/push on `fix/median-migration-race`; unrelated untracked research and demo documents remain untouched. Other dirty or active worktrees must be retained. The fresh AI film remains in progress in the separate demo-readiness/artifact workspace.
+
 Read first: `docs/todo.md` (open keys and tasks) and `docs/test-log.md` (every test run; skip a test that already passed at an unchanged commit). Demo branch: `chore/demo-integrate-main-1104`, PR #49 (draft, do not merge yet).
 
 Current (2026-11-05 AEDT): PR #50 shares the project rules through `AGENTS.md` and the `CLAUDE.md` import; it is still open, not merged.

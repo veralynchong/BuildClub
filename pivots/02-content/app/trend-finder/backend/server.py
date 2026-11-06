@@ -756,7 +756,12 @@ def migrate_medians(conn: sqlite3.Connection) -> None:
     have = {row[1] for row in conn.execute("PRAGMA table_info(medians)")}
     for column, kind in (("n", "INTEGER"), ("base_from", "TEXT"), ("base_to", "TEXT")):
         if column not in have:
-            conn.execute(f"ALTER TABLE medians ADD COLUMN {column} {kind}")
+            try:
+                conn.execute(f"ALTER TABLE medians ADD COLUMN {column} {kind}")
+            except sqlite3.OperationalError as error:
+                if (str(error) != f"duplicate column name: {column}"
+                        or column not in {row[1] for row in conn.execute("PRAGMA table_info(medians)")}):
+                    raise
 
 
 def db() -> sqlite3.Connection:

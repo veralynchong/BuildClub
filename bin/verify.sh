@@ -3,13 +3,16 @@
 set -u
 cd "$(dirname "$0")/.."
 
+verify_log=$(mktemp "${TMPDIR:-/tmp}/buildclub-verify.XXXXXX") || exit 1
+trap 'rm -f "$verify_log"' EXIT
+
 fail=0
 run_step() {
   local name="$1"; shift
-  if "$@" >/tmp/verify_step.log 2>&1; then
+  if "$@" >"$verify_log" 2>&1; then
     echo "PASS  $name"
   else
-    echo "FAIL  $name"; sed 's/^/      /' /tmp/verify_step.log | tail -20
+    echo "FAIL  $name"; sed 's/^/      /' "$verify_log" | tail -20
     fail=1
   fi
 }

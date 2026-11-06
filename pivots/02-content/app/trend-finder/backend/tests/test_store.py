@@ -1,3 +1,10 @@
+import sqlite3
+
+import pytest
+
+import server
+
+
 CLIENT = {"id": "c1", "name": "Tofu Bar", "niche": "food", "audience": "students",
           "monthlyTarget": 8, "examples": [], "cannot": ["alcohol"]}
 IDEA = {"id": "i1", "videoId": "v1", "clientId": "c1", "status": "saved", "dueDate": "2026-11-02",
@@ -50,3 +57,41 @@ def test_added_client_round_trips(client):
     saved = client.get("/api/clients").json()
     assert [c["id"] for c in saved] == ["c1", "acme-bakery"]
     assert saved[1]["topics"] == ["sourdough", "cake decorating"]
+
+
+def test_medians_migration_handles_another_connection_adding_a_column(tmp_path):
+    path = tmp_path / "migration.db"
+
+    class RacingConnection(sqlite3.Connection):
+        raced = False
+
+        def execute(self, statement, parameters=()):
+            cursor = super().execute(statement, parameters)
+            if statement == "PRAGMA table_info(medians)" and not self.raced:
+                snapshot = list(cursor)
+                self.raced = True
+                with sqlite3.connect(path) as other:
+                    other.execute("ALTER TABLE medians ADD COLUMN base_to TEXT")
+                return snapshot
+            return cursor
+
+    with sqlite3.connect(path, factory=RacingConnection) as conn:
+        conn.execute("CREATE TABLE medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
+        conn.execute("INSERT INTO medians VALUES ('existing', 42, 100)")
+        conn.commit()
+        server.migrate_medians(conn)
+        assert {row[1] for row in conn.execute("PRAGMA table_info(medians)")} >= {"n", "base_from", "base_to"}
+        assert conn.execute("SELECT author, median, fetched_at FROM medians").fetchall() == [("existing", 42, 100)]
+
+
+def test_medians_migration_does_not_hide_other_database_errors():
+    class LockedConnection(sqlite3.Connection):
+        def execute(self, statement, parameters=()):
+            if statement.startswith("ALTER TABLE medians"):
+                raise sqlite3.OperationalError("database is locked")
+            return super().execute(statement, parameters)
+
+    with sqlite3.connect(":memory:", factory=LockedConnection) as conn:
+        conn.execute("CREATE TABLE medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
+        with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+            server.migrate_medians(conn)
