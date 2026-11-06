@@ -7,6 +7,8 @@ import type { EditProject } from '../../lib/editor/types'
 
 export interface FreeformActions {
   selectVersion: (gen: Generation) => void
+  canUseInEdit?: (gen: Generation) => boolean
+  useInEdit?: (gen: Generation) => void
   addReference: (source: string, target: string) => void
   removeReference: (edgeId: string) => void
   uploadReference: (target: string, file: File) => void

@@ -113,6 +113,31 @@ Angle = Literal["eye_level", "high", "low", "top_down"]
 Movement = Literal["static", "pan", "tilt", "push_in", "handheld", "tracking"]
 
 
+class Footage(BaseModel):
+    key: str
+    kind: Literal["image", "video"]
+    name: str
+    src: Optional[str] = None
+    deviceOnly: Optional[bool] = None
+
+
+class BoardPos(BaseModel):
+    x: float = Field(allow_inf_nan=False)
+    y: float = Field(allow_inf_nan=False)
+
+
+class ScriptLine(BaseModel):
+    say: str
+    onScreen: str
+
+
+class PlanScript(BaseModel):
+    lines: list[ScriptLine]
+    basedOn: str
+    edited: Optional[bool] = None
+    writtenAt: int
+
+
 class Shot(BaseModel):
     # Stable id the node canvas keys its rows on. Optional on the wire; SavedIdea fills it in (fill_shot_ids).
     id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,40}$")
@@ -135,6 +160,8 @@ class Shot(BaseModel):
     edited: Optional[bool] = None
     frameImage: Optional[str] = Field(default=None, max_length=500, pattern=r"^(/|https?://)")
     palette: Optional[list[Hex]] = Field(default=None, max_length=8)
+    # Planning-board metadata only; device-only files are not server-side takes.
+    footage: Optional[Footage] = None
 
 
 def fill_shot_ids(shots: list[Shot]) -> list[Shot]:
@@ -180,6 +207,8 @@ class SavedIdea(BaseModel):
     dueDate: str
     notes: str
     shots: Optional[list[Shot]] = None
+    boardLayout: Optional[list[BoardPos]] = None
+    script: Optional[PlanScript] = None
     noteToApprover: Optional[str] = None
     sentAt: Optional[int] = None
     rejectReason: Optional[str] = None

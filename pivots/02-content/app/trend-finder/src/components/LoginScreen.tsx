@@ -11,6 +11,7 @@ interface Props {
   real?: boolean
   // Skip the landing page, e.g. after the session ended in the middle of work.
   startAtLogin?: boolean
+  onGuidedDemo?: () => void
   onSignIn: () => void
   // 'login' after a sign-out: straight to the log-in form, not the landing page.
   startOn?: 'landing' | 'login'
@@ -18,7 +19,7 @@ interface Props {
 
 // Staff covers the whole agency (team members and the manager who approves); clients get their own account.
 // Clients never see the agency's client list: their login is a separate second step (not built yet).
-export function LoginScreen({ real = false, startAtLogin = false, onSignIn, startOn = 'landing' }: Props) {
+export function LoginScreen({ real = false, startAtLogin = false, onSignIn, onGuidedDemo, startOn = 'landing' }: Props) {
   const { role: savedRole, setRole } = useApp()
   const [mode, setMode] = useState<'landing' | 'login' | 'register' | 'client'>(startAtLogin ? 'login' : startOn)
   const [email, setEmail] = useState('')
@@ -52,7 +53,7 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
     setRole('member')
     onSignIn()
   }
-  if (mode === 'landing') return <LandingAltitude onLogIn={() => setMode('login')} onDemo={real ? () => setMode('login') : tryDemo} />
+  if (mode === 'landing') return <LandingAltitude onLogIn={() => setMode('login')} onDemo={real ? () => setMode('login') : tryDemo} onGuidedDemo={onGuidedDemo} />
 
   const register = mode === 'register'
   const isClient = account === 'client'
