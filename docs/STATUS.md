@@ -1,3 +1,10 @@
+## 2026-11-07：本地計畫與研究保存
+
+- 使用者明確授權：保存最新展示版與本工作樹計畫／研究文件並 commit／push；不合併 main。其他工作樹僅盤點、保留，不清理或整合。
+- 文件保存分支 `docs/local-plans-research-1107`，基準 `63ada3c`；保存原有 103 份未追蹤計畫、retro、研究筆記與圖像，保留內容與歷史決策。此分支是文件備份，不是最新展示程式。
+- 本場親跑 `bash bin/verify.sh`：五項 PASS、verify GREEN（2026-11-07 AEDT）。最新展示程式另在 `chore/demo-review-checkpoint-1107`，不以本樹 GREEN 代替該樹驗收。
+- 下一步：核對最新展示分支獨立 review、遠端同步與四至六日展示關卡；語音依使用者決定不列阻擋。其他 dirty 工作樹和舊服務完整保留。
+
 # STATUS
 
 ## Git preservation follow-up (2026-11-06 AEDT)
