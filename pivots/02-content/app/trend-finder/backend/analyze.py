@@ -28,7 +28,7 @@ CUT_THRESHOLD = 0.15  # ffmpeg scene score; 0.3 missed 4 of 13 cuts on a real ep
 MIN_SHOT = 0.25       # seconds; closer cuts are flashes, not shots
 MAX_FRAMES = 12       # frames sent to the AI step, which is billed per image
 AI_MODEL = "claude-opus-5-5"
-AI_MAX_TOKENS = 16000  # caps one breakdown at about US$0.36 (2026-10-27 prices)
+AI_MAX_TOKENS = 16000  # output token limit, not a guaranteed USD cost cap
 
 # Every "needs" value in src/data/sample.ts: the list a breakdown chooses from unless the request brings its own.
 DEFAULT_NEEDS = [
@@ -180,14 +180,12 @@ def breakdown(prepared: dict, work: Path, vocab: list[str] | None = None) -> Bre
     speech = "\n".join(f"[{s['start']:.1f}-{s['end']:.1f}s] {s['text']}" for s in prepared["speech"])
     content.append({"type": "text", "text": f"Transcript:\n{speech or '(no speech)'}\n\n{PROMPT.format(needs=json.dumps(vocab))}"})
 
-    response = anthropic.Anthropic().beta.messages.parse(
+    response = anthropic.Anthropic(max_retries=0).beta.messages.parse(
         model=AI_MODEL,
         max_tokens=AI_MAX_TOKENS,
         thinking={"type": "adaptive"},
         output_config={"effort": "high"},
         output_format=BreakdownOut,
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
         messages=[{"role": "user", "content": content}],
     )
     u = response.usage
