@@ -1,5 +1,7 @@
 ## 2026-11-06 最新 Demo 整合分支
 
+- 最終程式 source `23272ae8dd0314160dc8290b022b7fb1070d6b7d`／base `2c069a84569cd9ed2a70c4d284626057e5118e36`，獨立 integration_review：Spec ACCEPT／Quality ACCEPT；原 P2 smoke module shadowing 已修，hostile path/cache 回歸通過。Lead 比對 committed tree 無 drift、150檔範圍符合後 Integrator ACCEPT。提交後 full 1122 passed／2 skipped（37.14s）、frontend PASS；TS／build／lint exit0。未重跑 UI／付費 provider；歷史 UI 證據限定仍保留。
+
 - 起點 `origin/main @ 2c069a8` full GREEN：1109 passed／2 skipped、frontend PASS；已驗收六鏡來源再驗 GREEN：1114 passed／2 skipped。整合後 full GREEN：1122 passed／2 skipped、frontend PASS。
 - focused offline tools：server 17、binding 13、finish 37 tests PASS；均 fake transport／無真 provider。初次工具測試 TMPDIR 被自身 env.clear 移除而失敗，wrapper 明確將 tempfile.tempdir 指向自有 sandbox 暫存後通過；原失敗不抹除。
 - 未變更來源工作樹；以明確檔案範圍匯入，不使用 git add -A。六鏡已有完整 1440 雙路 UI／四次原生匯出／重啟證據，本次整合不追溯將它當新 SHA UI 驗收。21 鏡 runtime 成片與資料保持原處，不納入 Git。

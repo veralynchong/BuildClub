@@ -6,7 +6,7 @@
 - 另外整合 `7a920fd` 的 median schema migration 競態修正與兩個測試；保留 main 更強的離線驗證 gate，沒有用該舊分支 shell gate 覆蓋。`bin/verify.sh` 無參數明確預設 full，修正 macOS Bash 3.2 空 positional array／nounset 問題，完整檢查沒有減少。
 - 補上已完成、前端已使用的 PlanScript／BoardPos／Footage 後端模型與三個儲存測試，避免 script、boardLayout、拍攝素材 metadata 被丟棄。沒有採用已否決的 ShotWorkspace 草稿，沒有放入 pilot 付費生成腳本、runtime state、依賴、dist 或大型 QA 錄影。
 - 最新親跑 `bash bin/verify.sh` GREEN：1122 passed、2 skipped（35.09s），frontend PASS；batch server 17／binding 13／finish guard 37 tests PASS（fake transport，離線，零實費）。驗收工具測試首次因自身清空 TMPDIR 而被既有 sandbox 擋住，改在 wrapper 指定自有暫存目錄後通過，未放寬網路／憑證限制。
-- TypeScript app／node、隔離 build、lint exit0；新 build 的101檔與已驗收服務對應輸出逐 byte 相同，原服務額外21個舊 chunk 未帶入。建置包裝器初次清理子程序權限錯誤及 /tmp 對 /private/tmp 路徑差異均保留，不改產品；以實體路徑建置後通過。獨立 review 找到 smoke 會載入外部舊 server，已改為精確載入同目錄模組並補遮蔽回歸。進行中：提交後獨立 review 及 push 核對。來源與過往失敗紀錄仍留在下方；本段最新授權優先於下方舊「不可 commit／push」狀態。外觀仍待使用者／Veralyn 審閱，真人批准未代行。
+- TypeScript app／node、隔離 build、lint exit0；新 build 的101檔與已驗收服務對應輸出逐 byte 相同，原服務額外21個舊 chunk 未帶入。建置包裝器初次清理子程序權限錯誤及 /tmp 對 /private/tmp 路徑差異均保留，不改產品；以實體路徑建置後通過。獨立 review 找到 smoke 會載入外部舊 server，已改為精確載入同目錄模組並補遮蔽回歸。程式整合與驗收已完成；code commit `23272ae8dd0314160dc8290b022b7fb1070d6b7d` 經獨立 integration_review 的 Spec／Quality ACCEPT，lead 核對無 drift 後接受。提交後 full 再驗 GREEN：1122 passed／2 skipped（37.14s）、frontend PASS。交付僅 push 本 feature 分支；遠端同步以 `git status -sb` 與 `git ls-remote origin refs/heads/feat/demo-integrated-latest` 核對，main 保持原 SHA。來源與過往失敗紀錄仍留在下方；本段最新授權優先於下方舊「不可 commit／push」狀態。外觀仍待使用者／Veralyn 審閱，真人批准未代行。
 
 ## 2026-11-06：六鏡雙路線／隔離本機真匯出已驗收（本機未提交）
 
