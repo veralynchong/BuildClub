@@ -65,3 +65,22 @@ Branch under test: `chore/demo-integrate-main-1104` (PR #49).
 - **限制**：本次是repo導覽片，原生cover裁切橫片內容，不能當可展示的正式案例成品；字幕為自寫技術標籤，沒有真人逐句聽驗或Clean up。沒有改渲染版型，沒有碰Canvas。證據`2026-11-05-zero-spend/native-takes-*`，保留舊工程片及原UI failed歷史。
 - **驗證RED**：全套verify於嚴格零預算環境後端92 failed／910 passed／2 skipped，其餘三步PASS。聚焦一項fake provider測試預期502但零預算提前429；其他91項未逐一分類。32項零支出回歸與本次原生鏈各自PASS，不提高預算換綠燈，不宣稱整體GREEN。
 - **未測／blocked**：真前端＋後端UI、正式同案例素材／拆解／畫音字幕、真人Clean up及Canvas固定版本。素材路徑已異步詢問；舊副本操作仍未批准，不繞過；搜尋／分析／生成／配音付費均禁止。自己的tab已關，8891／8892無listener，browser/static/render三個test-slot均held=false。
+
+## 2026-11-07：提交版 prepared 展示 review（最新適用性）
+
+Source `b37ddc1258c41f67a954e60b55b156f0bc85fe5c`，base `2be89f0f03695b0adbec4cfd463da9e07a992a0c`；獨立 Orca task `task_730702972645`／dispatch `ctx_4eca8615fb5d` ACCEPT 全部 79 檔增量，無新增 P0–P3 finding。Root 核對 HEAD／無 drift 後接受。這是原始碼與既有證據 review，沒有新增瀏覽器測量，不重寫上表歷史 open。
+
+| 舊編號 | 本次判定 | 下一步 |
+| --- | --- | --- |
+| 1 | savedInLive 原始碼已修；prepared 非主參考停用 Pick | native 真後端 reload／重啟仍需專項 UI 驗證 |
+| 2 | Research 已是後續 grid／container 版本，舊 1473px 不代表目前重現 | 1440 動態量測展開列，仍未宣告 fixed |
+| 3 | **P1 仍在 native 模式**：Signals 無 cutWaiting，Plans 分欄不顯示成片等待，缺影片 review 入口 | 展示後優先修；prepared ExportBar 隱藏 Send，非本次展示阻擋 |
+| 4 | saved／approved 入口已有分流；approved 仍有 CutPanel 與 Canvas，readonly 工具可開但控制停用 | 產品決策與 edge／drawer 動態確認 |
+| 5 | TikTok casing 原始碼已修；無 caption fallback 品質仍需內容驗收 | native 輸出／標題驗收，prepared 固定腳本不能代替 |
+| 6 | 完整 interp.text 已接入，舊 chip 不在 active JSX | 分組標籤擠字需 1440 動態檢視 |
+| 7 | 價格 modal 已有逐節點模型／設定／價格／餘額，board 未從 DOM 移除 | native backdrop 視覺需動態驗證；prepared 零費回放不走此 modal |
+| 8 | notice 現在位於編輯時 hidden 的 board，遮擋成因已有改善 | Shot 1 換行與每個 label 版面仍需動態檢視 |
+| 9 | **P2 仍在**：PlanScreen 主標題為 h2、頁面無 h1 | 後續小修，不阻擋此次核心 prepared 流程 |
+| 10 | 原 AgentPanel 核准並執行已非 active 路徑；目前 Apply to canvas 後逐節點 Run | native 重跑行為需動態確認，不能沿用舊路徑斷言 |
+
+限制：此 verdict 只接受本次 prepared 增量，非全產品／真 provider／真人拍攝／外觀批准。未測多節點拖曳與 cancel／resize 並發、pending-navigation Exit race、所有 drawer 影片。既有 ViewTransition 背景 timeout 未宣稱已修。語音依使用者決定不列阻擋。實際 MacBook smoke、離線播放、兩次真人彩排仍待人員確認。

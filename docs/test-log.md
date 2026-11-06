@@ -1,3 +1,13 @@
+## 2026-11-07：提交後驗證與獨立 review acceptance
+
+- Source `b37ddc1258c41f67a954e60b55b156f0bc85fe5c`／base `2be89f0f03695b0adbec4cfd463da9e07a992a0c`；postcommit shared-lease `bash bin/verify.sh full` exit0，backend1122passed2skipped34.02s、frontendPASS、verifyGREEN。沒有產品變更後再冒用舊結果。
+- Orca task task_730702972645／dispatch ctx_4eca8615fb5d succeeded：79檔唯讀review ACCEPT、未確認新增P0–P3；Git status／SHA／diffcheck／manifest檢查exit0，product snapshot drift=[]。Reviewer未執行tests/build/browser，resolved model/effort unknown；Root確認exactHEAD與乾淨狀態後Integrator ACCEPT，限此source。
+- Root補查21個manifest引用媒體全部tracked/hash正確；fresh build130檔對原UI驗收dist-release drift=[]。本機HTTP8996/8998 generationEnabled=false、PID78200/78479與indexSHA均吻合。不是新MacBook或browser驗收。
+- 舊issues#1–10逐項記入issues.md；native送審等待P1與Plan缺h1 P2仍在，其餘部分原始碼改善／部分待動態；不把歷史open全勾完。語音不列阻擋。
+- Orca 後續補充訊息曾回報未觀察到新 turn 的啟動（start_unknown）；原 task_730702972645／ctx_4eca8615fb5d 已 succeeded 的報告保持有效，不重送 worker_done、不覆寫原 verdict。唯讀 transcript 顯示同 worker 已收到新 Task task_4a3bf7735fe5；補充派工 ctx_d575feabce39 的結案另待 runtime 回報，未將未知狀態當作失敗或死亡。
+- 收尾再跑 shared-lease `bash bin/verify.sh full` exit0：1122passed2skipped36.41s、frontendPASS、verifyGREEN；沒有新增產品修改。`git diff --check` exit0。
+- 本次後續僅更新 STATUS／test-log／issues 三份現有文件，不改產品，不付費、不安裝、不操作既有服務、不清工作樹。main維持2c069a8；文檔備份4ed9e35與展示b37ddc1均已確認remoteSHA。下一個docs-only commit僅保存此review報告，code verdict不擴張到其他變更。
+
 ## 2026-11-07：保存新分支前的本場驗證
 
 - Scope: chore/demo-review-checkpoint-1107，base 2be89f0；使用者明確授權 commit／push，main 不整合。其他 dirty worktrees 保留清單在 STATUS。

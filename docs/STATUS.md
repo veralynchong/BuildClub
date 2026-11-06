@@ -1,3 +1,13 @@
+## 2026-11-07：提交版獨立 review 已接受；保留 main
+
+- Source `b37ddc1258c41f67a954e60b55b156f0bc85fe5c`；base `2be89f0f03695b0adbec4cfd463da9e07a992a0c`；範圍全部 79 檔展示增量。獨立 reviewer Orca task `task_730702972645`／dispatch `ctx_4eca8615fb5d`：ACCEPT，未確認新增 P0–P3；整合者親核 HEAD／clean status／主要舊問題原始碼後 ACCEPT 此精確 source。這不是全產品、即時模型或真人外觀批准。requested Sol/high，resolved model／effort unknown。
+- Review 親跑唯讀 Git／path／SHA 檢查 exit0；27 個新增二進位素材有引用，manifest／TS metadata 一致，AI 六段合計 315frames，產品與上一場 UI snapshot drift=[]。Root 提交後 full：1122 passed／2 skipped（34.02s）、frontend PASS／GREEN；lint／app+node TypeScript／隔離 build PASS，130 個 build 檔與原 UI-validated dist-release 全數 byte 一致。Reviewer 沒有重跑測試或瀏覽器。
+- Root 另核 manifest 引用 21 媒體：均 tracked、SHA 一致；8996／8998 status 為 prepared-local-export、generationEnabled=false，PID 78200／78479 未變，兩套 index SHA `f17b3561191f90269d9fe4cb490246424567dd83ae006b8991fa83329714ae3d`。這是本機 HTTP 檢查，不是 MacBook 互動驗收。
+- 舊清單確定保留：#3 native 成片送審不顯示 cut waiting（P1，本次 prepared 不提供送審，非展示阻擋）；#9 Plan 缺 h1（P2）。#1／#5／#8／#10 原始碼已有針對性改善；#2／#4／#6／#7／#8 的版面與部分 native 行為仍需動態確認，不自動宣告 fixed。逐項矩陣見既有 demo-qa/issues.md 最新段。
+- 四至六日判定：核心 prepared 雙路流程／真剪輯匯出已有工程與錄影證據；仍缺 Tommy／Veralyn 內容外觀批准、實際 MacBook smoke／離線備援及兩次真人彩排證據。兩條不同路線錄影不等同兩次正式彩排。語音不列阻擋；原計畫沒有週日關卡。未驗即時 provider、真人拍攝、並行拖曳／取消／resize 與 pending-navigation Exit race 保留。
+- 收尾親跑 `bash bin/verify.sh full`：1122 passed／2 skipped（36.41s）、frontend PASS、verify GREEN；僅文件變更，產品 source 仍為上述 b37ddc1。
+- 建議順序：先人員內容驗收與一次真機彩排；只修實際阻擋展示的問題；展示後優先補 native 送審狀態，再做真素材／生成品質／保存需求，不擴張發布／analytics／語音。此次僅補 review 文件，不改產品程式，review verdict 僅綁上述 source；後續文件 commit 不延伸為新程式審查。
+
 ## 2026-11-07：新展示分支保存與全面 review 檢查點
 
 - 本次使用者授權保存最新展示版＋目前計畫研究文件，其他工作樹只列清單保留；不合併 main、不新增付費。最新分支 `chore/demo-review-checkpoint-1107` 延續 `feat/demo-integrated-latest @ 2be89f0`，其 origin/main 基準仍為 `2c069a8`；不是從舊 canvas-p1 程式覆蓋最新展示版。
