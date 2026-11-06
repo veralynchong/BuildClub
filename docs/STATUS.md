@@ -1,3 +1,123 @@
+## 2026-11-07：新展示分支保存與全面 review 檢查點
+
+- 本次使用者授權保存最新展示版＋目前計畫研究文件，其他工作樹只列清單保留；不合併 main、不新增付費。最新分支 `chore/demo-review-checkpoint-1107` 延續 `feat/demo-integrated-latest @ 2be89f0`，其 origin/main 基準仍為 `2c069a8`；不是從舊 canvas-p1 程式覆蓋最新展示版。
+- 研究文件備份分支 `docs/local-plans-research-1107 @ 4ed9e35` 已推送 origin：103 份既有文件／圖像及 STATUS，沒有整合舊程式；原研究一行尾端空白保持原樣。此備份分支不是應部署的 app。
+- 本場親跑目標 full：backend 1122 passed／2 skipped（34.03s），frontend PASS，verify GREEN；lint exit0、TypeScript node exit0。TypeScript app／隔離 build 與提交後驗證另記 test-log。未變動現有服務、資料、轉接或依賴。
+- Playwright snapshot 工具可呼叫，但回覆 browser already in use；未關閉／搶用他人 Chrome，本輪未新增 UI PASS。既有 11/7 雙路完整錄影為上一場證據；本場親用 ffprobe／SHA256 核對兩份錄影，1440×900 H264、175.033333／191.7 秒，hash 與交付紀錄相符。兩份錄影只有 video stream，無 audio；語音依使用者最新決定不列阻擋。
+- 初步結論：prepared 素材＋真編輯／匯出的展示主線已有工程與操作證據；不能等同即時 provider／新真人拍攝全流程或人員內容批准。仍需 Tommy／Veralyn 內容外觀驗收、MacBook 實際展示 smoke／離線播放、逐項釐清舊 issues 的適用範圍。兩條不同路線錄影不能充當兩次正式彩排。原三天計畫涵蓋週四至週六，未發現週日目標。
+- 不新增產品實作；下一步先完成提交版獨立 code review，再與使用者討論剩餘展示關卡。真發布／analytics／額外模型／語音不擴張本次範圍。
+- 以下 dirty 工作樹全數保留，未 commit／push、未整合、未清理；它們不是本分支漏收的已驗交付：
+  - `/Users/tommy/Desktop/BuildClub` (feat/live-backend)
+  - `/Users/tommy/orca/workspaces/BuildClub/blenny` (main)
+  - `/Users/tommy/orca/workspaces/BuildClub/canvas-audit-bugs` (minchiaHuang/canvas-audit-bugs)
+  - `/Users/tommy/orca/workspaces/BuildClub/canvas-image-backend` (minchiaHuang/canvas-image-backend)
+  - `/Users/tommy/orca/workspaces/BuildClub/canvas-image-frontend` (feat/canvas-image-controls)
+  - `/Users/tommy/orca/workspaces/BuildClub/demo-14aa477` (detached HEAD)
+  - `/Users/tommy/orca/workspaces/BuildClub/demo-45a1cfb` (detached HEAD)
+  - `/Users/tommy/orca/workspaces/BuildClub/demo-5c320ed` (detached HEAD)
+  - `/Users/tommy/orca/workspaces/BuildClub/demo-76b757f` (detached HEAD)
+  - `/Users/tommy/orca/workspaces/BuildClub/demo-flow-qa` (fix/demo-flow-qa-mainline)
+  - `/Users/tommy/orca/workspaces/BuildClub/demo-mainline-fixes` (fix/demo-picked-plans-tiktok-casing)
+  - `/Users/tommy/orca/workspaces/BuildClub/demo-readiness` (chore/final-ai-delivery)
+  - `/Users/tommy/orca/workspaces/BuildClub/demo-readiness-ui` (test/demo-readiness-ui)
+  - `/Users/tommy/orca/workspaces/BuildClub/demo-team-handoff` (feat/demo-team-handoff)
+  - `/Users/tommy/orca/workspaces/BuildClub/freeform-canvas` (feat/canvas-generation-controls)
+  - `/Users/tommy/orca/workspaces/BuildClub/fresh-ai-pilot` (test/fresh-ai-pilot)
+  - `/Users/tommy/orca/workspaces/BuildClub/fresh-batch-smoke` (test/fresh-batch-smoke)
+  - `/Users/tommy/orca/workspaces/BuildClub/guided-demo-case` (feat/guided-demo-case)
+  - `/Users/tommy/orca/workspaces/BuildClub/guided-demo-shell` (feat/guided-demo-shell)
+  - `/Users/tommy/orca/workspaces/BuildClub/guided-tofu-demo` (feat/guided-tofu-demo)
+  - `/Users/tommy/orca/workspaces/BuildClub/remake-donn-prep` (fix/neutral-copy-letterbox)
+  - `/Users/tommy/orca/workspaces/BuildClub/six-shot-ai-flow` (feat/six-shot-real-export)
+  - `/Users/tommy/orca/workspaces/BuildClub/six-shot-demo-canvas` (feat/six-shot-demo-canvas)
+  - `/Users/tommy/orca/workspaces/BuildClub/video-canvas-entry` (feat/shot-focus-workspace)
+  - `/Users/tommy/orca/workspaces/BuildClub/video-premium-ui` (detached HEAD)
+
+## 2026-11-07：兩條完整Demo錄影已交付MacBook
+
+- 使用者要求完整錄製Plan a shoot與Create an AI ad兩條流程並傳自己的MacBook；沒有要求傳外部隊友訊息，未代送任何訊息。使用最新已審查dist-release，分別自有8994/8995與8990/8991隔離server/state/browser錄製；首頁→搜尋→Research→Script→route→14Canvas子步（每鏡Run/preview、版本與Use in Edit）→Editor入軌動畫／播放／文字操作→真匯出／播放／下載。沿用prepared素材，零新付費生成。
+- 成品MP4 H264／1440×900／30fps，已親跑ffprobe與ffmpeg -xerror整支解碼、抽首／中／尾畫面檢視。Plan-a-shoot.mp4：175.033333秒（2:55）、10460992bytes、SHA25661b1e34ffe9062019b30208d399bfa6df371f9880fecfdb00c7ecc8c1cd91384；Create-an-AI-ad.mp4：191.7秒（3:12）、14186126bytes、SHA2564c3ec10bbad1fcf9af704448c940640f40ffa579116078cc74f757c744eb9e73。兩次實際匯出各315frames／1080×1920，錄影browser errors=[]，own backend/browser已關、survivors=[]、兩lease已釋放。
+- Mini原檔：`/Users/tommy/Downloads/BuildClub-Demo-Recordings-20261107`；MacBook副本：`/Users/tommyhuang/Downloads/from-mini/BuildClub-Demo-Recordings-20261107`。已透過SSH/SCP複製，遠端shasum逐檔與Mini SHA256完全一致；沒有覆寫既有資料夾／檔案，未在Mini開可視app。
+- 首次shoot錄影在文字欄位被導覽卡覆蓋而失敗，原始失敗保留attempt-ea23a243；改操作時收合導覽後重錄乾淨版本。交付來源shoot attempt-eebd0155與ai attempt-257c5160均PASS、包含真匯出315frames；failed錄影未交付。證據與delivery.json在`/tmp/buildclub-share-recording-20261107/`及AI對應目錄。
+- 8996PID78200／8998PID78479及兩MacBook轉接保留；新網站修正已審查部署。本錄影任務未改產品程式，僅更新既有STATUS／test-log與Downloads影音檔；無commit／push／merge／依賴安裝／新付費。
+
+## 2026-11-07：搜尋單一Loading／12個Research專案／剪輯器內素材入軌（已審查並更新Demo）
+
+- 使用者`.orca/drops/1/1.md`六張截圖：搜尋中只留loading、查隊友多專案、移除獨立Preparing畫面、參考Vyra直接在Editor內自動排片。先討論後使用者cool lets go確認：Evergreen12個專案保留豆腐；首次約3秒逐段入軌／同步預覽，回訪淡入保留編輯。
+- 唯讀盤點：native sample已在整合來源，Evergreen12slots/14refs、MYST8slots/4refs；不是12個客戶。prepared維持guided-evergreen隔離，原豆腐slot1/topic/notes與快取保留，追加Evergreen2–12slots與14樣本refs，不混MYST。一個migration marker只補一次，後續編輯／刪除不復活；影片lookup沿用既有sample資料。prepared非主參考僅查看／整理，選片控制停用並有說明，避免原API只支援豆腐兩plan的dead end。
+- 搜尋loading/resolving期間隱藏SearchScreen及ResultsScreen，guide跟同一忙碌狀態，sidebar／導覽保留。Editor移除獨立Preparing，實際Player／時間軸直接掛載；六個已有PNG縮圖按真實片長依序入軌，Player seek到各段起點，既有首幀overlay接續預覽避免快切黑屏。3秒只動UI、不update/fill/PUT；期間操作鎖定。scoped local marker記完成，每專案回訪／reload不重演，已有分割等修改保留；中途退出清timer、不寫完成marker；reduced-motion立即展開／不淡入。
+- 開場full1122passed/2skipped33.94s GREEN；focused Research33PASS、TSapp／lint／隔離build PASS；最後source完整verify1122passed／2skipped44.57s、frontendPASS／GREEN。UI最後attempt-d6b3c2bb完整PASS：唯一loading、12slots/44呈現rows（含既有plan衍生列）、14native樣本refs、clip counts1→6／起點0,1.6,3.2,5.1,6.6,9.8／真片寬與PNG對應，intro PUT0且完整project/version不變；split為7clips後返回及刷新不重演／保存完全相同；真315frames1080×1920匯出播放／seek／下載／reload同SHA577db017…；reduced-motion與退出中途PASS、pageerrors=[]／ownedcleanup survivors=[]。
+- 原始失敗保留：初版UI18ce2000功能PASS但截圖見快切黑屏，補真PNG首幀overlay；0b2e8f02抓到reduced-motion CSS specificity不足，已修；e56b8cbd退出測試漏箭頭、cd22ac8a用Cards class查Sheet button的兩個locator FAIL，依實際DOM修正，focused318dab44與最後全流程PASS。不抹除原FAIL；unit原29筆預期依批准引入樣本改43並保留notes／removal斷言，TS一次slot literal array型別過窄已補ResearchSlot[]。無新付費／依賴／commit／push／merge；8996PID78200、8998PID78479與轉接保持。
+- 證據`/tmp/buildclub-editor-arrival-20261107/`（來源前快照prior-*、最終dist-release／verify-release.log／ui-release.log與錄影）。獨立review與靜態部署已完成，見下列記錄。
+
+- 獨立唯讀 task_a577615ff366／ctx_b1702c00f8cc provisional ACCEPT、無新增P0–P3；source/base2be89f0、78檔snapshot SHA2565adbaf8de9b1a9d280038e16b83311969f06bee115a9f15a57565cca7e7e246e。Lead再次核對全部hash與HEAD drift=[]後明確ACCEPT此未提交快照；review親跑focused33PASS/diffcheck0，未另跑full/UI，舊fresh/shoot由後續雙路錄影實際覆蓋。requested Sol/high、receipt Sol/high，底層resolvedprovider metadata unknown。不是提交／合併授權。
+- 兩套dist已各130實檔hash核對、舊chunk保留／index原子替換；indexSHAf17b3561191f90269d9fe4cb490246424567dd83ae006b8991fa83329714ae3d。8996PID78200與8998PID78479及轉接保持。使用者另要求錄製Plan a shoot與Create an AI ad完整操作並傳MacBook；目前使用同一已驗dist-release、自有8994/8995隔離state/browser錄製，真剪輯／匯出、零新付費生成；不接觸使用者原session。證據`/tmp/buildclub-share-recording-20261107/`，完成後檔案／轉送結果另補。
+
+## 2026-11-07：預設 Light，移除 System 主題選項（本機已更新）
+
+- 使用者要求預設Light／移除系統選項。ThemeChoice只保留light/dark，missing／invalid／舊system／storage blocked均Light，明確Dark保留。index首屏預設data-theme=light；main在prepared隔離完成後再套目前scoped設定，手動Dark刷新不遺失。Canvas只觀察明確主題，不再跟OS切換；設定頁兩欄Light／Dark並同步中英文說明。
+- 開場full1122passed／2skipped33.55s GREEN；theme測試先RED再6PASS、TS／lint／隔離build PASS；修改後full1122passed／2skipped34.55s、frontendPASS／GREEN。UI1440在深色OS模擬下驗Light預設、兩選項、Dark與Light刷新保存、OS切換不覆寫、舊system轉Light、Canvas Light，全PASS／pageerrors=[]／owned cleanup survivors=[]。
+- 兩套dist各130實檔hash核對、index原子更新、舊chunk保留；backend8996PID78200／8998PID78479與轉接保持不變。上線後MCP深色OS親驗html=light、options=[Light,Dark]、新說明文字與截圖；自有browser關閉、lease釋放。無commit／push／merge／付費／安裝；證據`/tmp/buildclub-light-default-20261106/`。
+
+- 部署後收尾親跑 `bash bin/verify.sh` exit0：1122 passed, 2 skipped in 34.43s；PASS  frontend unit tests；verify: GREEN；`git diff --check` exit0。
+
+## 2026-11-06：新八張截圖的 Demo 呈現修正（已驗收並更新）
+
+- 使用者`Pasted Graphic 11 copy 2.png`：搜尋快取也要loading、補成效與預算數字、先移除報錯發布區、進Editor有準備剪輯動畫；首頁兩CTA應為自由操作＋逐步導覽，上一批保留影片tour的理解已由本次更正。使用者明確批准補數字且不另加示範標籤，限定prepared畫面；原provider費用ledger／actualUsd不變。
+- 搜尋prepared最短1800ms搭既有resolve動畫，實測整體約4.3s；正常live搜尋不加延遲。Editor有1600ms整理六段素材動畫，pending ready不讓guide先跳過，prefers-reduced-motion停動畫。真剪輯／匯出仍實作，不以動畫替代工作。
+- 單一presentation helper補主參考views248600／followers18400／median32600／shares2840／saves6120／7天，倍率／日均照原公式；Research只覆蓋舊0/0預設，不改使用者編輯數字。History顯示剩餘image21.800／video37.600／voice8.800，每筆image0.04／video0.20／voice0.08；只呈現，真回放receipt仍0。不改原檔、快取或實付紀錄。
+- prepared Plan隱藏PublishPanel；其他原生工作區保留。首頁exact兩個可操作按鈕：Try the demo進自由操作並停guide、Start the guided demo建立新UUID導覽並保留cut=full21／舊session資料；不是影片tour。
+- 開場完整1122passed／2skipped36.68s GREEN。TS app/node、lint、隔離build PASS，最後空白修正重新build與已驗build130檔byte一致。Focused presentation2＋searchStatus PASS。UI attempt-ca834ec1全PASS：搜尋loading、跨畫面數字、兩入口、Publish隱藏、History預算且receipt0、剪輯動畫、真315frames匯出play／seek／download／refresh，同SHA577db017…；pageerrors=[]／owned cleanup survivors=[]。
+- 保留原FAIL：首UI attempt-6d192516於動畫已結束才等待而timeout，第二次提前掛觀察等待並PASS；首次full RED因抽出runLiveSearch的舊unit scope未提供新增guidedRuntime，補正常live null後focused通過，完整重跑已GREEN1122passed／2skipped37.05s、frontendPASS。一次tsc路徑誤用root exit127、首次TS漏import getGuidedRuntime已修；沒有安裝或削弱檢查。證據`/tmp/buildclub-demo-experience-20261106/`。
+
+- 首次獨立審查 task_5caa15e58d22／ctx_77321124a196 provisional REJECT：P2，Editor回Canvas再重入可能沿用上一輪ready。Lead新增changeEditing，在切換畫面同批setState先作廢ready／exportOpen，再切editing；所有現有入口／返回／跳節點路徑共用，edit→result不重置。新增實際transition抽取測試，保留focus fitView回歸。
+- 修正後UI attempt-165d91e0全PASS：一般與reduced-motion各重入一次，準備動畫中Next禁用且狀態仍canvas，完成才edit；減少動畫模式animationName=none，兩次都真的播放且時間軸playhead前進。原本搜尋／數字／兩入口／發布／預算及真315frames匯出重新跑PASS，errors=[]／survivors=[]。原審查stop hook在lead更新後曾捕捉guidedCanvasFocus缺新函式scope的RED，已補入真changeEditing實作與setGuideEditor，不空stub；focused13PASS。原REJECT保留；後續full與新快照複查結果見下。
+
+- 重入修正後親跑完整 `bash bin/verify.sh` exit0：1122passed／2skipped（49.32s）、frontend PASS、verify GREEN。
+
+- 原reviewer新派工task_5167ca30cbe5／ctx_86220b102feb provisional ACCEPT，無新增P0–P3；source/base2be89f0、新69檔快照SHA256 `2d37d9b9439171d29da5542e0dc8a6f18e74eb295f260187ac345fed41140f70` 前後drift=[]。Lead再次核對全部hash與HEAD後ACCEPT此未提交版本；舊68檔REJECT不更改。模型requested Sol/high，terminal顯示GPT-6.1-Sol high Fast；底層provider metadata unknown。
+- 新版靜態前端已更新兩套dist，各130個實體檔SHA核對、舊chunks保留／index最後原子替換。8996PID78200與8998PID78479保持不變。上線後MCP1440：搜尋loading3.846秒／舊版含refresh檢查3.942秒，18.4k→249k呈現正常，兩個homepage按鈕實際分別自由操作／新UUID導覽且full21保留；Exit刷新不重開，pageerrors=[]。自有browser已關／lease釋放，MacBook18996開新頁成功。無commit／push／merge／付費／依賴安裝；詳細檔案清單在test-log最新批次。
+
+- 部署後收尾親跑 `bash bin/verify.sh` exit0：1122passed／2skipped（33.90s）、frontend PASS、verify GREEN；`git diff --check` exit0，受審產品檔案hash無變動。
+
+## 2026-11-06：新截圖四項修正已驗收並更新兩套 Demo（未提交）
+
+- 範圍：`Pasted Graphic 7.png` 四項：Instagram播放、Exit guide、首頁兩個CTA、compact Re logo。保留先前五項與完整21鏡切六段；不commit／push／merge、不新增付費、不關8996／8998與MacBook轉接。
+- Instagram：使用公開官方embed回應取得同貼文／同作者影片，8支已快取原檔並記錄來源／SHA／尺寸；滑過原生靜音播放、移開pause並remove src/load釋放媒體資源，抽屜同片可播放。另3支官方回應copyright_blocked=true且無video_url，顯示無法預覽及原片入口，無繞過限制或替代影片。
+- Exit只保存active=false並關導覽，保留prepared runtime及工作；刷新／搜尋／開抽屜不再自動喚回。生成／匯出busy仍可退出。首頁移除Watch a guided demo；compact logo22→18px，expanded不變。
+- 開場full GREEN1122／2skip（35.98s）；最後source full GREEN1122／2skip（37.03s），frontend PASS；TS app/node、lint、隔離build PASS，focused11 PASS。真UI 8支連續hover、抽屜、退出刷新、生成完成、Canvas保存、首頁2CTA及logo18px通過；退出途中真匯出亦PASS：1080×1920、315frames，播放／seek／刷新同檔SHA確認；已經獨立審查並部署，見下列證據。
+- 失敗證據完整保留於`/tmp/buildclub-four-ui-fixes-20261106/`：初版第7支載入卡住，換序後同支先播正常，改釋放資源後8支通過；確切瀏覽器資源限制未證實。獨立唯讀ASGI Range八支均206／正確bytes，不能稱已測TCP。測試中模擬帳密URL被hook阻擋整批寫入，使用者明確批准移除該案例後才繼續；沒有建立該URL或繞過hook。
+
+- 獨立Orca task_915abdca957b／ctx_c824986cfc68 provisional ACCEPT，無新增P0–P3；source/base2be89f0、snapshot60檔SHA256 `7209e1bb0ba74cf49123eedbe387fcd05d25bf7594ef792071250ac0725faf0a` 前後無drift。Lead核對同HEAD及全部hash後ACCEPT此未提交快照；僅後續STATUS／test-log增補審查／部署記錄。requested Sol/high、receipt model Sol/effort high；底層resolved provider metadata unknown。不是提交版審查／merge授權。
+- 兩套前端靜態檔已更新，各137檔SHA核對，舊chunk保留／index最後原子替換；8996PID78200與8998PID78479保持不變，轉接未關。實際上線後1440 MCP播放IG時間0.204992／0.213542且muted=true，移開src釋放、Exit刷新不重開，pageerrors=[]；首頁兩CTA截圖親看。自有browser已關／lease釋放，MacBook18996開新Demo成功。證據deployment.json／published-smoke.json；未commit／push／merge／付費／安裝。
+
+- 部署後收尾親跑 `bash bin/verify.sh`：1122passed／2skipped（33.76s）、frontend PASS、verify GREEN；git diff --check無錯，受審產品檔hash仍無drift。
+
+## 2026-11-06：完整21鏡AI原片分成六段已驗收（本機未提交）
+
+- 使用者已確認：將原完整AI成片依自然鏡頭分成六段接回Shot1–6，內容／順序／字幕／聲音保留；不再用舊六鏡動靜混合選段代表整支原片。此新授權取代下方舊「21鏡與六鏡不同交付、不互換」限制，但舊成品／資料仍保留。
+- 原片 `~/Downloads/buildclub-demo-reference/batch-20261106-fresh-ai/deliverables/final21/ever-green-fresh-ai-ad.mp4` SHA256 `be20427fd3dc0eaadc3379dadd3e98136eeb25b60bb68c9d0f931294972edc14`；實際21鏡、315frames／30fps／10.5秒、1080×1920，AAC為靜音。原source.json是舊六鏡候選metadata，精確原片以delivery-manifest／source-manifest及實檔核對，不以舊source.json判定。
+- 無損六段邊界 `[0,48,97,154,199,293,315]`，分組原s1–2／s3–7／s8–11／s12–14／s15–19／s20–21。六段解碼frame hash逐一與原片315幀完全相同；含原字幕，不新增／重複字幕。新增offline `bin/prepare-full-ai-six.py` 可用原片重建新素材，不呼叫provider，既有目錄拒絕覆寫。
+- 新`cut=full21`／`full-ai-six-v1:` namespace、AI六段全video／不偽造I2V首圖關係；原shoot及舊fresh-six模式保留。原8998後端spec啟動後不可熱換，故新服務／state／cache／dist與新MacBook18996網址獨立，不能關8998／18998。新版mini8996／render8997／MacBook18996已啟動；網址 `http://127.0.0.1:18996/?guided=tofu&cut=full21`。persistent state／dist在 `~/Downloads/buildclub-demo-reference/full-ai-six-from-master-20261106/`；backendPID78200、terminal `term_6d4e7e78-ff79-479c-956d-e1cdd90a7d82`，tunnel `term_2a65a25f-ea7e-4490-b030-30fa97c80492`，留給使用者，不可一般cleanup關掉。
+- 核心6 tests、TS app/node、lint、隔離build PASS；完整 `bash bin/verify.sh` 1122passed／2skipped in33.73s、frontendPASS／GREEN。新增test先RED（3 video≠6）再GREEN；編輯工具的自動verify也捕捉同一預期RED，保留紀錄。
+- 真UI已播放完六段並真匯出完整原版：315frames、10.5秒、無額外text layers、音軌全零；native重新編碼輸出SSIM0.99557，不能稱作byte／pixel無損匯出。切片自身逐幀無損且原master另完整保留。初次harness讀PCM超出Node預設buffer而ENOBUFS，已增測試buffer，原FAIL保留；獨立比對同原匯出PASS。
+- 獨立Orca審查task_1ed988b2778f／ctx_1a1424842714：provisional ACCEPT、無本輪新增P0–P3；HEAD/base2be89f0，snapshot SHA256 `0c2f2e3512d7453c74c4c2cea0e2167c32f9725f8e1a49afe97a515c42f2d126`前後41檔hash無drift，lead再次核對後ACCEPT此未提交快照。requested Sol/high，projection model gpt-6.1-sol，resolved effort／底層provider metadata unknown。不是提交版或merge授權。
+- 新版服務上線後MCP1440親驗6來源、全315frames、texts=[]、Editor播放進度前進；MacBook18996 status full21／generationEnabled=false／PID78200、舊18998 PID78479兩者均核對，舊服務／素材／state未改。原master另保留，可直接在新版 `/demo-assets/full-ai-six/original-master.mp4` 播放，這份檔案與原版byte一致。
+- 證據 `/tmp/buildclub-full-ai-six-20261106/`；UI第二次執行178步PASS（5真匯出、雙路重啟／語言／清理）；主guided流程pageerror0，背景observer有1筆Chrome ViewTransition DOM update timeout保留於test-log，未擴大改全站動畫。收尾親跑full：1122passed／2skipped in38.78s、frontendPASS／verifyGREEN；MacBook18996原master經HTTP串流SHA亦吻合be20427…，open-on-macbook已成功開新Demo。保持`fix/demo-playback-polish`本輪與前輪dirty；無commit／push／merge／付費／安裝。
+
+## 2026-11-06：五項截圖修正已驗證並更新 Demo（本機未提交）
+
+- 分支 `fix/demo-playback-polish`，從乾淨、已同步的 `2be89f0f03695b0adbec4cfd463da9e07a992a0c` 建立；開場 full GREEN。依本次指示不 commit／push／merge，不碰其他工作樹或付費生成。
+- Find ideas：Ever Green 原參考使用對應本機原片靜音 hover，移開暫停；使用者另明確批准快取 TikTok 載入免費官方嵌入，實測影片時間前進／靜音／移開暫停，失敗仍有來源入口。其餘 Instagram 快取只有封面與來源網址，不假造對應影片。
+- Research：核實同案例有29筆快取參考；一次補入 scoped Research、保留既有編輯／後續刪除，預設展開。不是混入一般 Evergreen／MYST sample。頁面可能另含既有計畫衍生列，所以側欄30不等於30筆快取。
+- 導覽卡拖曳改為快取尺寸、rAF與transform；Canvas節點拖曳只保留暫態位置，放開後才保存。1440實測30個移動事件期間draft寫入0、放開1，位置刷新保留。
+- 生成節點加清楚的排隊／執行文字、spinner與不定進度條；僅prepared回放縮短polling，不捏造provider百分比。成片播放器110→240px，加入真成片新分頁連結；實際播放與seek通過。
+- 最後 full（Demo前端更新後親跑）：1122 passed／2 skipped（33.83s）、frontend PASS、verify GREEN；focused38 PASS，TS app/node、lint、隔離build exit0。最後註解變更後重新build的檔案與UI驗收build逐byte相同。
+- 1440雙路真UI回歸173步PASS：四次10.3秒1080×1920／30fps真MP4下載／解碼、刪片補回、文字／trim、stale後重匯出、原URL於真後端19812→28582重啟後播放ended、中英文。pageerror=[]，owned cleanup survivors=[]；新頁播放／seek與hover另有針對性證據。
+- 原RED保留：舊prepared禁止外網播放器的測試，在使用者明確批准TikTok嵌入後更新；初次UI harness隔離HOME找不到既有ffmpeg，指定既有快取後通過，未安裝依賴。初期UI探測的錯誤標題／Storage proxy攔截方式也保留於針對性報告。
+- 獨立Orca唯讀審查 task_32ec94fcfcb2／ctx_69ec6acc41d6：provisional ACCEPT、無P0–P3 finding，14檔hash與diff SHA256 `08382c25bd9107d1c2b3ab17a432f5dde198fda701498009a82d54528e8f3328` 前後一致；lead再次核對後ACCEPT此未提交快照。requested gpt-6.1-sol/high，worker runtime preview顯示GPT-6.1-Sol high Fast；底層provider metadata unknown。不是提交版／merge批准。多節點拖曳與取消/resize並發沒有新增真UI覆蓋，已做安裝版XYFlow事件及程式審查。
+- 證據 `/tmp/buildclub-playback-polish-20261106/`；完整回歸 `attempt-a4b628a3/results.json`。8998前端已更新，後端PID78479保持不變／18998轉接未動；舊靜態資產保留。上線後新scoped session1440實測主參考hover time0.207636、muted=true，Research內容與展開正常、pageerror=[]。真人外觀驗收、Instagram非主參考影片檔、真provider生成不在已驗結果內。
+
 ## 2026-11-06：最新 Demo 整合分支（依使用者要求 commit／push，不合併 main）
 
 - 目標分支 `feat/demo-integrated-latest`；從本輪 fetch 的 `origin/main @ 2c069a84569cd9ed2a70c4d284626057e5118e36` 建立。來源工作樹、既有服務、DB、影片與未追蹤研究目錄完整保留，不合併 main、不建立 PR。

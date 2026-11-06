@@ -57,3 +57,48 @@ test('Use in Edit restores a deleted shot in order without unsupported workspace
  assert.equal(placed.clips[0].muted, true)
  assert.equal(placeFreshSource(placed, source, 1.4), placed)
 })
+
+
+test('full master mode maps all 21 original shots into six continuous video parts without altering shoot', () => {
+ const full=freshTemplate('ai', true), shoot=freshTemplate('shoot', true)
+ assert.equal(full.nodes.filter(n=>n.type==='video').length,6)
+ assert.equal(full.edges.filter(e=>e.targetHandle==='in:start').length,0)
+ assert.equal(shoot.nodes.filter(n=>n.type==='video').length,0)
+ const data=createFreshSixData(store(),store(),()=>0,true)
+ const ideas=data.bootstrap.local['trend-finder.ideas.v6']
+ assert.match(ideas.find(i=>i.id==='guided-tofu-ai').notes,/21-shot/)
+ assert.equal(ideas.find(i=>i.id==='guided-tofu-ai').shots[0].time,'0.00-1.60s')
+ assert.equal(ideas.find(i=>i.id==='guided-tofu-shoot').shots[0].time,'0.00-1.40s')
+})
+
+test('every full-master part replays as video without an invented image parent and maps to its editor alias', async () => {
+ const local=store(), session=store(); let time=0
+ const data=createFreshSixData(local,session,()=>time,true)
+ const call=async(path,method='GET',body)=>{const response=await data.request(new Request(`http://local/api/ideas/guided-tofu-ai/${path}`,{method,...(body?{body:JSON.stringify(body)}:{})}));return {status:response.status,body:await response.json()}}
+ let canvas=(await call('canvas')).body
+ canvas.doc=materializeFresh(canvas.doc,freshTemplate('ai',true).nodes.map(n=>n.id),'ai')
+ assert.equal((await call('canvas','PUT',{version:canvas.version,doc:canvas.doc})).status,200)
+ for(let i=0;i<6;i++){
+  const quote=await call('gen','POST',{nodeId:freshNodes(i).video,confirm:false})
+  assert.equal(quote.status,200)
+  const result=await call('gen','POST',{nodeId:freshNodes(i).video,model:'prepared-full-cut',prompt:freshPrompt(i,'ai',true),inputStamp:quote.body.inputStamp,quoteStamp:quote.body.quoteStamp,confirm:true})
+  assert.equal(result.status,200);assert.equal(result.body.inputs.startFrame,undefined)
+  time+=1600
+  const done=(await call(`gen/${result.body.id}`)).body
+  assert.equal(done.status,'done');assert.match(done.url,/full-ai-six/)
+  assert.equal(freshSourceFor('ai',done).id,`ai-s${i+1}`)
+ }
+ assert.equal(local.getItem('fresh-six.v1'),null)
+})
+
+test('full-master tour has all six video steps and retains the shoot tour', async () => {
+ const {CANVAS_TOURS}=await import('../src/lib/guided/canvasTour.ts')
+ const previous=globalThis.window, shoot=CANVAS_TOURS.shoot
+ try{
+  globalThis.window={location:{search:'?guided=tofu&cut=full21'}}
+  assert.deepEqual(CANVAS_TOURS.ai.filter(s=>s.generation==='video').map(s=>s.id),Array.from({length:6},(_,i)=>`video-s${i+1}`))
+  assert.equal(CANVAS_TOURS.ai.length,14)
+  assert.ok(!CANVAS_TOURS.ai.some(s=>/exact.*parent|still hold/.test(s.en.description)))
+  assert.deepEqual(CANVAS_TOURS.shoot,shoot)
+ }finally{if(previous===undefined)delete globalThis.window;else globalThis.window=previous}
+})

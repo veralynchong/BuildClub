@@ -10,6 +10,9 @@ const MAX_PX = 120
 const DEFAULT_PX = 40
 
 interface Props {
+  introActive?: boolean
+  revealCount?: number
+  thumbnailOf?: (clip: Clip) => string | undefined
   project: EditProject
   sources: Record<string, SourceInfo>
   frame: number // playhead
@@ -26,7 +29,7 @@ interface Props {
 
 const fmt = (sec: number) => (Math.round(sec * 10) / 10).toString()
 
-export function Timeline({ project, sources, frame, readOnly, timeline, selected, onSelect: setSelected, nameOf, nodeOf, onJump, onProject, onSeek }: Props) {
+export function Timeline({ introActive = false, revealCount, thumbnailOf, project, sources, frame, readOnly, timeline, selected, onSelect: setSelected, nameOf, nodeOf, onJump, onProject, onSeek }: Props) {
   const [pxPerSec, setPx] = useState(DEFAULT_PX)
   const [menu, setMenu] = useState<{ clipId: string; x: number; y: number } | null>(null) // a clip's right-click menu
   const box = useRef<HTMLElement>(null)
@@ -97,7 +100,7 @@ export function Timeline({ project, sources, frame, readOnly, timeline, selected
   const ticks = Array.from({ length: Math.floor(total) + 1 }, (_, i) => i)
 
   return (
-    <section className="cv-ed-timeline" aria-label={t('editor.timeline')} ref={box}>
+    <section inert={introActive || undefined} className="cv-ed-timeline" aria-label={t('editor.timeline')} ref={box}>
       <div className="cv-ed-bar">
         <button type="button" className="btn btn-ghost btn-sm" disabled={readOnly || project.clips.length === 0} onClick={split}>
           {t('editor.split')}
@@ -133,7 +136,9 @@ export function Timeline({ project, sources, frame, readOnly, timeline, selected
           <DndContext sensors={sensors} onDragEnd={onDragEnd}>
             <div className="cv-ed-track">
               {project.clips.map((c, i) => (
-                <ClipBlock
+                (revealCount === undefined || i < revealCount) && <ClipBlock
+                  introActive={introActive}
+                  thumbnail={thumbnailOf?.(c)}
                   key={c.id}
                   clip={c}
                   left={starts[i] * pxPerSec}
@@ -239,6 +244,8 @@ export function Timeline({ project, sources, frame, readOnly, timeline, selected
 }
 
 interface BlockProps {
+  introActive: boolean
+  thumbnail?: string
   clip: Clip
   left: number
   width: number
@@ -254,7 +261,7 @@ interface BlockProps {
   onProject: (p: EditProject) => void
 }
 
-function ClipBlock({ clip, left, width, name, selected, state, disabled, pxPerSec, sourceDuration, project, onSelect, onMenu, onProject }: BlockProps) {
+function ClipBlock({ introActive, thumbnail, clip, left, width, name, selected, state, disabled, pxPerSec, sourceDuration, project, onSelect, onMenu, onProject }: BlockProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: clip.id, disabled })
   // Trimming works from the project as it was when the edge was grabbed, so the drag is one smooth gesture.
   const grab = useRef<{ edge: 'in' | 'out'; x: number; start: EditProject; value: number } | null>(null)
@@ -284,6 +291,9 @@ function ClipBlock({ clip, left, width, name, selected, state, disabled, pxPerSe
     <div
       ref={setNodeRef}
       className="cv-ed-clip"
+      data-intro={introActive ? '' : undefined}
+      data-thumbnail={thumbnail ? '' : undefined}
+      data-clip-id={clip.id}
       data-selected={selected ? '' : undefined}
       data-state={state === 'ok' ? undefined : state}
       data-dragging={isDragging ? '' : undefined}
@@ -296,6 +306,7 @@ function ClipBlock({ clip, left, width, name, selected, state, disabled, pxPerSe
       aria-label={`${name}, ${t('editor.clip.seconds', { sec: fmt(clipLength(clip)) })}`}
       aria-pressed={selected}
     >
+      {thumbnail && <img className="cv-ed-clip-thumbnail" src={thumbnail} alt="" draggable={false} />}
       <span className="cv-ed-edge cv-ed-edge-in" role="separator" aria-label={t('editor.clip.trimIn')} {...edge('in')} />
       <span className="cv-ed-clip-name">{name}</span>
       <span className="cv-ed-clip-len">{t('editor.clip.seconds', { sec: fmt(clipLength(clip)) })}</span>

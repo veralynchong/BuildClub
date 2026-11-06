@@ -100,12 +100,13 @@ export function FreeformNode({ id, data: { node }, selected }: NodeProps<FreeNod
       : node.type === 'kit' ? <div className="fc-kit-summary"><h3>{ff('kit')}</h3>{(actions.kit?.items ?? []).filter((item) => node.data.kitItems?.includes(item.id)).map((item) => <div key={item.id}><strong>{item.name}</strong><p>{item.note}</p></div>)}<button className="nodrag" onClick={() => actions.inspect(id)}>{ff('settings')}</button></div>
       : node.type === 'shot' ? <div className="fc-shot"><h3>{shot?.shot}</h3><p>{shot?.line}</p></div>
       : <>
-        <div className={`fc-preview ${busy ? 'is-running' : ''}`}>
+        <div className={`fc-preview ${busy ? 'is-running' : ''}`} aria-busy={busy}>
           {take ? <video className="nodrag nopan" src={take.url} controls playsInline preload="metadata" /> : shown?.url ? shown.kind === 'image' ? <img src={shown.url} alt={ff('storyboard')} draggable={false} /> : shown.kind === 'voice' ? <audio className="nodrag nopan" src={shown.url} controls /> : <video className="nodrag nopan" src={shown.url} controls playsInline preload="metadata" />
             : node.data.voiceId ? <audio className="nodrag nopan" controls src={actions.voices.find((v) => v.id === node.data.voiceId)?.url} />
             : <span className="fc-preview-icon">{busy ? '◌' : icons[node.type]}</span>}
           {!take && !shown?.url && !node.data.voiceId && !busy && <span className="fc-preview-note">{ff(node.type === 'upload' || node.type === 'footage' ? 'uploadHint' : 'noResult')}</span>}
         </div>
+        {busy && <div className="fc-generation-status" role="status"><span className="fc-spinner" aria-hidden="true" /><span>{pending ? ff(pending.status === 'running' ? 'running' : pending.status === 'waiting' ? 'waiting' : 'queued') : ff('running')}{model?.provider === 'prepared' && <> · {ff('preparedReplay')}</>}</span><progress aria-label={ff('running')} /></div>}
         {versions.length > 0 && <div className="fc-history-controls nodrag nopan"><button aria-label={ff('previous')} disabled={actions.readonly || versionIndex <= 0} onClick={() => actions.selectVersion(versions[versionIndex - 1])}>‹</button><span>{versionIndex + 1}/{versions.length}</span><button aria-label={ff('next')} disabled={actions.readonly || versionIndex < 0 || versionIndex >= versions.length - 1} onClick={() => actions.selectVersion(versions[versionIndex + 1])}>›</button></div>}
         {versions.length > 1 && <div className="fc-version-list nodrag nopan" aria-label={ff('versions')}>
           {versions.filter((g) => g.id !== shown?.id).map((g) => <figure className="fc-version" key={g.id} data-generation-id={g.id}>

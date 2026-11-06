@@ -1,5 +1,3 @@
-import { getGuidedRuntime } from '../lib/guided/runtime'
-import { GUIDED_IDS } from '../lib/guided/contracts'
 import { useState } from 'react'
 import type { Video } from '../types'
 import { byFollowers, compact, platformName, scoreBase } from '../lib/metrics'
@@ -27,7 +25,6 @@ export function VideoTile({ video, onOpen, onToggleSave, inResearch, followersLo
   // The button pops only when it's clicked, not when a tile shows up already saved.
   const [pop, setPop] = useState(false)
   const saved = Boolean(inResearch)
-  const unknownMetrics = !!getGuidedRuntime() && video.id === GUIDED_IDS.videoId
   const followers = byFollowers(video)
   // No followers (Reddit, some live Instagram results): fall back to the account's usual views, as Best to copy does.
   const base = followers ? video.followers : scoreBase(video)
@@ -46,7 +43,7 @@ export function VideoTile({ video, onOpen, onToggleSave, inResearch, followersLo
           <span className="best-compare tile-cmp">
             <span className="cmp-num cmp-from">{fromNum}</span>
             <span className="cmp-arrow" aria-hidden="true">→</span>
-            <span className="cmp-num cmp-to">{unknownMetrics ? '—' : compact(video.views)}</span>
+            <span className="cmp-num cmp-to">{compact(video.views)}</span>
             <span className="cmp-cap">{fromCap}</span>
             <span />
             <span className="cmp-cap">{t('find.tile.cmpViews')}</span>

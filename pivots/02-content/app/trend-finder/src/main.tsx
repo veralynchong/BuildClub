@@ -1,3 +1,4 @@
+import { applyTheme, readTheme } from './lib/theme'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
@@ -14,8 +15,10 @@ const reviewToken = reviewTokenFromPath(window.location.pathname)
 async function mount() {
   if (new URLSearchParams(window.location.search).has('guided')) {
     const { createFreshSixData } = await import('./lib/guided/freshSix')
-    installGuidedRuntime(createFreshSixData, window, 'fresh-six-v1:')
+    const full = new URLSearchParams(window.location.search).get('cut') === 'full21'
+    installGuidedRuntime(full ? (local, session) => createFreshSixData(local, session, Date.now, true) : createFreshSixData, window, full ? 'full-ai-six-v1:' : 'fresh-six-v1:')
   }
+  applyTheme(readTheme())
   // App modules may cache storage, so load them after guided isolation is installed.
   const { default: App } = await import('./App.tsx')
   createRoot(document.getElementById('root')!).render(

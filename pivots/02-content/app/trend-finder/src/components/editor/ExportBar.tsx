@@ -226,8 +226,9 @@ export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, read
       {output && !active && (
         <div className="cv-ed-export-done" ref={doneRef}>
           {cut?.stale && <p className="small">{t('editor.export.stale')}</p>}
-          <video className="cv-ed-export-video" src={output.url} controls preload="metadata" />
+          <video className="cv-ed-export-video" src={output.url} controls playsInline preload="metadata" />
           <div className="cv-ed-export-row">
+            <a className="btn btn-ghost btn-sm" href={output.url} target="_blank" rel="noopener noreferrer">{t('editor.export.openVideo')} ↗</a>
             <a className="btn btn-ghost btn-sm" href={`${output.url}${output.url.includes('?') ? '&' : '?'}download=1`} download>
               {t('cut.panel.download')}
             </a>

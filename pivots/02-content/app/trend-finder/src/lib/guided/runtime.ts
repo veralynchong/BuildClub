@@ -171,6 +171,7 @@ export function getGuidedRuntime(win: Window | undefined = currentWindow()): Gui
 export function startGuidedDemo(win: Window = window): void {
   const url = new URL('/', win.location.origin)
   url.searchParams.set('guided', 'tofu')
+  if (new URL(win.location.href).searchParams.get('cut') === 'full21') url.searchParams.set('cut', 'full21')
   url.searchParams.set('guideSession', win.crypto.randomUUID())
   win.location.assign(url.href)
 }

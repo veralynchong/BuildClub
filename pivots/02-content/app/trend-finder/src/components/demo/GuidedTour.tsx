@@ -1,3 +1,4 @@
+import { fullCutMode } from '../../lib/guided/fullAssets'
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import { canvasProgress, canvasStepFor } from '../../lib/guided/canvasTour'
@@ -30,7 +31,9 @@ export function GuidedTour({ state, lang, busy, error, canContinue = true, onSki
   const [collapsed, setCollapsed] = useState(false)
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
   const card = useRef<HTMLElement>(null)
-  const drag = useRef<{ id: number; x: number; y: number } | null>(null)
+  const drag = useRef<{ id: number; x: number; y: number; width: number; height: number } | null>(null)
+  const frame = useRef<number | null>(null)
+  const pendingPosition = useRef<{ left: number; top: number } | null>(null)
   useLayoutEffect(() => {
     if (!state.active || !card.current) return
     const fit = () => {
@@ -43,7 +46,7 @@ export function GuidedTour({ state, lang, busy, error, canContinue = true, onSki
     const observer = new ResizeObserver(fit)
     observer.observe(card.current)
     window.addEventListener('resize', fit)
-    return () => { observer.disconnect(); window.removeEventListener('resize', fit); drag.current = null }
+    return () => { observer.disconnect(); window.removeEventListener('resize', fit); drag.current = null; if (frame.current !== null) window.cancelAnimationFrame(frame.current); frame.current = null; pendingPosition.current = null }
   }, [collapsed, state.active])
   const moveTo = (left: number, top: number) => {
     if (card.current) setPosition(boundedPosition(left, top, card.current.getBoundingClientRect()))
@@ -51,13 +54,26 @@ export function GuidedTour({ state, lang, busy, error, canContinue = true, onSki
   const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (event.pointerType !== 'mouse' || event.button !== 0 || !card.current) return
     const rect = card.current.getBoundingClientRect()
-    drag.current = { id: event.pointerId, x: event.clientX - rect.left, y: event.clientY - rect.top }
+    drag.current = { id: event.pointerId, x: event.clientX - rect.left, y: event.clientY - rect.top, width: rect.width, height: rect.height }
     event.preventDefault()
     event.currentTarget.focus()
     event.currentTarget.setPointerCapture(event.pointerId)
   }
+  const flushPosition = () => {
+    if (frame.current !== null) window.cancelAnimationFrame(frame.current)
+    frame.current = null
+    if (pendingPosition.current) setPosition(pendingPosition.current)
+    pendingPosition.current = null
+  }
+  const moveDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    const current = drag.current
+    if (current?.id !== event.pointerId) return
+    pendingPosition.current = boundedPosition(event.clientX - current.x, event.clientY - current.y, current)
+    if (frame.current === null) frame.current = window.requestAnimationFrame(flushPosition)
+  }
   const finishDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (drag.current?.id !== event.pointerId) return
+    flushPosition()
     drag.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
@@ -78,9 +94,9 @@ export function GuidedTour({ state, lang, busy, error, canContinue = true, onSki
   const text = (en: string, hant: string) => zh ? hant : en
   const nextDisabled = busy || index === GUIDED_STEPS.length - 1 || (state.stepId === 'route' && state.route === null) || (!!canvasStep?.generation && !canContinue)
 
-  return <aside ref={card} style={position ? { ...position, right: 'auto' } : undefined} className="guided-tour" aria-label={text('Guided demo', '示範導覽')} data-testid="guided-tour" data-collapsed={collapsed}>
+  return <aside ref={card} style={position ? { left: 0, top: 0, right: 'auto', transform: `translate3d(${position.left}px, ${position.top}px, 0)` } : undefined} className="guided-tour" aria-label={text('Guided demo', '示範導覽')} data-testid="guided-tour" data-collapsed={collapsed}>
     <header className="guided-tour__header">
-      <button type="button" className="guided-tour__button guided-tour__drag" aria-label={text('Drag guide; use arrow keys to move', '拖曳導覽；或使用方向鍵移動')} title={text('Drag to reposition', '拖曳以調整位置')} aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" onPointerDown={startDrag} onPointerMove={event => { if (drag.current?.id === event.pointerId) moveTo(event.clientX - drag.current.x, event.clientY - drag.current.y) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onLostPointerCapture={() => { drag.current = null }} onKeyDown={moveWithKeys}>
+      <button type="button" className="guided-tour__button guided-tour__drag" aria-label={text('Drag guide; use arrow keys to move', '拖曳導覽；或使用方向鍵移動')} title={text('Drag to reposition', '拖曳以調整位置')} aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} onLostPointerCapture={() => { flushPosition(); drag.current = null }} onKeyDown={moveWithKeys}>
         <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1" /><circle cx="9" cy="3" r="1" /><circle cx="3" cy="8" r="1" /><circle cx="9" cy="8" r="1" /><circle cx="3" cy="13" r="1" /><circle cx="9" cy="13" r="1" /></svg>
       </button>
       <span className="guided-tour__eyebrow">{text('Prepared demo', '預備示範')}</span>
@@ -101,7 +117,7 @@ export function GuidedTour({ state, lang, busy, error, canContinue = true, onSki
     <div>
       <p className="guided-tour__description">{step.description}</p>
       {state.route && ['canvas', 'edit', 'result'].includes(state.stepId) && <p className="guided-tour__provenance">{state.route === 'ai'
-        ? text('Prepared AI images and motion · no live generation. Local editing and export are real.', '預備 AI 圖像與動態 · 無即時生成。本機剪輯與匯出會實際執行。')
+        ? fullCutMode() ? text('Complete original AI film · six continuous parts · no new generation.', '完整原AI成片 · 六段連續影片 · 無新增生成。') : text('Prepared AI images and motion · no live generation. Local editing and export are real.', '預備 AI 圖像與動態 · 無即時生成。本機剪輯與匯出會實際執行。')
         : text('Six-shot shoot plan · source-derived storyboard references, not filmed footage.', '六鏡拍攝計畫 · 原片衍生分鏡參考，並非實拍素材。')}</p>}
       {state.stepId === 'route' && <div className="guided-tour__routes" role="group" aria-label={text('Production route', '製作路線')}>
         <button type="button" className="guided-tour__button guided-tour__route" disabled={busy} aria-pressed={state.route === 'shoot'} onClick={() => onRoute('shoot')}>{text('Plan a shoot', '規劃拍攝')}</button>
@@ -116,7 +132,7 @@ export function GuidedTour({ state, lang, busy, error, canContinue = true, onSki
     {canvasStep?.generation && onSkip && <button type="button" className="guided-tour__button guided-tour__skip" disabled={busy} onClick={onSkip}>{text('Skip this replay', '跳過這次回放')}</button>}
     <footer className="guided-tour__footer">
       <button type="button" className="guided-tour__button guided-tour__quiet" disabled={busy} onClick={onReset}>{text('Restart guide', '重新導覽')}</button>
-      <button type="button" className="guided-tour__button guided-tour__quiet" disabled={busy} onClick={onExit}>{text('Exit guide', '退出導覽')}</button>
+      <button type="button" className="guided-tour__button guided-tour__quiet" onClick={onExit}>{text('Exit guide', '退出導覽')}</button>
     </footer>
     </div>
   </aside>

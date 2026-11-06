@@ -111,6 +111,7 @@ test('App passes the current error to results and a 429 preserves old results un
   let queryText = 'tofu'
   let searching = null
   const scope = {
+    guidedRuntime: null,
     parseQuery: (text) => ({ keywords: [text], topics: [] }), formats: [],
     query: { platforms: ['tiktok'] }, client: { id: 'client' }, searchSeq: { current: 0 },
     setSearchError: (value) => { searchError = value }, setNotice: noop,

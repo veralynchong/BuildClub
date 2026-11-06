@@ -1,5 +1,7 @@
+import { preparedResearchProjects } from './researchProjects.ts'
 import { SIX_SHOTS, sixShotFixtures } from './sixShot.ts'
 import { GUIDED_IDS as ids, GUIDED_CANVAS_IDS as c } from './contracts.ts'
+import type { ResearchEntry, ResearchSlot } from '../research.ts'
 import type { PreparedData } from './contracts.ts'
 import { preparedAssets, preparedAt, preparedCacheFetchedAt, preparedFixtures, preparedModels, preparedSearchResult, preparedSearchResults, preparedTikTokSearchResult, preparedTutorialPrompt, preparedSupplementFormats } from './fixtures.ts'
 import { tofuCase } from '../demo/tofuCase.ts'
@@ -93,11 +95,33 @@ export function createPreparedDataWithClock(local: Storage, _session: Storage, n
       'remake.role.v2': 'member', 'trend-finder.workspace.v2': ids.clientId,
       'remake.last-client.v1': ids.clientId, 'trend-finder.ideas.v6': state.ideas,
       'trend-finder.live-store.v1': seed.library, 'trend-finder.pulse.v1': {}, 'trend-finder.searches.v1': [],
-      'trend-finder.research.v4': [{ id: ids.researchId, clientId: ids.clientId, videoId: ids.videoId, account: seed.library.videos[0].handle, platform: 'instagram', followers: 0, views: 0, url: tofuCase.sourceUrl, keywords: ['tofu', 'okonomiyaki'], hook: tofuCase.title, title: tofuCase.title, notes: 'Prepared source reference. Popularity not available; 0 is the native missing-number sentinel.', loggedAt: preparedAt, source: 'sample', slotId: ids.slotId }],
-      'trend-finder.research-slots.v2': [{ id: ids.slotId, clientId: ids.clientId, number: 1, topic: 'Prepared tofu okonomiyaki', createdAt: preparedAt }],
+      'trend-finder.research.v4': [{ id: ids.researchId, clientId: ids.clientId, videoId: ids.videoId, account: seed.library.videos[0].handle, platform: 'instagram', followers: 0, views: 0, url: tofuCase.sourceUrl, keywords: ['tofu', 'okonomiyaki'], hook: tofuCase.title, title: tofuCase.title, notes: 'Prepared source reference. Popularity not available; 0 is the native missing-number sentinel.', loggedAt: preparedAt, source: 'sample', slotId: ids.slotId }] as ResearchEntry[],
+      'trend-finder.research-slots.v2': [{ id: ids.slotId, clientId: ids.clientId, number: 1, topic: 'Prepared tofu okonomiyaki', createdAt: preparedAt }] as ResearchSlot[],
     },
     session: { 'remake.view.v1': 'search' },
   }
+  // Add this case's cached references once, preserving edits and later removals in the scoped workspace.
+  const researchKey = 'trend-finder.research.v4'
+  const cachedRows: ResearchEntry[] = seed.library.videos.slice(1).map(video => ({
+    id: `guided-cache-${video.id}`, clientId: ids.clientId, videoId: video.id,
+    account: video.handle, platform: video.platform, followers: video.followers, views: video.views,
+    url: video.url, keywords: video.keywords, hook: video.hook, title: video.hook,
+    notes: video.caption ?? '', loggedAt: video.fetchedAt ?? preparedCacheFetchedAt, source: 'sample',
+  }))
+  bootstrap.local[researchKey] = [...bootstrap.local[researchKey], ...cachedRows]
+  if (!local.getItem('prepared-research-cache.v1')) {
+    const raw = local.getItem(researchKey)
+    if (raw) {
+      try {
+        const rows = JSON.parse(raw) as ResearchEntry[]
+        if (Array.isArray(rows)) local.setItem(researchKey, JSON.stringify([...rows, ...cachedRows.filter(row => !rows.some(old => old.clientId === row.clientId && old.videoId === row.videoId))]))
+      } catch { /* Leave malformed storage to the native store's recovery. */ }
+    }
+    local.setItem('prepared-research-cache.v1', 'true')
+  }
+  const projects = preparedResearchProjects(local, bootstrap.local[researchKey], bootstrap.local['trend-finder.research-slots.v2'] as ResearchSlot[])
+  bootstrap.local[researchKey] = projects.rows
+  bootstrap.local['trend-finder.research-slots.v2'] = projects.slots
   async function request(request: Request): Promise<Response> {
     if (request.signal.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
     const requestEpoch = epoch
@@ -129,7 +153,7 @@ export function createPreparedDataWithClock(local: Storage, _session: Storage, n
       const rows = object(body) && Array.isArray(body.videos) ? body.videos : []
       const expected = seed.library.videos.map((v) => ({ id: v.id, platform: v.platform, hook: v.hook, views: v.views, ...(hasScore(v) ? { outlier: outlierScore(v) } : {}), hashtags: v.hashtags!.slice(0,30).map((h) => Array.from(h).slice(0,60).join('')), music: Array.from(v.music ?? '').slice(0,200).join('') }))
       if (!object(body) || !exact(body,['query','videos']) || typeof body.query !== 'string' || !fixedQuery(body.query) || rows.length < 1 || rows.length > expected.length || new Set(rows.map((row) => object(row) ? row.id : null)).size !== rows.length || rows.some((row) => !expected.some((known) => JSON.stringify(row) === JSON.stringify(known)))) return error('Only the allowlisted cached references have a prepared search summary.')
-      return json({ lines: [`Prepared search: ${rows.length} saved tofu cooking and recipe references. Only the Ever Green reference has a local breakdown and adapted plan.`], basis: 'Prepared local sample. Instagram cards show a 2 Nov 2026 snapshot; TikTok cards show a 27 Oct 2026 snapshot, not live metrics. Ever Green popularity is unavailable. No provider call.' })
+      return json({ lines: [`Prepared search: ${rows.length} saved tofu cooking and recipe references. Only the Ever Green reference has a local breakdown and adapted plan.`], basis: 'Prepared local sample. Instagram cards show a 2 Nov 2026 snapshot; TikTok cards show a 27 Oct 2026 snapshot, not live metrics. No provider call.' })
     }
     if (method === 'GET') {
       if (path === '/api/health') return json({ live: true, demo: true, platforms: ['instagram','tiktok'], platformCounts: { instagram: preparedSearchResult.videos.length, tiktok: preparedTikTokSearchResult.videos.length }, resultsPerSearch: seed.library.videos.length, prepared: true })

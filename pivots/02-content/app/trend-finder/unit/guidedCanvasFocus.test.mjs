@@ -9,6 +9,7 @@ function find(node, predicate) {
   return ts.forEachChild(node, child => find(child, predicate))
 }
 const handler = find(board, node => ts.isBinaryExpression(node) && node.left.getText(board) === 'guideFocus.current').right
+const transition = find(board, node => ts.isVariableDeclaration(node) && node.name.getText(board) === 'changeEditing').initializer
 function fixture(overrides = {}) {
   const events = []
   let focused = null
@@ -18,6 +19,7 @@ function fixture(overrides = {}) {
     doc: { nodes: [{ id: 'image' }, { id: 'video' }], edges: [{ id: 'image-video' }] },
     edit: { flush: async () => true },
     setEditing: value => events.push(['editing', value]),
+    setGuideEditor: value => events.push(['editor', value]),
     setGuideExport: value => events.push(['export', value]),
     setSelected: value => events.push(['nodes', value]),
     setSelectedEdges: value => events.push(['edges', value]),
@@ -28,7 +30,7 @@ function fixture(overrides = {}) {
     startGen: () => { generateCalls++ },
     ...overrides,
   }
-  const js = ts.transpileModule(`exports.focus = ${handler.getText(board)}`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
+  const js = ts.transpileModule(`const changeEditing = ${transition.getText(board)}; exports.focus = ${handler.getText(board)}`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
   const output = {}
   new Function('exports', ...Object.keys(scope), js)(output, ...Object.values(scope))
   return { focus: output.focus, events, focused: () => focused, generateCalls: () => generateCalls }
@@ -77,4 +79,19 @@ test('nested progress requires the completed native focus and the actual Inspect
   assert.equal(output.match(observed, desired), true)
   for (const patch of [{ focusedNodeIds: ['image'] }, { focusedEdgeIds: [] }, { focusedDock: 'history' }]) assert.equal(output.match({ ...observed, ...patch }, desired), false)
   assert.equal(output.match({}, desired), false)
+})
+
+
+test('editor transitions invalidate previous readiness before publishing the new screen', () => {
+  for (const editing of [false, true]) {
+    const events = []
+    const output = {}
+    const js = ts.transpileModule(`exports.change = ${transition.getText(board)}`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
+    new Function('exports', 'editing', 'setGuideEditor', 'setEditing', js)(output, editing, value => events.push(['ready', value.ready]), value => events.push(['editing', value]))
+    output.change(!editing)
+    assert.deepEqual(events, [['ready', false], ['editing', !editing]])
+    events.length = 0
+    output.change(editing)
+    assert.deepEqual(events, [['editing', editing]])
+  }
 })

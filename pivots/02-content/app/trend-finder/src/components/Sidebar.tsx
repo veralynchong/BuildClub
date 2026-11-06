@@ -209,7 +209,7 @@ export function Sidebar(p: Props) {
               p.onLogo()
             }}
           >
-            <Logo height={22} />
+            <Logo height={p.compact ? 18 : 22} />
           </button>
         </div>
 

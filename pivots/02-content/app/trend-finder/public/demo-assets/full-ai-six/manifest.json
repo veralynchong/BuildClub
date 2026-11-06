@@ -1,0 +1,308 @@
+{
+  "version": 1,
+  "routes": {
+    "ai": {
+      "sources": [
+        {
+          "id": "ai-s1",
+          "shotId": "s1",
+          "nodeId": "n_six_video_s1",
+          "path": "ai-s1.mp4",
+          "sha256": "572fe4a96f2ec88ccfcb4d084c72339db1f0aa42f89c984ee1ac6e50a768a175",
+          "label": "Tofu reveal",
+          "provenance": "Continuous frames 0\u201347 of the original 21-shot AI master; original shots [1, 2]. Existing baked-in captions and silent audio are preserved; no new generation."
+        },
+        {
+          "id": "ai-s2",
+          "shotId": "s2",
+          "nodeId": "n_six_video_s2",
+          "path": "ai-s2.mp4",
+          "sha256": "20c72d8f38f3d02690677750400f8e64fc85d7b36ca8b16f29689314c1857296",
+          "label": "Add ingredients",
+          "provenance": "Continuous frames 48\u201396 of the original 21-shot AI master; original shots [3, 4, 5, 6, 7]. Existing baked-in captions and silent audio are preserved; no new generation."
+        },
+        {
+          "id": "ai-s3",
+          "shotId": "s3",
+          "nodeId": "n_six_video_s3",
+          "path": "ai-s3.mp4",
+          "sha256": "6ec2aa0c228c991271e374f0cad8a503ee7e2adc9df9461d6d000a7b0187d220",
+          "label": "Mix together",
+          "provenance": "Continuous frames 97\u2013153 of the original 21-shot AI master; original shots [8, 9, 10, 11]. Existing baked-in captions and silent audio are preserved; no new generation."
+        },
+        {
+          "id": "ai-s4",
+          "shotId": "s4",
+          "nodeId": "n_six_video_s4",
+          "path": "ai-s4.mp4",
+          "sha256": "8dfab3c86d3045c57679cd8b64f002c9ccc8cc98fec5df0cde0d0e349f4f0195",
+          "label": "Into the pan",
+          "provenance": "Continuous frames 154\u2013198 of the original 21-shot AI master; original shots [12, 13, 14]. Existing baked-in captions and silent audio are preserved; no new generation."
+        },
+        {
+          "id": "ai-s5",
+          "shotId": "s5",
+          "nodeId": "n_six_video_s5",
+          "path": "ai-s5.mp4",
+          "sha256": "435ea04dd26d9d32b27a88542814847e69c2f9dd82d8137bdccb81381ec025eb",
+          "label": "Finished dish",
+          "provenance": "Continuous frames 199\u2013292 of the original 21-shot AI master; original shots [15, 16, 17, 18, 19]. Existing baked-in captions and silent audio are preserved; no new generation."
+        },
+        {
+          "id": "ai-s6",
+          "shotId": "s6",
+          "nodeId": "n_six_video_s6",
+          "path": "ai-s6.mp4",
+          "sha256": "5074125aa565cadc1b2fb77f119e9ed9a21837ddffc102dd82c819f921d8453d",
+          "label": "Product CTA",
+          "provenance": "Continuous frames 293\u2013314 of the original 21-shot AI master; original shots [20, 21]. Existing baked-in captions and silent audio are preserved; no new generation."
+        }
+      ],
+      "project": {
+        "fps": 30,
+        "width": 1080,
+        "height": 1920,
+        "clips": [
+          {
+            "id": "ai-clip-s1",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s1",
+              "shotId": "s1"
+            },
+            "in": 0,
+            "out": 1.6,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s2",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s2",
+              "shotId": "s2"
+            },
+            "in": 0,
+            "out": 1.6333333333333333,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s3",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s3",
+              "shotId": "s3"
+            },
+            "in": 0,
+            "out": 1.9,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s4",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s4",
+              "shotId": "s4"
+            },
+            "in": 0,
+            "out": 1.5,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s5",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s5",
+              "shotId": "s5"
+            },
+            "in": 0,
+            "out": 3.1333333333333333,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s6",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s6",
+              "shotId": "s6"
+            },
+            "in": 0,
+            "out": 0.7333333333333333,
+            "volume": 0,
+            "muted": true
+          }
+        ],
+        "texts": [],
+        "captions": {
+          "enabled": false
+        },
+        "music": null,
+        "voiceover": [],
+        "primaries": {},
+        "showLogo": false,
+        "logoSize": "medium",
+        "logoCorner": "top-right"
+      }
+    },
+    "shoot": {
+      "sources": [
+        {
+          "id": "shoot-s1",
+          "shotId": "s1",
+          "nodeId": "n_six_image_s1",
+          "path": "shoot-s1.mp4",
+          "sha256": "6652b2a691fa7573a1b8c7f24bababe2d6f8bcc0373e6788dc0d33211e0effd4",
+          "label": "Tofu reveal",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s2",
+          "shotId": "s2",
+          "nodeId": "n_six_image_s2",
+          "path": "shoot-s2.mp4",
+          "sha256": "ff505543fe325933365be59aef36f5744e3f929e2420f4746b8aa44c63cfeb01",
+          "label": "Add ingredients",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s3",
+          "shotId": "s3",
+          "nodeId": "n_six_image_s3",
+          "path": "shoot-s3.mp4",
+          "sha256": "6f1f87094f1fbad78ce2475abbc19dfdd31e1a17c8dd41509c44a2fcf50770a5",
+          "label": "Mix together",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s4",
+          "shotId": "s4",
+          "nodeId": "n_six_image_s4",
+          "path": "shoot-s4.mp4",
+          "sha256": "4ced1b76b6dbeefcc094c9c42571e051717a5c124eeb76094d285016cbd4b1ae",
+          "label": "Into the pan",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s5",
+          "shotId": "s5",
+          "nodeId": "n_six_image_s5",
+          "path": "shoot-s5.mp4",
+          "sha256": "b9bf9f24de08880e86e001040988a818c1c8bff82f907e418b9d80ea28fd7670",
+          "label": "Finished dish",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s6",
+          "shotId": "s6",
+          "nodeId": "n_six_image_s6",
+          "path": "shoot-s6.mp4",
+          "sha256": "aca0b2b66f534850acf17b9e653bf23f6356298581dce17bee1ab28d46830ae1",
+          "label": "Product CTA",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        }
+      ],
+      "project": {
+        "fps": 30,
+        "width": 1080,
+        "height": 1920,
+        "clips": [
+          {
+            "id": "shoot-clip-s1",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s1",
+              "shotId": "s1"
+            },
+            "in": 0,
+            "out": 1.4,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s2",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s2",
+              "shotId": "s2"
+            },
+            "in": 0,
+            "out": 1.2,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s3",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s3",
+              "shotId": "s3"
+            },
+            "in": 0,
+            "out": 1.6,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s4",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s4",
+              "shotId": "s4"
+            },
+            "in": 0,
+            "out": 1.5,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s5",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s5",
+              "shotId": "s5"
+            },
+            "in": 0,
+            "out": 2.8,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s6",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s6",
+              "shotId": "s6"
+            },
+            "in": 0,
+            "out": 2.0,
+            "volume": 0,
+            "muted": true
+          }
+        ],
+        "texts": [],
+        "captions": {
+          "enabled": false
+        },
+        "music": null,
+        "voiceover": [],
+        "primaries": {},
+        "showLogo": false,
+        "logoSize": "medium",
+        "logoCorner": "top-right"
+      }
+    }
+  },
+  "preset": "full21",
+  "originalMaster": {
+    "path": "original-master.mp4",
+    "sha256": "be20427fd3dc0eaadc3379dadd3e98136eeb25b60bb68c9d0f931294972edc14",
+    "frames": 315,
+    "fps": 30,
+    "decodedFramesEqual": true,
+    "silentAudio": true
+  }
+}

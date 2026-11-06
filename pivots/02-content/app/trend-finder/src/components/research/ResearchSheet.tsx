@@ -1,4 +1,3 @@
-import { GUIDED_IDS } from '../../lib/guided/contracts'
 import type { ReactNode } from 'react'
 import type { ResearchEntry, ResearchSlot, ResearchStatus } from '../../lib/research'
 import type { Video } from '../../types'
@@ -19,6 +18,7 @@ import type { ResearchScreenProps, RowPick } from './ResearchScreen'
 
 // What the pick control needs, worked out once in ResearchScreen (the same rules as the Cards view's button).
 export interface PickInfo {
+  referenceOnly?: boolean
   status: ResearchStatus
   isPicked: boolean
   // The plan is past Still planning: it changes on Plans.
@@ -120,7 +120,7 @@ export function ResearchSheet(p: Props) {
           {t(pk.isPicked ? 'research.sheet.picked' : 'research.sheet.pickThis')}
         </button>
         <span className="rs-s-badges">{kit.statusBadge(e, rowRole(e, g))}</span>
-        {pk.locked && <span className="rs-locked small muted">{t('research.sheet.lockedNote')}</span>}
+        {pk.locked && <span className="rs-locked small muted">{t(pk.referenceOnly ? 'research.referenceOnly' : 'research.sheet.lockedNote')}</span>}
       </>
     )
   }
@@ -157,11 +157,11 @@ export function ResearchSheet(p: Props) {
           </div>
           <div className="rs-s-cell rs-s-followers">
             {k('research.col.followers')}
-            <span className="rs-s-num">{e.id === GUIDED_IDS.researchId ? '—' : count(e.followers)}</span>
+            <span className="rs-s-num">{count(e.followers)}</span>
           </div>
           <div className="rs-s-cell rs-s-views">
             {k('research.col.views')}
-            <span className="rs-s-num is-views">{e.id === GUIDED_IDS.researchId ? '—' : count(e.views)}</span>
+            <span className="rs-s-num is-views">{count(e.views)}</span>
           </div>
           <div className="rs-s-cell rs-s-keywords">
             {k('research.col.keywords')}
@@ -241,8 +241,8 @@ export function ResearchSheet(p: Props) {
           <strong className="rs-v-title">{title || e.hook || '—'}</strong>
           <span className="rs-v-account">{kit.accountCell(e)}</span>
           <span className="rs-v-reach">
-            {e.id === GUIDED_IDS.researchId ? '—' : count(e.followers)} <span aria-hidden="true">→</span>
-            <span className="sr-only">{t('research.col.followers')},</span> <b>{e.id === GUIDED_IDS.researchId ? '—' : count(e.views)}</b> {t('research.video.views')}
+            {count(e.followers)} <span aria-hidden="true">→</span>
+            <span className="sr-only">{t('research.col.followers')},</span> <b>{count(e.views)}</b> {t('research.video.views')}
           </span>
         </div>
         <div className="rs-v-status">{statusCell(e, g)}</div>

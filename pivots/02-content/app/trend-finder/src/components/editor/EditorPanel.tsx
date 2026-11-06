@@ -1,3 +1,6 @@
+import { freshRoute, freshThumbnail } from '../../lib/guided/freshSix'
+import { usePrefersReducedMotion } from '../../lib/motion'
+import { getGuidedRuntime } from '../../lib/guided/runtime'
 import { apiBase, type ResourceInput } from '../../lib/canvas/resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
@@ -13,8 +16,8 @@ import type { EditHook } from '../../lib/editor/useEditProject'
 import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, clipLength, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
-import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
+import { addVoice, clipFrames, clipLength, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import type { Clip, ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
 import { stepsDone, tabsDone } from '../../lib/editor/steps'
@@ -53,6 +56,11 @@ interface Props {
 }
 
 export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, doc, gens, takes, readOnly, onBack, onJumpToNode, focus = null, guideExport, onGuideState }: Props) {
+  const introKey = `editor-arrival.v1:${apiBase(ideaId)}`
+  const runtime = getGuidedRuntime()
+  const reducedMotion = usePrefersReducedMotion()
+  const [assembling, setAssembling] = useState(() => !!runtime && !runtime.local.getItem(introKey))
+  const [revealed, setRevealed] = useState(0)
   const { project, loadError, save, stale, update, flush, current, reload } = edit
   const { sources, error: sourceError } = footage
   const [skipped, setSkipped] = useState<string[]>([])
@@ -217,13 +225,13 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   )
 
   // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
-  const ready = project !== null // the player only exists once the project has loaded
+  const ready = project !== null && !!inputProps && sources !== null && !sourceError // the player only exists once the project has loaded
   useEffect(() => {
     if (guideExport !== undefined) setExportOpen(guideExport)
   }, [guideExport])
   useEffect(() => {
-    onGuideState?.({ error: loadError || sourceError || undefined, ready: ready && !!inputProps && !loadError && sources !== null && !sourceError, exportOpen, busy: readOnly || stale || !!edit.writing })
-  }, [onGuideState, ready, inputProps, loadError, sources, sourceError, exportOpen, readOnly, stale, edit.writing])
+    onGuideState?.({ error: loadError || sourceError || undefined, ready: !assembling && ready && !loadError, exportOpen, busy: assembling || readOnly || stale || !!edit.writing })
+  }, [onGuideState, assembling, ready, inputProps, loadError, sources, sourceError, exportOpen, readOnly, stale, edit.writing])
   useEffect(() => {
     const p = player.current
     if (!p) return
@@ -235,6 +243,26 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
       p.removeEventListener('seeked', on)
     }
   }, [ready])
+
+  useEffect(() => {
+    if (!assembling || !ready || !project) return
+    const frames = clipFrames(project)
+    const finish = () => {
+      runtime?.local.setItem(introKey, 'true')
+      player.current?.seekTo(0)
+      setFrame(0)
+      setAssembling(false)
+    }
+    if (reducedMotion || !frames.length) { finish(); return }
+    const timers = frames.map((clip, index) => window.setTimeout(() => {
+      setRevealed(index + 1)
+      player.current?.pause()
+      player.current?.seekTo(clip.from)
+      setFrame(clip.from)
+    }, index * 2500 / frames.length))
+    timers.push(window.setTimeout(finish, 3000))
+    return () => timers.forEach(window.clearTimeout)
+  }, [assembling, ready, project, introKey, runtime, reducedMotion])
 
   // Opened for Export or Send: once the controls exist, focus the one asked for (else the first that can be used).
   const focused = useRef(false)
@@ -258,7 +286,13 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   }
   const total = totalLength(project)
   const full = total > MAX_TOTAL - 0.2
-  const locked = readOnly || stale || !!edit.writing
+  const locked = assembling || readOnly || stale || !!edit.writing
+  const thumbnailOf = (clip: Clip) => {
+    const route = freshRoute(typeof ideaId === 'string' ? ideaId : ideaId.id)
+    const shotId = clip.source.shotId
+    return runtime && route && shotId && clip.source.id === `${route}-${shotId}` ? freshThumbnail(route, Number(shotId.slice(1)) - 1, new URLSearchParams(window.location.search).get('cut') === 'full21') : undefined
+  }
+  const arrivalThumbnail = project.clips[Math.max(0, revealed - 1)] && thumbnailOf(project.clips[Math.max(0, revealed - 1)])
   const fill = async () => setSkipped(await timeline.fill())
 
   const steps = stepsDone({ project, clientHasLogo: !!kit?.logo, cut })
@@ -275,7 +309,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   }
 
   return (
-    <div className="cv-ed cv-ed-full nokey">
+    <div className="cv-ed cv-ed-full nokey" aria-busy={assembling} data-arriving={assembling ? '' : undefined}>
       <header className="cv-ed-top">
         <button type="button" className="link-btn" onClick={onBack}>{t('editor.back')}</button>
         <div className="cv-ed-top-end">
@@ -294,19 +328,21 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
             ) : null}
             {readOnly && <span className="muted">{t('editor.readOnly')}</span>}
           </div>
-          <button type="button" className="btn btn-primary btn-sm" aria-expanded={exportOpen} aria-controls="cv-ed-export" data-done={steps.export || undefined} onClick={() => setExportOpen((o) => !o)}>
+          <button type="button" className="btn btn-primary btn-sm" disabled={assembling} aria-expanded={exportOpen} aria-controls="cv-ed-export" data-done={steps.export || undefined} onClick={() => setExportOpen((o) => !o)}>
             {steps.export && <span aria-hidden="true">✓ </span>}
             {t('editor.exportMenu')}
             {steps.export && <span className="sr-only"> ({t('editor.step.done')})</span>}
           </button>
         </div>
       </header>
-      <div className="cv-ed-main">
+      {assembling && <div className="cv-ed-arrival-status" role="status">{t('editor.preparing.body')}</div>}
+      <div className="cv-ed-main" inert={assembling || undefined}>
         <aside className="cv-ed-left">
           <ShotClips shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={takes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
         </aside>
         <div className="cv-ed-centre">
           <div className="cv-ed-player">
+            {assembling && arrivalThumbnail && <img className="cv-ed-arrival-preview" src={arrivalThumbnail} alt="" />}
             <Player
               ref={player}
               component={Reel}
@@ -315,7 +351,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
               compositionWidth={1080}
               compositionHeight={1920}
               fps={30}
-              controls
+              controls={!assembling}
               style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '100%' }}
             />
           </div>
@@ -383,6 +419,9 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
           </ul>
         )}
         <Timeline
+          introActive={assembling}
+          revealCount={assembling ? revealed : undefined}
+          thumbnailOf={runtime ? thumbnailOf : undefined}
           project={project}
           sources={byKey}
           frame={frame}

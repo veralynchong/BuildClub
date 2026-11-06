@@ -2,6 +2,7 @@
 // Every key in `en` must also be in `zhHant` (the Record type makes a missing one a compile error).
 export const en = {
   "editor.loading": "Loading the editor…",
+  "editor.preparing.body": "Loading clips and arranging the timeline",
   "editor.err.load": "Couldn't load the edit.",
   "editor.err.save": "Couldn't save the edit.",
   "editor.err.sources": "Couldn't load the footage.",
@@ -45,6 +46,7 @@ export const en = {
   "editor.missing": "Footage deleted",
   "editor.missing.remove": "Remove",
   "editor.export.button": "Export the video",
+  "editor.export.openVideo": "Play in new tab",
   "editor.export.working": "Exporting…",
   "editor.export.empty": "Put footage on the timeline before exporting.",
   "editor.export.needFirst": "Export the video first to send it.",
@@ -181,6 +183,7 @@ export const en = {
 
 export const zhHant: Record<keyof typeof en, string> = {
   "editor.loading": "正在載入剪輯器…",
+  "editor.preparing.body": "載入鏡頭素材並整理時間軸",
   "editor.err.load": "無法載入剪輯。",
   "editor.err.save": "無法儲存剪輯。",
   "editor.err.sources": "無法載入素材。",
@@ -224,6 +227,7 @@ export const zhHant: Record<keyof typeof en, string> = {
   "editor.missing": "素材已刪除",
   "editor.missing.remove": "移除",
   "editor.export.button": "出片",
+  "editor.export.openVideo": "在新分頁播放",
   "editor.export.working": "出片中…",
   "editor.export.empty": "時間軸上沒有素材，請先加入再出片。",
   "editor.export.needFirst": "先匯出成片才能送審。",

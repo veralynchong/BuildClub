@@ -93,10 +93,11 @@ test('header-only collapse hides the entire body, preserving compact top-right C
 
 // Exercise real component handlers/effects with controlled viewport measurements; no browser or business-state mocks.
 function floatingHarness(overrides = {}) {
+  const frames = new Map(); let nextFrame = 0
   const slots = [], listeners = new Map(), observers = [], captures = new Set()
   let cursor = 0, tree, effects = [], height = 300
   const priorWindow = globalThis.window, priorObserver = globalThis.ResizeObserver
-  globalThis.window = { innerWidth: 1440, innerHeight: 900, addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name) }
+  globalThis.window = { requestAnimationFrame: fn => { frames.set(++nextFrame, fn); return nextFrame }, cancelAnimationFrame: id => frames.delete(id), innerWidth: 1440, innerHeight: 900, addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name) }
   globalThis.ResizeObserver = class {
     constructor(fn) { this.fn = fn; observers.push(this) }
     observe() {}
@@ -117,12 +118,13 @@ function floatingHarness(overrides = {}) {
   }
   const Component = load('src/components/demo/GuidedTour.tsx', false, hooks).GuidedTour
   const walk = node => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(walk)]
-  const card = { getBoundingClientRect: () => ({ left: tree.props.style?.left ?? (window.innerWidth - (tree.props['data-collapsed'] ? 220 : 300) - 20), top: tree.props.style?.top ?? (tree.props['data-collapsed'] ? 16 : 80), width: tree.props['data-collapsed'] ? 220 : 300, height: tree.props['data-collapsed'] ? 44 : height }) }
+  const position = () => tree.props.style?.transform?.match(/translate3d\(([-.\d]+)px, ([-.\d]+)px, 0\)/)?.slice(1).map(Number)
+  const card = { getBoundingClientRect: () => ({ left: position()?.[0] ?? (window.innerWidth - (tree.props['data-collapsed'] ? 220 : 300) - 20), top: position()?.[1] ?? (tree.props['data-collapsed'] ? 16 : 80), width: tree.props['data-collapsed'] ? 220 : 300, height: tree.props['data-collapsed'] ? 44 : height }) }
   const target = { setPointerCapture: id => captures.add(id), hasPointerCapture: id => captures.has(id), releasePointerCapture: id => captures.delete(id), focus() {} }
-  const renderTree = () => { cursor = 0; tree = Component({ ...props, ...overrides }); if (tree.props.ref) tree.props.ref.current = card; const pending = effects; effects = []; pending.forEach(fn => fn()); return tree }
+  const renderTree = () => { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(fn => fn()); cursor = 0; tree = Component({ ...props, ...overrides }); if (tree.props.ref) tree.props.ref.current = card; const pending = effects; effects = []; pending.forEach(fn => fn()); return tree }
   renderTree()
   return {
-    render: renderTree,
+    render: () => { const result = renderTree(); const xy = position(); return { ...result, props: { ...result.props, style: xy ? { left: xy[0], top: xy[1], right: 'auto' } : result.props.style } } },
     find: className => walk(tree).find(node => node.props?.className?.split(' ').includes(className)),
     event: patch => ({ pointerType: 'mouse', button: 0, pointerId: 4, clientX: 1130, clientY: 90, currentTarget: target, preventDefault() { this.prevented = true }, ...patch }),
     captures, listeners, observers,
@@ -193,4 +195,8 @@ test('keyboard arrows move and clamp while unrelated keys and navigation remain 
     for (let n = 0; n < 40; n++) { h.find('guided-tour__drag').props.onKeyDown(h.event({ key: 'ArrowUp' })); h.render() }
     assert.equal(h.render().props.style.top, 8)
   } finally { h.close() }
+})
+
+test('Exit guide remains available while the guide is busy', () => {
+ assert.doesNotMatch(button(render({busy:true}),'Exit guide'),/disabled/)
 })

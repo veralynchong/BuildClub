@@ -561,3 +561,19 @@ test('native current publication ages stay exact while canonical snapshot metada
   assert.equal((await (await restored.request(new Request('http://guided.test/api/library'))).json()).videos.length,29)
  } finally {Date.now=originalNow;globalThis.fetch=original}
 })
+
+test('prepared research includes cached references and Evergreen projects while preserving scoped edits/removals', () => {
+ const local=store(), session=store(), key='trend-finder.research.v4'
+ const original={id:ids.researchId,clientId:ids.clientId,videoId:ids.videoId,notes:'user edit'}
+ local.setItem(key,JSON.stringify([original]))
+ const first=createPreparedDataWithClock(local,session,()=>0)
+ const rows=JSON.parse(local.getItem(key))
+ assert.equal(first.bootstrap.local[key].length,43)
+ assert.equal(rows.length,43); assert.deepEqual(rows[0],original)
+ assert.ok(rows.every(row=>row.clientId===ids.clientId))
+ assert.equal(new Set(rows.map(row=>row.videoId)).size,43)
+ local.setItem(key,JSON.stringify(rows.slice(0,42)))
+ createPreparedDataWithClock(local,session,()=>0)
+ assert.equal(JSON.parse(local.getItem(key)).length,42)
+ assert.equal(JSON.parse(local.getItem(key))[0].notes,'user edit')
+})

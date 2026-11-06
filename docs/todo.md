@@ -1,3 +1,13 @@
+## 2026-11-07：本次展示 review 的最新適用範圍
+
+- 使用者決定：語音不重要，本次不以 Gemini／ElevenLabs key 或語音生成作為阻擋。
+- prepared 固定案例、兩條操作錄影和真本機編輯／匯出已有驗收證據，見最新 STATUS／test-log；下方舊「生成 demo footage」未勾選不能解讀成沒有影片。即時 provider 與真人拍攝仍須分別標示，不能由 prepared 證據推論通過。
+- [ ] Tommy／Veralyn 看完最新成品並確認內容、外觀及展示說法。
+- [ ] 在實際 MacBook 開啟固定版本，核對播放、互動、備援錄影與離線播放；兩條錄影都沒有音軌，語音不列阻擋。
+- [ ] 按最新展示範圍重核 issues.md 的舊 P0/P1；歷史 open 不直接代表目前重現，也不自動勾完成。
+- [ ] 兩次正式彩排與週六展示 smoke 的驗收證據；已有兩條路線錄影，不等同兩次真人彩排。
+- [ ] 討論展示後優先事項：真素材／真 provider 的品質與等待、保存／跨裝置需求；先討論，不開始新增功能。
+
 # To do
 
 Open tasks that are not code: keys, decisions, things only Tommy can do. Tick `[x]` with the date when done.

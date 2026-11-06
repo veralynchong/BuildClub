@@ -318,7 +318,7 @@ export function PlanScreen(p: Props) {
             <>
               <ShotChecklist key={idea.id} ideaId={idea.id} status={idea.status} shots={shots} onProgress={onTakesProgress} />
               <CutPanel key={`cut-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} takesRevision={takesRevision} onOpenCanvas={onOpenCanvas} />
-              <PublishPanel key={`pub-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} />
+              {!p.preparedScript && <PublishPanel key={`pub-${idea.id}`} ideaId={idea.id} status={idea.status} shotCount={shots.length} />}
             </>
           )}
 

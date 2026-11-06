@@ -11,11 +11,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', required=True, type=Path)
     parser.add_argument('--dist', required=True, type=Path)
+    parser.add_argument('--assets', type=Path, help='Versioned local media directory; defaults to the existing six-shot demo')
     parser.add_argument('--port', type=int, default=8996)
     parser.add_argument('--render-port', type=int, default=8997)
     args = parser.parse_args()
     app_dir = Path(__file__).resolve().parents[1] / 'pivots/02-content/app/trend-finder'
-    assets = app_dir / 'public/demo-assets/fresh-six'
+    assets = (args.assets or app_dir / 'public/demo-assets/fresh-six').resolve(strict=True)
+    manifest = json.loads((assets / 'manifest.json').read_text())
     browser = app_dir / 'node_modules/.remotion/chrome-headless-shell/mac-arm64/chrome-headless-shell-mac-arm64/chrome-headless-shell'
     if not browser.is_file():
         parser.error('The existing Remotion browser is required; no download is performed.')
@@ -32,17 +34,21 @@ def main():
                       REMOTION_CACHE_DIR=str(state / 'render-cache'), REMOTION_PORT=str(args.render_port))
     sys.path.insert(0, str(app_dir / 'backend'))
     import uvicorn
-    from fastapi.responses import FileResponse
+    from fastapi import Request
+    from fastapi.responses import FileResponse, RedirectResponse
+    from urllib.parse import urlencode
     from fastapi.staticfiles import StaticFiles
     from guided_demo import create_app
-    app = create_app(manifest=json.loads((assets / 'manifest.json').read_text()), asset_root=assets, state_root=state)
+    app = create_app(manifest=manifest, asset_root=assets, state_root=state)
 
     @app.get('/api/guided/status')
     def status():
-        return {'mode': 'prepared-local-export', 'generationEnabled': False, 'pid': os.getpid()}
+        return {'mode': 'prepared-local-export', 'generationEnabled': False, 'pid': os.getpid(), **({'preset': 'full21'} if manifest.get('preset') == 'full21' else {})}
 
     @app.get('/')
-    def index():
+    def index(request: Request):
+        if manifest.get('preset') == 'full21' and (request.query_params.get('cut') != 'full21' or request.query_params.get('guided') != 'tofu'):
+            return RedirectResponse('/?' + urlencode({**dict(request.query_params), 'guided': 'tofu', 'cut': 'full21'}))
         return FileResponse(args.dist / 'index.html')
 
     app.mount('/', StaticFiles(directory=args.dist, html=True), name='frontend')
