@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # Throwaway Trend Finder backend for UI testing. Cannot spend money: no .env, all budgets 0.
-# Usage: [REMOTION_PORT=<port>] bash bin/isolated-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>]
+# Usage: [REMOTION_PORT=<port>] bash bin/isolated-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>] [--state <dir>]
 #   (runs in foreground; Ctrl-C or kill <pid> cleans up)
 #   --demo-data  also copy the finished breakdowns (jobs/<id>/) of the pinned searches' videos, found in
 #                jobs_source_dir, this checkout's backend/jobs, or the same folder of a sibling worktree
 #   --user       create a sign-in account once the server answers
+#   --state      keep data.db (accounts, sign-in sessions, projects) and media/ in <dir> across restarts
 #   REMOTION_PORT  if set, passed through to the backend (the clean environment drops everything else)
 #   MOCK_GEN_DELAY_S  if set, passed through too: how long a mock generation takes (default 2)
 set -eu
 cd "$(dirname "$0")/.."
 
-usage="usage: bash bin/isolated-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>]"
-port="${1:-}"; jobs_src=""; demo=0; user=""
+usage="usage: bash bin/isolated-backend.sh <port> [jobs_source_dir] [--demo-data] [--user <email>:<password>] [--state <dir>]"
+port="${1:-}"; jobs_src=""; demo=0; user=""; state=""
 [ -n "$port" ] || { echo "$usage" >&2; exit 2; }
 shift
 if [ "$#" -gt 0 ] && [ "${1#--}" = "$1" ]; then jobs_src="$1"; shift; fi
@@ -19,6 +20,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --demo-data) demo=1; shift;;
     --user) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 2; }; user="$2"; shift 2;;
+    --state) [ "$#" -ge 2 ] || { echo "$usage" >&2; exit 2; }; state="$2"; shift 2;;
     *) echo "$usage" >&2; exit 2;;
   esac
 done
@@ -67,6 +69,14 @@ PY
 fi
 rm -f "$tmp/.env" "$tmp/backend/.env"
 
+if [ -n "$state" ]; then
+  # Symlinks into the state dir; SQLite follows them, so its -wal/-shm files land there too.
+  mkdir -p "$state/media"; state="$(cd "$state" && pwd)"
+  [ ! -e "$tmp/backend/media" ] || rm -r "$tmp/backend/media"
+  ln -s "$state/data.db" "$tmp/backend/data.db"; ln -s "$state/media" "$tmp/backend/media"
+  echo "state:    $state (kept across restarts)"
+fi
+
 demo_env=(); [ "$demo" != 1 ] || demo_env=(REMAKE_DEMO=1)
 remotion_env=(); [ -z "${REMOTION_PORT:-}" ] || remotion_env=(REMOTION_PORT="$REMOTION_PORT")
 mock_env=(); [ -z "${MOCK_GEN_DELAY_S:-}" ] || mock_env=(MOCK_GEN_DELAY_S="$MOCK_GEN_DELAY_S")
@@ -82,7 +92,8 @@ echo "temp dir: $tmp"; echo "url:      http://127.0.0.1:$port"; echo "pid:      
 for _ in $(seq 1 60); do
   if out="$(curl -fsS "http://127.0.0.1:$port/api/health" 2>/dev/null)"; then echo "health:   $out"
     if [ -n "$user" ]; then
-      printf '%s\n' "${user#*:}" | "${clean_env[@]}" "$venv/bin/python" backend/server.py add-user "${user%%:*}" "E2E Tester" "E2E Agency" --password-stdin
+      printf '%s\n' "${user#*:}" | "${clean_env[@]}" "$venv/bin/python" backend/server.py add-user "${user%%:*}" "E2E Tester" "E2E Agency" --password-stdin \
+        || [ -n "$state" ]  # with --state the account usually exists already
     fi
     wait "$pid"; exit $?; fi
   kill -0 "$pid" 2>/dev/null || { echo "error: server exited early:" >&2; tail -20 "$tmp/server.log" >&2; exit 1; }
