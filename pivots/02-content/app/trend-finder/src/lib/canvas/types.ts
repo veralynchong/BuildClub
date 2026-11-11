@@ -13,6 +13,10 @@ export interface NodeData {
   prompt?: string
   text?: string // prompt node
   selected?: string | null // the chosen version (a generation id)
+  aspectRatio?: string
+  resolution?: string
+  count?: number
+  awaitingBatch?: string[]
   awaiting?: string // the generation being waited for; the chosen version stays until it finishes
   stale?: boolean // an input changed after the last version was made
   media?: 'image' | 'video' | 'audio' // upload
@@ -62,6 +66,12 @@ export interface Generation {
   kind: 'image' | 'video' | 'voice'
   model: string // a model id, or 'upload' / 'imported'
   inputs: {
+    aspectRatio?: string
+    resolution?: string
+    count?: number
+    batchId?: string
+    batchIndex?: number
+    requestedCount?: number
     inputStamp?: string
     prompt?: string
     startFrame?: string | null
@@ -88,12 +98,14 @@ export interface GenModel {
   provider: string
   endpoint: string
   tier: string
-  price: { per: string; usd: number }
+  price: { per: string; usd: number; byResolutionUsd?: Record<string, number> }
   priceCheckedAt: string
   available: boolean
   inputs: { text?: InputNeed; startFrame?: InputNeed; reference?: InputNeed }
   durations?: number[]
   maxRefs?: number // reference images the model takes; missing counts as 1
+  resolutions?: string[]
+  maxCount?: number
   aspects: string[]
   typicalSeconds?: number // seconds a job usually takes; the UI always says "about"
 }

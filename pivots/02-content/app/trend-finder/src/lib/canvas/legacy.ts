@@ -22,7 +22,9 @@ export function legacyInputsMatch(doc: CanvasDoc, gen: Generation, shots: Shot[]
   if (!kit && doc.edges.some((e) => e.target === node.id && e.targetHandle === 'in:kit')) return false
   const { request } = legacyGenerationRequest(doc, node.id, shots, gens, kit, model)
   const refs = (values: Generation['inputs']['references'] = []) => values.map((r) => r.source === 'gen' ? { source: r.source, genId: r.genId } : { source: r.source, itemId: r.itemId, image: r.image })
-  return request.prompt === (gen.inputs.prompt ?? '') && (request.startFrame ?? null) === (gen.inputs.startFrame ?? null) &&
+  const optionsMatch = (request.aspectRatio ?? '9:16') === (gen.inputs.aspectRatio ?? '9:16') &&
+    (request.resolution ?? (model.resolutions?.includes('1K') ? '1K' : undefined)) === (gen.inputs.resolution ?? (model.resolutions?.includes('1K') ? '1K' : undefined)) && (request.count ?? 1) === (gen.inputs.count ?? 1)
+  return optionsMatch && request.prompt === (gen.inputs.prompt ?? '') && (request.startFrame ?? null) === (gen.inputs.startFrame ?? null) &&
     (request.duration ?? model.durations?.[0] ?? null) === (gen.inputs.duration ?? null) &&
     JSON.stringify(refs(request.references)) === JSON.stringify(refs(gen.inputs.references)) &&
     Object.entries(gen.inputs.kitStamp ?? {}).every(([id, stamp]) => kit?.items.some((item) => item.id === id && item.updatedAt === stamp))

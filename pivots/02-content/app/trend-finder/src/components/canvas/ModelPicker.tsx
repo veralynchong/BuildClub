@@ -1,13 +1,15 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { t } from '../../lib/i18n'
-import { priceLabel } from '../../lib/canvas/graph'
+import { imageEstimate, normalizeImageSettings, priceLabel } from '../../lib/canvas/graph'
 import { aboutTime } from '../../lib/canvas/shell'
-import type { GenModel } from '../../lib/canvas/types'
+import { ff, usd } from '../../lib/strings/freeform'
+import type { GenModel, NodeData } from '../../lib/canvas/types'
 
 interface Props {
   models: GenModel[]
   kind: 'image' | 'video'
   value: string | undefined
+  imageSettings?: NodeData
   seconds: number | undefined
   refuses: (m: GenModel) => string | null
   disabled: boolean
@@ -29,10 +31,11 @@ const waitText = (m: GenModel): string | null => {
 // The model menu of the right panel (spec §6.3): a button that opens a list box. Each row has the full name, the price,
 // the usual wait and a tier badge; a model without a key, or one that can't take a connected input, is shown but can't
 // be picked, with the reason. Keyboard: arrows move, Enter picks, Esc closes.
-export function ModelPicker({ models, kind, value, seconds, refuses, disabled, onPick }: Props) {
+export function ModelPicker({ models, kind, value, seconds, imageSettings, refuses, disabled, onPick }: Props) {
+  const price = (m: GenModel) => m.kind === 'image' && imageSettings ? usd(imageEstimate(m, normalizeImageSettings(imageSettings, m))) : priceText(m, seconds)
   const [open, setOpen] = useState(false)
   const options = models.filter((m) => m.kind === kind)
-  const why = (m: GenModel): string | null => (!m.available ? t('canvas.gen.needsKey') : refuses(m))
+  const why = (m: GenModel): string | null => (!m.available ? ff('needsKey') : refuses(m))
   const current = options.find((m) => m.id === value)
   const [active, setActive] = useState(-1)
   const listId = useId()
@@ -87,7 +90,7 @@ export function ModelPicker({ models, kind, value, seconds, refuses, disabled, o
         }}
       >
         <span className="cv-picker-name">{current ? current.label : t('canvas.gen.retiredOption')}</span>
-        {current && <span className="cv-picker-meta small muted">{priceText(current, seconds)}</span>}
+        {current && <span className="cv-picker-meta small muted">{price(current)}</span>}
         <span aria-hidden="true">▾</span>
       </button>
       {open && (
@@ -103,6 +106,7 @@ export function ModelPicker({ models, kind, value, seconds, refuses, disabled, o
             if (!e.currentTarget.contains(e.relatedTarget as Node | null) && e.relatedTarget !== button.current) setOpen(false)
           }}
           onKeyDown={(e) => {
+            e.stopPropagation()
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
               e.preventDefault()
               step(e.key === 'ArrowDown' ? 1 : -1)
@@ -137,8 +141,9 @@ export function ModelPicker({ models, kind, value, seconds, refuses, disabled, o
                 <span className="cv-model-row-name">{m.label}</span>
                 {tier && <span className={`cv-tier is-${tier}`}>{t(`canvas.tier.${tier}`)}</span>}
                 <span className="cv-model-row-meta small muted">
-                  {priceText(m, seconds)}
+                  {price(m)}
                   {wait && ` · ${wait}`}
+                  {m.kind === 'image' && ` · ${(m.aspects ?? []).join(' / ')} · ${m.resolutions?.join(' / ') || ff('modelDefault')} · ×${m.maxCount ?? 1}`}
                 </span>
                 {reason && <span className="cv-model-row-why small">{reason}</span>}
               </li>

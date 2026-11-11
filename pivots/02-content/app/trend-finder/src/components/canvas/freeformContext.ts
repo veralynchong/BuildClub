@@ -6,6 +6,10 @@ import type { Kit, Shot } from '../../types'
 import type { EditProject } from '../../lib/editor/types'
 
 export interface FreeformActions {
+  selectVersion: (gen: Generation) => void
+  addReference: (source: string, target: string) => void
+  removeReference: (edgeId: string) => void
+  uploadReference: (target: string, file: File) => void
   kit: Kit | null
   freeform: boolean
   doc: CanvasDoc; gens: Generation[]; models: GenModel[]; shots: Shot[]; project: EditProject | null

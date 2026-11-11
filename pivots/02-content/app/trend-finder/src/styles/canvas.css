@@ -608,3 +608,14 @@
 .fc-screen[data-theme="light"] .fc-modal p { color:var(--fc-muted); }
 .fc-screen[data-theme="light"] .fc-kit-management { --fg:#27272a; --muted:#64646d; --surface:#fff; --surface-2:#f4f4f5; --line-strong:#d4d4d8; }
 .fc-screen[data-theme="light"] .fc-kit-management :is(input, textarea, select) { color:var(--fc-fg); background:#fff; border-color:var(--fc-line); }
+
+/* Compact image controls share the card and inspector settings. */
+.fc-image-options{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.fc-image-options label{min-width:0}.fc-image-options select{width:100%}
+.fc-references{width:100%;position:relative;border-top:1px solid var(--fc-line);padding-top:8px}
+.fc-reference-heading,.fc-history-controls{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fc-reference-menu{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--fc-line);border-radius:8px;background:var(--fc-panel)}
+.fc-reference-menu button small{display:block;white-space:normal}.fc-references .fc-input-wire span{overflow-wrap:anywhere}
+.fc-history-controls{justify-content:center;padding:6px}.fc-history-controls button{min-width:28px}
+.fc-batch{display:flex;flex-wrap:wrap;gap:5px;padding:8px;font-size:10px}.fc-batch strong{width:100%;font-weight:500}
+.fc-settings .cv-picker{width:100%;position:relative}.fc-settings .cv-model-list{position:static;min-width:0;width:100%;z-index:20;max-height:260px;overflow:auto}

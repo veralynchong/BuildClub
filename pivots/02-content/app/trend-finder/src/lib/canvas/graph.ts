@@ -1,3 +1,4 @@
+import { ff } from '../strings/freeform.ts'
 import { t, type Key } from '../i18n.ts'
 import type { Kit, Shot } from '../../types.ts'
 import { kitRefs, type GenRef } from './kit.ts'
@@ -131,6 +132,9 @@ export function shotTextSource(doc: CanvasDoc, nodeId: string, shots: Shot[]): {
 }
 
 export interface GenRequest {
+  aspectRatio?: string
+  resolution?: string
+  count?: number
   prompt: string
   startFrame?: string
   references: GenRef[]
@@ -148,6 +152,11 @@ export function genRequest(doc: CanvasDoc, nodeId: string, shots: Shot[], gens: 
   const start = frame('in:start')
   if (start) req.startFrame = start
   if (typeof node.data.duration === 'number') req.duration = node.data.duration
+  if (node.type === 'storyboard') {
+    if (node.data.aspectRatio !== undefined) req.aspectRatio = node.data.aspectRatio
+    if (node.data.resolution !== undefined) req.resolution = node.data.resolution
+    if (node.data.count !== undefined) req.count = node.data.count
+  }
   return req
 }
 
@@ -214,7 +223,7 @@ export function addNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: numb
 
 // The settings of an earlier version, to put back on its node.
 export function reuseSettings(g: Generation): Partial<NodeData> {
-  return { model: g.model, prompt: g.inputs.prompt ?? '', ...(typeof g.inputs.duration === 'number' ? { duration: g.inputs.duration } : {}) }
+  return { model: g.model, prompt: g.inputs.prompt ?? '', ...(typeof g.inputs.duration === 'number' ? { duration: g.inputs.duration } : {}), ...(g.kind === 'image' ? { aspectRatio: g.inputs.aspectRatio ?? '9:16', resolution: g.inputs.resolution, count: g.inputs.count ?? 1 } : {}) }
 }
 
 // The storyboard and the video it starts (the storyboard's line into the video's in:start), found from either node.
@@ -280,4 +289,45 @@ export function genView(node: CanvasNode, models: GenModel[], budget: Budget | n
   const seconds = model?.durations?.includes(node.data.duration ?? -1) ? node.data.duration : model?.durations?.[0]
   const usd = model ? priceOf(model, seconds) : 0
   return { kind, options, retired, model, seconds, usd, left: budgetLeft(budget, kind), canGenerate: !!model && model.available && !retired && need === null }
+}
+
+
+export function normalizeImageSettings(data: NodeData, model: GenModel): Pick<NodeData, 'aspectRatio' | 'resolution' | 'count'> {
+  const aspects = model.aspects ?? []
+  const resolutions = model.resolutions ?? []
+  return {
+    aspectRatio: aspects.includes(data.aspectRatio ?? '') ? data.aspectRatio : aspects.includes('9:16') ? '9:16' : aspects[0],
+    resolution: resolutions.includes(data.resolution ?? '') ? data.resolution : resolutions.includes('1K') ? '1K' : resolutions[0],
+    count: Number.isInteger(data.count) && data.count! >= 1 && data.count! <= (model.maxCount ?? 1) ? data.count : 1,
+  }
+}
+export function imageEstimate(model: GenModel, data: NodeData): number {
+  const options = normalizeImageSettings(data, model)
+  return Math.round((model.price.byResolutionUsd?.[options.resolution ?? ''] ?? model.price.usd) * (options.count ?? 1) * 1e6) / 1e6
+}
+export function successfulVersions(nodeId: string, gens: Generation[]): Generation[] {
+  return versionsOf(nodeId, gens).filter((g) => g.status === 'done')
+}
+export function referenceEdge(source: string, target: string, kit: boolean) {
+  const targetHandle = kit ? 'in:kit' : 'in:ref'
+  return { id: `e_${source}_${target}_${targetHandle}`, source, sourceHandle: 'out', target, targetHandle }
+}
+// Count untrimmed inputs: model changes must never silently discard connected references.
+export function referenceCount(doc: CanvasDoc, nodeId: string, kit: Kit | null): number {
+  const node = doc.nodes.find((n) => n.id === nodeId)
+  let count = doc.edges.filter((e) => e.target === nodeId && e.targetHandle === 'in:ref').length
+  for (const e of doc.edges.filter((e) => e.target === nodeId && e.targetHandle === 'in:kit')) {
+    const source = doc.nodes.find((n) => n.id === e.source)
+    count += (kit?.items ?? []).filter((i) => source?.data.kitItems?.includes(i.id) && !node?.data.kitOff?.includes(i.id)).reduce((n, i) => n + i.images.length, 0)
+  }
+  return count
+}
+export function modelRefusal(doc: CanvasDoc, nodeId: string, model: GenModel, gens: Generation[], kit: Kit | null): string | null {
+  const incoming = doc.edges.filter((e) => e.target === nodeId)
+  const refs = referenceCount(doc, nodeId, kit)
+  if ((refs || incoming.some((e) => e.targetHandle === 'in:kit')) && (model.inputs.reference ?? 'none') === 'none') return ff('refsUnsupported')
+  if (refs > (model.maxRefs ?? 1)) return `${ff('tooManyRefs')}: ${refs}/${model.maxRefs ?? 1}`
+  if (incoming.some((e) => e.targetHandle === 'in:start') && (model.inputs.startFrame ?? 'none') === 'none') return ff('startUnsupported')
+  void gens
+  return null
 }
