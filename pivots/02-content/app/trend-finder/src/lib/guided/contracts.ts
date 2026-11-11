@@ -1,8 +1,8 @@
 export type GuidedRoute = 'shoot' | 'ai'
-export type GuidedStep = 'search' | 'results' | 'research' | 'breakdown' | 'script' | 'route' | 'canvas' | 'edit' | 'result'
-export type GuidedCanvasStep = 'shots' | 'prompt' | 'image' | 'connect' | 'video' | 'versions' | 'footage' | `prompt-s${number}` | `image-s${number}` | `history-s${number}` | `video-s${number}` | `camera-s${number}`
+export type GuidedStep = 'search' | 'results' | 'save' | 'research' | 'breakdown' | 'script' | 'route' | 'canvas' | 'edit' | 'result'
+export type GuidedCanvasStep = 'shots' | 'image-s1-v2' | 'video-s1-v2' | 'rewrite-s1' | 'prompt' | 'image' | 'connect' | 'video' | 'versions' | 'footage' | `prompt-s${number}` | `image-s${number}` | `history-s${number}` | `video-s${number}` | `camera-s${number}`
 export type GuidedState = { version: 1; active: boolean; stepId: GuidedStep; route: GuidedRoute | null; canvasStep?: GuidedCanvasStep; skippedCanvasSteps?: GuidedCanvasStep[] }
-export type GuidedFocusRequest = { revealNodeIds?: readonly string[]; nodeIds: readonly string[]; edgeIds?: readonly string[]; dock?: 'inspect' | 'history' | null }
+export type GuidedFocusRequest = { revealNodeIds?: readonly string[]; nodeIds: readonly string[]; edgeIds?: readonly string[]; dock?: 'inspect' | 'history' | null; demoAction?: 'prompt-1' | 'image-1' | 'prompt-2' | 'image-2' | 'select' }
 
 export const GUIDED_CANVAS_IDS = {
   shotId: 's19', shotNumber: 19,

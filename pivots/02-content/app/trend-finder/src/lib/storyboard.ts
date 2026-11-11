@@ -150,8 +150,8 @@ async function post<T>(url: string, body: unknown, fallback: string): Promise<T>
   throw new Error(message)
 }
 
-export async function writeScript(ideaId: string, force = false): Promise<{ source: string; shots: WrittenShot[] }> {
-  return post(`${base(ideaId)}/script`, { force }, t('plan.sb.err.write'))
+export async function writeScript(ideaId: string, force = false, expectedBasis?: string): Promise<{ source: string; shots: WrittenShot[] }> {
+  return post(`${base(ideaId)}/script`, { force, ...(expectedBasis === undefined ? {} : { expectedBasis }) }, t('plan.sb.err.write'))
 }
 
 export async function writeShotScript(

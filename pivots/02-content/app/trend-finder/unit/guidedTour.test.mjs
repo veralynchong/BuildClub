@@ -5,7 +5,7 @@ import { GUIDED_STEPS, createGuidedState, readGuidedState, saveGuidedState, requ
 const ready = { view: 'research', workspace: GUIDED_IDS.clientId, drawerVideoId: null, planId: null, canvasId: null, editing: false, exportOpen: false, ready: true, busy: false }
 
 test('nine native steps are bilingual and requests never commit state or skip the route gate', () => {
-  assert.deepEqual(GUIDED_STEPS.map(step => step.id), ['search','results','breakdown','research','script','route','canvas','edit','result'])
+  assert.deepEqual(GUIDED_STEPS.map(step => step.id), ['search','results','research','script','route','canvas','edit','result'])
   for (const step of GUIDED_STEPS) for (const lang of ['en','zh-Hant']) { assert.ok(step[lang].title); assert.ok(step[lang].description) }
   const state = Object.freeze(createGuidedState())
   assert.equal(requestedStep(state, 'previous'), 'search')
@@ -80,7 +80,7 @@ test('native search and results require actual ready tofu results, never a loadi
 import * as guidedNavigation from '../src/lib/guided/tour.ts'
 
 test('main progress groups the original search and reference screens into seven stages', () => {
-  assert.deepEqual(GUIDED_STEPS.map(step => guidedNavigation.guidedMainProgress(step.id).current), [1, 1, 2, 2, 3, 4, 5, 6, 7])
+  assert.deepEqual(GUIDED_STEPS.map(step => guidedNavigation.guidedMainProgress(step.id).current), [1, 1, 2, 3, 4, 5, 6, 7])
   assert.ok(GUIDED_STEPS.every(step => guidedNavigation.guidedMainProgress(step.id).total === 7))
 })
 
@@ -97,7 +97,7 @@ test('persisted Canvas step and explicit replay skips survive reload and reject 
 })
 
 test('Canvas Next and Previous stay nested and Editor returns to the last Canvas step', () => {
-  for (const [route, expected] of [['ai', ['shots','prompt-s1','image-s1','video-s1','history-s1','prompt-s2','image-s2','history-s2','image-s3','video-s4','image-s5','video-s5','image-s6','versions']], ['shoot', ['shots','prompt-s1','image-s1','camera-s1','history-s1','prompt-s2','image-s2','camera-s2','history-s2','image-s3','image-s4','image-s5','image-s6','versions']]]) {
+  for (const [route, expected] of [['ai', ['shots','prompt-s1','image-s1','video-s1','history-s1','prompt-s2','image-s2','history-s2','image-s3','video-s4','image-s5','video-s5','image-s6','versions']], ['shoot', ['shots','prompt-s1','image-s1','rewrite-s1','image-s1-v2','versions']]]) {
     let state = { ...createGuidedState(), stepId: 'route', route }
     state = guidedNavigation.requestedGuidedState(state, 'next')
     for (const step of expected) {
@@ -113,4 +113,47 @@ test('Canvas Next and Previous stay nested and Editor returns to the last Canvas
     assert.equal(guidedNavigation.requestedGuidedState(first, 'previous').stepId, 'route')
     assert.deepEqual(guidedNavigation.requestedGuidedState({ ...first, active: false }, 'next'), { ...first, active: false })
   }
+})
+
+
+test('retired six-shot shoot steps migrate without restarting active or exited sessions', () => {
+ for (const active of [true, false]) for (const stepId of ['canvas', 'edit', 'result']) {
+  const old = {version: 1, active, stepId, route: 'shoot', canvasStep: 'camera-s1', skippedCanvasSteps: ['image-s1', 'image-s2', 'image-s6']}
+  const store = {getItem: () => JSON.stringify(old)}
+  assert.deepEqual(readGuidedState(store), {...old, canvasStep: stepId === 'canvas' ? 'prompt-s1' : 'versions', skippedCanvasSteps: []})
+ }
+})
+
+
+test('old final comparison opens the playable-video step once without resetting editor or exited guides', () => {
+ const values = new Map(), store = {getItem: key => values.get(key) ?? null, setItem: (key,value) => values.set(key,value)}
+ const old = {version: 1, active: true, stepId: 'canvas', route: 'shoot', canvasStep: 'versions'}
+ values.set('guided-progress.v1',JSON.stringify(old))
+ assert.deepEqual(readGuidedState(store),{...old,canvasStep:'prompt-s1'})
+ saveGuidedState(store,old)
+ assert.deepEqual(readGuidedState(store),old)
+ for(const patch of [{stepId:'edit'},{stepId:'result'},{active:false}]) {
+  values.set('guided-progress.v1',JSON.stringify({...old,...patch}))
+  assert.deepEqual(readGuidedState(store),{...old,...patch})
+ }
+})
+
+
+test('a new demo reference starts unsaved while saved progress and explicit saved state survive reload', () => {
+ const {referenceSavedInitially} = guidedNavigation
+ for(const stepId of ['search','results']) assert.equal(referenceSavedInitially({...createGuidedState(),stepId},null),false)
+ for(const stepId of ['save','breakdown','research','script','route','canvas','edit','result']) assert.equal(referenceSavedInitially({...createGuidedState(),stepId},null),true)
+ assert.equal(referenceSavedInitially({...createGuidedState(),stepId:'results'},'true'),true)
+ assert.equal(referenceSavedInitially({...createGuidedState(),stepId:'research'},'false'),false)
+})
+
+
+test('saving skips confirmation and breakdown steps; old saved progress resumes in Research', () => {
+ const base={...createGuidedState(),stepId:'results'}
+ assert.equal(guidedNavigation.requestedGuidedState(base,'next').stepId,'research')
+ assert.equal(guidedNavigation.requestedGuidedState({...base,stepId:'research'},'previous').stepId,'results')
+ for(const stepId of ['save','breakdown']) for(const active of [true,false]) {
+  const old={...base,stepId,active}
+  assert.deepEqual(readGuidedState({getItem:()=>JSON.stringify(old)}),{...old,stepId:'research'})
+ }
 })

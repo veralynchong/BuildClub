@@ -1,4 +1,5 @@
-import { freshRoute, freshThumbnail } from '../../lib/guided/freshSix'
+import { OPENING_VERSIONS } from '../../lib/guided/shootOpening'
+import { freshRoute, freshThumbnail, SHOOT_OPENING_V2 } from '../../lib/guided/freshSix'
 import { usePrefersReducedMotion } from '../../lib/motion'
 import { getGuidedRuntime } from '../../lib/guided/runtime'
 import { apiBase, type ResourceInput } from '../../lib/canvas/resource.ts'
@@ -289,6 +290,9 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const locked = assembling || readOnly || stale || !!edit.writing
   const thumbnailOf = (clip: Clip) => {
     const route = freshRoute(typeof ideaId === 'string' ? ideaId : ideaId.id)
+    const opening = runtime && OPENING_VERSIONS.find(version => version.sourceId === clip.source.id)
+    if (opening) return opening.poster
+    if (runtime && clip.source.id === 'shoot-s1-v2') return SHOOT_OPENING_V2
     const shotId = clip.source.shotId
     return runtime && route && shotId && clip.source.id === `${route}-${shotId}` ? freshThumbnail(route, Number(shotId.slice(1)) - 1, new URLSearchParams(window.location.search).get('cut') === 'full21') : undefined
   }

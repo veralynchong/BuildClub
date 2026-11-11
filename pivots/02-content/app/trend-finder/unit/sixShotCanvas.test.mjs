@@ -68,6 +68,6 @@ test('both routes restore explicit skipped six-shot replays without resetting pr
  for (const route of ['ai','shoot']) {
   const store=storage(), state={version:1,active:true,stepId:'canvas',route,canvasStep:'image-s3',skippedCanvasSteps:['image-s1','image-s2']}
   saveGuidedState(store,state)
-  assert.deepEqual(readGuidedState(store),state)
+  assert.deepEqual(readGuidedState(store), route === 'shoot' ? {...state, canvasStep: 'prompt-s1', skippedCanvasSteps: []} : state)
  }
 })

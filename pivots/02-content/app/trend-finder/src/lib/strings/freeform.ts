@@ -2,6 +2,13 @@ import { getActiveLang } from '../i18n.ts'
 
 const words = {
   arrangeShots: ['Arrange shots', '排列鏡頭'], versions: ['Other versions', '其他版本'], versionLabel: ['Version', '版本'],
+  demoPrompt: ['Demo prompt', '示範 Prompt'],
+  promptUsed: ['Prompt used for this version', '此版本使用的 Prompt'],
+  nextPrompt: ['Prompt for the next version', '下一個版本的 Prompt'],
+  promptChanged: ['Changed framing', '修改構圖描述'],
+  samplePrompt1: ['Sample prompt 1', '範例描述 1'],
+  samplePrompt2: ['Sample prompt 2', '範例描述 2'],
+  preparedFraming: ['Prepared framing variants from one existing AI clip · no live generation.', '同一段既有 AI 影片的預備構圖版本，無即時生成。'],
   preparedReplay: ['Prepared material replay', '預備素材回放'],
   estimate: ['Estimate', '預估'],
   ratio: ['Ratio', '比例'], size: ['Size', '尺寸'], count: ['Count', '張數'], modelDefault: ['Model default', '模型預設'],

@@ -1,3 +1,4 @@
+import { OPENING_IMAGES, OPENING_VERSIONS } from '../../lib/guided/shootOpening'
 import { getGuidedRuntime } from '../../lib/guided/runtime'
 import { preparedWallet, preparedCost } from '../../lib/guided/presentation'
 import { materializeFresh, freshRoute, freshSourceFor, placeFreshSource } from '../../lib/guided/freshSix'
@@ -16,7 +17,7 @@ import { KitPanel } from './KitPanel'
 import { mergeVoiceOwnership } from '../../lib/canvas/voices'
 import { createOperationQueue, prepareCanvasLeave } from '../../lib/canvas/operations'
 import { createCanvasSession, draftStore, reconcileGenerations, selectGeneration, rememberGeneration, rememberBatch } from '../../lib/canvas/session'
-import { genRequest, markStale, staleIds, priceOf, selectedGen, imageEstimate, normalizeImageSettings, modelRefusal, referenceEdge, reuseSettings, successfulVersions } from '../../lib/canvas/graph'
+import { genRequest, markStale, staleIds, priceOf, selectedGen, imageEstimate, normalizeImageSettings, modelRefusal, referenceEdge, reuseSettings } from '../../lib/canvas/graph'
 import { askAgent, applyAgentPlan, type AgentPlan } from '../../lib/canvas/agent'
 import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
 import { apiBase } from '../../lib/canvas/resource'
@@ -38,7 +39,7 @@ import { ZoomBar } from './ZoomBar'
 import { chooseTake, listTakes, uploadTake, type Take } from '../../lib/takes'
 import { createShareLink } from '../../lib/share'
 
-export type CanvasGuideState = { focusedNodeIds?: readonly string[]; focusedEdgeIds?: readonly string[]; focusedDock?: 'inspect' | 'history' | 'assistant' | null; replayedNodeIds?: readonly string[]; error?: string; resourceId: string | null; editing: boolean; exportOpen: boolean; ready: boolean; busy: boolean }
+export type CanvasGuideState = { demoAction?: GuidedFocusRequest['demoAction']; focusedNodeIds?: readonly string[]; focusedEdgeIds?: readonly string[]; focusedDock?: 'inspect' | 'history' | 'assistant' | null; replayedNodeIds?: readonly string[]; replayCounts?: Record<string, number>; selectedOnTimelineNodeIds?: readonly string[]; error?: string; resourceId: string | null; editing: boolean; exportOpen: boolean; ready: boolean; busy: boolean }
 export type CanvasGuideActions = { resourceId: string; focus: (request: GuidedFocusRequest) => Promise<boolean>; show: (target: 'canvas' | 'edit' | 'result') => Promise<boolean> }
 
 interface Props {
@@ -122,7 +123,10 @@ function Board({ context, registerGuide, onGuideState, registerLeaveGuard, onSho
   const [guideFocused, setGuideFocused] = useState<GuidedFocusRequest>({ nodeIds: [], edgeIds: [], dock: null })
   const [guideEditor, setGuideEditor] = useState<{ ready: boolean; exportOpen: boolean; busy: boolean; error?: string }>({ ready: false, exportOpen: false, busy: false })
   const changeEditing = (next: boolean) => {
-    if (next !== editing) setGuideEditor({ ready: false, exportOpen: false, busy: false })
+    if (next !== editing) {
+      setGuideEditor({ ready: false, exportOpen: false, busy: false })
+      if (next && registerGuide) getGuidedRuntime()?.local.removeItem(`editor-arrival.v1:${apiBase(resource)}`)
+    }
     setEditing(next)
   }
   const [note, setNote] = useState('')
@@ -156,7 +160,7 @@ function Board({ context, registerGuide, onGuideState, registerLeaveGuard, onSho
   const edit = useEditProject(resource, readOnly)
   const sources = useSources(resource, JSON.stringify(gens.map((g) => [g.id, g.status])))
   const nativeTimeline = useTimelineActions({ freeform: resource.kind === 'workspace', edit, sources, shots, doc, gens, takes, readOnly: readOnly || stale, onPlaced: () => {}, notify: (key) => setNote(t(key)) })
-  // Prepared replays reuse immutable imported sources, so a replay is not a newer creative version.
+  // Prepared versions map to immutable imported sources; selecting alone never edits the timeline.
   const timeline = registerGuide ? { ...nativeTimeline, useForShot: async (source: import('../../lib/editor/types').ClipSource) => {
     if (readOnly || stale || !edit.persist) return false
     const available = await sources.refresh()
@@ -171,8 +175,8 @@ function Board({ context, registerGuide, onGuideState, registerLeaveGuard, onSho
   }, [readOnly, session, recoveryOpen])
   const layoutSizes = useMemo(() => new Map(doc.nodes.map((n) => [n.id, {
     width: Math.max(350, measured[n.id]?.width ?? 0),
-    height: Math.max(n.type === 'shot' ? 200 : 720 + 280 * Math.max(0, successfulVersions(n.id, gens).length - 1), measured[n.id]?.height ?? 0),
-  }])), [doc.nodes, gens, measured])
+    height: Math.max(n.type === 'shot' ? 200 : 720, measured[n.id]?.height ?? 0),
+  }])), [doc.nodes, measured])
   const arrange = () => {
     const viewport = { x: 80, y: 32, zoom: 0.6 }
     change({ ...arrangeShots(session.doc(), shots, layoutSizes), viewport })
@@ -494,6 +498,7 @@ function Board({ context, registerGuide, onGuideState, registerLeaveGuard, onSho
     await refresh()
   }, true)
   const actions: FreeformActions = {
+    guidedPresentation: !!registerGuide && freshRoute(resource.id) === 'shoot',
     selectVersion, addReference, uploadReference,
     canUseInEdit: registerGuide ? (gen) => !!freshSourceFor(freshRoute(resource.id) ?? 'shoot', gen) : undefined,
     useInEdit: registerGuide ? (gen) => { void withBusy('guided-use', async () => {
@@ -508,7 +513,7 @@ function Board({ context, registerGuide, onGuideState, registerLeaveGuard, onSho
     connect: (id) => { const rect = flowBox.current!.getBoundingClientRect(); setMenu({ x: rect.width / 2, y: 150, from: id, at: screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + 150 }) }) },
   }
   const displayedDoc = useMemo(() => readOnly && (doc.layout === 'shots-horizontal' || initialShotLayout(doc, shots)) ? arrangeShots(doc, shots, layoutSizes) : doc, [doc, shots, layoutSizes, readOnly])
-  const nodes: FreeNode[] = useMemo(() => displayedDoc.nodes.map((node) => ({ id: node.id, type: 'freeform', position: dragPositions[node.id] ?? node.position, data: { node }, selected: selected.includes(node.id), measured: measured[node.id], deletable: node.type !== 'shot' })), [displayedDoc.nodes, selected, measured, dragPositions])
+  const nodes: FreeNode[] = useMemo(() => displayedDoc.nodes.map((node) => ({ id: node.id, type: 'freeform', hidden: !!registerGuide && freshRoute(resource.id) === 'shoot' && !!guideFocused.demoAction && node.type === 'shot' && !selected.includes(node.id), position: dragPositions[node.id] ?? node.position, data: { node }, selected: selected.includes(node.id), measured: measured[node.id], deletable: node.type !== 'shot' })), [displayedDoc.nodes, selected, measured, dragPositions, registerGuide, resource.id, guideFocused.demoAction])
   const edges = [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null, voices)].map((e) => ({ ...e, selected: selectedEdges.includes(e.id), className: `fc-edge media-${doc.nodes.find((n) => n.id === e.source)?.type === 'voice' ? 'audio' : 'image'}` }))
   const picked = doc.nodes.find((n) => selected.length === 1 && n.id === selected[0])
   const quotedNode = doc.nodes.find((n) => n.id === quote?.id)
@@ -557,6 +562,55 @@ function Board({ context, registerGuide, onGuideState, registerLeaveGuard, onSho
     changeEditing(target !== 'canvas')
     return true
   }
+  const performDemoAction = async (action: NonNullable<GuidedFocusRequest['demoAction']>) => {
+    if (readOnly || !registerGuide || freshRoute(resource.id) !== 'shoot') return false
+    busyRef.current.add('guide-demo'); setBusy(new Set(busyRef.current))
+    try {
+      const imageId = 'n_six_image_s1', promptId = 'n_six_prompt_s1'
+      if (action === 'select') {
+        const current = await getCanvas(resource)
+        const node = current.doc.nodes.find(node => node.id === imageId)
+        const selected = current.generations.find(gen => gen.id === node?.data.selected)
+        const source = selected && freshSourceFor('shoot', selected)
+        if (!source || !await timeline.useForShot(source) || !await edit.flush()) throw new Error(ff('needOutput'))
+        return true
+      }
+      const version = OPENING_VERSIONS[action.endsWith('2') ? 1 : 0]
+      change({ ...session.doc(), nodes: session.doc().nodes.map(node => node.id === promptId ? { ...node, data: { ...node.data, text: version.prompt } } : node.id === imageId ? { ...node, data: { ...node.data, prompt: version.prompt } } : node) })
+      if (!await flush()) throw new Error(ff('saveFirst'))
+      if (action.startsWith('image')) {
+        let current = await getCanvas(resource)
+        const pending = current.generations.find(gen => gen.nodeId === imageId && ['queued', 'running', 'waiting'].includes(gen.status))
+        if (pending) {
+          await pollGen(resource, pending.id, gen => setGens(gs => [...gs.filter(old => old.id !== gen.id), gen]), { signal: abort.current.signal, intervalMs: 250 })
+          await refresh()
+          if (!await flush()) throw new Error(ff('saveFirst'))
+          current = await getCanvas(resource)
+        }
+        const expectedUrl = OPENING_IMAGES[action.endsWith('2') ? 1 : 0]
+        const matches = (gen: Generation) => gen.nodeId === imageId && gen.kind === 'image' && gen.model === 'prepared-image' && gen.status === 'done' && gen.inputs.prompt === version.prompt && gen.url === expectedUrl
+        let gen = current.generations.find(matches)
+        if (!gen) {
+          const quote = await quoteNode(resource, imageId, session.version())
+          if (quote.total !== 0) throw new Error('Only a free prepared replay is available in this walkthrough.')
+          const request = genRequest(session.doc(), imageId, [], current.generations)
+          const started = await startGen(resource, { ...request, nodeId: imageId, model: 'prepared-image', canvasVersion: session.version(), inputStamp: quote.inputStamp, quoteStamp: quote.quoteStamp, confirm: true })
+          const pending = generationItems(started)[0]
+          setGens(gs => [...gs.filter(gen => gen.id !== pending.id), pending])
+          const done = await pollGen(resource, pending.id, gen => setGens(gs => [...gs.filter(old => old.id !== gen.id), gen]), { signal: abort.current.signal, intervalMs: 250 })
+          if (!done || !matches(done)) throw new Error(ff('needOutput'))
+          gen = done
+          current = await getCanvas(resource)
+        }
+        setGens(current.generations)
+        if (!await selectGeneration(gen, { ...selectionIO(), generations: current.generations })) throw new Error(ff('saveFirst'))
+        await refresh()
+      }
+      return true
+    } finally {
+      busyRef.current.delete('guide-demo'); setBusy(new Set(busyRef.current))
+    }
+  }
   const guideFocus = useRef<CanvasGuideActions['focus']>(async () => false)
   guideFocus.current = async (request) => {
     if (guideBusy || !request.nodeIds.length) return false
@@ -566,6 +620,7 @@ function Board({ context, registerGuide, onGuideState, registerLeaveGuard, onSho
       change(expanded)
       if (!await session.flush()) return false
     }
+    if (request.demoAction && !await performDemoAction(request.demoAction)) return false
     if (editing && !await edit.flush()) return false
     changeEditing(false)
     setGuideExport(false)
@@ -575,16 +630,22 @@ function Board({ context, registerGuide, onGuideState, registerLeaveGuard, onSho
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
     if (!mounted.current) return false
     const fitted = await fitView({ nodes: request.nodeIds.map((id) => ({ id })), padding: 0.25, maxZoom: 1, duration: 0 })
-    if (fitted && mounted.current) setGuideFocused({ nodeIds: [...request.nodeIds], edgeIds: [...(request.edgeIds ?? [])], dock: request.dock ?? null })
+    if (fitted && mounted.current) setGuideFocused({ nodeIds: [...request.nodeIds], edgeIds: [...(request.edgeIds ?? [])], dock: request.dock ?? null, ...(request.demoAction ? { demoAction: request.demoAction } : {}) })
     return fitted
   }
   useEffect(() => registerGuide?.({ resourceId: resource.id, show: (target) => guideShow.current(target), focus: (request) => guideFocus.current(request) }), [registerGuide, resource.id])
   useEffect(() => {
-    onGuideState?.({ focusedNodeIds: guideFocused.nodeIds.filter((id) => selected.includes(id) && doc.nodes.some((node) => node.id === id)),
+    onGuideState?.({ demoAction: guideFocused.demoAction, focusedNodeIds: guideFocused.nodeIds.filter((id) => selected.includes(id) && doc.nodes.some((node) => node.id === id)),
       focusedEdgeIds: (guideFocused.edgeIds ?? []).filter((id) => selectedEdges.includes(id) && doc.edges.some((edge) => edge.id === id)),
       focusedDock: dock, replayedNodeIds: [...new Set(gens.filter((generation) => generation.status === 'done' && generation.model.startsWith('prepared-') && !doc.nodes.find((node) => node.id === generation.nodeId)?.data.stale).map((generation) => generation.nodeId))],
+      replayCounts: Object.fromEntries(doc.nodes.map(node => [node.id, new Set(gens.filter(g => g.nodeId === node.id && g.status === 'done' && g.url).map(g => g.url)).size])),
+      selectedOnTimelineNodeIds: doc.nodes.filter(node => {
+        const gen = gens.find(g => g.id === node.data.selected)
+        const source = gen && freshSourceFor(freshRoute(resource.id) ?? 'shoot', gen)
+        return source && edit.committedProject?.clips.some(clip => clip.source.kind === source.kind && clip.source.id === source.id && clip.source.shotId === source.shotId)
+      }).map(node => node.id),
       error: editing ? guideEditor.error : undefined, resourceId: resource.id, editing, exportOpen: editing && guideEditor.exportOpen, ready: !editing || guideEditor.ready, busy: guideBusy || (editing && guideEditor.busy) })
-  }, [onGuideState, resource.id, editing, guideEditor, guideBusy, guideFocused, selected, selectedEdges, dock, gens, doc.nodes, doc.edges])
+  }, [onGuideState, resource.id, editing, guideEditor, guideBusy, guideFocused, selected, selectedEdges, dock, gens, doc.nodes, doc.edges, edit.committedProject])
   const leaveRef = useRef(prepareLeave)
   leaveRef.current = prepareLeave
   useEffect(() => registerLeaveGuard?.(() => leaveRef.current()), [registerLeaveGuard])
@@ -666,7 +727,7 @@ function Board({ context, registerGuide, onGuideState, registerLeaveGuard, onSho
             <button title={ff('select')} aria-label={ff('select')} className={!pan ? 'is-active' : ''} onClick={() => setPan(false)}>↖</button><button title={ff('pan')} aria-label={ff('pan')} className={pan ? 'is-active' : ''} onClick={() => setPan(true)}>✥</button><hr />
             {kinds.map((k, i) => <button key={k} title={ff(k)} aria-label={ff(k)} disabled={actions.readonly || (k === 'editor' && doc.nodes.some((n) => n.type === 'editor'))} onClick={() => add(k)}>{glyphs[i]}</button>)}
           </nav>
-          {selected.length > 1 && <div className="fc-multi"><span>{selected.length}</span><button disabled={actions.readonly} onClick={() => remove(selected)}>⌫ {ff('delete')}</button><button onClick={() => void fitView({ nodes: selected.map((id) => ({ id })), padding: 0.4 })}>⤢</button></div>}
+          {selected.length > 1 && !actions.guidedPresentation && <div className="fc-multi"><span>{selected.length}</span><button disabled={actions.readonly} onClick={() => remove(selected)}>⌫ {ff('delete')}</button><button onClick={() => void fitView({ nodes: selected.map((id) => ({ id })), padding: 0.4 })}>⤢</button></div>}
           {menu && <div className="fc-create-menu" style={{ left: Math.min(menu.x, (flowBox.current?.clientWidth ?? 1000) - 250), top: Math.min(menu.y, (flowBox.current?.clientHeight ?? 700) - 350) }}><input autoFocus placeholder={ff('add')} value={search} onChange={(e) => setSearch(e.target.value)} />{menuKinds.filter((k) => ff(k).toLowerCase().includes(search.toLowerCase())).map((k) => <button key={k} onClick={() => add(k, menu.at, menu.from)}><span>{glyphs[kinds.indexOf(k)]}</span>{ff(k)}<small>↗</small></button>)}</div>}
           <div className="fc-page">▱ {ff('page')} <span>1</span></div>
         </div>

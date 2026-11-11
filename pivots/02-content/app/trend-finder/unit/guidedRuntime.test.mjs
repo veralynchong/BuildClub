@@ -69,7 +69,7 @@ test('scoped Storage methods, named properties, enumeration and clear preserve f
   assert.equal(session.getItem('formal'), 'session')
 })
 
-test('reload retains the token and existing bootstrap values; a fresh Watch creates a new URL token', () => {
+test('normal navigation retains the token and existing bootstrap values; a fresh Watch creates a new URL token', () => {
   const { win, local } = windowFor(`?guided=tofu&guideSession=${id}`)
   local.setItem(`remake:guided:${id}:clients`, '["existing"]')
   const runtime = installGuidedRuntime(factory, win)
@@ -238,4 +238,74 @@ test('aborting a caller settles while shared local-editor initialization remains
   const pending = win.fetch('http://example.test/api/ideas/guided-tofu-ai/edit', { signal: controller.signal })
   controller.abort()
   await assert.rejects(pending, { name: 'AbortError' })
+})
+
+
+test('full editor selects the native host namespace only when its HTML declares support', async () => {
+  for (const [query, supported, expected] of [['?guided=tofu', true, '/api/guided/sessions/'], ['?guided=tofu&cut=full21', false, '/api/guided/sessions/'], ['?guided=tofu&cut=full21', true, '/api/guided/full/sessions/']]) {
+    const { win } = windowFor(query), calls = []
+    win.document = { querySelector: selector => supported && selector === 'meta[name="guided-editor-full"]' ? {} : null }
+    win.fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      calls.push(new URL(request.url).pathname)
+      return new Response(JSON.stringify({ version: 1, project: {} }))
+    }
+    installGuidedRuntime(factory, win)
+    await win.fetch('http://example.test/api/ideas/guided-tofu-shoot/edit')
+    assert.deepEqual(calls, [`${expected}${id}/shoot`, `${expected}${id}/shoot/edit`])
+  }
+})
+
+
+test('refresh creates a clean demo session while preserving normal account data and prior sessions', async () => {
+ const {createFreshSixData} = await import('../src/lib/guided/freshSix.ts')
+ for(const namespace of ['fresh-six-v1:','full-ai-six-v1:']) {
+  const {win,local,session} = windowFor(`?guided=tofu&guideSession=${id}${namespace.startsWith('full')?'&cut=full21':''}`)
+  const oldPrefix=`remake:guided:${namespace}${id}:`,nextId='87654321-4321-4321-8321-210987654321'
+  local.setItem('formal','keep account data');local.setItem(oldPrefix+'guided-reference-saved.v1','true');local.setItem(oldPrefix+'edit','old saved edit')
+  session.setItem(oldPrefix+'guided-progress.v1',JSON.stringify({version:1,active:true,stepId:'edit',route:'shoot'}))
+  win.performance={getEntriesByType:()=>[{type:'reload'}]};win.crypto.randomUUID=()=>nextId
+  const runtime=installGuidedRuntime((local,session)=>createFreshSixData(local,session,()=>0,namespace.startsWith('full')),win,namespace)
+  assert.equal(runtime.sessionId,nextId);assert.equal(new URL(win.location.href).searchParams.get('guideSession'),nextId)
+  assert.equal(new URL(win.location.href).searchParams.get('cut'),namespace.startsWith('full')?'full21':null)
+  assert.equal(runtime.session.getItem('remake.view.v1'),'"search"');assert.equal(runtime.session.getItem('guided-progress.v1'),null)
+  assert.equal(runtime.local.getItem('guided-reference-saved.v1'),null);assert.equal(runtime.local.getItem('edit'),null)
+  const canvas=await(await win.fetch('/api/ideas/guided-tofu-shoot/canvas')).json()
+  assert.deepEqual(canvas.generations,[]);assert.equal(canvas.doc.nodes.length,6);assert.ok(canvas.doc.nodes.every(node=>node.type==='shot'))
+  assert.equal(local.getItem('formal'),'keep account data');assert.equal(local.getItem(oldPrefix+'edit'),'old saved edit')
+  assert.equal(installGuidedRuntime(factory,win,namespace),runtime)
+ }
+})
+
+
+test('quota exhaustion falls back to current-page storage without deleting any existing data', () => {
+  const { win, local, session } = windowFor()
+  const prefix = `remake:guided:${id}:`
+  local.setItem('formal', 'keep')
+  local.setItem('remake:guided:old:draft', 'keep old draft')
+  local.setItem(prefix + 'existing', 'keep current draft')
+  session.setItem('formal', 'keep session')
+  const localBefore = [...local.entries], sessionBefore = [...session.entries]
+  local.setItem = session.setItem = () => { throw new DOMException('Storage full', 'QuotaExceededError') }
+  const runtime = installGuidedRuntime(factory, win)
+  assert.equal(runtime.local.existing, 'keep current draft')
+  assert.deepEqual(Object.keys(runtime.local).sort(), ['clients', 'existing'])
+  runtime.local.next = 'demo edit'
+  assert.equal(runtime.local.getItem('next'), 'demo edit')
+  delete runtime.local.existing
+  assert.equal(runtime.local.getItem('existing'), null)
+  runtime.session.setItem('view', 'canvas')
+  assert.equal(runtime.session.view, 'canvas')
+  runtime.local.clear()
+  assert.equal(runtime.local.length, 0)
+  assert.deepEqual([...local.entries], localBefore)
+  assert.deepEqual([...session.entries], sessionBefore)
+})
+
+test('storage errors other than quota exhaustion still fail and restore the window', () => {
+  const { win, local } = windowFor()
+  local.setItem = () => { throw new DOMException('Blocked', 'SecurityError') }
+  assert.throws(() => installGuidedRuntime(factory, win), { name: 'SecurityError' })
+  assert.equal(win.localStorage, local)
+  assert.equal(getGuidedRuntime(win), null)
 })

@@ -6,6 +6,7 @@ import type { Kit, Shot } from '../../types'
 import type { EditProject } from '../../lib/editor/types'
 
 export interface FreeformActions {
+  guidedPresentation?: boolean
   selectVersion: (gen: Generation) => void
   canUseInEdit?: (gen: Generation) => boolean
   useInEdit?: (gen: Generation) => void

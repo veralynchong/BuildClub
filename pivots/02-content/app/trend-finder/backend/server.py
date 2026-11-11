@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Header, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 import assist
 import brand
@@ -175,7 +175,7 @@ def needs_session(path: str) -> bool:
         return True
     if path != "/api" and not path.startswith("/api/"):
         return False
-    return path not in PUBLIC_API and not path.startswith(PUBLIC_API_PREFIX)
+    return path not in PUBLIC_API and not path.startswith(PUBLIC_API_PREFIX + getattr(app.state, 'guided_editor_prefixes', ()))
 
 
 @app.middleware("http")
@@ -1261,17 +1261,29 @@ def get_cover(name: str):
     return FileResponse(path, media_type=covers.media_type(path))
 
 
+# Optional prepared editors use separate databases/media and never expose native account data.
+_guided_paths = [os.environ.get(name, '') for name in
+                 ('GUIDED_DEMO_FRESH_ASSETS', 'GUIDED_DEMO_FULL_ASSETS', 'GUIDED_DEMO_STATE')]
+if any(_guided_paths):
+    if not all(_guided_paths):
+        raise RuntimeError('All three guided editor paths must be configured together.')
+    from guided_demo import attach_editors
+    attach_editors(app, fresh_assets=_guided_paths[0], full_assets=_guided_paths[1], state_root=_guided_paths[2])
+
+
 # Last route, so it never shadows the API: built files by path, and the app for anything else.
 @app.get("/{path:path}", include_in_schema=False)
 def front_end(path: str):
     if path.startswith("api/"):
         return error(404, "No such API route. See /docs.")
     target = (DIST_DIR / path).resolve()
-    if path and target.is_file() and target.is_relative_to(DIST_DIR.resolve()):
+    if path and target.is_file() and target.is_relative_to(DIST_DIR.resolve()) and target != (DIST_DIR / "index.html").resolve():
         return FileResponse(target)
     index = DIST_DIR / "index.html"
     if not index.exists():
         return error(404, "The app isn't built yet. Run npm run build in trend-finder/.")
+    if getattr(app.state, 'guided_editor_prefixes', ()):
+        return HTMLResponse(index.read_text().replace('<head>', '<head><meta name="guided-editor-full" content="1">', 1))
     return FileResponse(index)
 
 

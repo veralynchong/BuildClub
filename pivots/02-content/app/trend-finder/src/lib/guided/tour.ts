@@ -4,11 +4,10 @@ import type { GuidedRoute, GuidedState, GuidedStep } from './contracts'
 
 export const GUIDED_STEPS: readonly { id: GuidedStep; en: { title: string; description: string }; 'zh-Hant': { title: string; description: string } }[] = [
   { id: 'search', en: { title: 'Find your next idea', description: 'Search for Tofu Recipe using the search box below.' }, 'zh-Hant': { title: '搜尋下一個靈感', description: '在原搜尋框輸入 Tofu Recipe，開始找參考影片。' } },
-  { id: 'results', en: { title: 'Pick a reference', description: 'Open the tofu recipe video to see why it works.' }, 'zh-Hant': { title: '選擇參考影片', description: '點開豆腐食譜影片，查看它的內容拆解。' } },
-  { id: 'breakdown', en: { title: 'Understand the idea', description: 'Review the prepared content breakdown in the original panel.' }, 'zh-Hant': { title: '理解內容', description: '在原分析面板查看預先準備的內容拆解。' } },
-  { id: 'research', en: { title: 'Save your reference', description: 'Explore the saved tofu reference in Research.' }, 'zh-Hant': { title: '儲存參考', description: '在 Research 查看已儲存的豆腐原片。' } },
+  { id: 'results', en: { title: 'Choose this reference', description: 'Click Save on the thumbnail or Next, choose a project, then continue straight to Research.' }, 'zh-Hant': { title: '選用這支參考', description: '按縮圖右上角 Save 或 Next，選擇存入的 Project，完成後直接進入 Research。' } },
+  { id: 'research', en: { title: 'Save your reference', description: 'Projects start collapsed. Click a project to open its saved references, then Next to continue.' }, 'zh-Hant': { title: '儲存參考', description: 'Project 預設收起；點開 Project 查看已存參考，再按 Next 繼續。' } },
   { id: 'script', en: { title: 'Shape your story', description: 'Review the script and shots in the plan.' }, 'zh-Hant': { title: '改編故事', description: '在原計畫中查看腳本與分鏡。' } },
-  { id: 'route', en: { title: 'Choose a route', description: 'Plan a shoot or explore prepared AI material for the same case.' }, 'zh-Hant': { title: '選擇製作路線', description: '規劃拍攝，或探索同案例的預備 AI 素材。' } },
+  { id: 'route', en: { title: 'Plan a shoot', description: 'Click Plan a shoot to open the Canvas, demonstrate one shot and continue to the full six-shot Editor.' }, 'zh-Hant': { title: '規劃拍攝', description: '按「規劃拍攝」直接開啟 Canvas，一步步示範一鏡，再進入完整六鏡 Editor。' } },
   { id: 'canvas', en: { title: 'Choose your material', description: 'Explore prepared versions using the original Canvas controls.' }, 'zh-Hant': { title: '選用素材', description: '使用原 Canvas 控制項查看預備版本並選用。' } },
   { id: 'edit', en: { title: 'Edit the video', description: 'Edit the six-shot timeline, trim a clip and change the English text. Save and export a new video locally.' }, 'zh-Hant': { title: '剪輯影片', description: '在原 Editor 調整六鏡時間軸、裁切片段及修改英文文字，儲存後於本機匯出新影片。' } },
   { id: 'result', en: { title: 'Watch the result', description: 'Review the prepared cut and its source before downloading.' }, 'zh-Hant': { title: '觀看成片', description: '下載前查看預備成片與來源說明。' } },
@@ -19,9 +18,17 @@ export const createGuidedState = (): GuidedState => ({ version: 1, active: true,
 export function readGuidedState(store: Pick<Storage, 'getItem'>): GuidedState {
   try {
     const value = JSON.parse(store.getItem(KEY) ?? 'null')
+    if (value?.version === 1 && ['save', 'breakdown'].includes(value.stepId)) value.stepId = 'research'
     if (!value || value.version !== 1 || typeof value.active !== 'boolean' || !GUIDED_STEPS.some(step => step.id === value.stepId) ||
       (value.route !== null && value.route !== 'shoot' && value.route !== 'ai') ||
       (['canvas', 'edit', 'result'].includes(value.stepId) && value.route === null)) return createGuidedState()
+    // Older shoot walkthroughs visited all six shots; preserve their session and editor.
+    if (value.route === 'shoot') {
+      if (value.active && value.stepId === 'canvas' && value.canvasStep === 'versions' && value.shootNextRevision !== 1) value.canvasStep = 'prompt-s1'
+      const retired = ['video-s1', 'video-s1-v2', 'camera-s1', 'history-s1', 'prompt-s2', 'image-s2', 'camera-s2', 'history-s2', 'image-s3', 'image-s4', 'image-s5', 'image-s6']
+      if (retired.includes(value.canvasStep)) value.canvasStep = value.stepId === 'canvas' ? 'prompt-s1' : 'versions'
+      if (Array.isArray(value.skippedCanvasSteps)) value.skippedCanvasSteps = value.skippedCanvasSteps.filter((step: unknown) => !retired.includes(step as string) && !['image-s1', 'image-s1-v2'].includes(step as string))
+    }
     const canvasSteps = value.route ? CANVAS_TOURS[value.route as GuidedRoute] : []
     if (value.canvasStep !== undefined && !canvasSteps.some((step) => step.id === value.canvasStep)) return createGuidedState()
     if (value.skippedCanvasSteps !== undefined && (!Array.isArray(value.skippedCanvasSteps) || new Set(value.skippedCanvasSteps).size !== value.skippedCanvasSteps.length || value.skippedCanvasSteps.some((step: unknown) => !value.route || !canvasSteps.some((known) => known.id === step && known.generation)))) return createGuidedState()
@@ -32,10 +39,11 @@ export function readGuidedState(store: Pick<Storage, 'getItem'>): GuidedState {
   } catch { return createGuidedState() }
 }
 export function saveGuidedState(store: Pick<Storage, 'setItem'>, state: GuidedState): void {
-  store.setItem(KEY, JSON.stringify(state))
+  store.setItem(KEY, JSON.stringify({ ...state, shootNextRevision: 1 }))
 }
 export function requestedStep(state: GuidedState, direction: 'next' | 'previous'): GuidedStep {
   if (!state.active || (direction === 'next' && state.stepId === 'route' && !state.route)) return state.stepId
+  if (state.stepId === 'save' || state.stepId === 'breakdown') return direction === 'next' ? 'research' : 'results'
   const index = GUIDED_STEPS.findIndex(step => step.id === state.stepId)
   return GUIDED_STEPS[Math.max(0, Math.min(GUIDED_STEPS.length - 1, index + (direction === 'next' ? 1 : -1)))].id
 }
@@ -56,7 +64,7 @@ export function matchesGuidedScreen(step: GuidedStep, route: GuidedRoute | null,
 
 
 export function guidedMainProgress(stepId: GuidedStep): { current: number; total: number } {
-  const groups: readonly (readonly GuidedStep[])[] = [['search', 'results'], ['breakdown', 'research'], ['script'], ['route'], ['canvas'], ['edit'], ['result']]
+  const groups: readonly (readonly GuidedStep[])[] = [['search', 'results'], ['research'], ['script'], ['route'], ['canvas'], ['edit'], ['result']]
   return { current: groups.findIndex((group) => group.includes(stepId)) + 1, total: groups.length }
 }
 
@@ -69,4 +77,8 @@ export function requestedGuidedState(state: GuidedState, direction: 'next' | 'pr
   }
   const stepId = requestedStep(state, direction)
   return { ...state, stepId, ...(stepId === 'canvas' ? { canvasStep: state.stepId === 'edit' && direction === 'previous' ? 'versions' : 'shots' } : {}) }
+}
+
+export function referenceSavedInitially(state: GuidedState | null, stored: string | null): boolean {
+  return stored !== null ? stored === 'true' : !!state && !['search', 'results'].includes(state.stepId)
 }

@@ -20,6 +20,7 @@ import { newShotId } from '../lib/storyboard'
 import { t } from '../lib/i18n'
 
 interface Props {
+  live?: boolean
   localPlayback?: string
   preparedScript?: boolean
   idea: SavedIdea
@@ -104,26 +105,42 @@ export function PlanScreen(p: Props) {
   const script = savedScript(idea.script)
   const scriptStale = !!script && scriptOutOfDate(script, shots)
   const [writing, setWriting] = useState(false)
+  const [scriptError, setScriptError] = useState('')
+  const scriptRequest = useRef({ sequence: 0, pending: false })
+  useEffect(() => {
+    const request = scriptRequest.current
+    request.sequence++
+    setScriptError('')
+    return () => { request.sequence++ }
+  }, [idea.id, shots, idea.script])
   // Writing it again over the user's own changes asks first.
   const [confirmFor, setConfirmFor] = useState<string | null>(null)
   const confirmRewrite = confirmFor === idea.id
   // "Script written", for the plan it was written for, until the shot list changes.
   const [writtenFor, setWrittenFor] = useState<string | null>(null)
   const writeScriptNow = async () => {
+    if (scriptRequest.current.pending) return
     if (p.preparedScript) {
       requestAnimationFrame(() => document.getElementById('plan-script')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
       return
     }
+    scriptRequest.current.pending = true
+    const request = ++scriptRequest.current.sequence
     setConfirmFor(null)
+    setScriptError('')
     setWriting(true)
     try {
       // Shot 1 says the picked hook; with none picked yet, the first suggested one.
       const hook = shots[0]?.line?.trim() || suggestedHooks(shots, format, video, client)[0]?.text || ''
-      const next = await draftScript(idea.id, { shots, hook, client })
+      const next = await draftScript(idea.id, { shots, hook, client }, p.live, !!script?.edited)
+      if (request !== scriptRequest.current.sequence) return
       onChange({ script: next })
       setWrittenFor(idea.id)
       requestAnimationFrame(() => document.getElementById('plan-script')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+    } catch (error) {
+      if (request === scriptRequest.current.sequence) setScriptError(error instanceof Error ? error.message : t('plan.sb.err.write'))
     } finally {
+      scriptRequest.current.pending = false
       setWriting(false)
     }
   }
@@ -303,13 +320,14 @@ export function PlanScreen(p: Props) {
             )}
           </section>
 
+          {scriptError && <p className="error" role="alert">{scriptError}</p>}
           {script && (
             <PlanScript
               script={script}
               stale={scriptStale}
               editable={editable}
-              onChange={(next) => onChange({ script: next })}
-              onRewrite={askWriteScript}
+              onChange={(next) => { scriptRequest.current.sequence++; onChange({ script: next }) }}
+              onRewrite={writing ? undefined : askWriteScript}
             />
           )}
 

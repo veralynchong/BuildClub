@@ -5,21 +5,30 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12
 const currentWindow = () => typeof window === 'undefined' ? undefined : window
 
 function scopedStorage(native: Storage, prefix: string): Storage {
-  const keys = () => Array.from({ length: native.length }, (_, i) => native.key(i)).filter((key): key is string => key !== null && key.startsWith(prefix)).map(key => key.slice(prefix.length))
+  let memory: Map<string, string> | null = null
+  const keys = (): string[] => memory ? [...memory.keys()] : Array.from({ length: native.length }, (_, i) => native.key(i)).filter((key): key is string => key !== null && key.startsWith(prefix)).map(key => key.slice(prefix.length))
   const methods = {
     getItem(key: string) {
       if (arguments.length < 1) throw new TypeError('getItem requires a key.')
-      return native.getItem(prefix + String(key))
+      return memory ? memory.get(String(key)) ?? null : native.getItem(prefix + String(key))
     },
     setItem(key: string, value: string) {
       if (arguments.length < 2) throw new TypeError('setItem requires a key and value.')
-      native.setItem(prefix + String(key), String(value))
+      if (memory) { memory.set(String(key), String(value)); return }
+      try { native.setItem(prefix + String(key), String(value)) }
+      catch (error) {
+        if (!(error instanceof DOMException) || error.name !== 'QuotaExceededError') throw error
+        // Keep existing drafts intact when repeated demo resets exhaust browser storage.
+        memory = new Map(keys().map(key => [key, native.getItem(prefix + key)!]))
+        memory.set(String(key), String(value))
+      }
     },
     removeItem(key: string) {
       if (arguments.length < 1) throw new TypeError('removeItem requires a key.')
-      native.removeItem(prefix + String(key))
+      if (memory) memory.delete(String(key))
+      else native.removeItem(prefix + String(key))
     },
-    clear: () => { for (const key of keys()) native.removeItem(prefix + key) },
+    clear: () => { for (const key of keys()) methods.removeItem(key) },
     key(index: number) {
       if (arguments.length < 1) throw new TypeError('key requires an index.')
       return keys()[Number(index) >>> 0] ?? null
@@ -78,7 +87,8 @@ export function installGuidedRuntime(makePrepared: PreparedFactory, win: Window 
   const existing = installed.get(win)
   if (existing) return existing
   const token = url.searchParams.get('guideSession')
-  const sessionId = token && uuid.test(token) ? token : win.crypto.randomUUID()
+  const navigation = win.performance?.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+  const sessionId = navigation?.type !== 'reload' && token && uuid.test(token) ? token : win.crypto.randomUUID()
   const prefix = `remake:guided:${namespace}${sessionId}:`
   const names = ['localStorage', 'sessionStorage', 'fetch'] as const
   const descriptors = names.map(name => [name, Object.getOwnPropertyDescriptor(win, name)] as const)
@@ -114,7 +124,8 @@ export function installGuidedRuntime(makePrepared: PreparedFactory, win: Window 
         const params = [...target.searchParams.entries()]
         const queryOK = params.length === 0 || params.length === 1 && (action === 'cut' && params[0][0] === 'shots' && params[0][1] === '6' || action === 'cut/file' && params[0][0] === 'download' && params[0][1] === '1')
         if (target.username || target.password || !methods.includes(request.method) || !queryOK) return new Response(JSON.stringify({ error: 'Unsupported local editor request.' }), { status: 422, headers: { 'content-type': 'application/json' } })
-        const base = `/api/guided/sessions/${sessionId}/${route}`
+        const fullEditor = url.searchParams.get('cut') === 'full21' && win.document?.querySelector('meta[name="guided-editor-full"]')
+        const base = `${fullEditor ? '/api/guided/full/sessions' : '/api/guided/sessions'}/${sessionId}/${route}`
         if (!bridgeReady.has(route)) {
           const ready = nativeFetch.call(win, new URL(base, url.origin), { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then(async response => {
             if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'The local editor is unavailable.')

@@ -15,8 +15,6 @@ import { interpretMedia, matchesKeyword, parseQuery } from './lib/parseQuery'
 import type { Interpretation, MediaSource } from './lib/parseQuery'
 import { LikeThisCard } from './components/LikeThisCard'
 import { ReadingOverlay } from './components/ReadingOverlay'
-import { buildAnswer } from './lib/answer'
-import type { Answer } from './lib/answer'
 import { BreakdownPanel } from './components/BreakdownPanel'
 import { COHORT_PLATFORMS, cohortsByPattern, cohortsByVideo, fillBaseline } from './lib/evidence'
 import { PlanScreen } from './components/PlanScreen'
@@ -33,7 +31,7 @@ import { ChannelScreen } from './components/ChannelScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { LandingAltitude } from './components/landing/LandingAltitude'
 import { getGuidedRuntime, startGuidedDemo } from './lib/guided/runtime'
-import { readGuidedState, saveGuidedState, requestedGuidedState, matchesGuidedScreen } from './lib/guided/tour'
+import { readGuidedState, saveGuidedState, requestedGuidedState, matchesGuidedScreen, referenceSavedInitially } from './lib/guided/tour'
 import type { GuidedState, GuidedFocusRequest } from './lib/guided/contracts'
 import { canvasStepFor } from './lib/guided/canvasTour'
 import { GUIDED_IDS } from './lib/guided/contracts'
@@ -44,7 +42,6 @@ import type { Client, ContentType, Format, Platform, Shot, Video } from './types
 import {
   analyzeVideo,
   applyBreakdown,
-  askAnswer,
   checkDemo,
   checkLive,
   checkNeeds,
@@ -144,7 +141,7 @@ function restoreTab(workspace: Workspace): View {
 const CanvasScreen = lazy(() => import('./components/canvas/CanvasScreen'))
 
 function matchesCanvasFocus(observed: CanvasGuideState, focus: GuidedFocusRequest): boolean {
-  return focus.nodeIds.every((id) => observed.focusedNodeIds?.includes(id)) &&
+  return observed.demoAction === focus.demoAction && focus.nodeIds.every((id) => observed.focusedNodeIds?.includes(id)) &&
     (focus.edgeIds ?? []).every((id) => observed.focusedEdgeIds?.includes(id)) && observed.focusedDock === (focus.dock ?? null)
 }
 
@@ -152,6 +149,10 @@ function matchesCanvasFocus(observed: CanvasGuideState, focus: GuidedFocusReques
 export default function App() {
   const [guidedRuntime] = useState(() => getGuidedRuntime())
   const [guideState, setGuideState] = useState<GuidedState | null>(() => guidedRuntime ? readGuidedState(guidedRuntime.session) : null)
+  const [guideReferenceSaved, setGuideReferenceSaved] = useState(() => !guidedRuntime || referenceSavedInitially(guideState, guidedRuntime.local.getItem('guided-reference-saved.v1')))
+  useEffect(() => {
+    if (guidedRuntime && guideReferenceSaved) guidedRuntime.local.setItem('guided-reference-saved.v1', 'true')
+  }, [guidedRuntime, guideReferenceSaved])
   const [guideTarget, setGuideTarget] = useState<GuidedState | null>(() => guideState?.active ? guideState : null)
   const [guideError, setGuideError] = useState('')
   const [guideResultIds, setGuideResultIds] = useState<readonly string[]>([])
@@ -222,7 +223,7 @@ export default function App() {
   // Research opens with this row in view (from Find ideas' "Open in Research").
   const [researchFocus, setResearchFocus] = useState<string | null>(null)
   // `move`: the video is already saved; picking a video re-files it (the saved toast's Change).
-  const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void; move?: boolean } | null>(null)
+  const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void; move?: boolean; guided?: boolean } | null>(null)
   const [planIdeaId, setPlanIdeaId] = useState<string | null>(null)
   const [canvasFull, setCanvasFull] = useState(readFullscreen)
   const setFull = (on: boolean) => {
@@ -333,8 +334,6 @@ export default function App() {
   })
   const [liveResults, setLiveResults] = useState<Video[]>([])
   const [liveQuery, setLiveQuery] = useState('')
-  // The written answer to the latest live search; null while it is being written or if that failed.
-  const [liveAnswer, setLiveAnswer] = useState<Answer | null>(null)
   // The one search running in the background, and the client it belongs to.
   const [searching, setSearching] = useState<{ q: string; platforms: Platform[]; step?: string; clientId: string; startedAt: number } | null>(null)
   // What a search that finished while the person was elsewhere leaves behind (shown as a toast).
@@ -744,15 +743,6 @@ export default function App() {
         setLiveResults(guidedRuntime ? res.videos.map(presentPreparedVideo) : res.videos)
         setLiveQuery(q)
         void typed.then(applyTypes)
-        // One answer per search, from the videos it found. A failure just means no answer block.
-        setLiveAnswer(null)
-        if (res.videos.length) {
-          askAnswer(text, res.videos)
-            .then((a) => {
-              if (seq === searchSeq.current) setLiveAnswer(a)
-            })
-            .catch(() => {})
-        }
         setInterp({
           ...parsed, text, keywords: [q], topics: like ? [{ formatId: like.formatId, word: 'this video' }] : [],
           audience: null, isQuestion: false, source: like?.source ?? null,
@@ -964,7 +954,6 @@ export default function App() {
     [results, keywordPool, live],
   )
 
-  const answer = useMemo(() => (live ? liveAnswer : buildAnswer(interp, results, trends)), [interp, results, trends, live, liveAnswer])
 
   // Record a search once its results are on screen: the videos it found, to say next time what's new.
   useEffect(() => {
@@ -990,7 +979,7 @@ export default function App() {
 
   const savedForClient = new Set(shownIdeas.filter((i) => i.clientId === client.id).map((i) => i.videoId))
   // This client's Research rows, and the videos they hold.
-  const myResearch = research.filter((e) => e.clientId === client.id).map((row) => guidedRuntime ? presentPreparedResearch(row) : row)
+  const myResearch = research.filter((e) => e.clientId === client.id && (!guidedRuntime || guideReferenceSaved || e.videoId !== GUIDED_IDS.videoId)).map((row) => guidedRuntime ? presentPreparedResearch(row) : row)
   const inResearch = new Set(myResearch.map((e) => e.videoId))
   // Which of the client's videos (1 to 12) each Research video is filed under, for the Plans cards.
   const videoNoById = new Map<string, number>()
@@ -1104,6 +1093,7 @@ export default function App() {
   // Where a saved video sits in Research: short "Video 3" and full "Video 3 · Street taste test" (or Unsorted).
   // Null when it isn't saved.
   const savedIn = (videoId: string) => {
+    if (guidedRuntime && videoId === GUIDED_IDS.videoId && !guideReferenceSaved) return null
     const row = research.find((e) => e.clientId === client.id && e.videoId === videoId)
     if (!row) return null
     const slot = myVideos.find((s) => s.id === row.slotId)
@@ -1123,6 +1113,17 @@ export default function App() {
     setPendingSave({ videoId, onSaved })
   }
 
+  const askGuideSave = () => setPendingSave({ videoId: GUIDED_IDS.videoId, guided: true })
+  const saveGuideReference = (slotId: string | null) => {
+    const existing = research.find(row => row.id === GUIDED_IDS.researchId) ?? research.find(row => row.clientId === GUIDED_IDS.clientId && row.videoId === GUIDED_IDS.videoId)
+    if (existing) setResearch(rows => rows.map(row => row.id === existing.id ? { ...row, slotId: slotId ?? undefined } : row))
+    else saveToResearch(GUIDED_IDS.videoId, slotId ?? undefined)
+    setGuideReferenceSaved(true)
+    setSavedNote({ videoId: GUIDED_IDS.videoId })
+    setOpenVideoId(null)
+    if (guideState) setGuideTarget({ ...guideState, stepId: 'research' })
+  }
+
   // Takes a row off Research, but never one with a plan (the plan keeps its row).
   const removeResearch = (rowId: string) => {
     const row = research.find((e) => e.id === rowId)
@@ -1140,9 +1141,6 @@ export default function App() {
 
   // A saved video can lack its breakdown (saved before one existed); fetch it when opened.
   const openVideoDrawer = (videoId: string) => {
-    if (guidedRuntime && guideState?.active && !guideTarget && ['search', 'results'].includes(guideState.stepId) && videoId === GUIDED_IDS.videoId) {
-      setGuideTarget({ ...guideState, stepId: 'breakdown' })
-    }
     setOpenVideoId(videoId)
     if (savedForClient.has(videoId) || inResearch.has(videoId)) breakDown(videoId)
     fillNeeds(videoId)
@@ -1586,7 +1584,7 @@ export default function App() {
       return
     }
     if (guideTarget === guideState && guideTarget.stepId === 'search' && view === 'results' && !searching && !searchError && query.keyword.trim().toLowerCase() === 'tofu recipe' && guideResultIds.includes(GUIDED_IDS.videoId)) {
-      setGuideTarget({ ...guideTarget, stepId: openVideoId === GUIDED_IDS.videoId ? 'breakdown' : 'results' })
+      setGuideTarget({ ...guideTarget, stepId: 'results' })
       return
     }
     const observed = { view, workspace, searchQuery: query.keyword, resultVideoIds: guideResultIds, drawerVideoId: openVideoId, planId: planIdeaId,
@@ -1604,12 +1602,17 @@ export default function App() {
     }
   }, [guidedRuntime, guideState, guideTarget, searching, searchError, view, query.keyword, liveResults, guideResultIds])
   const activeCanvasStep = guideState ? canvasStepFor(guideState) : null
-  const canvasReplayReady = !!activeCanvasStep && !!guideCanvas.replayedNodeIds?.includes(activeCanvasStep.focus.nodeIds[0])
-  const canvasCanContinue = !activeCanvasStep?.generation || canvasReplayReady || !!guideState?.skippedCanvasSteps?.includes(activeCanvasStep.id)
+  const canvasReplayReady = !!activeCanvasStep && (activeCanvasStep.minimumVersions ? (guideCanvas.replayCounts?.[activeCanvasStep.focus.nodeIds[0]] ?? 0) >= activeCanvasStep.minimumVersions : !!guideCanvas.replayedNodeIds?.includes(activeCanvasStep.focus.nodeIds[0]))
+  const canvasCanContinue = activeCanvasStep?.requireSelection ? !!guideCanvas.selectedOnTimelineNodeIds?.includes(activeCanvasStep.focus.nodeIds[0]) && (guideCanvas.replayCounts?.[activeCanvasStep.focus.nodeIds[0]] ?? 0) >= 2 : !activeCanvasStep?.generation || canvasReplayReady || !!guideState?.skippedCanvasSteps?.includes(activeCanvasStep.id)
   const moveGuide = (direction: 'next' | 'previous', skip = false) => {
-    if (!guideState?.active || guideTarget || guideNavigating || (view === 'canvas' && guideCanvas.busy)) return
+    if (!guideState?.active || guideTarget || guideNavigating || (view === 'canvas' && guideCanvas.busy) || pendingSave) return
+    if (direction === 'next' && guideState.stepId === 'results') {
+      if (guideReferenceSaved) setGuideTarget({ ...guideState, stepId: 'research' })
+      else askGuideSave()
+      return
+    }
     if (direction === 'next' && !canvasCanContinue && !skip) return
-    let next = guideState
+    let next = direction === 'next' && guideState.stepId === 'route' ? { ...guideState, route: 'shoot' as const } : guideState
     if (direction === 'next' && activeCanvasStep?.generation) {
       const skipped = (guideState.skippedCanvasSteps ?? []).filter((id) => id !== activeCanvasStep.id)
       if (skip && !canvasReplayReady) skipped.push(activeCanvasStep.id)
@@ -1835,6 +1838,7 @@ export default function App() {
 
           {inClient && view === 'results' && !cardSearch && (
             <ResultsScreen
+              guidedSave={guidedRuntime ? { saved: guideReferenceSaved, onSave: askGuideSave } : undefined}
               recommendedVideoId={guidedRuntime ? GUIDED_IDS.videoId : undefined}
               initialFilters={guidedRuntime ? { ...DEFAULT_FILTERS, viewsMin: 0, followersMax: 0 } : undefined}
               onVisibleResults={guidedRuntime ? reportGuideResults : undefined}
@@ -1845,7 +1849,6 @@ export default function App() {
               query={query}
               setQuery={setQuery}
               interp={interp}
-              answer={answer}
               formats={formats}
               allVideos={videos}
               onSearch={runSearch}
@@ -1893,7 +1896,10 @@ export default function App() {
               ideaStatus={new Map(shownIdeas.filter((i) => i.clientId === client.id).map((i) => [i.videoId, i.status]))}
               inResearch={inResearch}
               onOpen={openVideoDrawer}
-              onToggleSave={toggleSave}
+              onToggleSave={(videoId) => {
+                if (guidedRuntime && videoId === GUIDED_IDS.videoId) askGuideSave()
+                else toggleSave(videoId)
+              }}
               onGoResearch={() => setView('research')}
               savedIn={savedIn}
               blockedFormatIds={blockedFormatIds}
@@ -2042,6 +2048,7 @@ export default function App() {
 
           {inClient && view === 'plan' && planIdea && planVideo && planFormat && planClient && (
             <PlanScreen
+              live={live}
               preparedScript={!!guidedRuntime && planVideo.id === GUIDED_IDS.videoId}
               localPlayback={guidedRuntime ? planVideo.id === GUIDED_IDS.videoId ? '/demo-assets/source.mp4' : instagramPlayback(planVideo) : undefined}
               idea={planIdea}
@@ -2089,10 +2096,10 @@ export default function App() {
         </main>
       </div>
 
-      {guidedRuntime && guideState && <GuidedTour state={guideState} lang={lang} busy={!!cardSearch || !!guideTarget || guideNavigating || (view === 'canvas' && guideCanvas.busy)} error={guideError}
+      {guidedRuntime && guideState && !openVideoId && !pendingSave && <GuidedTour state={guideState} lang={lang} busy={!!cardSearch || !!guideTarget || guideNavigating || (view === 'canvas' && guideCanvas.busy)} error={guideError}
         onNext={() => moveGuide('next')} onPrevious={() => moveGuide('previous')}
         canContinue={canvasCanContinue} onSkip={() => moveGuide('next', true)}
-        onRoute={(route) => setGuideTarget({ ...guideState, route, canvasStep: 'shots', skippedCanvasSteps: [] })}
+        onRoute={(route) => setGuideTarget({ ...guideState, stepId: 'canvas', route, canvasStep: 'shots', skippedCanvasSteps: [] })}
         onReset={() => { void withCanvasLeave(() => guidedRuntime.reset()) }}
         onExit={() => {
           const stopped = { ...guideState, active: false }
@@ -2105,7 +2112,8 @@ export default function App() {
           slots={myVideos}
           onCancel={() => setPendingSave(null)}
           onPick={(slotId) => {
-            if (pendingSave.move) {
+            if (pendingSave.guided) saveGuideReference(slotId)
+            else if (pendingSave.move) {
               moveSaved(pendingSave.videoId, slotId)
               setSavedNote({ videoId: pendingSave.videoId })
             } else saveToResearch(pendingSave.videoId, slotId ?? undefined)
@@ -2126,7 +2134,7 @@ export default function App() {
           status={ideas.find((i) => i.clientId === client.id && i.videoId === openVideo.id)?.status} // stream B
           inResearch={inResearch.has(openVideo.id)}
           onClose={() => setOpenVideoId(null)}
-          onSave={() => toggleSave(openVideo.id)}
+          onSave={() => guidedRuntime && openVideo.id === GUIDED_IDS.videoId ? askGuideSave() : toggleSave(openVideo.id)}
           onPlan={() => planFromVideo(openVideo.id)}
           onGoResearch={
             view === 'research'

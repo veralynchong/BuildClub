@@ -104,3 +104,31 @@ test('savedScript: old plans without a script and bad saved data are handled', (
     writtenAt: 0,
   })
 })
+
+
+test('native script calls the backend once, maps its lines and preserves on-screen text', async () => {
+  const previous = globalThis.fetch, calls = []
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) })
+    return new Response(JSON.stringify({ source: 'claude', shots: shots().map((shot, i) => ({ ...shot, line: `Written line ${i + 1}` })) }))
+  }
+  try {
+    const result = await draftScript('native-plan', { shots: shots(), hook: 'Hook', client }, true, true)
+    assert.deepEqual(calls, [{ url: '/api/ideas/native-plan/script', body: { force: true, expectedBasis: scriptBasis(shots()) } }])
+    assert.equal(result.lines[1].say, 'Written line 2')
+    assert.equal(result.lines[0].onScreen, 'Crispy tofu in 5 min')
+    assert.equal(scriptOutOfDate(result, shots()), false)
+  } finally { globalThis.fetch = previous }
+})
+
+test('native script rejects changed server shots and propagates errors instead of inventing an AI success', async () => {
+  const previous = globalThis.fetch
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Budget exceeded' }), { status: 429 })
+    await assert.rejects(draftScript('i', { shots: shots(), hook: '', client }, true), /Budget exceeded/)
+    globalThis.fetch = async () => new Response(JSON.stringify({ shots: shots().slice(1) }))
+    await assert.rejects(draftScript('i', { shots: shots(), hook: '', client }, true))
+    globalThis.fetch = async () => new Response(JSON.stringify({ shots: shots().map(shot => ({ ...shot, shot: 'Changed on the server' })) }))
+    await assert.rejects(draftScript('i', { shots: shots(), hook: '', client }, true))
+  } finally { globalThis.fetch = previous }
+})

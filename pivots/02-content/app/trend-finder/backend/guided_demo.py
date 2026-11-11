@@ -39,9 +39,9 @@ def validate_manifest(manifest, root):
         raise ValueError('Invalid guided manifest')
     specs = json.loads(json.dumps(manifest['routes']))
     for route, spec in specs.items():
-        signature = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
+        signature = hashlib.sha256(json.dumps({k: v for k, v in spec.items() if k != 'variants'}, sort_keys=True).encode()).hexdigest()
         known = {}
-        for source in spec['sources']:
+        for source in spec['sources'] + spec.get('variants', []):
             sid = source['id']
             if not ID.fullmatch(sid) or sid in known:
                 raise ValueError('Invalid source identity')
@@ -54,6 +54,9 @@ def validate_manifest(manifest, root):
             source['resolved'] = path
             source['duration'] = info['duration']
             known[sid] = source
+        baseline_shots = {source['shotId'] for source in spec['sources']}
+        if any(source['shotId'] not in baseline_shots for source in spec.get('variants', [])):
+            raise ValueError('A variant must belong to an existing shot')
         project = spec['project']
         if editing.check_project(project, set()) or project.get('music') is not None or project.get('voiceover') or project.get('primaries'):
             raise ValueError('Invalid initial project')
@@ -65,7 +68,7 @@ def validate_manifest(manifest, root):
     return specs
 
 
-def create_app(*, manifest, asset_root, state_root, jobs_factory=renders.RenderJobs):
+def create_app(*, manifest, asset_root, state_root, jobs_factory=renders.RenderJobs, api_prefix="/api/guided/sessions"):
     root = Path(asset_root).resolve(strict=True)
     specs = validate_manifest(manifest, root)
     state = Path(state_root).resolve()
@@ -111,6 +114,23 @@ def create_app(*, manifest, asset_root, state_root, jobs_factory=renders.RenderJ
             if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != metadata['sha256']:
                 raise ValueError('The imported source changed. Start a new guide.')
 
+    def import_sources(conn, wid, sources):
+        folder = media / wid / 'gen'
+        ids = {}
+        for source in sources:
+            filename = source['id'] + '.mp4'
+            destination = folder / filename
+            shutil.copyfile(source['resolved'], destination)
+            if hashlib.sha256(destination.read_bytes()).hexdigest() != source['sha256']:
+                raise ValueError('Imported source hash mismatch')
+            node = source.get('nodeId', 'import_' + source['id'])
+            gen = generations.insert_done(conn, wid, node, 'video', 'upload', file=filename)
+            ids[source['id']] = gen['id']
+            metadata = {k: source[k] for k in ['shotId', 'label', 'provenance', 'sha256']}
+            metadata.update(nodeId=node, filename=filename)
+            conn.execute('INSERT INTO guided_sources VALUES (?,?,?,?)', (wid, source['id'], gen['id'], json.dumps(metadata)))
+        return ids
+
     def initialize(sid, route):
         found = binding(sid, route)
         spec = specs[route]
@@ -118,6 +138,12 @@ def create_app(*, manifest, asset_root, state_root, jobs_factory=renders.RenderJ
             if found[1] != spec['signature']:
                 raise ValueError('The prepared assets changed. Start a new guide.')
             verify_imports(found[0])
+            imported = mapping(found[0])
+            variants = spec.get('variants', [])
+            if any(source['id'] in imported and imported[source['id']][1]['sha256'] != source['sha256'] for source in variants):
+                raise ValueError('The prepared variant changed. Start a new guide.')
+            with db() as conn:
+                import_sources(conn, found[0], [source for source in variants if source['id'] not in imported])
             return found[0]
         wid = 'ws_' + uuid.uuid4().hex
         folder = media / wid / 'gen'
@@ -128,19 +154,7 @@ def create_app(*, manifest, asset_root, state_root, jobs_factory=renders.RenderJ
         try:
             with db() as conn:
                 conn.execute('INSERT INTO workspaces VALUES (?,?,?,?,?)', (wid, 'guided-fixture', f'Guided {route} imported-media example', now, now))
-                for source in spec['sources']:
-                    filename = source['id'] + '.mp4'
-                    destination = folder / filename
-                    shutil.copyfile(source['resolved'], destination)
-                    if hashlib.sha256(destination.read_bytes()).hexdigest() != source['sha256']:
-                        raise ValueError('Imported source hash mismatch')
-                    node = source.get('nodeId', 'import_' + source['id'])
-                    gen = generations.insert_done(conn, wid, node, 'video', 'upload', file=filename)
-                    ids[source['id']] = gen['id']
-                    metadata = {k: source[k] for k in ['shotId', 'label', 'provenance', 'sha256']}
-                    metadata['nodeId'] = node
-                    metadata['filename'] = filename
-                    conn.execute('INSERT INTO guided_sources VALUES (?,?,?,?)', (wid, source['id'], gen['id'], json.dumps(metadata)))
+                ids = import_sources(conn, wid, spec['sources'] + spec.get('variants', []))
                 source_specs = {item['id']: item for item in spec['sources']}
                 for clip in project['clips']:
                     source_id = clip['source']['id']
@@ -166,7 +180,7 @@ def create_app(*, manifest, asset_root, state_root, jobs_factory=renders.RenderJ
         result = json.loads(result.body) if isinstance(result, JSONResponse) else copy.deepcopy(result)
         aliases = mapping(wid)
         reverse = {gid: sid for sid, (gid, _) in aliases.items()}
-        prefix = f'/api/guided/sessions/{sid}/{route}'
+        prefix = f'{api_prefix}/{sid}/{route}'
         if 'project' in result:
             for clip in result['project']['clips']:
                 clip['source']['id'] = reverse[clip['source']['id']]
@@ -284,7 +298,22 @@ def create_app(*, manifest, asset_root, state_root, jobs_factory=renders.RenderJ
             return public(result, sid, route, wid)
 
     methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
-    base = '/api/guided/sessions/{sid}/{route}'
+    base = api_prefix + '/{sid}/{route}'
     app.add_api_route(base, dispatch, methods=methods)
     app.add_api_route(base + '/{tail:path}', dispatch, methods=methods)
     return app
+
+
+def attach_editors(app, *, fresh_assets, full_assets, state_root, jobs_factory=renders.RenderJobs):
+    """Expose only isolated, provider-free guided routes beside a native account-based app."""
+    editors = []
+    for name, assets, prefix in [('fresh', fresh_assets, '/api/guided/sessions'),
+                                  ('full', full_assets, '/api/guided/full/sessions')]:
+        assets = Path(assets).resolve(strict=True)
+        manifest = json.loads((assets / 'manifest.json').read_text())
+        editor = create_app(manifest=manifest, asset_root=assets, state_root=Path(state_root) / name,
+                            jobs_factory=jobs_factory, api_prefix=prefix)
+        editors.append((prefix, editor))
+    for _prefix, editor in editors:
+        app.include_router(editor.router)
+    app.state.guided_editor_prefixes = tuple(prefix + '/' for prefix, _editor in editors)

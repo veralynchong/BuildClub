@@ -37,19 +37,19 @@ const render = (overrides = {}, collapsed = false) => renderToStaticMarkup(React
 const button = (html, label) => html.match(new RegExp(`<button\\b([^>]*)>${label}</button>`))?.[1]
 
 test('nine native screens stay grouped into seven main stages', () => {
-  assert.deepEqual(GUIDED_STEPS.map(s => guidedMainProgress(s.id)), [1, 1, 2, 2, 3, 4, 5, 6, 7].map(current => ({ current, total: 7 })))
+  assert.deepEqual(GUIDED_STEPS.map(s => guidedMainProgress(s.id)), [1, 1, 2, 3, 4, 5, 6, 7].map(current => ({ current, total: 7 })))
   assert.match(render(), /guided-tour__count">5\/7</)
   assert.match(render(), /aria-valuemax="7" aria-valuenow="5"/)
 })
 
 test('six-shot tour expands prompts and images in order, gates manual replay and keeps native docks', () => {
   const { CANVAS_TOURS, canvasStepFor, canvasProgress, nextCanvasStepId } = load('src/lib/guided/canvasTour.ts')
-  const expectedByRoute = { ai: ['shots','prompt-s1','image-s1','video-s1','history-s1','prompt-s2','image-s2','history-s2','image-s3','video-s4','image-s5','video-s5','image-s6','versions'], shoot: ['shots','prompt-s1','image-s1','camera-s1','history-s1','prompt-s2','image-s2','camera-s2','history-s2','image-s3','image-s4','image-s5','image-s6','versions'] }
+  const expectedByRoute = { ai: ['shots','prompt-s1','image-s1','video-s1','history-s1','prompt-s2','image-s2','history-s2','image-s3','video-s4','image-s5','video-s5','image-s6','versions'], shoot: ['shots','prompt-s1','image-s1','rewrite-s1','image-s1-v2','versions'] }
   for (const route of ['ai','shoot']) {
     const steps = CANVAS_TOURS[route]
     const expected = expectedByRoute[route]
     assert.deepEqual(steps.map(s => s.id),expected)
-    assert.equal(steps.filter(s => s.generation).length,route === 'ai' ? 8 : 6)
+    assert.equal(steps.filter(s => s.generation).length,route === 'ai' ? 8 : 0)
     for (const [i,step] of steps.entries()) {
       for (const lang of ['en','zh-Hant']) assert.ok(step[lang].title && step[lang].description)
       assert.equal(nextCanvasStepId(route,step.id,'next'),expected[i+1] ?? null)
@@ -60,7 +60,7 @@ test('six-shot tour expands prompts and images in order, gates manual replay and
         assert.match(button(html,'Next'),/disabled/)
         assert.doesNotMatch(button(html,'Skip this replay'),/disabled/)
         assert.equal(step.focus.dock,'inspect')
-        assert.equal(step.focus.revealNodeIds.length,2)
+        assert.equal(step.focus.revealNodeIds.length,route === 'shoot' ? 1 : 2)
       } else assert.doesNotMatch(html,/Skip this replay/)
       assert.match(button(render({state:{...state,route,canvasStep:step.id},busy:true}),'Next'),/disabled/)
     }
@@ -95,7 +95,7 @@ test('header-only collapse hides the entire body, preserving compact top-right C
 function floatingHarness(overrides = {}) {
   const frames = new Map(); let nextFrame = 0
   const slots = [], listeners = new Map(), observers = [], captures = new Set()
-  let cursor = 0, tree, effects = [], height = 300
+  let cursor = 0, tree, effects = [], height = 300, currentProps = { ...props, ...overrides }
   const priorWindow = globalThis.window, priorObserver = globalThis.ResizeObserver
   globalThis.window = { requestAnimationFrame: fn => { frames.set(++nextFrame, fn); return nextFrame }, cancelAnimationFrame: id => frames.delete(id), innerWidth: 1440, innerHeight: 900, addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name) }
   globalThis.ResizeObserver = class {
@@ -119,15 +119,16 @@ function floatingHarness(overrides = {}) {
   const Component = load('src/components/demo/GuidedTour.tsx', false, hooks).GuidedTour
   const walk = node => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(walk)]
   const position = () => tree.props.style?.transform?.match(/translate3d\(([-.\d]+)px, ([-.\d]+)px, 0\)/)?.slice(1).map(Number)
-  const card = { getBoundingClientRect: () => ({ left: position()?.[0] ?? (window.innerWidth - (tree.props['data-collapsed'] ? 220 : 300) - 20), top: position()?.[1] ?? (tree.props['data-collapsed'] ? 16 : 80), width: tree.props['data-collapsed'] ? 220 : 300, height: tree.props['data-collapsed'] ? 44 : height }) }
+  const card = { getBoundingClientRect: () => ({ left: position()?.[0] ?? (tree.props['data-placement'] !== 'right' ? 72 : window.innerWidth - (tree.props['data-collapsed'] ? 220 : 300) - 20), top: position()?.[1] ?? (tree.props['data-collapsed'] ? 16 : tree.props['data-placement'] === 'bottom-left' ? window.innerHeight - height - 20 : 80), width: tree.props['data-collapsed'] ? 220 : 300, height: tree.props['data-collapsed'] ? 44 : height }) }
   const target = { setPointerCapture: id => captures.add(id), hasPointerCapture: id => captures.has(id), releasePointerCapture: id => captures.delete(id), focus() {} }
-  const renderTree = () => { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(fn => fn()); cursor = 0; tree = Component({ ...props, ...overrides }); if (tree.props.ref) tree.props.ref.current = card; const pending = effects; effects = []; pending.forEach(fn => fn()); return tree }
+  const renderTree = () => { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(fn => fn()); cursor = 0; tree = Component(currentProps); if (tree.props.ref) tree.props.ref.current = card; const pending = effects; effects = []; pending.forEach(fn => fn()); return tree }
   renderTree()
   return {
     render: () => { const result = renderTree(); const xy = position(); return { ...result, props: { ...result.props, style: xy ? { left: xy[0], top: xy[1], right: 'auto' } : result.props.style } } },
     find: className => walk(tree).find(node => node.props?.className?.split(' ').includes(className)),
     event: patch => ({ pointerType: 'mouse', button: 0, pointerId: 4, clientX: 1130, clientY: 90, currentTarget: target, preventDefault() { this.prevented = true }, ...patch }),
     captures, listeners, observers,
+    updateProps(patch) { currentProps = { ...currentProps, ...patch }; renderTree() },
     resize(width, h) { window.innerWidth = width; window.innerHeight = h; listeners.get('resize')?.(); renderTree() },
     grow(h) { height = h; observers.at(-1).fn(); renderTree() },
     close() { slots.forEach(slot => slot?.cleanup?.()); globalThis.window = priorWindow; globalThis.ResizeObserver = priorObserver },
@@ -199,4 +200,49 @@ test('keyboard arrows move and clamp while unrelated keys and navigation remain 
 
 test('Exit guide remains available while the guide is busy', () => {
  assert.doesNotMatch(button(render({busy:true}),'Exit guide'),/disabled/)
+})
+
+
+test('guide leaves the active analysis, editing and canvas side panels unobstructed', () => {
+  for (const stepId of ['search', 'results', 'research']) assert.match(render({ state: { ...state, stepId } }), /data-placement="right"/)
+  for (const stepId of ['script', 'route', 'edit', 'result']) assert.match(render({ state: { ...state, stepId } }), /data-placement="left"/)
+  for (const route of ['ai', 'shoot']) {
+    for (const canvasStep of (route === 'ai' ? ['image-s1', 'history-s1', 'versions'] : ['prompt-s1','image-s1','rewrite-s1','image-s1-v2','versions'])) assert.match(render({ state: { ...state, route, canvasStep } }), /data-placement="bottom-left"/)
+    for (const canvasStep of (route === 'ai' ? ['shots', 'prompt-s1'] : ['shots'])) assert.match(render({ state: { ...state, route, canvasStep } }), /data-placement="right"/)
+  }
+})
+
+
+test('manual placement stays within a step, resets on navigation and cancels an in-flight drag', () => {
+  const h = floatingHarness()
+  try {
+    h.find('guided-tour__drag').props.onKeyDown(h.event({ key: 'ArrowLeft' }))
+    assert.equal(h.render().props.style.left, 1104)
+    h.updateProps({ busy: true })
+    assert.equal(h.render().props.style.left, 1104)
+    h.updateProps({ state: { ...state, canvasStep: 'image-s1' } })
+    assert.equal(h.render().props['data-placement'], 'bottom-left')
+    assert.equal(h.render().props.style, undefined)
+    const handle = h.find('guided-tour__drag')
+    handle.props.onPointerDown(h.event({ clientX: 82, clientY: 590 }))
+    handle.props.onPointerMove(h.event({ clientX: 650, clientY: 150 }))
+    h.updateProps({ state: { ...state, stepId: 'edit' } })
+    assert.equal(h.render().props['data-placement'], 'left')
+    assert.equal(h.render().props.style, undefined)
+    handle.props.onPointerMove(h.event({ clientX: 500, clientY: 500 }))
+    assert.equal(h.render().props.style, undefined)
+    h.updateProps({ state })
+    assert.equal(h.render().props['data-placement'], 'right')
+    assert.equal(h.render().props.style, undefined)
+  } finally { h.close() }
+})
+
+
+test('Plan a shoot is the direct Canvas action without a second Next button', () => {
+ const html=render({state:{...state,stepId:'route',route:null}})
+ assert.equal(button(html,'Next'),undefined)
+ assert.doesNotMatch(button(html,'Plan a shoot'),/disabled/)
+ let chosen=null
+ const h=floatingHarness({state:{...state,stepId:'route',route:null},onRoute:route=>{chosen=route}})
+ try {h.find('guided-tour__route').props.onClick();assert.equal(chosen,'shoot')}finally{h.close()}
 })

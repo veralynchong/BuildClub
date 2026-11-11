@@ -28,28 +28,33 @@ function boundedPosition(left: number, top: number, size: { width: number; heigh
 }
 
 export function GuidedTour({ state, lang, busy, error, canContinue = true, onSkip, onNext, onPrevious, onReset, onExit, onRoute }: GuidedTourProps) {
+  const canvasStep = canvasStepFor(state)
+  const stepKey = `${state.stepId}:${state.route ?? ''}:${canvasStep?.id ?? ''}`
+  const placement = canvasStep?.focus.dock || canvasStep?.focus.demoAction ? 'bottom-left' : ['breakdown', 'script', 'route', 'edit', 'result'].includes(state.stepId) ? 'left' : 'right'
   const [collapsed, setCollapsed] = useState(false)
-  const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
+  const [manualPosition, setManualPosition] = useState<{ key: string; left: number; top: number } | null>(null)
+  const position = manualPosition?.key === stepKey ? manualPosition : null
   const card = useRef<HTMLElement>(null)
   const drag = useRef<{ id: number; x: number; y: number; width: number; height: number } | null>(null)
   const frame = useRef<number | null>(null)
   const pendingPosition = useRef<{ left: number; top: number } | null>(null)
+  useLayoutEffect(() => { setManualPosition(null) }, [stepKey])
   useLayoutEffect(() => {
     if (!state.active || !card.current) return
     const fit = () => {
       if (!card.current) return
       const rect = card.current.getBoundingClientRect()
       const next = boundedPosition(rect.left, rect.top, rect)
-      if (Math.abs(next.left - rect.left) > 0.1 || Math.abs(next.top - rect.top) > 0.1) setPosition(next)
+      if (Math.abs(next.left - rect.left) > 0.1 || Math.abs(next.top - rect.top) > 0.1) setManualPosition({ ...next, key: stepKey })
     }
     fit()
     const observer = new ResizeObserver(fit)
     observer.observe(card.current)
     window.addEventListener('resize', fit)
     return () => { observer.disconnect(); window.removeEventListener('resize', fit); drag.current = null; if (frame.current !== null) window.cancelAnimationFrame(frame.current); frame.current = null; pendingPosition.current = null }
-  }, [collapsed, state.active])
+  }, [collapsed, state.active, stepKey])
   const moveTo = (left: number, top: number) => {
-    if (card.current) setPosition(boundedPosition(left, top, card.current.getBoundingClientRect()))
+    if (card.current) setManualPosition({ ...boundedPosition(left, top, card.current.getBoundingClientRect()), key: stepKey })
   }
   const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (event.pointerType !== 'mouse' || event.button !== 0 || !card.current) return
@@ -62,7 +67,7 @@ export function GuidedTour({ state, lang, busy, error, canContinue = true, onSki
   const flushPosition = () => {
     if (frame.current !== null) window.cancelAnimationFrame(frame.current)
     frame.current = null
-    if (pendingPosition.current) setPosition(pendingPosition.current)
+    if (pendingPosition.current) setManualPosition({ ...pendingPosition.current, key: stepKey })
     pendingPosition.current = null
   }
   const moveDrag = (event: PointerEvent<HTMLButtonElement>) => {
@@ -87,14 +92,13 @@ export function GuidedTour({ state, lang, busy, error, canContinue = true, onSki
   if (!state.active) return null
   const index = GUIDED_STEPS.findIndex(step => step.id === state.stepId)
   const { current, total } = guidedMainProgress(state.stepId)
-  const canvasStep = canvasStepFor(state)
   const canvasCount = canvasProgress(state)
   const step = (canvasStep ?? GUIDED_STEPS[index])[lang]
   const zh = lang === 'zh-Hant'
   const text = (en: string, hant: string) => zh ? hant : en
-  const nextDisabled = busy || index === GUIDED_STEPS.length - 1 || (state.stepId === 'route' && state.route === null) || (!!canvasStep?.generation && !canContinue)
+  const nextDisabled = busy || index === GUIDED_STEPS.length - 1 || (!!canvasStep && !canContinue)
 
-  return <aside ref={card} style={position ? { left: 0, top: 0, right: 'auto', transform: `translate3d(${position.left}px, ${position.top}px, 0)` } : undefined} className="guided-tour" aria-label={text('Guided demo', '示範導覽')} data-testid="guided-tour" data-collapsed={collapsed}>
+  return <aside ref={card} style={position ? { left: 0, top: 0, right: 'auto', bottom: 'auto', transform: `translate3d(${position.left}px, ${position.top}px, 0)` } : undefined} className="guided-tour" aria-label={text('Guided demo', '示範導覽')} data-testid="guided-tour" data-placement={placement} data-collapsed={collapsed}>
     <header className="guided-tour__header">
       <button type="button" className="guided-tour__button guided-tour__drag" aria-label={text('Drag guide; use arrow keys to move', '拖曳導覽；或使用方向鍵移動')} title={text('Drag to reposition', '拖曳以調整位置')} aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} onLostPointerCapture={() => { flushPosition(); drag.current = null }} onKeyDown={moveWithKeys}>
         <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1" /><circle cx="9" cy="3" r="1" /><circle cx="3" cy="8" r="1" /><circle cx="9" cy="8" r="1" /><circle cx="3" cy="13" r="1" /><circle cx="9" cy="13" r="1" /></svg>
@@ -121,13 +125,12 @@ export function GuidedTour({ state, lang, busy, error, canContinue = true, onSki
         : text('Six-shot shoot plan · source-derived storyboard references, not filmed footage.', '六鏡拍攝計畫 · 原片衍生分鏡參考，並非實拍素材。')}</p>}
       {state.stepId === 'route' && <div className="guided-tour__routes" role="group" aria-label={text('Production route', '製作路線')}>
         <button type="button" className="guided-tour__button guided-tour__route" disabled={busy} aria-pressed={state.route === 'shoot'} onClick={() => onRoute('shoot')}>{text('Plan a shoot', '規劃拍攝')}</button>
-        <button type="button" className="guided-tour__button guided-tour__route" disabled={busy} aria-pressed={state.route === 'ai'} onClick={() => onRoute('ai')}>{text('Create an AI ad', '製作 AI 廣告')}</button>
       </div>}
     </div>
     {error && <p className="guided-tour__error" role="alert">{error}</p>}
     <div className="guided-tour__navigation">
       <button type="button" className="guided-tour__button guided-tour__previous" disabled={busy || index === 0} onClick={onPrevious}>{text('Previous', '上一步')}</button>
-      <button type="button" className="guided-tour__button guided-tour__next" disabled={nextDisabled} onClick={onNext}>{text('Next', '下一步')}</button>
+      {state.stepId !== 'route' && <button type="button" className="guided-tour__button guided-tour__next" disabled={nextDisabled} onClick={onNext}>{text('Next', '下一步')}</button>}
     </div>
     {canvasStep?.generation && onSkip && <button type="button" className="guided-tour__button guided-tour__skip" disabled={busy} onClick={onSkip}>{text('Skip this replay', '跳過這次回放')}</button>}
     <footer className="guided-tour__footer">

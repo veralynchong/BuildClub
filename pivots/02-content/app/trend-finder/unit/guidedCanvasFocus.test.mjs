@@ -87,11 +87,49 @@ test('editor transitions invalidate previous readiness before publishing the new
     const events = []
     const output = {}
     const js = ts.transpileModule(`exports.change = ${transition.getText(board)}`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
-    new Function('exports', 'editing', 'setGuideEditor', 'setEditing', js)(output, editing, value => events.push(['ready', value.ready]), value => events.push(['editing', value]))
+    new Function('exports', 'editing', 'setGuideEditor', 'setEditing', 'registerGuide', 'getGuidedRuntime', 'apiBase', 'resource', js)(output, editing, value => events.push(['ready', value.ready]), value => events.push(['editing', value]), true, () => ({local: {removeItem: key => events.push(['intro', key])}}), () => '/api/test', {})
     output.change(!editing)
-    assert.deepEqual(events, [['ready', false], ['editing', !editing]])
+    assert.deepEqual(events, [['ready', false], ...(!editing ? [['intro', 'editor-arrival.v1:/api/test']] : []), ['editing', !editing]])
     events.length = 0
     output.change(editing)
     assert.deepEqual(events, [['editing', editing]])
   }
+})
+
+// Exercise the actual automatic action against the prepared API, including recovery of another pending Prompt.
+test('Next waits for a different pending image and only completes with the requested Prompt and source', async () => {
+  const {createFreshSixData,materializeFresh,freshSourceFor} = await import('../src/lib/guided/freshSix.ts')
+  const {OPENING_VERSIONS,OPENING_IMAGES} = await import('../src/lib/guided/shootOpening.ts')
+  const {genRequest} = await import('../src/lib/canvas/graph.ts')
+  const {selectGeneration} = await import('../src/lib/canvas/session.ts')
+  const store = () => { const values=new Map(); return {getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)} }
+  let time=0; const data=createFreshSixData(store(),store(),()=>time)
+  const call=async(path,method='GET',body)=>{const res=await data.request(new Request(`http://local/api/ideas/guided-tofu-shoot/${path}`,{method,...(body?{body:JSON.stringify(body)}:{})}));const result=await res.json();assert.equal(res.status,200,JSON.stringify(result));return result}
+  let initial=await call('canvas'),doc=materializeFresh(initial.doc,['n_six_prompt_s1','n_six_image_s1'],'shoot'),version=initial.version,gens=[]
+  const change=next=>{doc=next}
+  const flush=async()=>{version=(await call('canvas','PUT',{version,doc})).version;return true}
+  await flush()
+  const refresh=async()=>{const current=await call('canvas');doc=current.doc;version=current.version;gens=current.generations}
+  const selected=[]
+  const scope={readOnly:false,registerGuide:()=>{},freshRoute:()=> 'shoot',resource:{id:'guided-tofu-shoot'},busyRef:{current:new Set()},setBusy(){},session:{doc:()=>doc,version:()=>version},change,flush,
+    getCanvas:()=>call('canvas'),refresh,OPENING_VERSIONS,OPENING_IMAGES,genRequest,freshSourceFor,
+    quoteNode:(_resource,nodeId,canvasVersion)=>call('gen','POST',{nodeId,canvasVersion,confirm:false}),
+    startGen:(_resource,body)=>call('gen','POST',body),generationItems:gen=>[gen],setGens:next=>{gens=typeof next==='function'?next(gens):next},
+    pollGen:async(_resource,id,onProgress)=>{time+=1600;const gen=await call(`gen/${id}`);onProgress?.(gen);return gen},abort:{current:new AbortController()},selectGeneration,
+    selectionIO:()=>({current:()=>doc,change,flush,generations:gens,voices:[],importVoice:async()=>{throw Error('No voice expected')},onVoice(){}}),
+    timeline:{useForShot:async source=>{selected.push(source);return true}},edit:{flush:async()=>true},ff:key=>key}
+  const source=find(board,node=>ts.isVariableDeclaration(node)&&node.name.getText(board)==='performDemoAction').initializer
+  const output={};const js=ts.transpileModule(`exports.action = ${source.getText(board)}`,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText
+  new Function('exports',...Object.keys(scope),js)(output,...Object.values(scope))
+  doc={...doc,nodes:doc.nodes.map(node=>node.id==='n_six_image_s1'?{...node,data:{...node.data,prompt:OPENING_VERSIONS[1].prompt}}:node)};await flush()
+  const quote=await scope.quoteNode(null,'n_six_image_s1',version)
+  const readonlyOutput={};new Function('exports',...Object.keys(scope),js)(readonlyOutput,...Object.values({...scope,readOnly:true}));assert.equal(await readonlyOutput.action('image-1'),false)
+  const pending=await scope.startGen(null,{nodeId:'n_six_image_s1',canvasVersion:version,confirm:true,inputStamp:quote.inputStamp,quoteStamp:quote.quoteStamp})
+  assert.equal(pending.status,'queued')
+  assert.equal(await output.action('image-1'),true)
+  await refresh();let chosen=gens.find(gen=>gen.id===doc.nodes.find(node=>node.id==='n_six_image_s1').data.selected)
+  assert.equal(chosen.inputs.prompt,OPENING_VERSIONS[0].prompt);assert.equal(chosen.url,OPENING_IMAGES[0]);assert.notEqual(chosen.id,pending.id)
+  const count=gens.length;await output.action('image-1');await refresh();assert.equal(gens.length,count)
+  await output.action('prompt-2');await refresh();assert.equal(gens.length,count)
+  await output.action('image-2');await output.action('select');assert.equal(selected[0].id,'shoot-s1-v2')
 })

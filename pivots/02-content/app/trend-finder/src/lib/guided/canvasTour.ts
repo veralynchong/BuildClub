@@ -8,8 +8,33 @@ type CanvasTourStep = {
   en: { title: string; description: string }
   'zh-Hant': { title: string; description: string }
   generation?: 'image' | 'video'
+  minimumVersions?: number
+  requireSelection?: boolean
 }
 function routeSteps(route: GuidedRoute, full = false): CanvasTourStep[] {
+  if (route === ('shoot' as GuidedRoute)) {
+    const nodes = SIX_SHOTS[0].nodes
+    return [
+      { id: 'shots', focus: { nodeIds: [nodes.shot], dock: null },
+        en: { title: 'One shot, step by step', description: 'Use Next to reveal a Prompt, generate two prepared images and continue into the complete six-shot Editor.' },
+        'zh-Hant': { title: '示範一鏡，一步步完成', description: '按 Next 依序顯示 Prompt、兩版預備圖片，再進入完整六鏡 Editor。' } },
+      { id: 'prompt-s1', focus: { nodeIds: [nodes.prompt], dock: null, demoAction: 'prompt-1' },
+        en: { title: 'Your first Prompt', description: 'The visual direction appears here. Next reveals the first prepared image.' },
+        'zh-Hant': { title: '第一個 Prompt', description: '先查看這一鏡的畫面描述；按 Next 顯示第一張預備圖片。' } },
+      { id: 'image-s1', focus: { nodeIds: [nodes.prompt, nodes.image], dock: null, demoAction: 'image-1' },
+        en: { title: 'Version 1', description: 'The first prepared image follows this sample Prompt. Next changes the framing description.' },
+        'zh-Hant': { title: '第一版圖片', description: '第一張預備圖片對應這個範例 Prompt；按 Next 修改構圖描述。' } },
+      { id: 'rewrite-s1', focus: { nodeIds: [nodes.prompt, nodes.image], dock: null, demoAction: 'prompt-2' },
+        en: { title: 'Try a different direction', description: 'The highlighted words show the Prompt change. The first image stays in place until you click Next.' },
+        'zh-Hant': { title: '換一種畫面方向', description: '底色標示 Prompt 改動；原圖先保留，按 Next 才顯示第二版。' } },
+      { id: 'image-s1-v2', focus: { nodeIds: [nodes.prompt, nodes.image], dock: null, demoAction: 'image-2' },
+        en: { title: 'Version 2', description: 'Compare the second prepared image with version 1 using the arrows. Next selects this version for the film.' },
+        'zh-Hant': { title: '第二版圖片', description: '可用箭頭比較兩版預備圖片；按 Next 將第二版選入影片。' } },
+      { id: 'versions', focus: { nodeIds: [nodes.image], dock: null, demoAction: 'select' },
+        en: { title: 'Ready for the Editor', description: 'Your chosen version is saved to the first shot. Next brings all six shots into the Editor with the original arrival animation.' },
+        'zh-Hant': { title: '準備進入剪輯', description: '所選版本已存入第一鏡；按 Next，以原有入軌動畫進入完整六鏡 Editor。' } },
+    ]
+  }
   const steps: CanvasTourStep[] = [{ id: 'shots', focus: { nodeIds: [SIX_SHOTS[0].nodes.shot], dock: null },
     en: { title: 'Six shots, one story', description: route === 'ai' ? full ? 'The complete 21-shot AI master is split into six continuous video parts. Original captions and all 315 frames are retained; no new generation.' : 'Build a six-shot ad with prepared AI images and motion. Editing and local export are real.' : 'Plan six shots using storyboard references. The preview is an animatic, not filmed footage.' },
     'zh-Hant': { title: '六鏡，串起一個故事', description: route === 'ai' ? full ? '原21鏡AI成片完整分為六段連續影片，保留原字幕與全部315幀，不新增生成。' : '使用預備 AI 圖像與動態組成六鏡廣告；剪輯與本機匯出會實際執行。' : '以分鏡參考規劃六鏡拍攝。預覽是動態分鏡，並非實拍影片。' } }]

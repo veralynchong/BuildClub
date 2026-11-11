@@ -1,5 +1,3 @@
-import { getGuidedRuntime } from '../../lib/guided/runtime'
-import { GUIDED_IDS } from '../../lib/guided/contracts'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { Client, Platform, Video } from '../../types'
 import type { LinkInput, ResearchEntry, ResearchSlot, ResearchStatus, SlotSummary } from '../../lib/research'
@@ -647,8 +645,8 @@ export function ResearchScreen(p: ResearchScreenProps) {
   const sheetGroups = indexGroups.filter((g) => !filtered || g.rows.length > 0)
   const isOpen = (groupId: string) => {
     if (filtered) return (searchOpen.q === filterKey ? searchOpen.map[groupId] : undefined) ?? true
-    // Live workspaces start closed; the prepared case and search matches start open.
-    return sheetOpen[groupId] ?? (!!getGuidedRuntime() && p.client.id === GUIDED_IDS.clientId)
+    // Projects start closed; the viewer opens the references they want to inspect.
+    return sheetOpen[groupId] ?? false
   }
   const toggleOpen = (groupId: string) => {
     const next = !isOpen(groupId)

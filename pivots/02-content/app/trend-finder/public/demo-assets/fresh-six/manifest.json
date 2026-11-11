@@ -318,7 +318,36 @@
         "showLogo": false,
         "logoSize": "medium",
         "logoCorner": "top-right"
-      }
+      },
+      "variants": [
+        {
+          "id": "shoot-s1-v2",
+          "shotId": "s1",
+          "nodeId": "n_six_image_s1",
+          "path": "shoot-s1-v2.mp4",
+          "sha256": "99829756c8be4620c3571a77603354eb6ff7f876b260e0a29f4e9ae6cc82508e",
+          "label": "Tofu reveal \u00b7 alternative AI reference",
+          "provenance": "Existing AI opening parent image (ai-s1-parent.png) presented as an alternative static storyboard reference; no new AI generation or filmed footage."
+        },
+        {
+          "id": "shoot-s1-motion-a",
+          "shotId": "s1",
+          "nodeId": "n_six_video_s1",
+          "path": "opening-a.mp4",
+          "sha256": "0257dbe99aed865dda5e09cb80dfa493021891f63686b7cd41aa54996bb63f1b",
+          "label": "Tofu reveal \u00b7 close crop",
+          "provenance": "Prepared close crop of existing AI opening clip ai-s1.mp4; digital framing variation, no new AI generation."
+        },
+        {
+          "id": "shoot-s1-motion-b",
+          "shotId": "s1",
+          "nodeId": "n_six_video_s1",
+          "path": "opening-b.mp4",
+          "sha256": "736caecb8ad21c4c2430c91ebcedd564c4f6fb5d4f1bca3d549a3b7623163cb1",
+          "label": "Tofu reveal \u00b7 wider original framing",
+          "provenance": "Prepared wider original framing of existing AI opening clip ai-s1.mp4; digital framing variation, no new AI generation."
+        }
+      ]
     }
   }
 }
