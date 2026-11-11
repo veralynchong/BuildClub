@@ -1403,8 +1403,8 @@ export default function App() {
 
   // Sidebar "Find ideas": come back to this client's last results if they're still on screen, not an empty search page.
   const navTo = (v: View) => {
-    // "Video canvas" (5 Nov 2026): the planning board. One plan opens straight away; more than one, pick a plan.
-    // The 'canvas' branch below (approved plans' CanvasScreen) is no longer on the sidebar but is kept.
+    // 'board' (5 Nov 2026): the planning board. One plan opens straight away; more than one, pick a plan.
+    // Since 12 Nov 2026 the sidebar "Video canvas" uses the 'canvas' branch below (the freeform CanvasScreen) again.
     if (v === 'board') {
       const plans = boardPlans(shownIdeas, client.id)
       return plans.length === 1 ? openPlanBoard(plans[0].id) : setView('boardPick')
