@@ -1,0 +1,148 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Agency 模式：筆記 vs 現有實作",
+    "subtitle": "顏色代表實作狀態（比對 blenny worktree，2026-10-30）",
+    "locale": "zh-TW",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/veralynchong/BuildClub",
+      "provider": "github",
+      "link_mode": "local-only",
+      "revision": "3f1619887e1caa24a1833a75d263bb2dce63bbfb"
+    },
+    "output": ".archify/workflow-agency-mode-20261030-124041/agency-mode.html",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "backend": { "label": "已做" },
+        "messagebus": { "label": "部分 / 假資料" },
+        "security": { "label": "缺少" },
+        "external": { "label": "跟筆記不一樣" }
+      }
+    }
+  },
+  "lanes": [
+    { "id": "entry", "label": "入口" },
+    { "id": "staff", "label": "Agency 執行者" },
+    { "id": "system", "label": "Trend Finder 推薦" },
+    { "id": "review", "label": "主管 / 客戶" },
+    { "id": "memory", "label": "客戶記憶（護城河）", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "p_entry", "label": "進入", "fromCol": 0, "toCol": 0 },
+    { "id": "p_find", "label": "找趨勢", "fromCol": 1, "toCol": 2, "variant": "emphasis" },
+    { "id": "p_plan", "label": "規劃", "fromCol": 3, "toCol": 3 },
+    { "id": "p_review", "label": "審核", "fromCol": 4, "toCol": 4, "variant": "security" },
+    { "id": "p_make", "label": "製作", "fromCol": 5, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "g_moat", "label": "完全沒做", "lane": "memory", "fromCol": 3, "toCol": 4, "variant": "security" }
+  ],
+  "mainPath": ["lp", "login", "keyword", "suggest", "select", "shotlist", "approval", "film"],
+  "nodes": [
+    {
+      "id": "lp", "lane": "entry", "col": 0, "type": "external",
+      "label": "付費翻拍落地頁", "sublabel": "有三版主題，沒提翻拍和付費",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/components/landing/LandingMidnight.tsx" }]
+    },
+    {
+      "id": "login", "lane": "staff", "col": 0, "type": "messagebus",
+      "label": "登入", "sublabel": "只有示範帳號，沒有角色",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/components/LoginScreen.tsx" }]
+    },
+    {
+      "id": "keyword", "lane": "staff", "col": 1, "type": "backend",
+      "label": "輸入關鍵字或想法", "sublabel": "文字、連結、截圖",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/components/SearchScreen.tsx" }]
+    },
+    {
+      "id": "suggest", "lane": "system", "col": 1, "type": "backend",
+      "label": "最值得翻拍", "sublabel": "爆紅分數 + 趨勢階段",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/components/ResultsScreen.tsx" }]
+    },
+    {
+      "id": "analytics", "lane": "system", "col": 2, "type": "messagebus",
+      "label": "深入看數據", "sublabel": "只展示，不影響推薦",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/components/BreakdownPanel.tsx" }]
+    },
+    {
+      "id": "select", "lane": "staff", "col": 2, "type": "backend",
+      "label": "選要翻拍的影片", "sublabel": "存成客戶的點子",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/App.tsx" }]
+    },
+    {
+      "id": "shotlist", "lane": "staff", "col": 3, "type": "backend",
+      "label": "可編輯 shot list", "sublabel": "可改，但內容是範例",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/components/PlanScreen.tsx" }]
+    },
+    {
+      "id": "approval", "lane": "review", "col": 4, "type": "messagebus",
+      "label": "主管審核", "sublabel": "寫死 Annie，存在瀏覽器",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/components/ReviewScreen.tsx" }]
+    },
+    {
+      "id": "clientview", "lane": "review", "col": 5, "type": "security",
+      "label": "客戶端畫面", "sublabel": "沒有分享連結或登入"
+    },
+    {
+      "id": "film", "lane": "staff", "col": 5, "type": "messagebus",
+      "label": "拍攝與剪輯", "sublabel": "只有期限和剪輯 brief",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/components/PlanScreen.tsx" }]
+    },
+    {
+      "id": "feedback", "lane": "memory", "col": 4, "type": "security",
+      "label": "回饋紀錄", "sublabel": "只存退回理由"
+    },
+    {
+      "id": "profile", "lane": "memory", "col": 3, "type": "security",
+      "label": "客戶偏好", "sublabel": "Client 沒有偏好欄位",
+      "sources": [{ "path": "pivots/02-content/app/trend-finder/src/types.ts" }]
+    }
+  ],
+  "edges": [
+    { "id": "e_lp_login", "from": "lp", "to": "login" },
+    { "id": "e_login_kw", "from": "login", "to": "keyword" },
+    { "id": "e_kw_suggest", "from": "keyword", "to": "suggest", "label": "搜尋", "variant": "emphasis" },
+    { "id": "e_suggest_select", "from": "suggest", "to": "select", "variant": "emphasis" },
+    { "id": "e_suggest_analytics", "from": "suggest", "to": "analytics", "label": "想看再看", "variant": "dashed", "role": "branch" },
+    { "id": "e_select_shot", "from": "select", "to": "shotlist" },
+    { "id": "e_shot_approval", "from": "shotlist", "to": "approval", "label": "送審" },
+    { "id": "e_approval_film", "from": "approval", "to": "film", "label": "核准", "variant": "emphasis" },
+    { "id": "e_approval_back", "from": "approval", "to": "shotlist", "label": "退回", "variant": "security", "role": "error" },
+    { "id": "e_approval_feedback", "from": "approval", "to": "feedback", "label": "應記錄", "variant": "dashed", "role": "branch" },
+    { "id": "e_client_feedback", "from": "clientview", "to": "feedback", "label": "讚 / 不讚", "variant": "dashed", "role": "branch" },
+    { "id": "e_feedback_profile", "from": "feedback", "to": "profile", "label": "累積", "variant": "dashed" },
+    { "id": "e_profile_shot", "from": "profile", "to": "shotlist", "label": "依偏好調整", "variant": "dashed", "role": "async" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "前半段大致做好",
+      "items": [
+        "輸入、推薦、選片、編輯 shot list 都能用",
+        "推薦靠規則：爆紅分數加趨勢階段，再排除客戶不能拍的"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "審核是假資料",
+      "items": [
+        "點子和審核都存在瀏覽器 localStorage",
+        "後端只有 /api/health 和 /api/search",
+        "比對的是 blenny worktree；feat/full-backend-coverage 可能更完整"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "建議先做",
+      "items": [
+        "1. 審核搬到後端，用分享連結給主管或客戶",
+        "2. 每格 shot 收讚 / 不讚，存成客戶事件",
+        "3. 用累積的偏好產生 shot list"
+      ]
+    }
+  ]
+}

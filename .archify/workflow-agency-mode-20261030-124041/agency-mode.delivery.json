@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "08d92e13-6572-445c-9a07-130733a23608",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/Users/tommy/orca/workspaces/BuildClub/blenny/.archify/workflow-agency-mode-20261030-124041/candidate.json",
+  "output": "/Users/tommy/orca/workspaces/BuildClub/blenny/.archify/workflow-agency-mode-20261030-124041/agency-mode.html",
+  "specification": {
+    "sha256": "a4423c3eec9639b189db45e5d89ce79ff6ba2965b66cafa2e285b3d0dae4c235",
+    "bytes": 6978
+  },
+  "artifact": {
+    "sha256": "c39d4f6cf76f0425710dfd765beb1fd324e2f2d84a684a75993c3d3d5c6c2052",
+    "bytes": 831437
+  }
+}

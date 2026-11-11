@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "拍攝清單 → 影片剪輯流程（白板草圖）",
+    "locale": "zh-TW",
+    "quality_profile": "showcase",
+    "output": ".archify/workflow-shotlist-video-edit-20261102-182656/shotlist-video-edit.html"
+  },
+  "lanes": [
+    { "id": "plan", "label": "拍攝清單" },
+    { "id": "source", "label": "素材來源" },
+    { "id": "canvas", "label": "節點畫布" },
+    { "id": "edit", "label": "工具列編輯" },
+    { "id": "output", "label": "輸出" }
+  ],
+  "phases": [
+    { "id": "ph_plan", "label": "規劃", "fromCol": 0, "toCol": 1 },
+    { "id": "ph_build", "label": "組裝鏡頭", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "ph_finish", "label": "剪輯與發佈", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["shotlist", "visualise", "upload", "shot1", "shot2", "shot3", "toolbar", "publish"],
+  "nodes": [
+    { "id": "shotlist", "lane": "plan", "col": 0, "type": "frontend", "label": "拍攝清單", "sublabel": "勾選鏡頭 1、2、3", "icon": "start" },
+    { "id": "visualise", "lane": "plan", "col": 1, "type": "backend", "label": "視覺化分鏡", "sublabel": "把分鏡變成影片" },
+    { "id": "prompt", "lane": "source", "col": 1, "type": "cloud", "label": "輸入提示詞", "sublabel": "AI 生成畫面" },
+    { "id": "upload", "lane": "source", "col": 2, "type": "external", "label": "上傳素材", "sublabel": "實拍影片" },
+    { "id": "media", "lane": "source", "col": 3, "type": "database", "label": "圖片／角色節點", "sublabel": "掛在鏡頭上" },
+    { "id": "shot1", "lane": "canvas", "col": 2, "type": "frontend", "label": "鏡頭 1", "sublabel": "節點" },
+    { "id": "shot2", "lane": "canvas", "col": 3, "type": "frontend", "label": "鏡頭 2", "sublabel": "節點" },
+    { "id": "shot3", "lane": "canvas", "col": 4, "type": "frontend", "label": "鏡頭 3", "sublabel": "節點" },
+    { "id": "toolbar", "lane": "edit", "col": 4, "type": "backend", "label": "工具列", "sublabel": "剪影片・加文字・音效／音樂" },
+    { "id": "brand", "lane": "edit", "col": 5, "type": "messagebus", "label": "品牌板", "sublabel": "用途待定" },
+    { "id": "export", "lane": "output", "col": 4, "type": "external", "label": "匯出", "sublabel": "下載檔案", "icon": "success" },
+    { "id": "publish", "lane": "output", "col": 5, "type": "external", "label": "發佈", "sublabel": "上線到平台", "icon": "flag" }
+  ],
+  "edges": [
+    { "id": "e_pick", "from": "shotlist", "to": "visualise", "label": "勾選後送出" },
+    { "id": "e_prompt", "from": "visualise", "to": "prompt", "label": "或", "role": "branch", "variant": "dashed" },
+    { "id": "e_upload", "from": "visualise", "to": "upload", "variant": "emphasis" },
+    { "id": "e_prompt_shot", "from": "prompt", "to": "shot1", "role": "branch", "variant": "dashed" },
+    { "id": "e_upload_shot", "from": "upload", "to": "shot1", "variant": "emphasis" },
+    { "id": "e_media", "from": "media", "to": "shot2", "role": "branch", "variant": "dashed" },
+    { "id": "e_s12", "from": "shot1", "to": "shot2", "variant": "emphasis" },
+    { "id": "e_s23", "from": "shot2", "to": "shot3", "variant": "emphasis" },
+    { "id": "e_edit", "from": "shot3", "to": "toolbar" },
+    { "id": "e_brand", "from": "brand", "to": "toolbar", "role": "branch", "variant": "dashed" },
+    { "id": "e_export", "from": "toolbar", "to": "export", "role": "branch" },
+    { "id": "e_publish", "from": "toolbar", "to": "publish", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "白板上的重點",
+      "items": [
+        "左邊是拍攝清單，勾選鏡頭後「視覺化成分鏡影片」",
+        "每個鏡頭是畫布上的一個節點，依序串起來（node based）",
+        "右側工具列：剪影片、加文字；下方另列音效／音樂"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "看不清楚、待確認",
+      "items": [
+        "「提示詞或上傳」是二選一，還是可以混用",
+        "品牌板只有草圖，不確定是套用品牌樣式還是另一個頁面",
+        "鏡頭之間的小方塊推測是圖片／角色素材"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,437 @@
+<title>翻拍競品與爆款</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one reading column, figure first in each section, wide tables scroll inside their own box. */
+:root{
+  --bg:#f6f5f1; --surface:#ffffff; --fg:#1d1f24; --muted:#5b6070; --line:#d9d8d0;
+  --accent:#b4531a; --accent-soft:#f4e3d6; --good:#1f6b4a; --good-soft:#dcefe5; --warn:#8a5a00; --warn-soft:#f6e9c8;
+  --bad:#a02a2a; --bad-soft:#f5dcdc; --blue:#2c5c9a; --blue-soft:#dde8f5;
+  --font-body:"PingFang TC","Noto Sans TC","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-display:"PingFang TC","Noto Sans TC","Songti TC",Georgia,serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"PingFang TC","Noto Sans TC",monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14161a; --surface:#1d2026; --fg:#e8e8e4; --muted:#a2a8b6; --line:#343944;
+  --accent:#e58a4f; --accent-soft:#3a2819; --good:#6fcf9f; --good-soft:#173528; --warn:#e5b94e; --warn-soft:#38300f;
+  --bad:#f08a8a; --bad-soft:#3d1c1c; --blue:#8fb7ee; --blue-soft:#1c2b42; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14161a; --surface:#1d2026; --fg:#e8e8e4; --muted:#a2a8b6; --line:#343944;
+  --accent:#e58a4f; --accent-soft:#3a2819; --good:#6fcf9f; --good-soft:#173528; --warn:#e5b94e; --warn-soft:#38300f;
+  --bad:#f08a8a; --bad-soft:#3d1c1c; --blue:#8fb7ee; --blue-soft:#1c2b42; color-scheme:dark}
+*{box-sizing:border-box}
+html{font-size:17px}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);line-height:1.7;
+  padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:62rem;margin:0 auto}
+a{color:var(--blue);text-underline-offset:2px;overflow-wrap:anywhere}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;line-height:1.3;margin:0}
+h1{font-size:2rem;margin-bottom:.75rem}
+h2{font-size:1.5rem;margin:3.5rem 0 1rem;padding-top:1rem;border-top:2px solid var(--fg)}
+h3{font-size:1.1rem;margin:2rem 0 .5rem}
+p{margin:.5rem 0;max-width:68ch}
+code{font-family:var(--font-mono);font-size:.85em;background:var(--accent-soft);padding:.05em .35em;border-radius:3px;overflow-wrap:anywhere}
+.eyebrow{font-size:.8rem;letter-spacing:.08em;color:var(--accent);font-weight:600}
+.lead{font-size:1.1rem;max-width:62ch}
+.meta{color:var(--muted);font-size:.85rem}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;margin:1.25rem 0 0;font-size:.9rem}
+.ev{display:inline-block;font-size:.75rem;line-height:1.5;padding:0 .45em;border-radius:3px;border:1px solid var(--line);background:var(--surface);color:var(--muted);white-space:nowrap;vertical-align:baseline}
+.ev.ok{border-color:var(--good);color:var(--good);background:var(--good-soft)}
+.ev.inf{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.ev.apify{border-color:var(--blue);color:var(--blue);background:var(--blue-soft)}
+.ev.vendor,.ev.sum{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+figure{margin:1.25rem 0;padding:0}
+figcaption{font-size:.9rem;color:var(--muted);margin-top:.5rem;max-width:68ch}
+figcaption b{color:var(--fg)}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:1rem}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.85rem;line-height:1.55}
+th,td{padding:.55rem .65rem;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-size:.78rem;color:var(--muted);font-weight:600;background:var(--bg);position:sticky;top:0;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.t-wide{min-width:60rem}.t-mid{min-width:48rem}
+.chip{display:inline-block;font-size:.75rem;padding:0 .5em;border-radius:99px;white-space:nowrap;border:1px solid var(--line)}
+.chip.ad{background:var(--bad-soft);color:var(--bad);border-color:var(--bad)}
+.chip.org{background:var(--good-soft);color:var(--good);border-color:var(--good)}
+.chip.col{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
+.chip.own{background:var(--blue-soft);color:var(--blue);border-color:var(--blue)}
+.chip.err{background:var(--bg);color:var(--muted)}
+.bar{display:block;height:.55rem;border-radius:2px;background:var(--accent);width:calc(var(--w)*1%);min-width:2px;margin-top:.3rem}
+.bar.b{background:var(--blue)}.bar.g{background:var(--good)}.bar.r{background:var(--bad)}
+/* hero figure */
+.hero-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1rem}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:1rem}
+.stat .n{font-family:var(--font-display);font-size:2.2rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat .l{font-size:.85rem;color:var(--muted)}
+.cmp{display:grid;grid-template-columns:5rem minmax(0,1fr) 4.5rem;gap:.5rem;align-items:center;font-size:.85rem;margin-top:.5rem}
+.cmp .track{background:var(--bg);height:1.1rem;border-radius:3px;overflow:hidden}
+.cmp .fill{height:100%;width:calc(var(--w)*1%)}
+.fill.r{background:var(--bad)}.fill.g{background:var(--good)}
+/* layers figure */
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:.5rem;align-items:stretch}
+.flow .box{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.6rem;font-size:.82rem;line-height:1.5}
+.flow .box b{display:block;font-size:.9rem}
+.flow .gap{border:2px dashed var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:.6rem;font-size:.82rem;display:flex;align-items:center;font-weight:600;line-height:1.5}
+@media (max-width:720px){.flow{grid-template-columns:minmax(0,1fr)}}
+/* conclusion blocks */
+.concl{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:1rem 1.1rem;margin:1.5rem 0}
+.concl h3{margin:0 0 .5rem;font-size:1.05rem}
+.concl .row{display:grid;grid-template-columns:4.5rem minmax(0,1fr);gap:.25rem .75rem;margin-top:.6rem}
+.concl .row .k{font-size:.8rem;font-weight:700;color:var(--muted);padding-top:.15rem}
+.concl .row.warn .k{color:var(--warn)}
+.concl .row p{margin:0;max-width:none}
+@media (max-width:560px){.concl .row{grid-template-columns:minmax(0,1fr)}}
+.callout{border-left:4px solid var(--warn);background:var(--warn-soft);padding:.7rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0;max-width:68ch}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:.4rem 1rem;font-size:.85rem;margin-top:.75rem}
+.kw{display:grid;gap:.6rem;margin-top:.5rem}
+.kw div{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .8rem;font-size:.9rem}
+.kw b{display:block;margin-bottom:.15rem}
+.json{font-family:var(--font-mono);font-size:.78rem;overflow-wrap:anywhere}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<main>
+<header>
+  <div class="eyebrow">研究報告 · 存取日期 2026-10-30(雪梨時間)</div>
+  <h1>把爆款變成分鏡的位置,還沒有人佔</h1>
+  <p class="lead"><b>結論先講:</b>跟 Trend Finder 相鄰的產品大約有 22 個,分成四層,但<b>沒有一家把「找到自然流量的爆款 → 歸納格式 → 給真人拍的可編輯分鏡 → 客戶批准」串起來</b>。YC 名單和 GitHub 也是同一個空白。</p>
+  <nav class="toc" aria-label="章節">
+    <a href="#s1">競品地圖</a><a href="#s2">YC 名單</a><a href="#s3">GitHub</a><a href="#s4">熱門影片</a><a href="#s5">搜尋手冊</a><a href="#s6">總結</a>
+  </nav>
+</header>
+
+<section aria-labelledby="sum">
+  <h2 id="sum" style="margin-top:2rem">先看結論</h2>
+  <figure>
+    <div class="fig">
+      <div class="hero-grid">
+        <div class="stat"><div class="n">22</div><div class="l">相鄰產品,四層,每層都停在分鏡前面</div></div>
+        <div class="stat"><div class="n">US$0.67</div><div class="l">本次 Apify 實測總花費(8 個 TikTok 品牌、7 個 IG 品牌)<span class="ev apify">Apify 實測</span></div></div>
+        <div class="stat">
+          <div class="l">TikTok 按讚率中位數(讚 ÷ 播放)<span class="ev apify">Apify 實測</span></div>
+          <div class="cmp"><span>廣告 13 支</span><span class="track"><span class="fill r" style="display:block;--w:10"></span></span><b>0.65%</b></div>
+          <div class="cmp"><span>其餘 83 支</span><span class="track"><span class="fill g" style="display:block;--w:100"></span></span><b>6.46%</b></div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>Fig. 1</b> 付費推廣的 TikTok 影片播放高,按讚率低約 10 倍。長條按比例繪製(6.46% = 100%)。</figcaption>
+  </figure>
+  <p>找趨勢的工具(Sandcastles、Virlo、Format Finder)做到腳本就停了。「複製這支廣告」的生成器(Creatify、MakeUGC、Higgsfield)拿的參考素材是 Meta 廣告庫,產出的是 AI 演員影片,不是給剪輯師的分鏡。剪輯和切片工具(OpusClip、Submagic、Captions)只處理你已經有的素材。</p>
+  <p>YC 名單也一樣:投資集中在生成、AI 剪輯和「代理商即軟體」,負責「找」的那一層只剩 Bluma(F25,複製對手爆紅影片,但做的是生成)和 Syncly(W23,給大型 CPG 品牌的影片社群聆聽),唯一純做趨勢分析的 Trendpop(W21)在 2022 年被收購。</p>
+  <p>GitHub 上能直接放進商業產品的,只有底層工具:yt-dlp、PySceneDetect、faster-whisper／WhisperX。功能最接近的 ViralMint 是 AGPL 授權,只能參考不能抄。</p>
+  <p>2026-10-30 我們用 Apify 實際抓了 8 個品牌的 TikTok 和 7 個品牌的 Instagram(花費 <b>US$0.67</b>)。<b>這些品牌點閱最高的影片,大多不是自家的產品 demo,而是創作者合作貼文、付費推廣,或 CapCut 那種「範本」機制</b>。Instagram 播放前 10 名的 reel 全部用「留言 X 拿連結」當 CTA;TikTok 上標為廣告的影片,按讚率中位數只有 0.65%,自然流量的影片是 6.46%。</p>
+  <p>這次也順便解開了上一輪的懸念:clockworks 的 <code>profileSorting: popular</code> <b>是照按讚數排序,不是照播放數</b>(8 個帳號 8 個都是)。所以之後的搜尋要多抓一些再自己用播放數重排,並且把廣告和合作貼文標出來,不然「爆款」會混進買來的流量。</p>
+
+  <div class="callout"><b>兩個口徑提醒。</b>Instagram 的數字只是「最近 12 支 reel 裡最高的」,不是帳號的歷史最高。TikTok 的 <code>popular</code> 是照按讚數排序,不是照播放數,所以播放高但讚少的影片(例如付費推廣)可能根本沒被抓進來。</div>
+
+  <h3>證據標籤說明</h3>
+  <p class="meta">存取日期皆為 2026-10-30,雪梨時間。</p>
+  <div class="legend">
+    <div><span class="ev ok">已核對原頁</span> 研究員抓取並讀了該頁</div>
+    <div><span class="ev sum">僅摘要</span> 只看到搜尋結果摘要或第三方頁面</div>
+    <div><span class="ev vendor">廠商自述</span> 廠商對自己的說法</div>
+    <div><span class="ev">競品所述</span> 對手寫的比較頁</div>
+    <div><span class="ev apify">Apify 實測</span> 本次自己跑 Apify 拿到的資料集,數字是登出狀態下的快照,沒有逐支到平台上核對</div>
+    <div><span class="ev inf">推論</span> 本報告的判斷,不是任何來源的原話</div>
+  </div>
+  <p class="meta">爆款公式(觀看 ÷ 帳號中位數)和平台 API 能拿到哪些指標,上一份報告《短影音趨勢驗證與競品護城河》已經處理,本報告不再重複,只在需要時引用。</p>
+</section>
+
+<section aria-labelledby="s1">
+  <h2 id="s1">22 個產品分四層,每一層都停在分鏡前面</h2>
+  <figure>
+    <div class="fig">
+      <div class="flow" role="img" aria-label="四層競品與缺口:找加腳本、複製廣告與AI演員、生成與剪輯、剪輯與切片,都停在分鏡與客戶批准之前">
+        <div class="box"><b>找＋腳本</b>Sandcastles、Virlo、Format Finder、Blort、Spotter／vidIQ<br>停在腳本</div>
+        <div class="box"><b>複製廣告／AI 演員</b>Creatify、MakeUGC、Higgsfield、Arcads、Icon<br>停在 AI 演員影片</div>
+        <div class="box"><b>生成／剪輯</b>HeyGen、Captions、CapCut<br>處理已有素材</div>
+        <div class="box"><b>剪輯／切片</b>OpusClip、Submagic、Descript、Vizard、Klap、Choppity、VEED、Munch<br>處理已有素材</div>
+        <div class="gap">空白:真實爆款 → 分鏡 → 客戶批准</div>
+      </div>
+    </div>
+    <figcaption><b>Fig. 2</b> 四層產品都沒有走到「把一支真實爆款轉成客戶能拍、且客戶簽過名的分鏡」。</figcaption>
+  </figure>
+
+  <h3>競品地圖</h3>
+  <div class="scroll"><table class="t-wide">
+    <thead><tr><th>層</th><th>產品</th><th>做到哪一步</th><th>價格(美元／月)</th><th>對代理商的支援</th><th>牽引力／資金</th><th>證據</th></tr></thead>
+    <tbody>
+    <tr><td>找＋腳本</td><td>Sandcastles</td><td>追蹤指定頻道的 outlier、解釋爆紅原因、產出「remix playbook」、hook、腳本;IG／TikTok／Shorts</td><td>$49／$99／$499(年繳 $39／$79／$399)</td><td>只有 Titan 方案有 20 個 workspace 和訪客權限</td><td>沒找到</td><td><span class="ev ok">已核對原頁</span> (<a href="https://www.sandcastles.ai">Sandcastles</a>)</td></tr>
+    <tr><td>找＋腳本</td><td>Virlo</td><td>outlier、AI 拆解 hook／格式、用你的語氣寫腳本、MCP、Meta 廣告庫</td><td>$49／$199／$499 起</td><td>明確鎖定管理多個客戶帳號的代理商,3–10 個席位</td><td>「1,700+ teams」<span class="ev vendor">廠商自述</span></td><td><span class="ev ok">已核對原頁</span> (<a href="https://virlo.ai/start">Virlo</a>、<a href="https://virlo.ai/about">About</a>)</td></tr>
+    <tr><td>找＋腳本</td><td>Format Finder</td><td>65+ 個命名格式、依利基生成 hook／腳本／<b>拍攝計畫</b>、一鍵剪輯</td><td>$29／$59／$97</td><td>未提</td><td>沒找到</td><td><span class="ev vendor">廠商自述</span> (<a href="https://formatfinder.onepeakcreative.com/resources/compare/format-finder-vs-sandcastles-ai">Format Finder</a>)</td></tr>
+    <tr><td>找＋腳本</td><td>Blort</td><td>找對手最好的內容、逐格拆解、改寫成你的產品</td><td>未公開</td><td>未提</td><td>沒找到</td><td><span class="ev sum">僅摘要</span> (<a href="https://creatoreconomytools.com/tool/blort-ai">creatoreconomytools</a>)</td></tr>
+    <tr><td>找＋腳本</td><td>Spotter Studio、vidIQ Remix</td><td>只做 YouTube(長影音)的點子發想</td><td>Spotter 約 $49(狀態不明,定價頁 404)</td><td>無</td><td>—</td><td><span class="ev sum">僅摘要</span> (<a href="https://techcrunch.com/2024/09/03/spotter-launches-ai-tools-youtubers-brainstorm-video-ideas-thumbnails">TechCrunch</a>、<a href="https://support.vidiq.com/en/articles/9899331-remix">vidIQ</a>)</td></tr>
+    <tr><td>複製廣告／AI 演員</td><td>Creatify</td><td>Ad Clone 用你的產品重建對手廣告結構;追蹤 1,000 萬+ 支 Meta 廣告;投放</td><td>$15–195;API $99／$299</td><td>Business 方案 10 席位、10 個 brand space,另有代管服務</td><td>ARR $9M、A 輪 $15.5M <span class="ev vendor">廠商自述</span></td><td><span class="ev ok">已核對原頁</span> (<a href="https://www.creatify.ai/pricing">Creatify</a>、<a href="https://www.businesswire.com/news/home/20250528506486/en/Creatify-Crosses-$9M-ARR-Raises-$15.5M-Series-A-to-Launch-the-First-End-to-End-AI-Ad-Agent-for-Video">BusinessWire</a>)</td></tr>
+    <tr><td>複製廣告／AI 演員</td><td>MakeUGC</td><td>1,000+ AI 演員、Ad Remake、UGC 格式庫、批次 10 個版本</td><td>$29／$39／$79(年繳)</td><td>導向 Agencies 頁</td><td>沒找到</td><td><span class="ev ok">已核對原頁</span> (<a href="https://www.makeugc.ai">MakeUGC</a>)</td></tr>
+    <tr><td>複製廣告／AI 演員</td><td>Higgsfield</td><td>Recreate 把參考影片的動作換成你的角色;Content Factory 把熱門風格做成系列</td><td>約 $19／$47／$99 <span class="ev sum">僅摘要</span></td><td>企業客戶已佔多數營收</td><td>B 輪 $400M、估值 $5.4B、年化約 $700M <span class="ev vendor">廠商自述</span></td><td><span class="ev ok">已核對原頁</span> (<a href="https://higgsfield.ai">Higgsfield</a>、<a href="https://thenextweb.com/news/higgsfield-series-b-400m-5-4bn-valuation-700m-revenue">TNW</a>)</td></tr>
+    <tr><td>複製廣告／AI 演員</td><td>Arcads</td><td>AI 演員 UGC、現成廣告格式、團隊畫布</td><td>約 $110 起 <span class="ev sum">僅摘要</span></td><td>共享畫布</td><td>「millions」<span class="ev vendor">廠商自述</span></td><td><span class="ev ok">已核對原頁</span> (<a href="https://www.arcads.ai">Arcads</a>、<a href="https://fluxnote.io/guides/arcads-pricing-2026">Fluxnote</a>)</td></tr>
+    <tr><td>複製廣告／AI 演員</td><td>Icon</td><td>從 AI 廣告製作<b>轉向真人 UGC</b>:每月 6 支、18 種格式,付款前先看 6 份腳本</td><td>$1,000</td><td>白牌 API</td><td>「$30M+ raised」<span class="ev vendor">廠商自述</span></td><td><span class="ev ok">已核對原頁</span> (<a href="https://www.icon.com">Icon</a>)</td></tr>
+    <tr><td>生成／剪輯</td><td>HeyGen</td><td>頭像、翻譯、Video Agent(提示 → 成片)、MCP</td><td>$29／$49／$149</td><td>Business 共享 workspace、品牌套件</td><td>ARR 超過 $200M <span class="ev vendor">廠商自述</span></td><td><span class="ev ok">已核對原頁</span> (<a href="https://www.heygen.com/pricing">HeyGen</a>、<a href="https://www.heygen.com/blog/heygen-surpasses-200m-arr">HeyGen blog</a>)</td></tr>
+    <tr><td>生成／剪輯</td><td>Captions(Mirage)</td><td>AI Edit 自動剪接、B-roll、數位分身、字幕</td><td>約 $24.99(iOS)<span class="ev sum">僅摘要</span></td><td>未提</td><td>2026-03 募得 $75M</td><td><span class="ev ok">已核對原頁</span> (<a href="https://www.captions.ai">Captions</a>)</td></tr>
+    <tr><td>生成／剪輯</td><td>CapCut</td><td>從 TikTok 熱門格式長出的範本庫,把素材丟進範本就好</td><td>Pro $7.99–19.99(來源不一)</td><td>無</td><td>—</td><td><span class="ev sum">僅摘要</span> (<a href="https://socialrails.com/blog/capcut-pricing-guide">Socialrails</a>)</td></tr>
+    <tr><td>剪輯／切片</td><td>OpusClip、Submagic、Descript、Vizard、Klap、Choppity、VEED、Munch</td><td>長片切短片、字幕、品牌範本、排程</td><td>入門 $14–29</td><td>多為分享連結或團隊 workspace;Choppity Enterprise 有白牌</td><td>Submagic 自力營運,約 $8M ARR <span class="ev sum">僅摘要</span></td><td><span class="ev ok">已核對原頁</span> (<a href="https://www.opus.pro/pricing">Opus</a>、<a href="https://www.submagic.co/pricing">Submagic</a>、<a href="https://www.choppity.com/pricing">Choppity</a>、<a href="https://www.munchstudio.com/pricing">Munch</a>)</td></tr>
+    </tbody></table></div>
+
+  <div class="concl">
+    <h3>結論一:最接近我們的是 Format Finder(概念)和 Virlo(客群),但兩者都沒有「客戶批准」,也沒有把某支真實爆款轉成分鏡。</h3>
+    <div class="row"><span class="k">證據</span><p>Format Finder 是唯一寫明會產出「shot plans」的產品,但它的格式是人工整理的 65 個固定格式,不是從你的利基即時抓出來的,也不追蹤頻道 (<a href="https://formatfinder.onepeakcreative.com/resources/compare/format-finder-vs-sandcastles-ai">Format Finder</a>) <span class="ev vendor">廠商自述</span>。Virlo 明說要服務「管理多個客戶帳號的代理商」,但產品做到腳本為止,自家部落格還建議行銷人把輸出丟進 AI 影片工具 (<a href="https://virlo.ai/start">Virlo</a>) <span class="ev ok">已核對原頁</span>。所有產品的公開定價頁,都找不到給客戶簽核分鏡的流程;「審閱」指的是分享連結(Opus、Submagic),或是代管服務裡的一個步驟(Icon 付款前讓你看 6 份腳本) (<a href="https://www.opus.pro/pricing">Opus</a>、<a href="https://www.icon.com">Icon</a>) <span class="ev ok">已核對原頁</span>。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> Trend Finder 的差異不在「找得到 outlier」(這已經是商品),而在兩個步驟:一是把「一支真實的爆款」抽象成「一個格式」,再轉成「這個客戶能拍的分鏡」;二是讓客戶在拍攝前簽核。這跟上一份報告的結論一致:缺的是代理商流程,不是 AI 能力。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>判斷只根據公開定價頁和功能頁,登入後的功能都沒有實測。Format Finder 的資料出自它自己寫的比較頁。</p></div>
+  </div>
+
+  <div class="concl">
+    <h3>結論二:「複製爆款」這件事,市場的主流答案是不拍了、改用 AI 演員;Icon 反向轉回真人,是唯一一個支持「真人拍攝」的訊號。</h3>
+    <div class="row"><span class="k">證據</span><p>資金流向很一面倒:Higgsfield 估值 $5.4B、HeyGen ARR 超過 $200M、Mirage 募 $75M、Creatify A 輪 $15.5M;Sandcastles、Blort、Format Finder 都找不到融資紀錄 (<a href="https://thenextweb.com/news/higgsfield-series-b-400m-5-4bn-valuation-700m-revenue">TNW</a>、<a href="https://www.heygen.com/blog/heygen-surpasses-200m-arr">HeyGen</a>、<a href="https://www.businesswire.com/news/home/20250528506486/en/Creatify-Crosses-$9M-ARR-Raises-$15.5M-Series-A-to-Launch-the-First-End-to-End-AI-Ad-Agent-for-Video">BusinessWire</a>)。Icon 原本是「The AI Admaker」,2026 年改賣每月 $1,000 的真人 UGC,主打「no AI / 100% real」 (<a href="https://www.icon.com">Icon</a>) <span class="ev ok">已核對原頁</span> <span class="ev vendor">廠商自述</span>。另外,這幾家生成器「複製」的參考來源多半是 Meta 廣告庫,不是 TikTok／Reels 的自然流量(Creatify、Virlo Pro、Icon)。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> Mercif 的剪輯師在印尼、拍的是真人,賣的是真實素材和手藝。生成器越便宜,「為什麼還要真人拍」的壓力越大,所以我們的說法要站在「品牌安全＋客戶信任」上,而不是「比較省」。法律上也比較乾淨:把來源影片只存成連結、產出新的分鏡給真人拍,比 Higgsfield Recreate 這種直接複製動作和肖像的做法風險低(這是一般原則,未經律師確認)。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>Icon 的轉向只是一個案例,「AI UGC is illegal as of June 9, 2026」那句話在它頁面上沒有出處,我們無法確認。</p></div>
+  </div>
+
+  <div class="concl">
+    <h3>結論三:關於剪輯層,上一份報告已經確認它是商品,這次的新資訊只有一個:Munch 已經從切片工具變成「腳本＋生成」套件,並在定價頁放了「For Agencies」。</h3>
+    <div class="row"><span class="k">證據</span><p>Munch 的 Premium 方案是 $60／月,包含無限腳本、30 支生成影片、無限團隊成員,頁面上沒有它過去宣傳的爆紅分析 (<a href="https://www.munchstudio.com/pricing">Munch</a>) <span class="ev ok">已核對原頁</span>。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> 剪輯工具正往上游的「腳本」移動,這是值得盯的威脅方向,但目前還沒有任何一家往「分鏡簽核」移動。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>Munch 的頁面沒有說明代理商功能具體是什麼。</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s2">
+  <h2 id="s2">YC 投的是生成和代理商服務,「找」這層只剩兩家</h2>
+  <figure>
+    <div class="fig">
+      <div class="flow" style="grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))" role="img" aria-label="YC 公司依覆蓋環節分組">
+        <div class="box"><b>找</b>Bluma(F25)、Syncly(W23)、Trendpop(W21,2022-01 被 Collab 收購)、Kuli(P26)</div>
+        <div class="box"><b>生成</b>Knowlify、Tell if AI、InstaAgent、Argil、Gooseworks、Craze、Mosaic、Overlap／Kestroll／Vyra、Reforged Labs</div>
+        <div class="box"><b>營運</b>Reacher、1stCollab</div>
+        <div class="gap">空白:小代理商＋分鏡＋客戶批准</div>
+      </div>
+    </div>
+    <figcaption><b>Fig. 3</b> YC 公司依表中「覆蓋」欄分組,「找」只有少數幾家,沒有任何一家做分鏡與客戶批准。分組依下方表格的覆蓋欄,部分公司跨多個環節,此處取主要環節。</figcaption>
+  </figure>
+
+  <div class="scroll"><table class="t-wide">
+    <thead><tr><th>公司</th><th>批次</th><th>做什麼</th><th>覆蓋(找／格式／翻拍／生成／發佈)</th><th>客群</th><th>牽引力(標籤)</th><th>跟我們的關係 <span class="ev inf">推論</span></th></tr></thead>
+    <tbody>
+    <tr><td><b>Bluma</b></td><td>F25</td><td>「第一個 AI 短影音內容引擎」,端到端複製對手的爆紅影片</td><td>找(對手參考)、翻拍、生成</td><td>未寫明,推測是行銷／成長團隊</td><td>2 人團隊,beta,無數據 <span class="ev ok">已核對原頁</span></td><td><b>最接近的 YC 公司</b>,但做的是生成,沒有分鏡或批准</td></tr>
+    <tr><td>Syncly</td><td>W23</td><td>影片時代的社群聆聽:品牌／對手聆聽、創作者搜尋</td><td>找</td><td>大型 CPG(Tiffany、Clorox)</td><td>ARR $2.1M、NDR 142% <span class="ev vendor">廠商自述</span>;種子輪 $3.3M</td><td>同樣分析影片,客群是大品牌,不衝突</td></tr>
+    <tr><td>Trendpop</td><td>W21(2022-01 被 Collab 收購)</td><td>短影音行銷分析平台</td><td>找、格式</td><td>唱片公司、品牌</td><td>分析「超過 10 億支」影片,12 個月內獲利 <span class="ev vendor">廠商自述</span></td><td>唯一的純趨勢分析 YC 案例:早早獲利,賣得不大</td></tr>
+    <tr><td>Kuli</td><td>P26</td><td>給大型消費品牌行銷團隊的 AI 同事,分析社群影片找創作者</td><td>找、營運</td><td>大品牌(Disney、Nivea)</td><td>「某 Fortune 100 娛樂品牌出活動量變 3 倍」<span class="ev vendor">廠商自述</span></td><td>大品牌端,不衝突</td></tr>
+    <tr><td>Grocalo</td><td>S26</td><td>幫創作者經營內容的 AI 大腦</td><td>找／發佈、部分生成</td><td>喜劇／娛樂創作者</td><td>「2 個月 20 億觀看」<span class="ev vendor">廠商自述</span></td><td>創作者端</td></tr>
+    <tr><td>Knowlify</td><td>S25</td><td>包辦式影片廣告代理商:AI UGC、動畫廣告、Meta 投放</td><td>生成、營運</td><td>跑付費社群的公司</td><td>月方案每週約 25 支成片 <span class="ev vendor">廠商自述</span></td><td><b>跟 Mercif 搶客戶</b>,不是賣給代理商</td></tr>
+    <tr><td>Tell if AI</td><td>F25</td><td>AI 經營的成效代理商,用真手機跑數百個帳號</td><td>生成、發佈</td><td>品牌</td><td>營收分成 <span class="ev vendor">廠商自述</span></td><td>同上</td></tr>
+    <tr><td>InstaAgent</td><td>P26</td><td>一份 brief 生成數百種受眾版本,投 Meta／TikTok</td><td>生成、發佈</td><td>B2C</td><td>「10 個月 $1M ARR」<span class="ev vendor">廠商自述</span></td><td>同上</td></tr>
+    <tr><td>Argil</td><td>S24</td><td>2 分鐘影片複製自己的分身,腳本進、成片出</td><td>生成</td><td>創作者、企業</td><td>Kwebblekop 每月用 API 生成 1,000 支 shorts <span class="ev vendor">廠商自述</span></td><td>生成層</td></tr>
+    <tr><td>Gooseworks</td><td>W23</td><td>索引品牌素材和廣告成效,讓 agent 生成廣告</td><td>生成、品牌脈絡</td><td>行銷團隊</td><td>「200+ 付費用戶」<span class="ev sum">僅摘要</span></td><td>品牌記憶的鄰居</td></tr>
+    <tr><td>Craze</td><td>S22(從 HR 轉型)</td><td>多模型 AI 影片平台＋時間軸剪輯</td><td>生成</td><td>品牌、創作者、代理商</td><td>$19／月(二手來源)</td><td>生成層</td></tr>
+    <tr><td>Mosaic</td><td>W25</td><td>節點式 agent 剪輯器,可匯出到 Premiere／Resolve</td><td>生成(剪輯)</td><td>創作者、社群行銷</td><td>Launch HN 148 分;留言說手動剪還是比較好 <span class="ev ok">已核對原頁</span></td><td>剪輯層</td></tr>
+    <tr><td>Overlap、Kestroll、Vyra</td><td>S24／S25／F26</td><td>找片段、AI 剪輯 agent</td><td>生成(剪輯)</td><td>媒體公司、短影音創作者</td><td>無數據</td><td>剪輯層</td></tr>
+    <tr><td>Reacher、1stCollab</td><td>S25／W23</td><td>創作者搜尋、邀約、合約、付款</td><td>營運</td><td>電商代理商、新創</td><td>1stCollab「數百家新創」<span class="ev vendor">廠商自述</span></td><td>若代理商要找創作者合作才相關</td></tr>
+    <tr><td>Reforged Labs</td><td>批次未載明</td><td>給遊戲公司的 AI 影片廣告</td><td>生成</td><td>遊戲工作室</td><td>2026-08 <b>收掉</b></td><td>失敗案例</td></tr>
+    </tbody></table></div>
+
+  <div class="concl">
+    <h3>結論四:YC 裡沒有一家做「小代理商＋分鏡＋客戶批准」;最該盯的是 Bluma,最該小心的是 Knowlify 這類「代理商即軟體」。</h3>
+    <div class="row"><span class="k">證據</span><p>Bluma 的 YC 頁寫的是「自動化消費品行銷,端到端複製對手的爆紅影片」,自家網站只提到「source video reference → new variants」,沒有定價或客戶 (<a href="https://www.ycombinator.com/companies/bluma">YC: Bluma</a>、<a href="https://www.getbluma.com">getbluma.com</a>) <span class="ev ok">已核對原頁</span>。Knowlify、Tell if AI、InstaAgent 賣的都是成果,不是工具:Knowlify「價格寫在提案裡」,Tell if AI 收營收分成 (<a href="https://www.ycombinator.com/companies/knowlify">YC: Knowlify</a>、<a href="https://www.ycombinator.com/companies/tell-if-ai">YC: Tell if AI</a>) <span class="ev ok">已核對原頁</span>。Syncly 的 ARR $2.1M、Trendpop 被收購、Kuli 鎖定 Fortune 100,都在大品牌端 (<a href="https://www.ycombinator.com/companies/syncly">YC: Syncly</a>、<a href="https://www.ycombinator.com/companies/trendpop">YC: Trendpop</a>、<a href="https://www.ycombinator.com/companies/kuli">YC: Kuli</a>)。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> YC 的空白處跟商業市場的空白處是同一塊,等於兩邊互相印證「找＋分鏡＋批准」沒人做。但「代理商即軟體」的公司如果做起來,Mercif 這種小代理商的客戶會被搶走,這比任何工具競品都更直接。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>YC 名錄是延遲載入的,研究員在 video(72 家)、marketing(140 家)、content(79 家)三個分類只看到前 50 筆,排序是新批次在前,2021 年以前的公司可能漏掉。所有公司的 TikTok／IG 帳號都沒找到(YC 頁只列 X 和 LinkedIn),所以這次的 Apify 實測沒有涵蓋任何 YC 公司。Creatify、Affogato 是不是 YC 公司都無法確認。</p></div>
+  </div>
+
+  <div class="concl">
+    <h3>結論五:這一層唯一的退場和失敗案例,都指向同一個教訓:純做生成的薄包裝會被模型吃掉,純做趨勢分析則賣不大。</h3>
+    <div class="row"><span class="k">證據</span><p>Reforged Labs 在 2026-08 收掉,執行長說「市場很小」、「模型強到我們重寫了產品的大部分」、「我們賣的那個缺口正在關閉」;它的種子輪是 2024 年的 $3.9M (<a href="https://pocketgamer.biz/reforged-labs-shuts-down-as-ceo-says-ai-is-closing-its-market-opportunity/">PocketGamer.biz</a>) <span class="ev ok">已核對原頁</span>。Trendpop 很早就獲利,然後在 2022 年賣給 Collab,原因沒公開 (<a href="https://www.ycombinator.com/companies/trendpop">YC: Trendpop</a>)。YC 目前的 Requests for Startups 列了 11 項,沒有一項跟影片、內容或創作者有關 (<a href="https://www.ycombinator.com/rfs">YC RFS</a>) <span class="ev ok">已核對原頁</span>。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> Trend Finder 如果只是趨勢清單,會走 Trendpop 的路;如果押在生成,會走 Reforged 的路。押在「流程＋決策紀錄」比較不受模型進步影響,這跟上一份報告的護城河結論一致。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>每個方向都只有一個案例,不能當成規律。</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s3">
+  <h2 id="s3">GitHub 能直接用的只有下載、轉錄、切鏡頭三樣</h2>
+  <figure>
+    <div class="fig">
+      <div class="meta" style="margin-bottom:.4rem">Stars,長條為對數刻度(yt-dlp 203,762 = 100%)</div>
+      <div class="scroll" style="border:0"><table class="t-mid">
+        <thead><tr><th>Repo</th><th>Stars</th><th>授權</th><th>判定</th></tr></thead>
+        <tbody>
+        <tr><td><a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a></td><td class="num">203,762<span class="bar g" style="--w:100"></span></td><td>Unlicense</td><td><span class="chip org">直接用</span></td></tr>
+        <tr><td><a href="https://github.com/remotion-dev/remotion">remotion</a></td><td class="num">68,943<span class="bar b" style="--w:91"></span></td><td>自訂授權</td><td><span class="chip col">用前先看授權</span></td></tr>
+        <tr><td><a href="https://github.com/SYSTRAN/faster-whisper">faster-whisper</a></td><td class="num">26,310<span class="bar g" style="--w:82"></span></td><td>MIT</td><td><span class="chip org">直接用</span></td></tr>
+        <tr><td><a href="https://github.com/apify/crawlee">crawlee</a></td><td class="num">26,298<span class="bar b" style="--w:82"></span></td><td>Apache-2.0</td><td><span class="chip own">需要時再用</span></td></tr>
+        <tr><td><a href="https://github.com/m-bain/whisperX">whisperX</a></td><td class="num">24,937<span class="bar g" style="--w:81"></span></td><td>BSD-2</td><td><span class="chip org">直接用</span></td></tr>
+        <tr><td><a href="https://github.com/RayVentura/ShortGPT">ShortGPT</a></td><td class="num">8,089<span class="bar b" style="--w:73"></span></td><td>MIT</td><td><span class="chip col">借概念</span></td></tr>
+        <tr><td><a href="https://github.com/Breakthrough/PySceneDetect">PySceneDetect</a></td><td class="num">5,304<span class="bar g" style="--w:70"></span></td><td>BSD-3</td><td><span class="chip org">直接用</span></td></tr>
+        <tr><td><a href="https://github.com/HUANGCHIHHUNGLeo/claude-real-video">claude-real-video</a></td><td class="num">2,274<span class="bar b" style="--w:63"></span></td><td>MIT</td><td><span class="chip col">借做法</span></td></tr>
+        <tr><td><a href="https://github.com/openclaw-easy/ViralMint">ViralMint</a></td><td class="num">182<span class="bar r" style="--w:43"></span></td><td><b>AGPL-3.0</b></td><td><span class="chip ad">只參考,不抄</span></td></tr>
+        <tr><td><a href="https://github.com/Agent-Field/reels-af">reels-af</a></td><td class="num">122<span class="bar b" style="--w:40"></span></td><td>Apache-2.0</td><td><span class="chip col">借 prompt</span></td></tr>
+        <tr><td><a href="https://github.com/zthisgood/hot-video-recreate">hot-video-recreate</a></td><td class="num">29<span class="bar b" style="--w:28"></span></td><td>MIT</td><td><span class="chip col">借概念</span></td></tr>
+        <tr><td><a href="https://github.com/Mharis-code/videoanalyzer">videoanalyzer</a></td><td class="num">15<span class="bar b" style="--w:22"></span></td><td>MIT</td><td><span class="chip col">借 schema 改寫成我們的 prompt</span></td></tr>
+        </tbody></table></div>
+    </div>
+    <figcaption><b>Fig. 4</b> 星數高的是底層工具,「參考影片 → 新腳本」這層多半不到 200 顆星。綠色為可直接用,紅色為授權不可抄。</figcaption>
+  </figure>
+
+  <h3>完整清單</h3>
+  <div class="scroll"><table class="t-wide">
+    <thead><tr><th>Repo</th><th>Stars</th><th>最後 commit</th><th>授權</th><th>我們怎麼用</th><th>判定</th></tr></thead>
+    <tbody>
+    <tr><td><a href="https://github.com/Breakthrough/PySceneDetect">Breakthrough/PySceneDetect</a></td><td class="num">5,304</td><td>2026-10-25</td><td>BSD-3</td><td>自動切出鏡頭邊界,當作可編輯分鏡的初稿</td><td><b>直接用</b></td></tr>
+    <tr><td><a href="https://github.com/yt-dlp/yt-dlp">yt-dlp/yt-dlp</a></td><td class="num">203,762</td><td>2026-10-29</td><td>Unlicense</td><td>抓 TikTok／IG／Shorts 的影片和 metadata 來分析(只存連結與指標,不轉發影片)</td><td><b>直接用</b></td></tr>
+    <tr><td><a href="https://github.com/SYSTRAN/faster-whisper">SYSTRAN/faster-whisper</a>／<a href="https://github.com/m-bain/whisperX">m-bain/whisperX</a></td><td class="num">26,310／24,937</td><td>2026-10</td><td>MIT／BSD-2</td><td>逐字稿;WhisperX 有逐字時間戳,可以對齊 hook 的秒數</td><td><b>直接用</b></td></tr>
+    <tr><td><a href="https://github.com/openclaw-easy/ViralMint">openclaw-easy/ViralMint</a></td><td class="num">182</td><td>2026-10-24</td><td><b>AGPL-3.0</b></td><td>功能最接近的參考:outlier 用「頻道基準的 3x–20x」、觀看速度、AI 爆紅分數、69 個工具的 MCP;README 沒看到格式分群</td><td><b>只參考,不抄</b></td></tr>
+    <tr><td><a href="https://github.com/Mharis-code/videoanalyzer">Mharis-code/videoanalyzer</a></td><td class="num">15</td><td>2026-06-10</td><td>MIT</td><td>分析結構幾乎就是我們要的「格式」:hook(口說／視覺、分類、可填空模板)、逐秒節拍表、CTA、「複製攻略」</td><td><b>借 schema 改寫成我們的 prompt</b></td></tr>
+    <tr><td><a href="https://github.com/zthisgood/hot-video-recreate">zthisgood/hot-video-recreate</a></td><td class="num">29</td><td>2026-07-18</td><td>MIT</td><td>抽出參考影片的「結構 DNA」(構圖、節奏、運鏡、轉場),跨品類轉移,避免變成照抄</td><td>借概念</td></tr>
+    <tr><td><a href="https://github.com/HUANGCHIHHUNGLeo/claude-real-video">HUANGCHIHHUNGLeo/claude-real-video</a></td><td class="num">2,274</td><td>2026-10-08</td><td>MIT</td><td>把影片轉成去重的場景截圖＋時間戳逐字稿,讓 LLM「看」影片;<code>--grid</code> 拼成聯絡表</td><td>借做法</td></tr>
+    <tr><td><a href="https://github.com/Agent-Field/reels-af">Agent-Field/reels-af</a></td><td class="num">122</td><td>2026-06-05</td><td>Apache-2.0</td><td>Hook → Mechanism → Payoff 的腳本 prompt</td><td>借 prompt</td></tr>
+    <tr><td><a href="https://github.com/RayVentura/ShortGPT">RayVentura/ShortGPT</a></td><td class="num">8,089</td><td>2025-02-10</td><td>MIT</td><td>「Editing Markup Language」:LLM 可以編輯的 JSON 剪輯描述,可當可編輯分鏡格式的參考</td><td>借概念(已停更 9 個月)</td></tr>
+    <tr><td><a href="https://github.com/apify/crawlee">apify/crawlee</a></td><td class="num">26,298</td><td>2026-10-29</td><td>Apache-2.0</td><td>跟我們同一套 Node＋Apify 技術棧</td><td>需要時再用</td></tr>
+    <tr><td><a href="https://github.com/remotion-dev/remotion">remotion-dev/remotion</a></td><td class="num">68,943</td><td>2026-10-29</td><td>自訂授權</td><td>React 程式化影片;員工 4 人以上的營利公司要買授權</td><td>用前先看授權</td></tr>
+    </tbody></table></div>
+
+  <div class="concl">
+    <h3>結論六:底層工具成熟、授權寬鬆;「參考影片 → 新腳本」這層 2026 年才冒出來,多半不到 200 顆星,只能當靈感。沒有任何開源專案做「格式分群」。</h3>
+    <div class="row"><span class="k">證據</span><p>上表 stars、commit 日期、授權,都是研究員 2026-10-30 用 GitHub API 讀的 <span class="ev ok">已核對原頁</span>。ViralMint 的 README 寫了 outlier 是頻道基準的 3x–20x、Scout／Analyzer／Generator 幾個 agent,以及 MCP server,但沒提到把影片歸成格式 (<a href="https://github.com/openclaw-easy/ViralMint">ViralMint</a>)。研究員用 GitHub 搜尋和 topic 查詢,找不到任何做短影音格式分群的 repo。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> 以我們的技術棧(Node／React＋Apify),實際能重用的是「當成子程序或服務呼叫」的 Python 工具(PySceneDetect、Whisper 系列),以及 MIT／Apache 授權 repo 裡的 prompt 和 schema,而不是把函式庫 import 進 Node app。PySceneDetect 的鏡頭邊界加上 WhisperX 的逐字時間戳,就是一份分鏡的骨架:第幾秒換鏡、這一鏡講了什麼。剩下的「這一鏡要拍什麼」再交給多模態模型。格式分群沒人做,正好也是我們的差異。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>沒有任何 repo 實際跑過,功能描述都是 README 的說法。GitHub 搜尋對多字詞查詢的結果偏少,命名不尋常的 repo 可能漏掉。AGPL／GPL 的 repo(ViralMint、MoneyPrinterV2、Postiz、TikTokDownloader)不能把程式碼抄進閉源產品。</p></div>
+  </div>
+
+  <div class="concl">
+    <h3>結論七:非官方的 TikTok／IG 爬蟲天生就脆弱,正式產品繼續外包給 Apify 是對的。</h3>
+    <div class="row"><span class="k">證據</span><p>TikTok-Api(6,720 星)的 README 自己寫,<code>EmptyResponseException</code> 代表「TikTok 在擋你、偵測到你是機器人」(<a href="https://github.com/davidteather/TikTok-Api">TikTok-Api</a>);5,238 星的 drawrowfly/tiktok-scraper 從 2023-04 後就沒更新 (<a href="https://github.com/drawrowfly/tiktok-scraper">repo</a>);instagrapi 的 README 建議正式環境改用付費的 HikerAPI (<a href="https://github.com/subzeroid/instagrapi">instagrapi</a>);TikTok 服務條款(2025-12-01 版)禁止「用自動化腳本收集資訊」(<a href="https://www.tiktok.com/legal/page/row/terms-of-service/en">TikTok ToS</a>) <span class="ev ok">已核對原頁</span>。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> 外包給 Apify,把「壞掉要修」的成本轉給別人,但沒有消除服務條款的風險。比較安全的做法是:只用登出狀態的公開資料、不下載影片(<code>shouldDownloadVideos: false</code>)、只存指標和連結、顯示時連回原貼文。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>沒查澳洲法律;Meta v. Bright Data 的判決只涵蓋登出狀態的爬取,而且只有搜尋摘要 (<a href="https://www.quinnemanuel.com/the-firm/news-events/client-alert-what-does-the-meta-v-bright-data-summary-judgment-ruling-mean-for-web-scraping/">Quinn Emanuel</a>)。</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s4">
+  <h2 id="s4">這些品牌最紅的影片,大多不是自己拍的產品 demo</h2>
+  <p><b>方法</b> <span class="ev apify">Apify 實測,2026-10-30</span>:TikTok 用 <code>clockworks~tiktok-scraper</code> 抓 9 個品牌帳號,<code>profileSorting: popular</code>、每個帳號 12 支,另外跑兩個關鍵字搜尋(<code>/video</code> 分頁,各 12 支)。Instagram 用 <code>apify~instagram-reel-scraper</code> 抓 8 個帳號、每個最新 12 支 reel。兩邊都在本地用播放數(TikTok <code>playCount</code>、IG <code>videoPlayCount</code>)重排。</p>
+  <div class="callout"><b>請注意兩邊的口徑不同:</b>TikTok 的 popular 是全期間(所以會出現 2021–2024 年的舊片),IG 只是「最近 12 支 reel 裡最高的」。</div>
+  <p>共 120 筆 TikTok、84 筆 IG,總花費約 US$0.67(TikTok 約 $0.45、IG 約 $0.22,從 Apify 月用量讀出,可能有延遲)。原始 JSON 存在本機暫存區,沒有放進 repo;筆記在 <code>research/research_notes/AI 翻拍剪輯競品與熱門影片/r5_apify_top_videos.md</code>。</p>
+
+  <h3>各品牌點閱最高的影片</h3>
+  <figure>
+    <div class="scroll"><table class="t-wide">
+      <thead><tr><th>品牌</th><th>平台(口徑)</th><th>影片</th><th>播放(長條為對數刻度)</th><th>讚</th><th>發佈日</th><th>標記</th><th>為什麼紅 <span class="ev inf">推論</span></th></tr></thead>
+      <tbody>
+      <tr><td>CapCut</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@capcut/video/7361508219904265480">cinematic 範本</a></td><td class="num">84,800,000<span class="bar" style="--w:100"></span></td><td class="num">1,800,000</td><td>2024-04-24</td><td><span class="chip org">自然</span></td><td>示範「套用範本就變電影感」,觀眾看完就能照做;收藏 24.5 萬</td></tr>
+      <tr><td>CapCut</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@capcut/video/7169288221812067586">感恩節</a></td><td class="num">50,900,000<span class="bar" style="--w:97"></span></td><td class="num">2,900,000</td><td>2022-11-23</td><td><span class="chip org">自然</span></td><td>節日情緒＋「標記某個人」</td></tr>
+      <tr><td>CapCut</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@capcut/video/7119891336831962370">教學</a></td><td class="num">23,400,000<span class="bar" style="--w:93"></span></td><td class="num">2,200,000</td><td>2022-07-13</td><td><span class="chip org">自然</span></td><td>剪輯教學,收藏 41 萬,前三名裡收藏率最高(1.75%)</td></tr>
+      <tr><td>Submagic</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@submagic.co/video/7241966959707884827">「別用這些工具」</a></td><td class="num">561,000<span class="bar" style="--w:73"></span></td><td class="num">49,600</td><td>2023-06-07</td><td><span class="chip org">自然</span> <span class="chip err">置頂</span></td><td>法語、反向 hook(「不要用」),按讚率 8.8%</td></tr>
+      <tr><td>Submagic</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@submagic.co/video/7228077897775385883">AI 字幕</a></td><td class="num">343,000<span class="bar r" style="--w:70"></span></td><td class="num">14,500</td><td>2023-05-01</td><td><span class="chip ad">廣告</span></td><td>付費推廣</td></tr>
+      <tr><td>HeyGen</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@heygen.com/video/7586706345479376141">聖誕老人學上網</a></td><td class="num">429,300<span class="bar r" style="--w:71"></span></td><td class="num">938</td><td>2025-12-22</td><td><span class="chip ad">廣告</span></td><td>季節梗＋付費推廣;按讚率 0.22%</td></tr>
+      <tr><td>HeyGen</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@heygen.com/video/7647271350054309134">「$4,500 vs $29」</a></td><td class="num">98,200<span class="bar r" style="--w:63"></span></td><td class="num">122</td><td>2026-06-03</td><td><span class="chip ad">廣告</span></td><td>價格對比 hook</td></tr>
+      <tr><td>HeyGen</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@heygen.com/video/7455095753237613870">「AI 怎麼看你」</a></td><td class="num">75,400<span class="bar" style="--w:62"></span></td><td class="num">367</td><td>2025-01-01</td><td><span class="chip org">自然</span></td><td>互動式好奇心 hook</td></tr>
+      <tr><td>Captions</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@captionsapp/video/7132199937311247662">「check it out!」</a></td><td class="num">303,300<span class="bar r" style="--w:69"></span></td><td class="num">788</td><td>2022-08-15</td><td><span class="chip ad">廣告</span></td><td>9 秒功能展示＋付費推廣</td></tr>
+      <tr><td>Captions</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@captionsapp/video/7322511832093117738">AI 降噪</a></td><td class="num">111,500<span class="bar" style="--w:64"></span></td><td class="num">1,368</td><td>2024-01-10</td><td><span class="chip org">自然</span></td><td>前後對比:一聽就懂的功能</td></tr>
+      <tr><td>Munch</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@munchstudio_com/video/7613433962114845972">「Not so helpful」</a></td><td class="num">56,200<span class="bar" style="--w:60"></span></td><td class="num">1,729</td><td>2026-03-04</td><td><span class="chip org">自然</span></td><td>辦公室幽默短劇,分享 730 次,跟產品幾乎無關</td></tr>
+      <tr><td>Creatify</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@creatifyai/video/7510014113959922987">「傳給那個同事」</a></td><td class="num">16,800<span class="bar" style="--w:53"></span></td><td class="num">550</td><td>2025-05-29</td><td><span class="chip org">自然</span></td><td>辦公室幽默＋「傳給同事」,分享 419 次</td></tr>
+      <tr><td>Virlo</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@virloapp/video/7527019453729623309">「這個爆紅趨勢是用 Virlo 找到的」</a></td><td class="num">16,400<span class="bar" style="--w:53"></span></td><td class="num">1,063</td><td>2025-07-14</td><td><span class="chip org">自然</span></td><td>自己翻拍一個熱門梗,再說「趨勢是用 Virlo 找的」,把產品示範藏在翻拍裡</td></tr>
+      <tr><td>MakeUGC</td><td>TikTok(全期間)</td><td><a href="https://www.tiktok.com/@makeugc/video/7414839776576032033">「為什麼他們會失敗」</a></td><td class="num">1,146<span class="bar" style="--w:39"></span></td><td class="num">98</td><td>2024-09-15</td><td><span class="chip org">自然</span></td><td>帳號只有 141 個粉絲,TikTok 不是它的主戰場</td></tr>
+      <tr><td>Higgsfield</td><td>TikTok</td><td>—</td><td class="num">—</td><td class="num">—</td><td>—</td><td><span class="chip err">錯誤</span></td><td><code>@higgsfield.ai</code> 回傳「Profile has no videos (or is behind a login wall)」,帳號有 4,953 粉絲、0 支影片</td></tr>
+      <tr><td>Higgsfield</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DeHZl65CI2G/">「每個爆紅 AI 網紅都是 Higgsfield 做的」</a></td><td class="num">2,574,718<span class="bar b" style="--w:81"></span></td><td class="num">44,501</td><td>2026-10-05</td><td><span class="chip own">自有</span></td><td>搭「AI 網紅」話題的大宣稱＋「留言 VIRAL 拿連結」</td></tr>
+      <tr><td>Higgsfield</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DePxEsZKKJ8/">Katana(Claude Motion)發表</a></td><td class="num">1,140,999<span class="bar b" style="--w:76"></span></td><td class="num">24,070</td><td>2026-10-08</td><td><span class="chip own">自有</span></td><td>新功能發表,搭 Claude MCP 話題</td></tr>
+      <tr><td>MakeUGC(合作)</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DXr_a_zkdrw/">@russestudiosv「這是 AI」</a></td><td class="num">992,730<span class="bar b" style="--w:76"></span></td><td class="num">2,388</td><td>2026-04-28</td><td><span class="chip col">創作者合作、付費合作標記</span></td><td>「這是 AI」開場的反差＋「留言 UGC 拿免費 prompt」;比 MakeUGC 自己最好的 reel(6,214)高 160 倍</td></tr>
+      <tr><td>MakeUGC(合作)</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DTdKPFVkfXl/">@creator.abe</a></td><td class="num">482,729<span class="bar b" style="--w:72"></span></td><td class="num">1,991</td><td>2026-01-13</td><td><span class="chip col">創作者合作</span></td><td>「留言 AI 拿完整教學」</td></tr>
+      <tr><td>Submagic(合作)</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/Db_SMR_Rz-1/">@dreomar(西語)</a></td><td class="num">161,982<span class="bar b" style="--w:66"></span></td><td class="num">6,814</td><td>2026-08-13</td><td><span class="chip col">創作者合作</span></td><td>「留言 Captions,我傳連結給你」;留言 3,618 則,CTA 本身就在灌互動</td></tr>
+      <tr><td>Submagic(合作)</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DbfJECFTVdm/">@mr.k.videography</a></td><td class="num">50,473<span class="bar b" style="--w:59"></span></td><td class="num">3,395</td><td>2026-08-01</td><td><span class="chip col">創作者合作、付費合作標記</span></td><td>剪輯師的教學帳號,「留言 captions」</td></tr>
+      <tr><td>Captions</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DcJdgQvKI3S/">與 @sevynthestylist 合作</a></td><td class="num">29,603<span class="bar b" style="--w:56"></span></td><td class="num">隱藏</td><td>2026-08-17</td><td><span class="chip col">共同作者</span></td><td>用真實使用者的故事示範</td></tr>
+      <tr><td>Captions</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DbdbBecipmD/">「留言 TWIN」</a></td><td class="num">29,155<span class="bar b" style="--w:56"></span></td><td class="num">隱藏</td><td>2026-07-31</td><td><span class="chip own">自有</span></td><td>數位分身＋留言 CTA</td></tr>
+      <tr><td>HeyGen</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DexRW9DBMwV/">@heyjoshuaxu「用 Claude 做出這支影片」</a></td><td class="num">10,050<span class="bar b" style="--w:51"></span></td><td class="num">193</td><td>2026-10-21</td><td><span class="chip col">創作者合作</span></td><td>「幕後怎麼做」型</td></tr>
+      <tr><td>HeyGen</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DeiFxneCTEv/">Jan Hotovec 用分身講人生故事</a></td><td class="num">8,925<span class="bar b" style="--w:50"></span></td><td class="num">89</td><td>2026-10-15</td><td><span class="chip col">共同作者</span></td><td>用戶故事</td></tr>
+      <tr><td>Munch</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/Dd6iu6gOPFe/">行銷預算梗</a></td><td class="num">4,902<span class="bar b" style="--w:47"></span></td><td class="num">74</td><td>2026-09-30</td><td><span class="chip own">自有</span></td><td>辦公室／小老闆幽默</td></tr>
+      <tr><td>Creatify</td><td>IG(最近 12 支)</td><td><a href="https://www.instagram.com/p/DfAqse1jiPU/">Kling 4.0 vs Seedance 2.5</a></td><td class="num">1,966<span class="bar b" style="--w:42"></span></td><td class="num">22</td><td>2026-10-27</td><td><span class="chip own">自有</span></td><td>模型對比、「你選哪個」</td></tr>
+      <tr><td>Virlo</td><td>IG</td><td>—</td><td class="num">—</td><td class="num">—</td><td>—</td><td><span class="chip err">錯誤</span></td><td><code>@virloai</code> 回傳「Profile does not exist」</td></tr>
+      </tbody></table></div>
+    <figcaption><b>Fig. 5</b> 紅色長條是 TikTok 標為廣告的影片,橘色是 TikTok 自然流量,藍色是 IG(最近 12 支)。播放數長條用對數刻度,最大值 84,800,000 = 100%。<span class="ev apify">Apify 實測</span></figcaption>
+  </figure>
+
+  <p>用 Trend Finder 自己的公式(最高播放 ÷ 帳號中位數)看 IG 最近 12 支:Higgsfield 23.8 倍(中位數 108,399)、MakeUGC 250 倍(中位數 3,966,最高那支是合作貼文)、Submagic 10.9 倍、Creatify 4.0 倍、Munch 2.7 倍、HeyGen 和 Captions 都只有 1.7 倍 <span class="ev apify">Apify 實測</span>。也就是說,以這兩週到兩個月的窗口來看,HeyGen 和 Captions 的 IG 很穩定,沒有真正的爆款;MakeUGC 和 Submagic 的「爆款」都不是它們自己發的。</p>
+  <p>順帶一提,兩個關鍵字搜尋的結果幾乎都是「AI 做出來的內容」,不是「AI 工具的內容」:<code>ai video editing</code> 第一名是 150 萬播放的 AI 生成影片(<a href="https://www.tiktok.com/@alexytyba5e/video/7701764174967360781">@alexytyba5e</a>),第二名是 120 萬播放的 CapCut AI 灌籃範本教學(<a href="https://www.tiktok.com/@zhufei312/video/7701199439033027871">@zhufei312</a>);<code>viral video ai remix</code> 第一名是 320 萬播放的 AI 寶寶跳舞特效(<a href="https://www.tiktok.com/@elsdigitalfreedomai/video/7600553954950335775">@elsdigitalfreedomai</a>),第二名是 61.1 萬播放的「hotel lobby」範本(<a href="https://www.tiktok.com/@jake.s661/video/7687222180597271828">@jake.s661</a>) <span class="ev apify">Apify 實測</span>。</p>
+
+  <h3>這些爆款的共同模式</h3>
+  <div class="concl">
+    <h3>結論八:在 Instagram,紅的是「創作者合作＋留言關鍵字拿連結」,品牌自己的帳號很小。</h3>
+    <div class="row"><span class="k">證據</span><p><span class="ev apify">Apify 實測</span> IG 播放前 10 名的 reel,<b>10 支的文案都有「Comment／Comenta X」</b>。全部 84 支裡,有這種 CTA 的 32 支播放中位數是 20,018,沒有的 52 支是 2,613。創作者合作貼文(發文者不是品牌本身、品牌掛共同作者)有 16 支,播放中位數 20,018;品牌自己發的 68 支,中位數只有 3,299。Submagic 最近 12 支 reel <b>全部</b>是創作者發的;MakeUGC 播放最高的 3 支也都是合作貼文。16 支合作貼文裡,有 5 支帶有 Instagram 的 <code>paidPartnership</code> 標記(@russestudiosv、@mr.k.videography 兩支、@jennasharp.edits、@likfoon)。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> 「留言關鍵字 → 私訊連結」同時做兩件事:把留言數灌高(演算法訊號),又把觀眾導進 DM 漏斗。這些 AI 工具品牌的成長方式,比較像聯盟行銷或付費創作者計畫,而不是品牌帳號的內容。對 Trend Finder 有兩個直接含意。第一,如果客戶的利基裡有很多合作貼文,「爆款」可能反映的是那位創作者的粉絲盤,不是格式本身,所以資料要標出 <code>ownerUsername</code> 跟抓取帳號不同的貼文。第二,「留言 X 拿連結」本身就是一個可以寫進分鏡的格式元素。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>CTA 的效果跟品牌混在一起。Higgsfield 12 支全部有 CTA,而且帳號本來就大;在同一個品牌內部比較(Captions:有 CTA 的 8 支中位數 17,372,沒有的 4 支 16,070),差距幾乎消失。所以比較可能的解釋是「合作創作者的觸及」,CTA 只是附帶的特徵。樣本只有 7 個品牌、84 支,而且都是 AI 工具這個利基。另外,研究筆記把 @dreomar 歸給 Captions,但原始資料顯示它是從 <code>submagic.co</code> 抓到的,共同作者也是 submagic.co,本報告採用原始資料。</p></div>
+  </div>
+
+  <div class="concl">
+    <h3>結論九:在 TikTok,不少「最高播放」其實是付費推廣;按讚率是最簡單的分辨方法。</h3>
+    <div class="row"><span class="k">證據</span><p><span class="ev apify">Apify 實測</span> 8 個有回傳資料的 TikTok 帳號、96 支影片裡,有 13 支的 <code>isAd</code> 是 true,包括 Captions 第一、二名(303,300、284,500)、HeyGen 第一、二名(429,300、98,200)、Submagic 第二、三名(343,000、283,500)。這 13 支的按讚率(讚 ÷ 播放)中位數是 <b>0.65%</b>,其餘 83 支是 <b>6.46%</b>,差了約 10 倍(見 Fig. 1)。例如 HeyGen 的聖誕老人影片有 42.9 萬播放,卻只有 938 個讚。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> 付費推廣把播放數撐高,但觀眾不太互動。如果 Trend Finder 把這種影片當爆款推薦給客戶,等於叫客戶去翻拍一支「花錢買來的觀看」。所以排序前要先排除 <code>isAd</code>,就算沒有這個欄位,也要把「播放高但按讚率低於某個門檻」的影片標成「可能是付費」。上一份報告提到 IG 的觀看數也混了付費流量,這次在 TikTok 看到的是同一個問題。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>clockworks 的頁面沒有定義 <code>isAd</code> 的意思,「等於付費推廣」是我們從按讚率差異推出來的。Instagram 的 reel-scraper 只有 <code>paidPartnership</code>(合作標記),沒有廣告標記,IG 的付費流量還是分不出來。</p></div>
+  </div>
+
+  <div class="concl">
+    <h3>結論十:小品牌最好的自然流量是跟產品無關的職場幽默,大品牌最好的是「看完就能照做」的範本。</h3>
+    <div class="row"><span class="k">證據</span><p><span class="ev apify">Apify 實測</span> Munch 的 TikTok 第一名(56,200)和 Creatify 的第一名(16,800)都是辦公室幽默短劇,分享數(730、419)在各自帳號裡最高,遠高於它們的產品示範。CapCut 前三名合計 1.59 億播放,都是範本或教學,收藏數 24.5 萬到 41 萬。Virlo 最好的一支(16,400)是自己翻拍一個熱門梗,文案再說「這個趨勢是用 Virlo 找到的」。Submagic 最好的一支(561,000、按讚率 8.8%)用的是反向 hook「別用這些工具」。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> 這對 Mercif 的客戶(食物和生活風格品牌)有參考價值:「可以照做」(收藏)和「想傳給某個人」(分享)是兩種不同的爆紅動機,格式卡片上應該分開標,而且分享和收藏正是上一份報告說「拿不到別人的」指標。TikTok 透過 Apify 其實拿得到 <code>shareCount</code> 和 <code>collectCount</code>,Instagram 拿不到。Virlo 的做法(把產品示範藏在翻拍裡)也正好就是 Trend Finder 要幫客戶做的事。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>每個品牌只有 12 支,而且 TikTok 的「popular」是照讚數挑的(見結論十一),播放高但讚少的影片可能根本沒被抓進來。CapCut 的數據大多是 2021–2022 年的,那時的 TikTok 演算法跟現在不同。</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s5">
+  <h2 id="s5">之後怎麼搜:先修正排序,再分利基跑</h2>
+
+  <div class="concl">
+    <h3>結論十一:clockworks 的 <code>profileSorting: popular</code> 是照按讚數排序。要找「播放最高」,至少抓 30–50 支再自己重排。</h3>
+    <div class="row"><span class="k">證據</span><p><span class="ev apify">Apify 實測</span> 8 個帳號回傳的 12 支影片,<b>8 個都完全照 <code>diggCount</code> 由大到小排,沒有一個照 <code>playCount</code> 排</b>。例如 CapCut 的回傳順序是 5,090 萬、2,340 萬、1,350 萬、8,480 萬播放,對應的讚是 290 萬、220 萬、210 萬、180 萬。上一輪研究只能從第三方頁面推測「Popular (most liked)」(<a href="https://apify.com/scrapelabsapi/tiktok-profile-scraper">scrapelabsapi</a>) <span class="ev sum">僅摘要</span>,clockworks 自己的頁面只寫「most popular videos first」(<a href="https://apify.com/clockworks/tiktok-profile-scraper">clockworks</a>),這次實測確認了。同一個 actor 頁面也寫了,TikTok 把 popular 排序限制在每個帳號大約 400–500 支 (<a href="https://apify.com/clockworks/tiktok-scraper">clockworks/tiktok-scraper</a>) <span class="ev ok">已核對原頁</span>。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> 付費推廣的影片讚少,所以在「照讚數排」的前 12 名裡反而會被擠下去,但它們的播放可能更高(Captions 的廣告片就是這樣,排在第 3、4 位)。如果只抓 12 支,看到的是「最多人按讚的」,不是「最多人看的」。抓 30–50 支,再用 <code>playCount</code> 重排、排除 <code>isAd</code>,才是我們要的榜單。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>只測了 8 個帳號、每個 12 支,沒測更深的位置是否也照讚數排。</p></div>
+  </div>
+
+  <div class="concl">
+    <h3>結論十二:TikTok 的有效單價是標價的兩倍以上,預算要用實測數字算。</h3>
+    <figure style="margin:.75rem 0 0">
+      <div class="fig">
+        <div class="meta">每 1,000 筆的費用(美元)</div>
+        <div class="cmp"><span>TikTok 標價</span><span class="track"><span class="fill g" style="display:block;--w:45"></span></span><b>$1.70</b></div>
+        <div class="cmp"><span>TikTok 實測</span><span class="track"><span class="fill r" style="display:block;--w:100"></span></span><b>$3.75</b></div>
+        <div class="cmp"><span>IG 實測</span><span class="track"><span class="fill r" style="display:block;--w:69"></span></span><b>$2.6</b></div>
+      </div>
+      <figcaption><b>Fig. 6</b> TikTok 實測單價是 clockworks 標價「from $1.70 / 1,000」的兩倍多;IG 與 README 的免費方案價 $2.60 一致。長條按比例繪製($3.75 = 100%)。</figcaption>
+    </figure>
+    <div class="row"><span class="k">證據</span><p><span class="ev apify">Apify 實測</span> TikTok 這一輪 120 筆(96 筆帳號＋24 筆搜尋)花了約 US$0.45,等於<b>每 1,000 筆約 US$3.75</b>,是 clockworks 標價「from $1.70 / 1,000」的兩倍多 (<a href="https://apify.com/clockworks/tiktok-scraper">clockworks</a>)。IG 84 筆約 US$0.22,等於<b>每 1,000 筆約 US$2.6</b>,跟 reel-scraper README 寫的免費方案價 $2.60 一致 (<a href="https://apify.com/apify/instagram-reel-scraper">instagram-reel-scraper</a>) <span class="ev ok">已核對原頁</span>。</p></div>
+    <div class="row"><span class="k">推理</span><p><span class="ev inf">推論</span> TikTok 多出來的部分,可能是免費方案的費率比較高,或是 <code>/video</code> 搜尋分頁、啟動事件另外計費。實際原因要到 Apify 的 run 明細裡看。在搞清楚之前,用 $3.75／1,000 來估預算比較保險。Apify 免費方案每月有 US$5 額度 <span class="ev sum">僅摘要</span> (<a href="https://apify.com/pricing">Apify pricing</a>),以實測單價計算,大約是 1,300 筆 TikTok,或 1,900 筆 IG。</p></div>
+    <div class="row warn"><span class="k">弱點</span><p>費用是從 Apify 月用量 API 讀出來的,可能有延遲;只有一次 run,樣本很小。</p></div>
+  </div>
+
+  <h3>搜尋手冊</h3>
+  <p>以下的設定和成本,是根據上面的實測和 actor 頁面整理的;關鍵字清單是本報告的建議,<b>還沒驗證過</b> <span class="ev inf">推論</span>。</p>
+  <figure>
+    <div class="scroll"><table class="t-wide">
+      <thead><tr><th>任務</th><th>Actor ID</th><th>輸入(重點欄位)</th><th>每次成本</th><th>拿到之後要做的事</th></tr></thead>
+      <tbody>
+      <tr><td><b>A1.</b> 品牌／對手帳號的 TikTok 爆款(全期間)</td><td><code>clockworks/tiktok-scraper</code></td><td class="json">{"profiles":["capcut","submagic.co","heygen.com"],"profileSorting":"popular","resultsPerPage":40,"excludePinnedPosts":false,"shouldDownloadVideos":false,"shouldDownloadCovers":false}<br>不設日期篩選(日期篩選跟 popular 不相容,而且另外收費)</td><td>10 個帳號 × 40 支 = 400 筆 ≈ <b>US$1.5</b>(實測單價)</td><td>用 <code>playCount</code> 重排;排除 <code>isAd</code>;<code>isPinned</code> 的影片標出來但保留;計算按讚率,低於 1% 標「可能付費」</td></tr>
+      <tr><td><b>A2.</b> 品牌帳號的 TikTok 近期爆款(用我們的公式)</td><td>同上</td><td class="json">"profileSorting":"latest"、"resultsPerPage":30</td><td>10 個帳號 ≈ <b>US$1.1</b></td><td>用「播放 ÷ 這 30 支的中位數」找 outlier,跟 Trend Finder 現在的算法一致</td></tr>
+      <tr><td><b>A3.</b> 品牌帳號的 IG 爆款(只能看最近 N 支)</td><td><code>apify/instagram-reel-scraper</code></td><td class="json">{"username":["higgsfield.ai","submagic.co"],"resultsLimit":50}</td><td>10 個帳號 × 50 支 = 500 筆 ≈ <b>US$1.3</b></td><td>用 <code>videoPlayCount</code> 重排;介面上寫「最近 50 支裡的最高」;<code>ownerUsername</code> 跟輸入帳號不同的,標為合作貼文;<code>paidPartnership</code> 標出來</td></tr>
+      <tr><td><b>B1.</b> 利基關鍵字的 TikTok 熱門影片</td><td><code>clockworks/tiktok-scraper</code></td><td class="json">{"searchQueries":["capcut template tutorial","ai ugc ads"],"searchSection":"/video","resultsPerPage":30,"proxyCountryCode":"AU"}</td><td>每個關鍵字 30 筆 ≈ <b>US$0.11</b></td><td>同 A1 的重排和過濾</td></tr>
+      <tr><td><b>B2.</b> 同上,便宜版(未測)</td><td><code>apidojo/tiktok-scraper</code></td><td class="json">{"keywords":["ai ugc ads"],"sortType":"MOST_LIKED","location":"AU","maxItems":30}<br>輸出的播放欄位叫 <code>views</code>,不是 <code>playCount</code></td><td>標價 <b>US$0.30／1,000</b>,每個關鍵字約 US$0.01 (<a href="https://apify.com/apidojo/tiktok-scraper">apidojo</a>);免費方案每次只給 10 筆</td><td>先用一個關鍵字比較它跟 B1 的結果是否一致,再決定要不要換</td></tr>
+      <tr><td><b>B3.</b> 利基關鍵字的 IG 熱門 reel</td><td><code>apify/instagram-search-scraper</code></td><td><code>search</code> 填一個關鍵字,<code>searchType</code> 選「Search popular reels」(確切的 enum 值要在 <a href="https://apify.com/apify/instagram-search-scraper/input-schema">input schema</a> 確認)</td><td>每個關鍵字最多約 64 支,約 <b>US$0.15–0.17</b></td><td>有些關鍵字沒有熱門 reel,會回傳 <code>"error":"no_items"</code>;先用無痕視窗開 <code>instagram.com/popular/&lt;關鍵字&gt;</code> 免費預查</td></tr>
+      <tr><td><b>C.</b> 免費前置</td><td>—</td><td>TikTok App 搜尋「Most Liked」;TikTok Creative Center Top Ads(看廣告的觸及／CTR);Meta Ad Library(看品牌現在在推哪些廣告)</td><td>免費</td><td>只用來找關鍵字、hashtag、對手正在推的素材,再餵進 A／B</td></tr>
+      </tbody></table></div>
+    <figcaption><b>Fig. 7</b> 搜尋任務、actor ID、輸入與成本。設定與成本來自上面的實測和 actor 頁面。</figcaption>
+  </figure>
+
+  <h3>關鍵字策略 <span class="ev inf">推論</span></h3>
+  <p>這次實測最重要的教訓是:<b>泛用詞會抓到「AI 做的內容」,不是「關於 AI 工具的內容」</b>(<code>ai video editing</code> 的前三名都是 AI 生成影片或範本教學)。所以要分三類來搜。</p>
+  <div class="kw">
+    <div><b>第一類:品牌名(不分語言,適合跨區域)</b>Opus Clip、Submagic、HeyGen、Higgsfield、Creatify、MakeUGC、CapCut template、Captions app</div>
+    <div><b>第二類:「教學／意圖」詞</b>capcut template tutorial、how to make ai ugc、ai ugc ads、ai avatar video、long video to shorts、recreate viral video、steal this video idea、remake any video</div>
+    <div><b>第三類:這次看到的 CTA 句型(直接撈出合作創作者的貼文)</b>comment for the link、comment UGC、comment captions</div>
+  </div>
+  <p>單字 hashtag(<code>#aiugc</code>、<code>#ugcads</code>、<code>#capcuttutorial</code>、<code>#aivideoeditor</code>、<code>#opusclip</code>、<code>#heygen</code>)留給 hashtag 爬蟲;多字詞一律用關鍵字搜尋,因為 IG hashtag 爬蟲會把多個字合成一個 tag,結果變少 (<a href="https://apify.com/apify/instagram-hashtag-scraper">instagram-hashtag-scraper</a>),TikTok 每個 hashtag 也只能拿到大約 400–800 支 (<a href="https://apify.com/clockworks/tiktok-hashtag-scraper">tiktok-hashtag-scraper</a>) <span class="ev ok">已核對原頁</span>。</p>
+  <p>區域方面,Mercif 在澳洲,要設 <code>proxyCountryCode: "AU"</code>(clockworks)或 <code>location: "AU"</code>(apidojo);這兩個欄位確實存在,但沒有來源測過它們對結果影響多大。中文的 <code>AI 剪輯</code>、<code>AI 翻拍</code> 內容大多在抖音,TikTok 爬蟲抓不到。</p>
+
+  <h3>給客戶利基用的版本 <span class="ev inf">推論</span></h3>
+  <p>上面這套是用來監看競品的;換到 Mercif 的食物和生活風格客戶,流程一樣,只是把關鍵字換成利基詞(例如菜系、城市、「Sydney cafe」這類),先跑 B1／B3 找出陌生的小帳號爆款(這就是 Mercif 的「1-to-10」研究法),再對找到的帳號跑 A2,用中位數確認是不是真的 outlier。每週預算抓 10 個關鍵字(約 US$1.1＋US$1.6)加 10 個帳號(約 US$1.1＋US$1.3),<b>一週約 US$5,剛好是免費方案一個月的額度</b>,所以正式跑之前要先升級方案,或是降低頻率。</p>
+  <div class="callout"><b>弱點:</b>所有成本都建立在一次、約 200 筆的實測上。apidojo 和 instagram-search-scraper 這次都沒有跑。關鍵字清單沒有經過任何量測,下一步應該每個詞先抓 10 筆試水溫。</div>
+</section>
+
+<section aria-labelledby="s6">
+  <h2 id="s6">總結</h2>
+  <p>這次研究改變最大的,是我們對「爆款」這個詞本身的信任。看完 AI 工具品牌自己的數據,排在最前面的常常是付費推廣(TikTok 上按讚率低了 10 倍)、別人帳號的合作貼文(Submagic 最近 12 支 IG 全是),或是照讚數而不是播放數挑出來的結果。只要 Trend Finder 排序前不先過濾這三種偏差,就會把「花錢買的觀看」和「借來的粉絲」當成「可以翻拍的格式」推薦給客戶。</p>
+  <p>所以下一步要補進產品的不是更多數據來源,而是三個標記:<code>isAd</code>／低按讚率、合作貼文、以及「最近 N 支」的口徑說明。這三個標記成本都很低,也正好延續上一份報告「把計算攤開」的方向。</p>
+  <p>第二個收穫是位置。從商業產品、YC 名單到 GitHub,大家要嘛在做「找」(而且賣不貴),要嘛在做「生成」(而且越做越不需要真人),中間「把一支真實爆款轉成某個客戶能拍、而且客戶簽過名的分鏡」這一段,三個地方都是空的。空著有兩種解釋:機會,或是市場太小。Reforged Labs 和 Trendpop 的下場提醒我們,答案不在研究裡,而在 Mercif 願不願意每週真的在這一段做決定。</p>
+</section>
+</main>

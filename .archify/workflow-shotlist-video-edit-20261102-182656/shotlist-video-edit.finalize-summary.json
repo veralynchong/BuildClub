@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "workflow",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/tommy/orca/workspaces/BuildClub/blenny/.archify/workflow-shotlist-video-edit-20261102-182656/candidate.json",
+    "sha256": "e716f0f5c2f834500cc05f6f5ab20368550612c346672f21ca90a321b2f1697e",
+    "bytes": 4281
+  },
+  "artifact": {
+    "path": "/Users/tommy/orca/workspaces/BuildClub/blenny/.archify/workflow-shotlist-video-edit-20261102-182656/shotlist-video-edit.html",
+    "sha256": "d5466a1e9274c6405b6026536f1c4329f95c0ea31e69612888b7a9fa0483f208",
+    "bytes": 847143
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/tommy/orca/workspaces/BuildClub/blenny/.archify/workflow-shotlist-video-edit-20261102-182656/shotlist-video-edit.finalize.json",
+    "summaryReceipt": "/Users/tommy/orca/workspaces/BuildClub/blenny/.archify/workflow-shotlist-video-edit-20261102-182656/shotlist-video-edit.finalize-summary.json",
+    "browserCheckReceipt": "/Users/tommy/orca/workspaces/BuildClub/blenny/.archify/workflow-shotlist-video-edit-20261102-182656/shotlist-video-edit.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-11-02T07:27:16.377Z",
+    "source": "network",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2565,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  }
+}

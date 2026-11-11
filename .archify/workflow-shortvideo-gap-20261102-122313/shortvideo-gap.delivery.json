@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c23d074c-0e94-4fb8-adee-c8b61f554448",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/Users/tommy/orca/workspaces/BuildClub/blenny/.archify/workflow-shortvideo-gap-20261102-122313/candidate.json",
+  "output": "/Users/tommy/orca/workspaces/BuildClub/blenny/.archify/workflow-shortvideo-gap-20261102-122313/shortvideo-gap.html",
+  "specification": {
+    "sha256": "cb0071489ec7f1a3814b785095e6e6ae4252d48899dba64d655d45211cbe808e",
+    "bytes": 5954
+  },
+  "artifact": {
+    "sha256": "85dbf8e4d080f68a691487b1e4a549cd4f1f995fc333589b4fc09e67be6853a1",
+    "bytes": 833519
+  }
+}

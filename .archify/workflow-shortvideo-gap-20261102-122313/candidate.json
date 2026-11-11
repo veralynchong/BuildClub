@@ -1,0 +1,91 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "短影音流程 vs Remake 現況",
+    "subtitle": "上排：業界常見的短影音六步；中排：Remake 目前做到的（fork/main ecc67b8，2026-11-02）；下排：缺口",
+    "locale": "zh-TW",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "output": ".archify/workflow-shortvideo-gap-20261102-122313/shortvideo-gap.html",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "frontend": { "label": "業界短影音步驟" },
+        "backend": { "label": "Remake 已有" },
+        "messagebus": { "label": "Remake 只做一部分" },
+        "security": { "label": "缺口（還沒做）" }
+      }
+    }
+  },
+  "lanes": [
+    { "id": "std", "label": "業界短影音流程" },
+    { "id": "remake", "label": "Remake 目前" },
+    { "id": "gap", "label": "缺口", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "pre", "label": "前製", "fromCol": 0, "toCol": 2, "variant": "emphasis" },
+    { "id": "shoot", "label": "拍攝", "fromCol": 3, "toCol": 3 },
+    { "id": "post", "label": "後製與發佈", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["s_idea", "s_script", "s_board", "s_shoot", "s_edit", "s_post"],
+  "nodes": [
+    { "id": "s_idea", "lane": "std", "col": 0, "type": "frontend", "icon": "start", "label": "選題企劃", "sublabel": "找趨勢・定 hook" },
+    { "id": "s_script", "lane": "std", "col": 1, "type": "frontend", "label": "腳本", "sublabel": "口播稿・CTA" },
+    { "id": "s_board", "lane": "std", "col": 2, "type": "frontend", "label": "參考與分鏡", "sublabel": "moodboard・storyboard" },
+    { "id": "s_shoot", "lane": "std", "col": 3, "type": "frontend", "label": "拍攝", "sublabel": "照 shot list 拍・收音" },
+    { "id": "s_edit", "lane": "std", "col": 4, "type": "frontend", "label": "剪輯後製", "sublabel": "字幕・音樂・調色" },
+    { "id": "s_post", "lane": "std", "col": 5, "type": "frontend", "label": "發佈與數據", "sublabel": "標題封面・看留存" },
+
+    { "id": "r_search", "lane": "remake", "col": 0, "type": "backend", "icon": "success", "label": "趨勢搜尋", "sublabel": "結果證據・shortlist", "tag": "頻道分析" },
+    { "id": "r_text", "lane": "remake", "col": 1, "type": "messagebus", "icon": "waiting", "label": "鏡頭上的字", "sublabel": "每顆鏡頭一行字" },
+    { "id": "r_plan", "lane": "remake", "col": 2, "type": "backend", "icon": "success", "label": "Plan＋送審", "sublabel": "shot list・參考片", "tag": "客戶核准" },
+    { "id": "r_take", "lane": "remake", "col": 3, "type": "backend", "icon": "success", "label": "拍攝清單", "sublabel": "逐鏡頭上傳・選 take" },
+    { "id": "r_cut", "lane": "remake", "col": 4, "type": "backend", "icon": "success", "label": "自動剪輯", "sublabel": "去靜音・加速・配樂", "tag": "成品核准" },
+    { "id": "r_board", "lane": "remake", "col": 5, "type": "messagebus", "icon": "waiting", "label": "製作看板", "sublabel": "發佈只有後端結構" },
+
+    { "id": "g_script", "lane": "gap", "col": 1, "type": "security", "icon": "failure", "label": "沒有腳本", "sublabel": "沒有台詞・hook・CTA" },
+    { "id": "g_board", "lane": "gap", "col": 2, "type": "security", "icon": "failure", "label": "沒有分鏡圖", "sublabel": "沒有畫面草圖・色調參考" },
+    { "id": "g_edit", "lane": "gap", "col": 4, "type": "security", "icon": "failure", "label": "沒字幕調色", "sublabel": "字幕要新套件" },
+    { "id": "g_post", "lane": "gap", "col": 5, "type": "security", "icon": "failure", "label": "沒真的發佈", "sublabel": "成效沒回到選題" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "s_idea", "to": "s_script", "variant": "emphasis" },
+    { "id": "e2", "from": "s_script", "to": "s_board", "variant": "emphasis" },
+    { "id": "e3", "from": "s_board", "to": "s_shoot", "variant": "emphasis" },
+    { "id": "e4", "from": "s_shoot", "to": "s_edit", "variant": "emphasis" },
+    { "id": "e5", "from": "s_edit", "to": "s_post", "variant": "emphasis" },
+    { "id": "e_loop", "from": "s_post", "to": "s_idea", "label": "數據回饋下一支", "variant": "dashed", "role": "return", "fromSide": "top", "toSide": "top", "route": "up-channel" },
+
+    { "id": "r1", "from": "r_search", "to": "r_text" },
+    { "id": "r2", "from": "r_text", "to": "r_plan" },
+    { "id": "r3", "from": "r_plan", "to": "r_take", "label": "核准後" },
+    { "id": "r4", "from": "r_take", "to": "r_cut" },
+    { "id": "r5", "from": "r_cut", "to": "r_board" },
+
+    { "id": "x1", "from": "r_text", "to": "g_script", "label": "缺", "variant": "security", "role": "branch" },
+    { "id": "x2", "from": "r_plan", "to": "g_board", "label": "缺", "variant": "security", "role": "branch" },
+    { "id": "x3", "from": "r_cut", "to": "g_edit", "label": "缺", "variant": "security", "role": "branch" },
+    { "id": "x4", "from": "r_board", "to": "g_post", "label": "缺", "variant": "security", "role": "branch" }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "重點",
+      "items": [
+        "頭（選題）和尾（拍攝、剪輯）都有了，中間的腳本和分鏡最薄",
+        "腳本、分鏡、moodboard 現在全壓成一張 shot list：每顆鏡頭只有時間、拍什麼、畫面文字",
+        "剪輯能出 9:16 成品，但沒有字幕和調色",
+        "發佈和成效只有後端結構，數據還沒回流到選題（推論：看程式碼結構，沒實測）"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "依據",
+      "items": [
+        "Remake：fork/main ecc67b8 的 backend/models.py（Shot、SavedIdea.stage）、PlanScreen.tsx、docs/phase2-scope.md",
+        "業界流程：上一輪搜尋（StudioBinder、MasterClass、短影音職缺描述），六步分法是歸納，不是單一來源的標準"
+      ]
+    }
+  ]
+}
