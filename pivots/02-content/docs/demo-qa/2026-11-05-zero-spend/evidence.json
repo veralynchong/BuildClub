@@ -1,0 +1,120 @@
+{
+  "date": "2026-11-05",
+  "branch": "fix/demo-flow-qa-mainline",
+  "baseHead": "e442b3ae80964ee53fda7265df61d18a210f66b3",
+  "workingTree": "uncommitted local fixes",
+  "scope": "Existing-footage technical export and frontend mock-API UI; not campaign/human/AI-generation acceptance",
+  "source": {
+    "source": "/Users/tommy/orca/workspaces/BuildClub/demo-flow-qa/pivots/02-content/app/trend-finder/public/media/remake-tour.mp4",
+    "sha256": "9490813e79d83a5f1fc7a43d5985d8099ef14c823676da9dd3e720a70b4d3f9b",
+    "kind": "existing repository product-tour recording, not human-speech or AI-generation acceptance",
+    "timelineSeconds": 9,
+    "sourceRangesSeconds": [
+      [
+        0,
+        3
+      ],
+      [
+        8,
+        11
+      ],
+      [
+        16,
+        19
+      ]
+    ],
+    "captions": "authored technical labels, not speech transcription"
+  },
+  "outputSha256": "9ea54b644440061c60dfa0d37eb67b2dc9b39a1953742e7f13e7efc03ae5e84c",
+  "ffprobe": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1080,
+        "height": 1920,
+        "r_frame_rate": "30/1"
+      },
+      {
+        "codec_name": "aac",
+        "sample_rate": "48000",
+        "channels": 2,
+        "r_frame_rate": "0/0"
+      }
+    ],
+    "format": {
+      "duration": "9.024000"
+    }
+  },
+  "decode": "ffmpeg entire-file decode exit 0",
+  "audioTechnical": {
+    "meanDb": -20.0,
+    "maxDb": -3.0,
+    "humanListening": "not verified"
+  },
+  "playwrightPlayback": {
+    "ended": true,
+    "currentTime": 9.024,
+    "duration": 9.024,
+    "videoWidth": 1080,
+    "videoHeight": 1920,
+    "error": null,
+    "muted": false
+  },
+  "ui": {
+    "viewport": [
+      1440,
+      900
+    ],
+    "mode": "read-only static frontend plus browser-route fake API; all outbound remote origins aborted",
+    "passed": [
+      "Research sample picked",
+      "Plans shows selected plan",
+      "Actual page reload retains plan through fake API",
+      "Plan shot-list edit saved through fake API"
+    ],
+    "plan": {
+      "id": "evergreen-t14",
+      "savedInLive": true,
+      "shotEdit": "Close-up: press tofu under a clean board"
+    },
+    "confirmedIssue": {
+      "researchPageWidth": 1473,
+      "viewportWidth": 1440
+    },
+    "notVerified": [
+      "real backend UI persistence/restart",
+      "new Canvas",
+      "actual reference analysis",
+      "human speech cleanup",
+      "campaign final video"
+    ],
+    "consoleNotes": "Expected rejected mock API requests and blocked external font loads; not an error-free console claim"
+  },
+  "safety": {
+    "paidApprovalUsd": 0,
+    "paidProviderRequests": 0,
+    "staticPostStatus": 501,
+    "paidBackendStarted": false,
+    "backendCopyCreated": false,
+    "serviceBinding": "127.0.0.1 only, static read-only files",
+    "networkPolicy": "API requests fulfilled in browser, remote browser requests aborted",
+    "zeroSpendRegression": "32 passed, each case asserts provider/network spy count 0 and no wallet debit",
+    "cleanup": "owned page closed, owned static server SIGINT clean exit, browser lease released, renderer exited0"
+  },
+  "originalUiDispatch": {
+    "id": "ctx_5412d8a8ceb6",
+    "status": "failed/exited; static delivered, dynamic blocked; root added only scoped mock-API UI evidence"
+  },
+  "artifacts": [
+    "existing-footage-proof.mp4",
+    "frame-4s.png",
+    "research-picked-ui.png",
+    "plans-visible-ui.png",
+    "plans-reload-ui.png",
+    "shot-list-edit-ui.png",
+    "video-playback-midpoint.png",
+    "video-playback-ended.png"
+  ]
+}

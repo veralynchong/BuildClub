@@ -1,5 +1,55 @@
 # STATUS
 
+## 2026-11-05：原生 takes → edit → 真 MP4 驗收（本輪最新）
+
+- 接手核對：`fix/demo-flow-qa-mainline @ e442b3a`，15項既有dirty與專用交接一致，完整保留。本輪未改產品、Canvas、其他工作區、設定或共享handoff；未commit／push／merge，沒有重開workers。
+- 親跑 `bash bin/verify-zero-spend.sh`：`32 passed in 0.40s`，exit0。全程env -i、七項paid budgets0、無付費憑證；原生鏈及新程序重開provider/network spy均0，wallet空。
+- **完成（工程驗收）**：in-process真API、自己的臨時DB／media，repo產品導覽片上傳4個takes至3個shots；第2鏡切換alternate、原take取消選取；真ffprobe sources、edit version1保存／讀回；`POST /edit/export` 202→done，走原生worker及真Remotion，下載bytes與final.mp4一致，沒有fake probe／renderer／成品。`native-takes-proof.mp4`為H264 1080×1920、30fps、AAC、9.024s，全片decode exit0。先通過兩次TestClient lifespan，再用全新Python程序讀同一DB／media，edit／takes／成品hash均一致；不是HTTP服務重啟／真前端驗收。
+- 瀏覽器實際完整播放：1440×900、ended=true、error=null、muted=false，抽查中段截圖；不是逐句聽驗。原生Reel用cover將橫片置中裁成直式，導覽文字遭裁切；字幕為英文自寫技術標籤，**不是同案例正式成品、真人Clean up或新Canvas驗收**。舊9秒工程片保留不覆寫。
+- **驗證RED**：本輪完整verify在env -i＋七項budget0下，backend `92 failed, 910 passed, 2 skipped in 25.62s`；compile、load、frontend unit PASS。聚焦 `test_frame_poll_failed_refunds` 重現為預期fake provider 502、實際零預算先回429（`1 failed in 0.17s`）；其餘91項未逐一分類，不全歸同因。不提高預算、不拿歷史GREEN冒充本輪；產品沒有新增修改。
+- 證據：`pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/native-takes-{check.py,evidence.json,proof.mp4,playback-midpoint.png,playback-ended.png}`。臨時持久資料保留 `/tmp/buildclub-native-chain-ooc5gsg_`，可用check.py的`--reopen`重驗；完整命令在test-log。首次Chromium路徑前檢少一層已修正，未下載；首次about:blank播放失敗，改same-origin靜態頁後通過，歷史不隱去。
+- **未測／依賴**：同案例有權真人或既有真AI素材及真拆解／參考畫面路徑已異步詢問，尚未收到；Canvas固定交付仍待其擁有人提供。真前端＋後端保存／重啟、正式畫音字幕品質、真人Clean up仍未驗。既有backend副本操作仍未批准，未重試或繞過；paid US$0，任何新生成禁止。
+- 下一步：取得素材及Canvas固定交付後，才做同案例真前端接入與正式成品。完整verify零預算相容性需另行決定如何以fake測試涵蓋，不能調高paid budgets求綠燈。
+
+## 2026-11-05：週六 demo QA 起跑與 P1 修正
+- 恢復執行：使用者已確認核心為找熱門影片 → shot list／storyboard → Canvas 改編 → AI 或真人素材 → 剪輯 → 真 MP4；本機三天計畫已合入權威範圍並保留原增量。至少一素材路完整跑通，另一條展示接入；送審／全站支線不阻擋，手動發布貼連結，成效可明示示範數據，不做產品內發布或真平台授權。
+- 當前驗證：暫停期間 worker 的 RED 原始後端錯誤未保留、未能重現；恢復後 test-slot＋獨立完整日誌兩次 verify 四項 PASS／GREEN（第二次包含 bin/verify.sh 改為每輪 mktemp 日誌，避免跨工作區共用輸出）。不是用歷史 GREEN 替代現況。詳見 test-log。
+- 本工作區 `test/demo-flow-qa @ e442b3a` 與 fetch 後的 `origin/main` 相同；沒有 upstream，`git pull` 明確失敗，未將它視為同步成功。工作區沒有 `AGENTS.md`，本 session 遵循使用者提供的指示與交接。
+- 最近驗證：2026-11-05 `bash bin/verify.sh` GREEN（四項 PASS）、`git diff --check` PASS。首次 RED 為 setup skip 後缺依賴；只建立本機 ignored 連結：`node_modules` → `canvas-p1` 的既有完整依賴，`backend/.venv` → `w2-grade-subs-backend` 的既有 venv。未安裝或修改共享套件，未改產品。
+- 原 UI worker 已實際恢復並交付核心靜態矩陣，之後以動態 QA 未完成回報 failed／exited；不是 UI PASS。沒有 active worker 任務，不為通知重啟 finished workers。非主線全站與送審延後。
+- 未驗／依賴：真人英文素材使用權與路徑待 Tommy 提供；第一支影片、Clean up、完整送審與持久重啟尚未通過本輪驗收。新版 Canvas 仍由另一 agent 負責，不用本版測試冒充其驗收。
+- 整合驗證：2026-11-05 在以下未提交修正樹親跑 test-slot 完整 verify 四項 PASS／GREEN，build、lint、diff check 均 exit 0；獨立 reviewer 聚焦 20/20。UI、真人與持久重啟仍未驗。
+- 程式進度：已在本機 `fix/demo-flow-qa-mainline` 套用經獨立覆核接受的 P1 #1／#5 七檔差異，仍是未提交工作樹（base e442b3a）；per-plan optional savedInLive、既有計畫恢復及 TikTok 大小寫。不是 UI 通過，整合驗證另見 test-log。
+- 下一步：整合者接回免費核心查核；隔離副本操作仍被 hook 擋下，未批准、不繞過。取得有權素材與 Canvas 固定交付後驗主線。付費批准 US$0，不做產品內發布，沒有 commit／push／merge 授權。
+
+## 2026-11-05：整合者接回 UI 與既有素材真 MP4（最新）
+
+- 重跑零支出驗證：`bash bin/verify-zero-spend.sh`，2026-11-05親跑輸出 `32 passed in 0.35s`，exit0；腳本先拒絕已存在的本機設定，再以env -i與七項預算0啟動測試。新增腳本／測試與日誌隔離修正未另行獨立review，舊P1七檔review接受範圍不擴大冒用。
+- 本機證據目錄：`pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/`，9檔（MP4、7張截圖、evidence.json）。真匯出使用已追蹤 `public/media/remake-tour.mp4` 的0–3、8–11、16–19秒；先 letterbox 保留橫式全畫面，經現有 Remotion Reel 匯出，加英文技術標籤／字幕。不是新 AI 生成、真人素材或正式 tofu 案例。
+- 親驗：ffprobe H264 1080×1920 30/1、AAC 48kHz stereo、9.024s（時間線9s，含AAC padding）；全片 ffmpeg decode exit0；mean -20dB／max -3dB；Playwright 播放至 ended=true、error=null、muted=false，並抽查畫面。未完成主觀人聲逐句聽驗，字幕是自寫技術標籤、非轉錄。
+- 原 failed UI 任務已由整合者接回一部分：真瀏覽器1440下實際選 Research sample→Plans 出現→真 reload 仍在，per-plan savedInLive 與 library 保存正確；shot list 編輯亦經 fake API 保存。這是實際前端＋瀏覽器內 fake API，不是真後端／新 Canvas／跨程序持久驗收。原 dispatch 的 failed 歷史不改寫為通過。
+- UI 安全方案沒有建立被擋的後端副本：只啟 env -i 的 Python 唯讀靜態檔案服務，127.0.0.1:8891，實測 POST 501；所有 /api 回應由瀏覽器 route fake，外部字型等請求 abort，無付費後端、憑證或 provider 呼叫。預期的 mock429／字型阻擋 console 訊息已註明，不宣稱console全綠。
+- Research 展開後 scrollWidth1473／viewport1440，舊 issue #2 已實機重現，未修。自己的頁已關、靜態服務正常停止、profile lease釋放，Remotion正常退出，8891／8892無listener。其他人的瀏覽器／服務與freeform-canvas未修改。
+
+## 2026-11-05：原任務交付核對與零支出政策（最新）
+
+| 原任務 | Patch／review／整合證據 | 狀態與缺口 |
+|---|---|---|
+| 接線盤點 task_eb358747b731 | 唯讀矩陣已存 demo-qa/issues.md；獨立 task_6a6c14d68b61 核對成因 | 靜態完成；不是 UI PASS |
+| P1 #1／#5 task_5dc84402da84、task_b49dd821aaa5 | /tmp/buildclub-demo-p1-review-ctx1156.patch 七檔；首次 review task_57050706d8f2 拒絕兩個反例，補修後 task_82b57e760129 接受、聚焦20/20；已套用本工作區並親跑 verify／build／lint | 程式整合完成，未提交；UI 保存／reload 未驗。保留 worker 舊 RED 為歷史，不重開 worker 重跑 |
+| 原 UI dispatch ctx_5412d8a8ceb6 | 已讀 exact transcript 與 msg_bf0b6c0e10e7、msg_b7286ea927f8；恢復後實際讀路由、算指標、核對 Canvas，再交付矩陣 | failed／exited：靜態交付完成；副本 hook 阻擋，UI／MP4／重啟未跑，未啟服務/context，不能列 PASS |
+| 暫停 RED 診斷 | 恢復後受控重跑 GREEN；bin/verify.sh 改每輪 mktemp log，四項檢查未刪減；獨立日誌在 test-log | 原後端錯誤未留存、未重現，不能聲稱已知根因；日誌混用缺陷已修，該 shell 改動未另派獨立 reviewer |
+| Canvas 前後端／bug workers | 使用者回報 done；本次僅讀 freeform-canvas Git／STATUS，HEAD b651e6d 仍有產品 dirty 增量 | 不重派、不修改、不操作服務；本 session 尚未拿到固定交付樹或驗其新版 UI，舊 STATUS 證據不可冒充現 dirty 通過 |
+| 找熱門影片核心查核 | 自有 pinned tofu 保存記錄；in-process GET /api/search hit 12筆 cached=true，miss 空結果，外部搜尋／spend spy 不允許呼叫 | API 完成；11/2歷史指標，非即時平台核對；無同案例真 breakdown cache |
+| 付費入口零支出回歸 | 新 backend/tests/test_zero_spend.py；env -i、七項預算0，程序內 TestClient、32 passed，逐案 provider/network spy=0、無 wallet 扣額 | 本 QA 分支 fake 驗證完成；此新測試未另獨立覆核，不代表新版 Canvas batch／外部服務或 provider 帳單限制已驗 |
+| 核心最終成品 | 已新增既有 repo 素材→真 Remotion MP4 技術匯出（9.024s）及完整瀏覽器播放證據；不是同案例真人／AI 成品 | 正式案例未完成；素材／固定版本／真後端 UI 環境為依賴，送審與 analytics 不阻擋 |
+
+付費批准額為 **US$0（含 credits／預付餘額）**。本 session 不發任何付費搜尋、分析、助手、圖片、影片、配音呼叫；未知結果不重送，不載入付費憑證、不改 key／預算／共享設定。新政策已合入本機三天計畫。自己的測試只用清空環境、七項零預算、fake／spy、臨時資料，不開外部可寫 HTTP listener。單獨 literal existence check 確認本工作區設定檔不存在，未讀內容；混合檢查命令被 hook 擋下的歷史保留。
+
+預算稽核：程式預設每日 image US$0.50／video US$1.00／voice US$0.30／Claude US$1.00／Apify US$2.00／Jev US$0.50／ScrapeCreators 20 credits 是原始碼預設，**不是執行中服務實際值或本次批准額**。一般生成前按估價預扣、同 row CAS claim、unknown 不退款不重送；新版 workspace confirm 有鎖／交易，但未證實所有 POST 有一次性 idempotency。OpenRouter n=1、fallback=false、單次 submit，不明結果保留扣額；usage.cost 若無回傳會用估價填 actualUsd，wallet 仍估價，token／解析度估價不是帳單硬上限。Anthropic 拆解使用預設 SDK retry=2，不能聲稱所有 LLM 都不重試；實際重複收費未驗。provider key 限額、本次 demo provider 硬總額、外部既有任務與帳單狀態均未知，沒有發帶 key 查詢；不能以停本機宣稱取消外部扣款。
+
+以下為既有歷史進度，與 Git 或上方最新核對矛盾時以上方為準。
+
 Read first: `docs/todo.md` (open keys and tasks) and `docs/test-log.md` (every test run; skip a test that already passed at an unchanged commit). Demo branch: `chore/demo-integrate-main-1104`, PR #49 (draft, do not merge yet).
 
 Current (2026-11-04 AEDT): canvas product polish A-D is done and stacked as PRs #46 (B), #47 (C), #48 (D, on `feat/canvas-polish-d-agent`); none is merged. A whole-branch review and one fix wave followed: a price dialog now locks the side panels and Confirm re-quotes, asking again if anything changed. Final checks with mock models only: unit 466/466, backend pytest 969 passed, `polish-a-shell` 18/18, `polish-b-nodes` 76/76, `polish-c-timeline` 50/50, `polish-d-agent` 54/54 (each on a fresh isolated backend at 1440x900), `bash bin/verify.sh` GREEN, build OK, eslint 0 errors, tsc exit 0 (2026-11-04). Open: real model wait times are unverified (the agent route ran its sample plan, no Claude call; no real image or video model ran); line and node fine-tuning waits for the user test; polish-a and polish-b must not share one backend (B fails 4 checks after A, from leftover state), so run each on a fresh backend. Decision log entry of 3 Nov updated from "nothing built yet".
@@ -182,3 +232,31 @@ Open items:
 ## Next steps
 1. User testing on the 8805 environment.
 2. Phase 2 inventory done (2026-10-31): see `docs/phase2-scope.md`. User approved scope 2a-2c (stage board, shot checklist + real-footage upload, ffmpeg rough cut), real footage only. 2a stage board done on `feat/remake-stage-board` (PR to the fork, base `feat/remake-e2e`), waiting for review. Next: 2b plan after 2a merges. Still open: rough cut vs finished cut, Annie approving the cut, video storage location.
+
+## 本工作區本輪修改／新增檔案（未提交）
+
+- `bin/verify.sh`
+- `docs/STATUS.md`
+- `docs/test-log.md`
+- `pivots/02-content/app/trend-finder/backend/models.py`
+- `pivots/02-content/app/trend-finder/backend/tests/test_store.py`
+- `pivots/02-content/app/trend-finder/src/App.tsx`
+- `pivots/02-content/app/trend-finder/src/lib/hooks.ts`
+- `pivots/02-content/app/trend-finder/src/types.ts`
+- `pivots/02-content/app/trend-finder/unit/hooks.test.mjs`
+- `pivots/02-content/docs/demo-qa/issues.md`
+- `bin/verify-zero-spend.sh`
+- `pivots/02-content/app/trend-finder/backend/tests/test_zero_spend.py`
+- `pivots/02-content/app/trend-finder/unit/pickedPlans.test.mjs`
+- `pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/evidence.json`
+- `pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/existing-footage-proof.mp4`
+- `pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/frame-4s.png`
+- `pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/plans-reload-ui.png`
+- `pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/plans-visible-ui.png`
+- `pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/research-picked-ui.png`
+- `pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/shot-list-edit-ui.png`
+- `pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/video-playback-ended.png`
+- `pivots/02-content/docs/demo-qa/2026-11-05-zero-spend/video-playback-midpoint.png`
+- `pivots/02-content/docs/plans/2026-11-05-saturday-demo-plan.md`
+
+另有ignored本機依賴連結（node_modules、backend/.venv）、build產生的dist與其中qa-existing-footage-proof.mp4連結；只指向既有依賴／本輪證據，不安裝或改共享套件。

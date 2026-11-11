@@ -50,3 +50,16 @@ def test_added_client_round_trips(client):
     saved = client.get("/api/clients").json()
     assert [c["id"] for c in saved] == ["c1", "acme-bakery"]
     assert saved[1]["topics"] == ["sourdough", "cake decorating"]
+
+
+def test_explicit_live_pick_round_trips_without_marking_old_ideas(client):
+    old = {**IDEA, "id": "old"}
+    picked = {**IDEA, "savedInLive": True}
+    response = client.put("/api/ideas", json=[old, picked])
+    assert response.status_code == 200
+    assert response.json()[1]["savedInLive"] is True
+    saved = client.get("/api/ideas").json()
+    assert "savedInLive" not in saved[0]
+    assert saved[1]["savedInLive"] is True
+    assert saved[1]["id"] == IDEA["id"]
+    assert saved[1]["status"] == IDEA["status"]

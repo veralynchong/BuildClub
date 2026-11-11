@@ -60,7 +60,7 @@ export function subjectOf(format: Pick<Format, 'short' | 'name'>, video: Pick<Vi
   // Up to the first comma or colon, lower-cased when it starts like a sentence ("Crispy tofu"), not an acronym ("ASMR").
   const firstPart = (s: string) => {
     const x = s.split(/[,:(（，：|]/)[0].replace(/["“”]/g, '').trim()
-    return /^[A-Z][a-z]/.test(x) ? x[0].toLowerCase() + x.slice(1) : x
+    return /^[A-Z][a-z]/.test(x) && !/^TikTok\b/.test(x) ? x[0].toLowerCase() + x.slice(1) : x
   }
   const short = clean(format.short)
   if (short && !same(short, clean(video.hook)) && Array.from(short).length <= 32) return firstPart(short)
