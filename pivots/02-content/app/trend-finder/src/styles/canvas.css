@@ -541,7 +541,7 @@
 .fc-modal p { color:#aaa; }
 .fc-modal input { width:100%; border:1px solid #444; border-radius:7px; padding:10px; background:#181818; color:#ccc; }
 .fc-modal footer { display:flex; gap:10px; justify-content:flex-end; margin-top:25px; }
-.fc-editor { position:absolute; inset:0; z-index:40; background:var(--surface,#fff); color:var(--text,#222); color-scheme:light; }
+.fc-editor { position:absolute; inset:0; z-index:40; background:var(--surface,#fff); color:var(--fg); color-scheme:inherit; }
 .fc-loading { padding:40px; }
 .fc-picker { padding:42px 32px; max-width:1140px; margin:0 auto; }
 .fc-picker header>span { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
