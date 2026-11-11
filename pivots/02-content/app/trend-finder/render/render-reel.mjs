@@ -69,7 +69,7 @@ async function ensureBundle(cacheDir) {
   const tmp = `${serveUrl}.tmp-${process.pid}`
   const { bundle } = await import('@remotion/bundler')
   try {
-    await bundle({ entryPoint: path.join(APP, 'src/remotion/index.ts'), publicDir: path.join(APP, 'public'), outDir: tmp })
+    await bundle({ entryPoint: path.join(APP, 'src/remotion/index.ts'), publicDir: path.join(APP, 'public'), outDir: tmp, enableCaching: !process.env.REMOTION_CACHE_DIR })
   } catch (err) {
     rmSync(tmp, { recursive: true, force: true }) // a failed bundle leaves no half-written folder
     throw err
@@ -121,8 +121,11 @@ async function main() {
   const arg = process.argv[2]
   if (!arg) fail('Usage: render-reel.mjs <job.json> | --ensure-browser')
   const { ensureBrowser, renderMedia, selectComposition } = await import('@remotion/renderer')
+  const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE || undefined
+  if (browserExecutable && !existsSync(browserExecutable)) fail('The configured render browser is unavailable.')
+  const browserOptions = browserExecutable ? { browserExecutable, onBrowserDownload: () => { throw new Error('Browser download is disabled for this export.') } } : {}
   if (arg === '--ensure-browser') {
-    await ensureBrowser()
+    await ensureBrowser(browserOptions)
     return
   }
   if (arg === '--bundle') {
@@ -133,7 +136,7 @@ async function main() {
   const job = JSON.parse(readFileSync(arg, 'utf8'))
   const { input, mediaDir, out, cacheDir } = job
   if (!input || !mediaDir || !out || !cacheDir) fail('The job needs input, mediaDir, out and cacheDir.')
-  await ensureBrowser()
+  await ensureBrowser(browserOptions)
 
   const serveUrl = await ensureBundle(cacheDir)
 
@@ -143,11 +146,10 @@ async function main() {
     const served = (name) => (name ? `${base}/${encodeURIComponent(name)}` : null)
     // fontUrl stays empty: Reel resolves the bundled font with staticFile. Music, voice and the logo are file names in mediaDir too.
     const inputProps = { ...input, urls, fontUrl: '', musicUrl: served(input.musicUrl), voice: (input.voice || []).map((v) => ({ ...v, url: served(v.url) })), brand: { ...input.brand, logoUrl: served(input.brand && input.brand.logoUrl) } }
-    const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE || undefined
-    const composition = await selectComposition({ serveUrl, id: 'Reel', inputProps, port: PORT, browserExecutable })
+    const composition = await selectComposition({ serveUrl, id: 'Reel', inputProps, port: PORT, ...browserOptions })
     let last = -1
     await renderMedia({
-      composition, serveUrl, inputProps, port: PORT, browserExecutable,
+      composition, serveUrl, inputProps, port: PORT, ...browserOptions,
       codec: 'h264', audioCodec: 'aac', enforceAudioTrack: true, pixelFormat: 'yuv420p',
       outputLocation: path.resolve(out),
       onProgress: ({ progress }) => {

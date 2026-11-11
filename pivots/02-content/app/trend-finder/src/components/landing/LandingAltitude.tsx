@@ -599,7 +599,7 @@ const FAQ = [
   { q: 'Who can see our client info?', a: 'Your clients and plans stay in your agency’s account. We don’t share them or use them to train anything.' },
 ]
 
-export function LandingAltitude({ onLogIn, onDemo }: { onLogIn: () => void; onDemo: () => void }) {
+export function LandingAltitude({ onLogIn, onDemo, onGuidedDemo }: { onLogIn: () => void; onDemo: () => void; onGuidedDemo?: () => void }) {
   const [preview, setPreview] = useState<Preview | null>(null)
   const closePreview = useCallback(() => setPreview(null), [])
   const stepArt = useStepArt()
@@ -634,6 +634,7 @@ export function LandingAltitude({ onLogIn, onDemo }: { onLogIn: () => void; onDe
             </p>
             <div className="rk-ctas">
               <DemoButton onDemo={onDemo} big />
+              {onGuidedDemo && <button type="button" className="rk-btn rk-btn-on-navy rk-btn-big" onClick={onGuidedDemo}>Watch a guided demo</button>}
               <a className="rk-btn rk-btn-on-navy rk-btn-big" href="#tour">
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 5.5v13l10-6.5z" fill="currentColor" /></svg>
                 Watch the tour (under a minute)

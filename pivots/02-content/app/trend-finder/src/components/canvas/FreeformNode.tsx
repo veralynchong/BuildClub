@@ -107,11 +107,18 @@ export function FreeformNode({ id, data: { node }, selected }: NodeProps<FreeNod
           {!take && !shown?.url && !node.data.voiceId && !busy && <span className="fc-preview-note">{ff(node.type === 'upload' || node.type === 'footage' ? 'uploadHint' : 'noResult')}</span>}
         </div>
         {versions.length > 0 && <div className="fc-history-controls nodrag nopan"><button aria-label={ff('previous')} disabled={actions.readonly || versionIndex <= 0} onClick={() => actions.selectVersion(versions[versionIndex - 1])}>‹</button><span>{versionIndex + 1}/{versions.length}</span><button aria-label={ff('next')} disabled={actions.readonly || versionIndex < 0 || versionIndex >= versions.length - 1} onClick={() => actions.selectVersion(versions[versionIndex + 1])}>›</button></div>}
+        {versions.length > 1 && <div className="fc-version-list nodrag nopan" aria-label={ff('versions')}>
+          {versions.filter((g) => g.id !== shown?.id).map((g) => <figure className="fc-version" key={g.id} data-generation-id={g.id}>
+            <div className="fc-preview">{g.kind === 'image' ? <img src={g.url!} alt={`${ff('versionLabel')} ${versions.indexOf(g) + 1}`} draggable={false} /> : g.kind === 'voice' ? <audio src={g.url!} controls /> : <video src={g.url!} controls playsInline preload="metadata" />}</div>
+            <figcaption><span>{ff('versionLabel')} {versions.indexOf(g) + 1}</span><button disabled={actions.readonly || busy} onClick={() => actions.selectVersion(g)}>{ff('version')}</button></figcaption>
+          </figure>)}
+        </div>}
         {batch.length > 0 && <div className="fc-batch nodrag nopan" aria-live="polite"><strong>{ff('batch')} · {batch.filter((g) => g.status === 'done').length}/{batch.length} {ff('done')} · {batch.filter((g) => g.status === 'failed').length} {ff('failed')} · {batch.filter((g) => g.status === 'unknown').length} {ff('unknown')}</strong>{batch.map((g, i) => <span key={g.id}>#{(g.inputs.batchIndex ?? i) + 1} {ff(g.status)}</span>)}</div>}
         {mine.length > 0 && <div className="fc-legacy-takes nodrag nopan">{mine.map((t) => <div key={t.id}><span>{t.name}</span><button disabled={actions.readonly || t.chosen} onClick={() => actions.pickTake(t.id)}>{t.chosen ? ff('ready') : ff('version')}</button></div>)}</div>}
         {generated && <NodeSettings node={node} actions={actions} />}
         {(node.type === 'upload' || node.type === 'footage') && <label className="fc-upload nodrag nopan">↑ {ff('choose')}<input type="file" accept={node.type === 'footage' ? 'video/mp4,video/quicktime,.mp4,.mov' : actions.freeform ? 'image/*,video/*,audio/*' : 'image/*,audio/*'} disabled={actions.readonly || busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) actions.upload(id, f) }} /></label>}
         {generated && <div className="fc-run-row"><span>{ff('estimate')} · {model ? (model.kind === 'image' ? imageEstimate(model, node.data) : priceOf(model, node.data.duration)) === 0 ? ff('free') : usd((model.kind === 'image' ? imageEstimate(model, node.data) : priceOf(model, node.data.duration))) : '—'}</span><button className="fc-run nodrag nopan" disabled={actions.readonly || busy || !model?.available || !!modelRefusal(actions.doc, id, model, actions.gens, actions.kit)} aria-label={ff('run')} onClick={() => actions.run(id)}>{busy ? '◌' : '▶'}</button></div>}
+        {shown && actions.useInEdit && actions.canUseInEdit?.(shown) && <button className="fc-primary nodrag nopan" disabled={actions.readonly || busy} onClick={() => actions.useInEdit?.(shown)}>{ff('useInEdit')}</button>}
         {node.data.stale && <p className="fc-stale">◷ {ff('stale')}</p>}
         {error && <p className="fc-node-error" role="alert">{serverText(error)}</p>}
       </>}

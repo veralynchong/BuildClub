@@ -138,7 +138,7 @@ def shot_count(idea: dict) -> Optional[int]:
     return len(idea["shots"]) if idea.get("shots") else None
 
 
-def is_stale(conn, idea_id: str, shots: Optional[int] = None) -> bool:
+def is_stale(conn, idea_id: str, shots: Optional[int] = None, *, media_dir=None) -> bool:
     """Whether the cut was made from other takes, other music or another shot count than the plan has now."""
     row = conn.execute("SELECT out_signature, out_speed, out_shots, out_source FROM renders "
                        "WHERE idea_id = ? AND out_size IS NOT NULL", (idea_id,)).fetchone()
@@ -150,7 +150,7 @@ def is_stale(conn, idea_id: str, shots: Optional[int] = None) -> bool:
         project = conn.execute("SELECT doc FROM edit_projects WHERE idea_id = ?", (idea_id,)).fetchone()
         project = json.loads(project[0]) if project else editing.empty_project()
         return (workspaces.stale_project(conn, idea_id, project, workspaces.stored_load(conn)) or
-                editing.signature(conn, _media_dir().resolve(), {"id": idea_id}, project) != out_sig)
+                editing.signature(conn, (media_dir or _media_dir)().resolve(), {"id": idea_id}, project) != out_sig)
     music = music_row(conn, idea_id)
     # The speed is part of the fingerprint, but it is the one the video was made at, so it never differs.
     current = signature([t[0] for t in chosen_ids(conn, idea_id, out_shots)], out_speed, music[0] if music else None)
@@ -244,11 +244,12 @@ class RenderJobs:
             shutil.rmtree(work, ignore_errors=True)
 
 
-def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
+def make_router(db, load, media_dir: Callable[[], Path], *, jobs_factory=None, register_default_media=True) -> APIRouter:
     global _media_dir
-    _media_dir = media_dir
+    if register_default_media:
+        _media_dir = media_dir
     router = APIRouter()
-    jobs = RenderJobs(db, media_dir)
+    jobs = (jobs_factory or RenderJobs)(db, media_dir)
 
     def find_idea(idea_id: str):
         return workspaces.resolve(db, load, idea_id)
@@ -274,7 +275,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
                 version = (folder / "final.mp4").stat().st_mtime_ns
                 out["output"] = {"url": f"/api/{'workspaces' if idea_id.startswith('ws_') else 'ideas'}/{idea_id}/cut/file?v={version}", "size": size,
                                  "durationSec": duration}
-                out["stale"] = is_stale(conn, idea_id, shots)
+                out["stale"] = is_stale(conn, idea_id, shots, media_dir=media_dir)
                 sent = review_row(conn, idea_id)
                 if sent is not None and sent[0] == version:  # a record of another video is not shown
                     out["review"] = {"status": sent[1], "sentAt": sent[2]}
@@ -344,7 +345,7 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
                     refused = error(409, CUTTING)
                 elif version is None or have is None or have[0] is None:
                     refused = error(409, NO_CUT)
-                elif is_stale(conn, idea_id, shot_count(found)):
+                elif is_stale(conn, idea_id, shot_count(found), media_dir=media_dir):
                     refused = error(409, EDIT_STALE if have[1] == "editor" else STALE_CUT)
                 elif not has_review_link(conn, found["clientId"]):
                     refused = error(409, NO_LINK)

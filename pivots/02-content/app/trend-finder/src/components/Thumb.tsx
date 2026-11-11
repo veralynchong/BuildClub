@@ -102,7 +102,7 @@ export function Thumb({ video, large = false, preview = false }: { video: Video;
   const [broken, setBroken] = useState(false)
   const [hovering, setHovering] = useState(false)
   const timer = useRef<number | undefined>(undefined)
-  const id = preview && video.live && video.url && video.platform === 'tiktok' ? tiktokVideoId(video.url) : undefined
+  const id = preview && !video.thumbnail?.startsWith('/demo-assets/') && video.live && video.url && video.platform === 'tiktok' ? tiktokVideoId(video.url) : undefined
   const active = useSyncExternalStore(subscribePreviews, getActivePreview) === id
   const failed = useSyncExternalStore(subscribePreviews, () => (id ? isPreviewFailed(id) : false))
   useEffect(

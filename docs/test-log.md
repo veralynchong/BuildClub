@@ -295,3 +295,25 @@ A	pivots/02-content/docs/plans/2026-11-05-freeform-canvas-status.md
 A	pivots/02-content/docs/plans/2026-11-05-freeform-canvas-tasks.md
 A	pivots/02-content/docs/plans/2026-11-05-saturday-demo-plan.md
 ```
+
+
+## 2026-11-06：六鏡雙路線／隔離真匯出（進行中）
+
+- 整合樹 six-shot-ai-flow／feat/six-shot-real-export；基準是 origin/main 2c069a8＋已凍結426檔原guided增量。開工full1109passed／2skipped＋frontendPASS，原展示樹不修改。
+- 新來源/parent hash與媒體decode：六鏡各來源、輸出、可用父圖核對，315frames／10.5sec；S1/S19 ledger parentRequestId/bytes吻合text-onlyimage；舊兩筆截斷路徑錯誤留在候選，lead-asset-review記精確來源。
+- 新後端測試先ModuleNotFound RED；完成app後共用fixture alias導致Path JSON RED，改為JSON隔離複製後GREEN。原native handler重用；5focused tests涵蓋session/route/version/restart、202/poll/download/stale、重新提交、resetbusy及隔離、changed-source拒絕、default-media不污染。
+- frontend Runtime13與fresh2 focused PASS，後補abort/init及刪鏡Use恢復測試，共17focused PASS；最小quoteNode body回歸PASS。原tour測試因新增video/camera子步RED，依雙路需求更新預期後all frontend712PASS，後續新增回歸亦PASS。TS與isolatedVite build exit0；lint exit0。
+- 第一次整合full RED：11failed／1102passed／2skipped。原因：jobs_factory=RenderJobs定義時捕捉破壞既有monkeypatch；guided factory改全域_media_dir污染原生suite。改為late-bound optional factory、guided不註冊defaultmedia、router stale使用自己的closure。獨立review接受。重跑full GREEN：1114passed／2skipped in34.28s＋frontendPASS。
+- 真native API smoke：smoke-result.json，1080x1920／30fps／10.300sec；UI待驗，這輪由API改英文文字與首鏡out1.2後真Remotion匯出。完整decode、首幀文字實看PASS；own server PID59009→60247重啟後版本與SHA5ea36821fc8ae1c04a4dc75027dc29fe534c2548f230999c5725569425f7f435相同；ownserver停止與lease釋放。
+- 原Orca writer兩任務回報failed且未交付程式；native唯讀proposal/review後由lead唯一寫作。模型要求Terra與終端實際Luna不符已披露；未將launch receipt當resolved證據。
+- 真UI雙路與錄影目前由sole ui_verification agent執行，frozen465source/108dist；首attempt在進導覽前因harness共用normal auth storage無landing按鈕而FAIL，已清自有backend/browser，非產品通過。結果待回。
+- 全部本輪證據 /tmp/buildclub-six-real-export-20261106/，implementation-manifest.json列48個task delta檔；無付費、安裝、commit/push。Goal尚未完成。
+
+
+## 2026-11-06：六鏡雙路線最後驗收
+
+- 真UI捕捉ChromiumHTTP1 streaming PUT失敗ERR_ALPN_NEGOTIATION_FAILED；runtime改成讀取request.arrayBuffer後以明確method/headers/body/signal/credentials/cache/redirect轉送。Nodefocused17PASS、TS0；真UIDelete PUTv2五clips→Use PUTv3六clips→trim PUTv4六clips，無回退或ALPN。
+- QA script共用normal auth、Skip commit時序、舊Saved狀態、文字tab locator等失敗皆保留；沒有為測試放寬產品gate。最終attempt-c18b25db走完雙路並4次真匯出10.3s，兩路 revised文字實看；真重啟40392→54209，DB/media與下載SHA相同，3支完整錄影decodePASS。
+- 原最後networkassert FAIL26!=0不改寫；逐筆audit配26blocked route/26ERR_BLOCKED_BY_CLIENT failure，成功外連0，真provider/search transport0；12local404精確分類為root原生auth/health bootstrap，guided editor4040。Lead親跑audit.py：auditPASS，exports4，recordings3，465source/122dist凍結hash，ports8996/8997不監聽，leasefalse。
+- 最後full GREEN1114passed／2skipped40.52s＋frontendPASS；lint/TS/build0。另lead兩路default真render各315frames10.5s完整decode，AI結尾CTA影格親看。原10本ledgerSHA全未變；無付費生成、安裝、commit/push。
+- 早期bundler默認enableCaching=true會寫共享node_modules/.cache/webpack；本輪localcache模式改enableCaching=false，未刪既有cache或修改套件。UI凍結與最後真輸出均用修正版。

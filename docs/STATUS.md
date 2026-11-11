@@ -1,3 +1,26 @@
+## 2026-11-06：六鏡雙路線／隔離本機真匯出已驗收（本機未提交）
+
+- 整合工作樹 `six-shot-ai-flow`／`feat/six-shot-real-export`，原 guided-tofu-demo 展示與其他 dirty 保留。新預覽為獨立 loopback8998／render8999，generationEnabled=false；無 commit／push／安裝／新增付費。MacBook SSH目前無法連線，未改舊18991預覽。
+- Plan a shoot：六鏡拍攝提示與來源衍生分鏡 animatic，沒有假實拍。Create an AI ad：沿用本輪真AI素材，S1／S5精確首圖I2V、S4 T2V，其餘靜態呈現；原21鏡成片與來源/失敗/10本費用ledger保持hash不變。
+- 原生Editor真的保存、裁切、加英文文字、匯出與下載。預設兩路各315frames／10.5秒、1080x1920／30fps，檔案在 `/Users/tommy/Downloads/buildclub-demo-reference/six-shot-local-demo-20261106/`；AI含三組英文文字，兩路靜音。沒有真人批准或假送審。
+- 完整1440雙路UI：每路14Canvas子步、History、刪首鏡→Use in Edit補回、英文文字與6frame trim、四次真MP4匯出、修改後stale→再匯出、Reset新UUID保留舊資料、EN/zh-Hant、真後端重啟40392→54209後兩路原URL文字/影片ended與SHA一致，全有錄影證據。QA backend/browser全部關閉，8996/8997空、lease釋放；user preview8998另行保留。
+- 原UI runner最後outcome FAIL保留：網路彙總把26筆已block字型requestfailed誤算成功。Lead已讀腳本／原traffic／版本與重啟資料並親跑獨立audit：PASS，external success0、真provider/search URL0；12筆404均為root無guided的原生auth/health bootstrap fallback，guided editor404/pageerror0。這是明確限定的harness分類修正，不改寫原FAIL。
+- 最後完整 `bash bin/verify.sh full` GREEN：1114passed／2skipped in40.52s，frontendPASS；TypeScript、isolatedbuild及lint exit0。Backend Spec/Quality與frontend修正review ACCEPT。曾發現的11項suite污染和Chromium streaming PUT／HTTP1 ALPN問題已修並由真UI保存驗證。
+- 早期Remotion預設Webpack快取曾寫共享node_modules的生成快取；已在本輪專屬cache模式關閉該層，保留自有bundle cache，不刪既有共享快取、不改套件。手機依desktop1440範圍waived。
+- 驗收與失敗證據 `/tmp/buildclub-six-real-export-20261106/`，最終UI `ui-evidence/attempt-c18b25db/acceptance-audit.json`；產品修改逐檔清單以交付根 implementation-manifest.json 為準。下一步是使用者檢視與外觀回饋；未獲授權不commit/push，不自動合併或清worktrees。
+
+## 2026-11-06：六鏡雙路線與本機真匯出進行中（未交付）
+
+- 實作整合樹 `six-shot-ai-flow`／`feat/six-shot-real-export`，HEAD 2c069a8 加已驗收 guided 426 檔基準及本輪增量。原 guided-tofu-demo 展示服務／dirty 保留，未 commit／push／新增付費。
+- 原兩位 Orca 寫作 worker 回報未完成，沒有交付產品程式；lead 已接管唯一寫作權。實際後端終端顯示 Luna，與要求 Terra 不符，已披露，不將 launch receipt 當 resolved model 證據。另兩位原生唯讀 agent 盤點與 review 已返回具體缺口。
+- 開工基準 `bash bin/verify.sh full` GREEN：1109 passed／2 skipped、frontend PASS。新工作樹以本地 symlink 使用既有依賴，不安裝、不寫共享依賴。
+- 已準備 ai／shoot 各六支可追溯素材，315 幀／10.5 秒：AI 三鏡短動態加明示靜態停留、三鏡抽幀靜態；shoot 原片衍生參考靜態 animatic。S1／S19 原 ledger 首圖 parent ID／SHA／真檔 bytes 核對 PASS；S12 為 T2V，沒有偽造 poster→video。
+- 已實作 standalone guided backend／精確 runtime bridge、原生匯入與剪輯保存、版本409、隔離session/route、來源hash gate、route reset，以及既有renderer的隔離cache／existing browser小幅支援。新後端5 focused tests PASS；runtime13＋fresh素材2 tests PASS；frontend全部712 PASS、TypeScript／隔離build PASS（仍有既有chunk warning）。獨立review先FAIL的reset/hash/metadata/signature缺口已修，待重審。
+- 最新整合完整驗證 GREEN：1114 passed／2 skipped in34.28s，frontend PASS；lint exit0、TS／隔離build exit0。第一次full曾11failed／1102passed，定位並修正jobs_factory預設捕捉及guided污染原生media global；相容修正獨立review ACCEPT，不抹除RED。原生真render smoke已PASS10.3秒、新英文文字、重啟PID變更而project／影片SHA一致，首幀實看文字正確。
+- 六鏡tour已分shoot拍攝提示／ai圖到影片，加入導覽專用Use in Edit；仍在整合，未做真UI或真Remotion匯出。沒有替換8991／18991已發布展示。
+- 下一步：補齊UI脚本/素材文案一致、重審後端與前端、lint/full、啟動自有8996/8997真匯出smoke，再單一tester走1440雙路完整操作／錄影與重啟。不得把現有focused GREEN當goal完成。
+- 本輪證據與進度：`/tmp/buildclub-six-real-export-20261106/`，baseline-manifest／lead-asset-review／i2v-parent-binding／integration-media-manifest；原錯誤source候選及失敗派工保留。
+
 # STATUS
 
 ## 2026-11-05：交付隊友的統一分支（本輪最新）
