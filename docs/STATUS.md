@@ -1,5 +1,22 @@
 # STATUS
 
+## 2026-11-12：剪輯器淺色版與一批介面修正（`feat/editor-timeline`）
+
+- 一行狀態：剪輯器預設改成淺色（App 切到深色時才用原本的深色）、側欄拿掉 Channel、修掉 Shots 列重疊和預覽左上角的「1.00」、字幕條多顯示字；已 push，未開 PR、未合併。
+- Commits：459d20e（側欄與收合圖示列移除 Channel；`channel` 畫面與 ChannelScreen 保留，沒有其他地方連過去）、4560b0a（剪輯器）。
+- 做法：
+  - 範圍 class 由 `.cv-ed-dark` 改名 `.cv-ed-pro`。顏色全改成 `--ed-*` / `--tr-*` token，預設淺色（Remake 中性灰、藍 #1a33f2、Inter/Geist Mono）；`:root[data-theme="dark"]` 或系統深色時換回原深色值。預覽舞台用比面板深一階的淺灰 #e8e8ee，讓黑底 9:16 畫面跳出來。軌道條改成淡底＋深色邊＋深色字（影片紫、字幕琥珀棕、文字黃、配音藍、音樂綠），波形和 AI 標記（琥珀/紅斜線）、播放頭紅線在淺色上都清楚。
+  - 「1.00」不是我們畫的：是使用者 Brave 裡的 Video Speed Controller 擴充功能，會在每個 `<video>` 左上角放速度徽章（縮圖只有 26px 寬，徽章蓋到「9.2s · Ready」）。縮圖 video 加 `loop`（VSC 會略過 loop+muted 的靜態影片），剪輯器內 `vsc-controller` 一律隱藏（transport 已有自己的速度選單）。
+  - 字幕條：字幕/文字條左右留白 6→4px；鎖定的原聲字幕 tooltip 也帶全文；剪輯器開啟時時間軸自動 Fit 一次，短片用滿寬度。放大後全文顯示。
+  - 右側分頁改依標籤寬度分配，「AI suggestions」不再被截成「AI sugg…」。
+- 最後驗證：2026-11-12，`bash bin/verify.sh full` GREEN（後端 1224 passed、3 skipped；前端 unit PASS）；tsc、eslint、build 通過。:8797 零花費後端（沒重啟，只把新 dist 同步到它的暫存目錄）用 1440x900、1280x800 看過淺色、深色、Transcript、選取字幕條、放大後字幕全文；截圖在 session scratchpad 的 `fixes1/`。
+- 已知缺口：
+  - 使用者的瀏覽器也裝了 Dark Reader，可能把淺色剪輯器反轉；VSC 的快捷鍵（如 S、D）也可能和剪輯器的 S 分割衝突，這是擴充功能端的設定。
+  - 預設縮放下 1 秒左右的字幕條仍會出現「…」（寬度只有 60–80px），全文在 tooltip。
+  - 音樂和配音軌在這次種子資料裡是空的，淺色下的音樂波形只檢查了 CSS，沒看到實際畫面。
+  - 舊的瀏覽器分頁要重新整理才會拿到新 index.html（:8797 的 index 會被快取）。
+- 下一步：使用者看過淺色版後決定是否開 PR（base `feat/editor-real-footage`）。
+
 ## 2026-11-12：剪輯器 stage C，文字稿視圖（`feat/editor-timeline`）
 
 - 一行狀態：左側多了「Transcript」分頁，點字跳播放頭、播放時高亮目前的字並自動捲動、選字按 Delete 就剪掉那段（可 ⌘Z）、停頓顯示成「(0.8s)」小膠囊也可刪、雙擊改字會同步改「從原聲產生」的字幕；原聲字幕改用真正的逐字時間。已 push 到 `feat/editor-timeline`，未開 PR、未合併。
