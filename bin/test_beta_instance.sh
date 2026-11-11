@@ -34,6 +34,9 @@ for p in com.remake.beta.daphne com.remake.beta.daphne.tunnel com.remake.beta.da
 done
 check "daphne plist uses port 8801" grep -q 8801 "$tmp/agents/com.remake.beta.daphne.plist"
 check "tunnel plist targets port 8801" grep -q 'http://localhost:8801' "$tmp/agents/com.remake.beta.daphne.tunnel.plist"
+check "editor renders from the instance copy" grep -q "<string>$b/app</string>" "$tmp/agents/com.remake.beta.daphne.plist"
+check "render script copied" test -f "$b/app/render/render-reel.mjs"
+check "remotion sources copied" test -f "$b/app/src/remotion/index.ts"
 
 $s install collage >/dev/null 2>&1
 check "collage budget is 8" grep -qx BETA_TOTAL_USD=8 "$tmp/beta/collage/app/.env"

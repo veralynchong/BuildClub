@@ -7,7 +7,7 @@
 #   backup <name>           sqlite .backup + media copy into backups/<stamp>/, newest 7 kept
 #   add-user <name> <email> create a sign-in account; the password is read from stdin, never printed
 # Overrides (tests): BETA_HOME, BETA_LAUNCHAGENTS, BETA_SOURCE_ENV, BETA_DIST, BETA_STAMP, BETA_NO_LAUNCHCTL=1,
-#   TF_VENV, TF_APP_DIR (checkout that has render/ and node_modules/ for the video editor).
+#   TF_VENV, TF_APP_DIR (defaults to the instance's own app/, which gets render/, src/ and public/ for the video editor).
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -17,7 +17,6 @@ home="${BETA_HOME:-$HOME/beta}"
 agents="${BETA_LAUNCHAGENTS:-$HOME/Library/LaunchAgents}"
 source_env="${BETA_SOURCE_ENV:-/Users/tommy/Desktop/BuildClub/$TF/.env}"
 venv="${TF_VENV:-/Users/tommy/Desktop/BuildClub/$TF/backend/.venv}"
-tf_app="${TF_APP_DIR:-/Users/tommy/Desktop/BuildClub/$TF}"
 dist_src="${BETA_DIST:-$TF/dist}"
 cloudflared="${CLOUDFLARED:-/opt/homebrew/bin/cloudflared}"
 script="$(pwd)/bin/beta-instance.sh"
@@ -45,6 +44,10 @@ copy_app() {
   rsync -a --delete --exclude .venv --exclude 'data.db*' --exclude cache --exclude jobs --exclude __pycache__ \
     --exclude .env --exclude media "$TF/backend/" "$base/app/backend/"
   rsync -a --delete "$dist_src/" "$base/app/dist/"
+  # The video editor renders with Remotion from this same commit: render/, src/, public/ and package.json.
+  for d in render src public; do rsync -a --delete "$TF/$d/" "$base/app/$d/"; done
+  cp "$TF/package.json" "$base/app/package.json"
+  [ ! -e "$TF/node_modules" ] || ln -sfn "$(cd "$TF/node_modules" && pwd -P)" "$base/app/node_modules"
   # The backend reads data.db and media/ next to server.py; keep them in state/ across updates.
   mkdir -p "$base/state/media"
   ln -sfn "$base/state/data.db" "$base/app/backend/data.db"
@@ -80,7 +83,7 @@ EOF
   <dict>
     <key>HOME</key><string>$HOME</string>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-    <key>REMOTION_APP_DIR</key><string>$tf_app</string>
+    <key>REMOTION_APP_DIR</key><string>${TF_APP_DIR:-$base/app}</string>
   </dict>
 EOF
     if [ "$keep" = 1 ]; then echo '  <key>RunAtLoad</key><true/>'; echo '  <key>KeepAlive</key><true/>'; fi
