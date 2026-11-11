@@ -157,7 +157,7 @@
  :root[data-theme="dark"][data-ui="altitude"] .alt-eyebrow { color: #cfdcef; } 
 :root[data-ui="altitude"] .alt-headline {
   display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 20px; width: 100%;
-  font-size: clamp(28px, 3.1vw, 44px); line-height: 1.02; font-weight: 600; letter-spacing: -0.045em;
+  font-size: 44px; line-height: 1.02; font-weight: 600; letter-spacing: -0.045em;
 }
 :root[data-ui="altitude"] .alt-left { justify-self: end; text-align: right; }
 :root[data-ui="altitude"] .alt-right { justify-self: start; text-align: left; text-wrap: balance; }

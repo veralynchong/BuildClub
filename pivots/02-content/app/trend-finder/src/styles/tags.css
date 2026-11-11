@@ -13,7 +13,7 @@
 }
 .mn-panel-compact { padding: 36px 24px 24px; margin: 0; }
 .mn-panel-compact .mn-stage { min-height: 170px; }
-.mn-panel-compact .mn-headline { font-size: clamp(34px, 5.4vw, 60px); }
+.mn-panel-compact .mn-headline { font-size: 60px; }
 .mn-panel-compact .mn-pill { --size: 0.78; }
 .mn-panel-compact .mn-sub { margin-top: 12px; }
 
@@ -24,7 +24,7 @@
   margin: 0;
   font-family: 'Inter Tight', 'Inter', sans-serif;
   font-weight: 700;
-  font-size: clamp(46px, 8.6vw, 112px);
+  font-size: 112px;
   line-height: 0.98;
   letter-spacing: -0.045em;
   background: linear-gradient(180deg, #ffffff 15%, #9aa3b5 100%);

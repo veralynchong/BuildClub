@@ -79,8 +79,8 @@
   --text-3xl: 28px;
   --text-4xl: 30px;
   --text-display: 52px;
-  --text-h1: clamp(30px, 8vw, 36px);
-  --text-h2: clamp(21px, 2.3vw, 25px);
+  --text-h1: 36px;
+  --text-h2: 25px;
 
   /* Space scale (gaps) */
   --space-3xs: 2px;

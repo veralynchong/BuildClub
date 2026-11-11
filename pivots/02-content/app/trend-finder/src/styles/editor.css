@@ -441,7 +441,7 @@
 .cv-ed-pro .cv-ed-alert { gap: 8px; padding: 4px 12px; border: 0; border-bottom: 1px solid var(--ed-line); border-radius: 0; font-size: 12px; }
 .cv-ed-pro .cv-ed-alert[data-state="newer"] { border: 0; border-bottom: 1px solid var(--ed-line); background: var(--rising-soft); color: var(--rising); }
 .cv-ed-pro .cv-ed-alert[data-state="missing"] { border: 0; border-bottom: 1px solid var(--ed-line); background: var(--no-soft); color: var(--no); }
-.cv-ed-tl-scroll { position: relative; overflow: auto; max-height: 280px; scrollbar-color: var(--ed-line-strong) transparent; }
+.cv-ed-tl-scroll { position: relative; overflow: auto; overflow-x: scroll; max-height: 280px; /* scroll, not auto: the bar is always there, so the timeline height does not change with the window width */ scrollbar-color: var(--ed-line-strong) transparent; }
 .cv-ed-tl-inner { position: relative; min-width: 100%; }
 .cv-ed-tl-row { display: flex; height: 30px; border-bottom: 1px solid var(--ed-line); }
 .cv-ed-tl-row[data-lane="video"] { height: 80px; }

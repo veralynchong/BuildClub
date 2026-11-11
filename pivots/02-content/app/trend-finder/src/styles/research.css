@@ -11,7 +11,7 @@
 
 /* Header: centred serif title, one line about the page, search, the three actions */
 :root[data-ui="altitude"] .rs-hero { display: grid; justify-items: center; gap: var(--space-xl); text-align: center; padding-top: var(--space-base); min-width: 0; }
-:root[data-ui="altitude"] .rs-hero h1 { margin: 0; font-size: clamp(44px, 5vw, 56px); line-height: 1.05; }
+:root[data-ui="altitude"] .rs-hero h1 { margin: 0; font-size: 56px; line-height: 1.05; }
 :root[data-ui="altitude"] .rs-sub { margin: -6px 0 0; max-width: 560px; color: var(--muted); font-size: var(--text-base); }
 :root[data-ui="altitude"] .rs-head-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; justify-content: center; }
 
@@ -501,7 +501,8 @@
 :root[data-ui="altitude"] .rs-s-account .rs-account-btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
 :root[data-ui="altitude"] .rs-s-account .rs-account { min-width: 0; max-width: 100%; }
 
-@container rs-sheet (max-width: 1000px) {
+/* 900, not 1000 (12 Nov 2026): the sheet is 952px wide at the 1264px minimum page width, so every desktop size gets the same wide table. */
+@container rs-sheet (max-width: 900px) {
   :root[data-ui="altitude"] .rs-s-head { display: none; }
   :root[data-ui="altitude"] .rs-s-row { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 8px 10px; }
   :root[data-ui="altitude"] .rs-s-row > .rs-s-no { grid-column: 1; grid-row: 1; padding: 4px 0 0; }
@@ -554,7 +555,7 @@
 :root[data-ui="altitude"] .rs-viewswitch button[aria-pressed="true"] { background: var(--on-navy); color: var(--navy); }
 :root[data-ui="altitude"] .rs-viewswitch button:focus-visible { outline: 2px solid var(--on-navy); outline-offset: 2px; }
 /* Keyword tags never break mid-word; the keywords column gets a bit more room, the platform picker fits "Instagram". */
-@container rs-sheet (min-width: 1001px) {
+@container rs-sheet (min-width: 901px) {
   :root[data-ui="altitude"] :is(.rs-s-head, .rs-s-row) {
     grid-template-columns: 44px minmax(150px, 1.1fr) 140px 72px 64px minmax(0, 1.3fr) minmax(0, 1.4fr) minmax(0, 1.2fr) 156px 28px;
   }
@@ -570,7 +571,7 @@
 :root[data-ui="altitude"] .rs-sheet .rs-s-text { font-size: var(--text-sm); line-height: 1.45; overflow-wrap: anywhere; }
 :root[data-ui="altitude"] .rs-sheet .rs-s-hooktext { font-family: var(--font-serif); font-size: 17px; line-height: 1.3; }
 :root[data-ui="altitude"] .rs-sheet .rs-s-num.is-views { color: var(--accent); font-weight: 600; }
-@container rs-sheet (min-width: 1001px) {
+@container rs-sheet (min-width: 901px) {
   :root[data-ui="altitude"] :is(.rs-s-head, .rs-s-row) {
     grid-template-columns: 44px minmax(150px, 1.1fr) 80px 76px 68px minmax(0, 1.3fr) minmax(0, 1.5fr) minmax(0, 1.4fr) 156px 28px;
   }
@@ -591,18 +592,18 @@
 :root[data-ui="altitude"] .rs-s-row .rs-s-x { min-height: 0; padding-top: 2px; }
 :root[data-ui="altitude"] .rs-sheet .rs-s-keywords .rs-chips { gap: 8px; padding-top: 0; margin-top: -2px; }
 :root[data-ui="altitude"] .rs-sheet .rs-s-keywords .rs-chip { white-space: nowrap; }
-@container rs-sheet (min-width: 1001px) {
+@container rs-sheet (min-width: 901px) {
   :root[data-ui="altitude"] :is(.rs-s-head, .rs-s-row) { column-gap: 24px; }
   :root[data-ui="altitude"] .rs-s-vrow { column-gap: 16px; }
 }
-@container rs-sheet (max-width: 1000px) {
+@container rs-sheet (max-width: 900px) {
   :root[data-ui="altitude"] .rs-s-row { gap: 12px 16px; }
   :root[data-ui="altitude"] .rs-s-row > * { min-height: 0; }
   :root[data-ui="altitude"] .rs-s-row .rs-s-cell { padding-top: 0; }
 }
 :root[data-ui="altitude"] .rs-sheet .rs-s-keywords .rs-chips { gap: 6px 6px; }
 :root[data-ui="altitude"] .rs-sheet .rs-s-keywords .rs-chip { white-space: normal; text-overflow: clip; overflow: visible; max-width: 100%; }
-@container rs-sheet (min-width: 1001px) {
+@container rs-sheet (min-width: 901px) {
   :root[data-ui="altitude"] :is(.rs-s-head, .rs-s-row) {
     grid-template-columns: 40px minmax(130px, 0.9fr) 64px 72px 60px minmax(140px, 1.2fr) minmax(0, 1.4fr) minmax(0, 1.6fr) 148px 28px;
   }
@@ -617,20 +618,20 @@
 :root[data-ui="altitude"] .rs-sheet .rs-s-pick:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Title column (founder, 4 Nov 2026) next to the account; "Other info" left the Sheet. */
 :root[data-ui="altitude"] .rs-sheet .rs-s-titletext { color: var(--fg); font-weight: 500; }
-@container rs-sheet (min-width: 1001px) {
+@container rs-sheet (min-width: 901px) {
   :root[data-ui="altitude"] :is(.rs-s-head, .rs-s-row) {
     grid-template-columns: 40px minmax(130px, 0.8fr) minmax(0, 1.4fr) 64px 72px 60px minmax(140px, 1.1fr) minmax(0, 1.3fr) 148px 28px;
   }
 }
-@container rs-sheet (max-width: 1000px) {
+@container rs-sheet (max-width: 900px) {
   :root[data-ui="altitude"] .rs-s-title { grid-column: 1 / -1; }
 }
-@container rs-sheet (min-width: 1001px) {
+@container rs-sheet (min-width: 901px) {
   :root[data-ui="altitude"] :is(.rs-s-head, .rs-s-row) {
     grid-template-columns: 40px minmax(120px, 0.75fr) minmax(0, 1.6fr) 64px 72px 60px minmax(140px, 1.1fr) minmax(0, 1.2fr) 124px 28px;
   }
 }
-@container rs-sheet (max-width: 1000px) {
+@container rs-sheet (max-width: 900px) {
   :root[data-ui="altitude"] .rs-s-title { order: -2; }
   :root[data-ui="altitude"] .rs-s-title .rs-s-k { display: none; }
 }
@@ -718,7 +719,7 @@
 @media (prefers-reduced-motion: reduce) {
   :root[data-ui="altitude"] .rs-v-item.is-flash { animation: none; background-color: var(--accent-soft); }
 }
-@container rs-sheet (max-width: 1000px) {
+@container rs-sheet (max-width: 900px) {
   :root[data-ui="altitude"] .rs-v-shelf { grid-auto-columns: 160px; }
 }
 :root[data-ui="altitude"] .rs-sheet.is-shelf .rs-v-shelf { margin: 0; padding: 6px 4px 10px; }

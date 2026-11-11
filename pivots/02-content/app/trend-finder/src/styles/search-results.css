@@ -66,7 +66,7 @@
 .sort { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 14px; color: var(--muted); }
 .section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
 .section-head > div { display: grid; gap: 4px; }
-.section-head h2, .grid-head h2 { font-size: clamp(22px, 2.4vw, 26px); }
+.section-head h2, .grid-head h2 { font-size: 26px; }
 .section-title { display: grid; gap: 4px; }
 .section-sub { font-size: 14px; color: var(--muted); max-width: 62ch; }
 
@@ -139,7 +139,7 @@
 .pattern-kind { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---------- "Best to copy": the hero. Trend badge → hook → numbers → actions ---------- */
-.best-title { font-size: clamp(26px, 3vw, 34px); margin: 4px 0 -12px; }
+.best-title { font-size: 34px; margin: 4px 0 -12px; }
 .best {
   position: relative; display: grid; grid-template-columns: minmax(200px, 270px) minmax(0, 1fr); gap: 32px; align-items: center;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg);
@@ -149,7 +149,7 @@
 .best-body .small { overflow-wrap: anywhere; }
 .best-trend { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--muted); }
 .best-hook {
-  font-size: clamp(22px, 2.3vw, 30px); font-weight: 700; line-height: 1.18; letter-spacing: var(--tracking-tight);
+  font-size: 30px; font-weight: 700; line-height: 1.18; letter-spacing: var(--tracking-tight);
   text-wrap: balance; max-width: 30ch; overflow-wrap: anywhere;
 }
 /* The account sits right under the title, before followers → views. */
@@ -198,7 +198,7 @@
 .cmp-arrow { color: var(--muted); font-size: 20px; }
 .cmp-cap { font-size: var(--text-xs); color: var(--muted); }
 .cmp-tier { grid-column: 1 / -1; justify-self: start; margin-top: 6px; }
-.best .cmp-num.cmp-to { font-size: clamp(34px, 3.4vw, 44px); }
+.best .cmp-num.cmp-to { font-size: 44px; }
 .best .cmp-from { font-size: 22px; }
 
 /* The bar: the whole track is this video, the small grey start is the usual. It grows in once. */

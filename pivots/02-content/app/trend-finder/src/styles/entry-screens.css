@@ -35,7 +35,7 @@
 }
 .rk-auth .rk-auth-panel.rk-dots::before { display: none; }
 :root .rk-auth .rk-auth-panel h1 {
-  grid-row: 2; max-width: 12em; font-size: clamp(40px, 4.2vw, 56px); line-height: 1.05; letter-spacing: -0.025em; text-wrap: balance;
+  grid-row: 2; max-width: 12em; font-size: 56px; line-height: 1.05; letter-spacing: -0.025em; text-wrap: balance;
 }
 .rk-auth .rk-auth-lede {
   grid-row: 3; align-self: end; max-width: 46ch;
@@ -45,7 +45,7 @@
 /* The form: no card, set straight on the page, vertically centred */
 .rk-auth .rk-auth-card {
   margin: 0; max-width: none; border: 0; border-radius: 0; box-shadow: none; background: transparent;
-  padding: 96px clamp(24px, 7vw, 96px) 64px;
+  padding: 96px 96px 64px;
   display: flex; flex-wrap: wrap; align-content: center; align-items: center; gap: 22px 18px;
 }
 .rk-auth .rk-auth-card > * { flex: 1 1 100%; min-width: 0; }
@@ -98,9 +98,9 @@
 }
 
 /* ================= Shared by All clients Home and Add client ================= */
-:root[data-ui="altitude"] .main:has(> :is(.overview, .add-client)) { padding: 34px clamp(16px, 4vw, 52px) 72px; }
+:root[data-ui="altitude"] .main:has(> :is(.overview, .add-client)) { padding: 34px 52px 72px; }
 :root[data-ui="altitude"] :is(.overview .page-head h1, .add-client .page-head h1) {
-  font-size: clamp(34px, 4.2vw, 46px); line-height: 1.05; letter-spacing: -0.025em;
+  font-size: 46px; line-height: 1.05; letter-spacing: -0.025em;
 }
 :root[data-ui="altitude"] :is(.overview .page-head > p.muted, .add-client .page-head > p.muted) {
   margin: 0; font-size: 16px; line-height: 1.55; color: var(--muted); max-width: 620px;
@@ -249,10 +249,6 @@
 @media (hover: hover) {
   :root[data-ui="altitude"] .add-client .cannot-list .check:hover:not(:has(input:checked)) { border-color: var(--hover-edge); }
   :root[data-ui="altitude"] .add-client .form-actions .btn-ghost:hover { background-color: var(--hover-tint); border-color: var(--hover-edge); color: var(--hover-text); }
-}
-@media (max-width: 1100px) {
-  :root[data-ui="altitude"] .settings.add-client { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
-  :root[data-ui="altitude"] .add-client > .form-actions { grid-column: 1; grid-row: auto; position: static; }
 }
 
 /* ================= Sidebar, only while All clients Home or Add client is open ================= */

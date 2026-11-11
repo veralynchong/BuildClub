@@ -122,7 +122,7 @@
 :root[data-ui="altitude"] .main:has(> .board-screen) { max-width: none; padding: 0; }
 .board-screen {
   position: relative; min-height: 100dvh; align-content: start; grid-template-rows: auto auto minmax(0, 1fr) auto;
-  padding: var(--space-3xl) max(var(--space-3xl), 3vw) var(--space-xl);
+  padding: var(--space-3xl) 40px var(--space-xl);
   background-color: var(--navy-deep); color: var(--on-navy);
   background-image: radial-gradient(circle at 1px 1px, var(--navy-dot) 1px, transparent 1.5px);
   background-size: 24px 24px;

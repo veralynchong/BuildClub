@@ -104,7 +104,7 @@
 :root[data-ui="altitude"] .main:has(> .plan) { max-width: none; padding: 0; }
 .plan {
   --plan-gap: calc(var(--space-3xl) + var(--space-xl));      /* 40px between the panel's parts */
-  --plan-pad-x: max(var(--space-3xl), 3vw);
+  --plan-pad-x: 40px;
   --frame-inset: calc(var(--space-sm) + 1px);                 /* a field's padding + border: plain text lines up with typed text */
   --frame-inset-y: calc(var(--space-xs) + 1px);               /* the same, top and bottom */
   /* One type scale for the panel (3 Nov 2026). Hook cards and shot cards share every step.
@@ -233,9 +233,9 @@
   .plan-panel { --plan-gap: var(--space-4xl); padding: var(--space-3xl) var(--space-xl) 128px; }
 }
 /* Side by side: the bottom bar covers only the panel, so the navy stage runs to the bottom of the screen.
-   100vw - 100cqw is the sidebar's width; the stage is 38% of the plan (at least 300px). */
+   264px is the sidebar's width (100vw - 100cqw broke once the page scrolls sideways below 1280px); the stage is 38% of the plan (at least 300px). */
 @container plan (min-width: 761px) {
-  .plan .plan-bar { left: calc(100vw - 100cqw + max(300px, 38cqw)); }
+  .plan .plan-bar { left: calc(264px + max(300px, 38cqw)); }
   /* The sentence wraps onto two lines before the buttons drop to a second row */
   .plan .plan-bar-text { flex: 1 1 0; min-width: 18ch; }
   .plan-stage { padding-bottom: var(--space-4xl); }
@@ -263,7 +263,7 @@
 /* Sticky action bar at the bottom of the plan: frosted */
 .plan-bar {
   position: fixed; left: 264px; right: 0; bottom: 0; z-index: var(--z-action-bar);
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-md); padding: 14px max(16px, 3vw);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-md); padding: 14px 40px;
   background: var(--frost); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
   border-top: 1px solid var(--line);
 }

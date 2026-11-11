@@ -12,7 +12,7 @@
 }
 :root[data-ui="altitude"] .ch-id { display: grid; gap: 4px; min-width: 0; }
 :root[data-ui="altitude"] .ch-id .eyebrow { color: var(--label); font-size: 12px; }
-:root[data-ui="altitude"] .ch-id h1 { font-size: clamp(32px, 4vw, 48px); line-height: 1.05; overflow-wrap: anywhere; }
+:root[data-ui="altitude"] .ch-id h1 { font-size: 48px; line-height: 1.05; overflow-wrap: anywhere; }
 
 /* Grid */
 :root[data-ui="altitude"] .ch-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
@@ -55,7 +55,7 @@
 :root[data-ui="altitude"] .ch-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--navy); transition: width var(--dur) var(--ease); }
 
 /* ① Film next */
-:root[data-ui="altitude"] .ch-hero h2 { font-size: clamp(26px, 3vw, 34px); text-wrap: balance; }
+:root[data-ui="altitude"] .ch-hero h2 { font-size: 34px; text-wrap: balance; }
 :root[data-ui="altitude"] .ch-pick { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; align-items: start; }
 :root[data-ui="altitude"] .ch-pick-thumb .thumb { border-radius: var(--radius); }
 :root[data-ui="altitude"] .ch-pick-body { display: grid; gap: 8px; min-width: 0; }
@@ -119,8 +119,8 @@
 :root[data-ui="altitude"] .ch-later p { margin: 0; }
 :root[data-ui="altitude"] .ch-later-ask { font-weight: 500; color: var(--fg); }
 
-/* Tablet: 6 columns */
-@container (max-width: 960px) {
+/* Tablet: 6 columns. 900, not 960 (12 Nov 2026): Home is 920px wide at the 1264px minimum, so every desktop size keeps the 12-column grid. */
+@container (max-width: 900px) {
   :root[data-ui="altitude"] .ch-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   :root[data-ui="altitude"] :is(.ch-hero, .ch-needs, .ch-decisions, .ch-kinds) { grid-column: span 6; }
   :root[data-ui="altitude"] :is(.ch-month, .ch-ready, .ov-waiting) { grid-column: span 3; }
@@ -144,9 +144,6 @@
 /* Brief: can't film and client memory side by side */
 :root[data-ui="altitude"] .brief-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
 :root[data-ui="altitude"] .brief-pair .client-memory { max-width: none; }
-@media (max-width: 1100px) {
-  :root[data-ui="altitude"] .brief-pair { grid-template-columns: minmax(0, 1fr); }
-}
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-ui="altitude"] :is(.ch-card, .ch-bar > span) { animation: none; transition: none; }
