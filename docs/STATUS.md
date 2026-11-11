@@ -1,5 +1,18 @@
 # STATUS
 
+## 2026-11-12：剪輯器 stage B，時間軸上的 AI 標記、縮圖條與波形（`feat/editor-timeline`）
+
+- 一行狀態：影片條上顯示 AI 清剪標記（可保留/刪除、可復原），初剪理由變成刻度尺上的圖釘，片段有縮圖條和紫色波形，音樂軌有綠色波形；已 push 到 `feat/editor-timeline`，未開 PR、未合併。
+- Commits：09d1f91（後端：分析結果多存 audio peaks，每秒 50 格、最多 6000 格；takes 清單帶 `updatedAt`）、2fb023b（前端：標記、圖釘、縮圖條、波形、工具列開關與數量徽章，`marks.ts` 純邏輯 + 8 個測試）。
+- 做法：每個 take 只抓一次（以 plan、take、分析時間為 key）整段 take 的清剪建議和分析結果，再依各片段的 in/out 換算位置；被片段邊緣切掉、只剩不到 10 格的部分視為已套用剪輯留下的空檔，不再顯示。單一標記「刪除」走和 AI 分頁相同的 keeps 流程，算一步復原；太短的贅詞在預設 4 格空檔下會被合併，就改用 1 格空檔再試。音樂波形在瀏覽器用 Web Audio 解碼（不經後端），以檔案本身最大值正規化。
+- 最後驗證：2026-11-12，`bash bin/verify.sh full` GREEN（後端 1222 passed、3 skipped；前端 unit 675 pass）；tsc、eslint、build 通過。在 :8797 零花費後端（重啟後重新 seed，3 個 take 和一首合成音樂）用 1440x900 走過：標記顯示、popover 保留/刪除、刪除後 ⌘Z、開關標記、AI 分頁全部套用後標記消失、初剪圖釘與說明、修剪片段後縮圖條與波形跟著移動、retry 後 `updatedAt` 更新。截圖在 session scratchpad 的 `stageB/`。
+- 已知缺口：
+  - 圖釘位置是初剪當下的時間，之後再剪輯不會跟著移動；同一個鏡頭的理由多半疊在同一根圖釘上。
+  - 「保留」只在這次開啟有效，不存檔。
+  - 整段 take 抓建議，和 AI 分頁依片段範圍抓的結果在片段邊緣的短靜音上可能略有不同。
+  - 波形只看片段音量和靜音，不看軌道靜音（軌道靜音本來就只影響預覽）。
+- 下一步：使用者看過介面後決定是否開 PR（base `feat/editor-real-footage`），再做 stage C（文字稿視圖）。
+
 ## 2026-11-12：剪輯器改版 stage A，專業深色介面與多軌時間軸（`feat/editor-timeline`）
 
 - 一行狀態：剪輯器改成類 Remotion Studio 的深色介面，多軌時間軸、播放列、快捷鍵、多層復原都做好了，已 push 到 `feat/editor-timeline`（疊在 `feat/editor-real-footage` / PR #56 上），尚未開 PR、未合併。計畫在 `docs/` 的時間軸研究與計畫（9c9e5c9）。
