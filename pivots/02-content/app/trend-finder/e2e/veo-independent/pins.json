@@ -1,0 +1,13 @@
+{
+  "planSha256": "3503d8d02cb15328ec15649f1d6682f8ff11c335411441667d1e93edbdfe1d23",
+  "sourcePins": {
+    "runtime.py": "857a34fe2c452c19e988aeff1b5e9ff069182baab608bde010ac5a0714507e93",
+    "fixed_runtime.py": "28e9b63d2d358537b5f9cca74a1ed631d657a484b5494932f1a34be34a6f2604",
+    "provider_transport.py": "fabbc689db29403e32e3cea639a552f6fe71af2fc042a4db401324a0a95860fa",
+    "image_normalization.py": "01634462d3d5b13db405c12ad6b8b83a83cd0d3226c7a1f9bb5e6ff446f65a4f"
+  },
+  "acceptanceSha256": "6c7cb1e282be94749fe8b0c49d8c2d6d838aea0ed2c4979431c8b2cb0fcbcd86",
+  "approvalSha256": "822dbf192620719f80b67a0d5942975756dc36e23cc7c9903dc2aaaf5213f9f8",
+  "priceSha256": "e264ab20e876678bc5926a8b0133475cc244ef3cfe4d38b500abeeebbf40ce74",
+  "appServerSha256": "a862e9611a027762bded213467ba875ab94dd23cad00e94fa07138f0ff992ed8"
+}

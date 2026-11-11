@@ -1,0 +1,10 @@
+{
+  "planSha256": "8c4475c2fc5e96c5cc17a82a7121edbed7ddd20552f9175bd64ad2c4305ba1a9",
+  "approvalSha256": "822dbf192620719f80b67a0d5942975756dc36e23cc7c9903dc2aaaf5213f9f8",
+  "sourcePins": {
+    "runtime.py": "857a34fe2c452c19e988aeff1b5e9ff069182baab608bde010ac5a0714507e93",
+    "fixed_runtime.py": "28e9b63d2d358537b5f9cca74a1ed631d657a484b5494932f1a34be34a6f2604",
+    "provider_transport.py": "fabbc689db29403e32e3cea639a552f6fe71af2fc042a4db401324a0a95860fa",
+    "image_normalization.py": "01634462d3d5b13db405c12ad6b8b83a83cd0d3226c7a1f9bb5e6ff446f65a4f"
+  }
+}
