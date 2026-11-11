@@ -117,6 +117,10 @@ DAILY_CLAUDE_USD = float(os.environ.get("DAILY_CLAUDE_USD", 1.00))
 DAILY_GEN_IMAGE_USD = float(os.environ.get("DAILY_GEN_IMAGE_USD", 0.50))  # canvas image generations
 DAILY_GEN_VIDEO_USD = float(os.environ.get("DAILY_GEN_VIDEO_USD", 1.00))  # canvas video generations
 DAILY_GEN_VOICE_USD = float(os.environ.get("DAILY_GEN_VOICE_USD", 0.30))  # editor voiceover (text to speech)
+# Beta only: a cap on all USD spend across every day. Unset means no total cap.
+BETA_TOTAL_USD = float(os.environ["BETA_TOTAL_USD"]) if os.environ.get("BETA_TOTAL_USD") else None
+BETA_USED_UP = ("The beta budget for this workspace is used up. Saved work still opens; "
+                "new AI analysis is paused. Contact the Remake team to add more.")
 # Channel summaries: Jev labelling in US$; ScrapeCreators (Instagram only) in credits, 1 per 12 reels.
 DAILY_JEV_USD = float(os.environ.get("DAILY_JEV_USD", 0.50))
 DAILY_SCRAPECREATORS_CREDITS = float(os.environ.get("DAILY_SCRAPECREATORS_CREDITS", 20))
@@ -962,12 +966,16 @@ def gen_budget(kind: str, usd: float, conn=None):
     if conn is None:
         if spend(wallet, usd, cap):
             return None
+        if total_cap_hit():
+            return error(429, BETA_USED_UP)
         left = remaining(wallet, cap)
     else:  # workspace confirm owns budget_lock and BEGIN IMMEDIATE on this connection
         key = f'spend:{today()}'
         row = conn.execute('SELECT value FROM store WHERE key=?', (key,)).fetchone()
         spent = json.loads(row[0]) if row else {}
         total = round(spent.get(wallet, 0) + usd, 4)
+        if total_over_cap(wallet, usd, conn):
+            return error(429, BETA_USED_UP)
         if total <= cap:
             conn.execute('INSERT OR REPLACE INTO store (key,value) VALUES (?,?)',
                          (key, json.dumps({**spent, wallet: total})))
@@ -1006,13 +1014,34 @@ def today() -> str:
     return time.strftime("%Y-%m-%d")  # this machine's local day
 
 
+blocked_by = threading.local()  # whether this thread's last refused spend() hit the beta total
+
+
+def total_spent_usd(conn=None) -> float:
+    """Every USD wallet over every day. scrapecreators counts credits, not dollars, so it is left out."""
+    with contextlib.nullcontext(conn) if conn else contextlib.closing(db()) as c:
+        rows = c.execute("SELECT value FROM store WHERE key LIKE 'spend:%'").fetchall()
+    return round(sum(v for (raw,) in rows for w, v in json.loads(raw).items() if w != "scrapecreators"), 4)
+
+
+def total_over_cap(wallet: str, usd: float, conn=None) -> bool:
+    limit = globals()["BETA_TOTAL_USD"]  # looked up at call time, so a test can change it
+    return limit is not None and wallet != "scrapecreators" and total_spent_usd(conn) + usd > limit
+
+
+def total_cap_hit() -> bool:
+    """True when the last spend() this thread made was refused by the beta total, not the daily cap."""
+    return getattr(blocked_by, "total", False)
+
+
 def spend(wallet: str, usd: float, cap: float) -> bool:
     """Count a paid call against today's cap. Returns False, counting nothing, if it would go over."""
     key = f"spend:{today()}"
     with budget_lock:
         spent = load(key) or {}
         total = round(spent.get(wallet, 0) + usd, 4)  # 4 places: a Jev label costs less than a cent
-        if total > cap:
+        blocked_by.total = total_over_cap(wallet, usd)
+        if total > cap or blocked_by.total:
             return False
         with db() as conn:
             conn.execute("INSERT OR REPLACE INTO store (key, value) VALUES (?, ?)",
@@ -1051,6 +1080,8 @@ def saved_searches(limit: int = 3) -> list[str]:
 
 
 def over_budget(name: str, cap: float, env: str, unit: str = "US$") -> JSONResponse:
+    if total_cap_hit():
+        return error(429, BETA_USED_UP)
     print(f"[budget] {name} budget used up; to allow more, raise {env} in .env and restart the API.", flush=True)
     if cap <= 0:
         saved = saved_searches() if name == "Apify" else []
