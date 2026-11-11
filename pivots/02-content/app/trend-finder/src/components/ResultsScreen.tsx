@@ -37,6 +37,7 @@ export type Chip =
   | { kind: 'source' }
 
 interface Props {
+  error: string | null
   query: Query
   setQuery: (q: Query) => void
   interp: Interpretation
@@ -212,6 +213,12 @@ export function ResultsScreen(p: Props) {
         hideChips
         suggestFor={p.suggestFor}
       />
+
+      {p.error && (
+        <p className="error" role="alert">
+          <ErrorText text={p.error} onSearch={p.onSearch} />
+        </p>
+      )}
 
       <div className="understood">
         <span className="field-label">{t('find.res.searchingFor')}</span>

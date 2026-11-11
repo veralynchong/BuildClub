@@ -26,3 +26,116 @@ test('background search strings exist in English and Traditional Chinese with th
   assert.match(en['find.bg.seconds'], /\{seconds\}/)
   assert.match(zhHant['find.bg.seconds'], /\{seconds\}/)
 })
+
+// Exercise the actual result component and App search handler without HTTP or a browser.
+import { readFileSync } from 'node:fs'
+import ts from 'typescript'
+import React from 'react'
+import * as jsx from 'react/jsx-runtime'
+import { renderToStaticMarkup } from 'react-dom/server'
+import * as metrics from '../src/lib/metrics.ts'
+import * as filters from '../src/lib/resultFilters.ts'
+import * as i18n from '../src/lib/i18n.ts'
+
+const appSource = ts.createSourceFile('App.tsx', readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+function find(root, predicate) {
+  if (predicate(root)) return root
+  return ts.forEachChild(root, (child) => find(child, predicate))
+}
+function compile(code, scope) {
+  const js = ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
+  const exports = {}
+  new Function('exports', ...Object.keys(scope), js)(exports, ...Object.values(scope))
+  return exports
+}
+const noop = () => {}
+const child = ({ children }) => React.createElement('div', null, children)
+function resultsComponent() {
+  const source = readFileSync(new URL('../src/components/ResultsScreen.tsx', import.meta.url), 'utf8')
+  const errorSource = readFileSync(new URL('../src/components/ErrorText.tsx', import.meta.url), 'utf8')
+  const require = (name) => {
+    if (name === 'react') return React
+    if (name === 'react/jsx-runtime') return jsx
+    if (name === '../lib/metrics') return metrics
+    if (name === '../lib/resultFilters') return filters
+    if (name === '../lib/i18n') return i18n
+    if (name === '../lib/appContext') return { useManagerName: () => 'Annie' }
+    if (name === '../lib/useShortcuts') return { useResultsShortcuts: noop, resultsShortcuts: [] }
+    if (name === './ErrorText') return compile(errorSource, { require })
+    if (name === './find/words') return { platformsText: (ps) => ps.join(', '), viewsLabel: () => 'views', daysAgoWords: () => 'today', beatUsual: () => 'Usual views' }
+    if (name === '../lib/motion') return { useCountUp: (value) => value }
+    return new Proxy({}, { get: () => child })
+  }
+  return compile(source, { require }).ResultsScreen
+}
+
+test('current search failure is an alert beside retained tofu results, and clears for the next request', () => {
+  const ResultsScreen = resultsComponent()
+  const props = {
+    query: { days: 90, maxLength: 0, platforms: ['tiktok'] },
+    interp: { text: 'tofu', keywords: ['tofu'], topics: [] },
+    results: [{ id: 'tofu-1', platform: 'tiktok', hook: 'Original tofu result', views: 2_000_000, followers: 1000, daysAgo: 1 }],
+    trends: [], formats: [], allVideos: [], newIds: new Set(), cohorts: new Map(),
+    ideaStatus: new Map(), blockedFormatIds: new Set(), inResearch: new Set(),
+    failed: [], empty: [], saved: [], live: true, clientName: 'Test client',
+    savedIn: () => null, onSearch: noop,
+  }
+  for (const lang of ['en', 'zh-Hant']) {
+    i18n.setActiveLang(lang)
+    const message = `${i18n.t('shell.search.failed')} Try a saved search, like "tofu".`
+    const failed = renderToStaticMarkup(React.createElement(ResultsScreen, { ...props, error: message }))
+    assert.match(failed, /role="alert"/)
+    assert.ok(failed.includes(i18n.t('shell.search.failed')))
+    assert.match(failed, /class="link-btn"/)
+    assert.match(failed, /Original tofu result/)
+    assert.match(failed, /tofu/)
+    const cleared = renderToStaticMarkup(React.createElement(ResultsScreen, { ...props, error: null }))
+    assert.doesNotMatch(cleared, /role="alert"/)
+    assert.match(cleared, /Original tofu result/)
+  }
+  i18n.setActiveLang('en')
+})
+
+test('App passes the current error to results and a 429 preserves old results until a successful retry', async () => {
+  const resultsNode = find(appSource, (n) => ts.isJsxSelfClosingElement(n) && n.tagName.getText(appSource) === 'ResultsScreen')
+  const errorProp = resultsNode.attributes.properties.find((p) => p.name?.text === 'error')
+  assert.ok(errorProp, 'ResultsScreen must receive the current search error')
+  const error = 'HTTP 429: search budget reached'
+  assert.equal(compile(`export const value = ${errorProp.initializer.expression.getText(appSource)}`, { searchError: error }).value, error)
+  const run = find(appSource, (n) => ts.isVariableDeclaration(n) && n.name.getText(appSource) === 'runLiveSearch').initializer
+  let release
+  let searchError = error
+  let results = ['old tofu result']
+  let queryText = 'tofu'
+  let searching = null
+  const scope = {
+    parseQuery: (text) => ({ keywords: [text], topics: [] }), formats: [],
+    query: { platforms: ['tiktok'] }, client: { id: 'client' }, searchSeq: { current: 0 },
+    setSearchError: (value) => { searchError = value }, setNotice: noop,
+    setSearching: (value) => { searching = value },
+    searchAll: () => new Promise((resolve, reject) => { release = { resolve, reject } }),
+    failSearch: (_client, message) => { searchError = message },
+    fetchContentTypes: async () => new Map(), setSearchFailed: noop, setSearchEmpty: noop,
+    setLiveStore: noop, setLiveResults: (value) => { results = value }, setLiveQuery: (value) => { queryText = value },
+    setLiveAnswer: noop, setInterp: noop, setQuery: noop, setPatternFilter: noop,
+    setFormatFilter: noop, setLastSearches: noop, setShownSearch: noop, setToRecord: noop, setView: noop,
+    here: { current: { view: 'results', workspace: 'client' } }, isOnSearchPage,
+  }
+  const search = compile(`export const run = ${run.getText(appSource)}`, scope).run
+  const first = search('uncached query')
+  assert.equal(searchError, null)
+  assert.equal(searching.q, 'uncached query')
+  release.reject(new Error(error))
+  await first
+  assert.equal(searchError, error)
+  assert.deepEqual(results, ['old tofu result'])
+  assert.equal(queryText, 'tofu')
+  assert.equal(searching, null)
+  const retry = search('retry')
+  assert.equal(searchError, null)
+  release.resolve({ videos: [], formats: [], failed: [], empty: [], pending: [] })
+  await retry
+  assert.equal(searchError, null)
+  assert.deepEqual(results, [])
+  assert.equal(queryText, 'retry')
+})

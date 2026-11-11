@@ -4,6 +4,7 @@ Files live in <media>/<ideaId>/gen/<genId>.<ext>. Only signed-in staff reach the
 
 import hashlib
 import json
+import math
 import os
 import queue
 import secrets
@@ -43,6 +44,9 @@ FILE_LOST = "The model finished but its file couldn't be saved. It may have char
 FAILED = "The generation failed. Try again."
 START_FRAME_LOST = "The start frame wasn't made, so the video didn't run."
 BAD_REFS = "The reference images aren't valid."
+BAD_IMAGE_COUNT = "That image count is not available for this model."
+BAD_ASPECT = "That aspect ratio is not available for this model."
+BAD_RESOLUTION = "That resolution is not available for this model."
 PROMPT_TOO_LONG = "The prompt and the kit notes are too long together. Shorten the prompt."
 PENDING = "!pending"  # a chained video's startFrame in validation: the image isn't made yet
 MAX_PROMPT = 4000
@@ -113,12 +117,48 @@ def validate_models(models: list[dict]) -> list[str]:
             errors.append(f"{mid}: typicalSeconds must be a positive number")
         if (m.get("price") or {}).get("perRefUsd") is not None:
             errors.append(f"{mid}: perRefUsd is not supported yet")
+        count = m.get("maxCount", 1)
+        if type(count) is not int or count < 1 or count > 10:
+            errors.append(f"{mid}: maxCount must be an integer from 1 to 10")
+        resolutions = m.get("resolutions")
+        prices = (m.get("price") or {}).get("byResolutionUsd")
+        if resolutions is not None or prices is not None:
+            if not isinstance(resolutions, list) or not resolutions or any(r not in ("1K", "2K", "4K") for r in resolutions) \
+                    or len(set(resolutions)) != len(resolutions) or not isinstance(prices, dict) \
+                    or set(prices) != set(resolutions) or any(type(v) not in (int, float) or not math.isfinite(v) or v < 0
+                                                            for v in prices.values()):
+                errors.append(f"{mid}: resolutions need matching nonnegative finite prices")
     return errors
 
 
-def estimate_usd(model: dict, duration: Optional[float], chars: int = 0) -> float:
+def image_options(model: dict, data: dict) -> dict:
+    count = data.get('count', 1)
+    if type(count) is not int or not 1 <= count <= model.get('maxCount', 1):
+        raise ValueError(BAD_IMAGE_COUNT)
+    ratio = data.get('aspectRatio', '9:16')
+    if not isinstance(ratio, str) or ratio not in model.get('aspects', []):
+        raise ValueError(BAD_ASPECT)
+    resolution = data.get('resolution', (model.get('resolutions') or [None])[0])
+    if resolution is not None and (not isinstance(resolution, str) or resolution not in model.get('resolutions', [])):
+        raise ValueError(BAD_RESOLUTION)
+    if 'resolution' in data and resolution is None:
+        raise ValueError(BAD_RESOLUTION)
+    return {'aspectRatio': ratio, 'count': count, **({'resolution': resolution} if resolution is not None else {})}
+
+
+def semantic_options(options: dict) -> dict:
+    return {key: options[key] for key, default in (('aspectRatio', '9:16'), ('resolution', '1K'), ('count', 1))
+            if options.get(key) is not None and options[key] != default}
+
+
+def quote_stamp(stamp, unit, count):
+    return hashlib.sha256(json.dumps({'inputStamp': stamp, 'unitUsd': unit, 'count': count,
+                                     'total': round(unit * count, 4)}, sort_keys=True).encode()).hexdigest()
+
+
+def estimate_usd(model: dict, duration: Optional[float], chars: int = 0, resolution: Optional[str] = None) -> float:
     price = model.get("price") or {}
-    usd = float(price.get("usd", 0))
+    usd = float((price.get("byResolutionUsd") or {}).get(resolution, price.get("usd", 0)))
     if price.get("per") == "1k_chars":
         return round(usd * chars / 1000, 4)
     return round(usd * (duration or 0) if price.get("per") == "second" else usd, 4)
@@ -136,7 +176,7 @@ def enqueue(conn, idea_id: str, node_id: str, kind: str, model: str, inputs: dic
     gid = secrets.token_urlsafe(9)
     row = (gid, idea_id, node_id, kind, model, json.dumps(inputs),
            input_hash(model, inputs.get("sentPrompt") or inputs.get("prompt"), inputs.get("startFrame"),
-                      inputs.get("references") or [], inputs.get("duration")), "queued", est, None, None, None, None, now, None, None)
+                      inputs.get("references") or [], inputs.get("duration"), inputs), "queued", est, None, None, None, None, now, None, None)
     conn.execute(f"INSERT INTO generations ({COLUMNS}) VALUES ({', '.join('?' * NCOLUMNS)})", row)
     return to_json(row)
 
@@ -266,12 +306,12 @@ def copy_kit_images(kit, media: Path, client_id: str, idea_id: str, stored: list
             part.unlink(missing_ok=True)
 
 
-def input_hash(model: str, prompt: str, start, refs: list, duration) -> str:
+def input_hash(model: str, prompt: str, start, refs: list, duration, options=None) -> str:
     """`refs` are sorted first, so the order they were picked in doesn't change the hash."""
     keys = ("source", "genId", "itemId", "image")
     ordered = sorted(json.dumps({k: r[k] for k in keys if k in r}, sort_keys=True) for r in refs or [])
     text = json.dumps({"model": model, "prompt": prompt, "startFrame": start, "references": ordered,
-                       "duration": duration}, sort_keys=True)
+                       "duration": duration, **semantic_options(options or {})}, sort_keys=True)
     return hashlib.sha256(text.encode()).hexdigest()
 
 
@@ -418,14 +458,16 @@ class GenJobs:
             inputs = json.loads(raw)
             if resumed:  # polling needs only the request id, not the input files
                 job = gen_providers.Job(model, inputs.get("sentPrompt") or inputs.get("prompt") or "", None, [],
-                                        inputs.get("duration"), scratch=folder)
+                                        inputs.get("duration"), scratch=folder, aspectRatio=inputs.get("aspectRatio", "9:16"),
+                                        resolution=inputs.get("resolution"), count=inputs.get("count", 1))
             else:
                 if folder is None:
                     raise cutting.CutError("That plan doesn't exist.")
                 refs = self._ref_paths(folder, idea_id, inputs)
                 start = self._input_path(folder, idea_id, inputs.get("startFrame"))
                 job = gen_providers.Job(model, inputs.get("sentPrompt") or inputs.get("prompt") or "", start, refs,
-                                        inputs.get("duration"), scratch=folder)
+                                        inputs.get("duration"), scratch=folder, aspectRatio=inputs.get("aspectRatio", "9:16"),
+                                        resolution=inputs.get("resolution"), count=inputs.get("count", 1))
             adapter = gen_providers.adapter_for(model["provider"])
             if not resumed:
                 self._set_request_id(gen_id, SUBMITTING)
@@ -642,29 +684,46 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                 return None, error(422, "An input image is missing.")
         return {"references": stored, "kitStamp": stamp, "sentPrompt": sent}, None
 
-    def confirm_workspace(idea_id, node_id, version, stamp, model, inputs, usd, prepare=None):
+    def confirm_workspace(idea_id, node_id, version, stamp, model, inputs, usd, prepare=None, count=1, quoteStamp=None):
         # Global lock order: kit/brand -> wallet -> SQLite writer. Never call the legacy
         # separate-connection wallet writer while holding SQLite's write transaction.
         with kit.lock, router.confirmation_lock, db() as conn:
             conn.execute('BEGIN IMMEDIATE')
             try:
-                current_version, _, current_stamp = workspaces.inputs(conn, idea_id, node_id, workspaces.stored_load(conn))
+                current_version, current_inputs, current_stamp = workspaces.inputs(conn, idea_id, node_id, workspaces.stored_load(conn))
             except ValueError:
                 return error(409, 'The canvas changed somewhere else. Reload it.')
             if current_version != version or current_stamp != stamp:
                 return error(409, 'The canvas changed somewhere else. Reload it.')
+            if model['kind'] == 'image':
+                current_model = next((m for m in load_models() if m['id'] == current_inputs['model']), None)
+                if current_model is None or current_model.get('retired') or not is_available(current_model):
+                    return error(409, 'The canvas changed somewhere else. Reload it.')
+                current_unit = estimate_usd(current_model, None, resolution=current_inputs.get('resolution'))
+                current_count = current_inputs['count']
+                current_quote = quote_stamp(current_stamp, current_unit, current_count)
+                if current_unit != usd or current_count != count or (count > 1 and quoteStamp is None) \
+                        or (quoteStamp is not None and quoteStamp != current_quote):
+                    return error(409, 'The canvas changed somewhere else. Reload it.')
+            elif count != 1:
+                return error(422, 'This node does not support batches.')
             if prepare:
                 bad = prepare()
                 if bad is not None:
                     return bad
-            blocked = router.budget(model['kind'], usd, conn=conn)
+            blocked = router.budget(model['kind'], round(usd * count, 4), conn=conn)
             if blocked is not None:
                 return blocked
             # A failed enqueue rolls the wallet and row back together. The queue starts only
             # after the context commits, so no worker can observe uncommitted media jobs.
-            out = enqueue(conn, idea_id, node_id, model['kind'], model['id'], inputs, usd)
-        router.jobs.submit(out['id'])
-        return JSONResponse(out, status_code=201)
+            batch_id = secrets.token_urlsafe(9) if count > 1 else None
+            items = []
+            for index in range(count):
+                child = {**inputs, **({'batchId': batch_id, 'batchIndex': index, 'requestedCount': count} if batch_id else {})}
+                items.append(enqueue(conn, idea_id, node_id, model['kind'], model['id'], child, usd))
+        for out in items:
+            router.jobs.submit(out['id'])
+        return JSONResponse({'batchId': batch_id, 'count': count, 'items': items} if batch_id else items[0], status_code=201)
 
     router.confirm_workspace = confirm_workspace
 
@@ -694,7 +753,7 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                     _, resolved, stamp = workspaces.inputs(conn, idea_id, body.get('nodeId'), load)
                 except ValueError as e:
                     return error(422, str(e))
-            body = {**body, **resolved}
+            body = {**{k: v for k, v in body.items() if k not in ('aspectRatio', 'resolution', 'count')}, **resolved}
         node_id, prompt = body.get("nodeId"), body.get("prompt", "")
         start, duration = body.get("startFrame"), body.get("duration")
         refs = body.get("references")
@@ -706,16 +765,27 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                                      start, refs, duration)
         if bad is not None:
             return bad
+        try:
+            options = image_options(model, body) if model['kind'] == 'image' else {}
+        except ValueError as e:
+            return error(422, str(e))
+        count = options.get('count', 1)
+        if (not independent and count != 1) or (model['kind'] != 'image' and (type(body.get('count', 1)) is not int or body.get('count', 1) != 1)):
+            return error(422, 'This node does not support batches.')
         part, bad = prepare_refs(found, idea_id, prompt, refs, copy=not independent)
         if bad is not None:
             return bad
-        est = estimate_usd(model, duration)
+        est = estimate_usd(model, duration, resolution=options.get('resolution'))
+        total = round(est * count, 4)
+        pricing = {'count': count, 'unitUsd': est, **{k: v for k, v in options.items() if k != 'count'}}
         if independent and body.get('confirm') is not True:
             remaining = {kind: round(max(0, values['cap'] - values['spent']), 4)
                          for kind, values in router.remaining().items()}
-            return {'total': est, 'remaining': remaining, 'items': [{'nodeId': node_id, 'model': model['id'], 'usd': est}],
-                    'canvasVersion': version, 'inputStamp': stamp, 'inputs': {**resolved, **part}}
-        inputs = {"prompt": prompt, "startFrame": start, "duration": duration, **part}
+            return {'total': total, 'remaining': remaining, **pricing,
+                    'items': [{'nodeId': node_id, 'model': model['id'], 'usd': total, **pricing}],
+                    'canvasVersion': version, 'inputStamp': stamp, 'quoteStamp': quote_stamp(stamp, est, count),
+                    'inputs': {**resolved, **part}}
+        inputs = {"prompt": prompt, "startFrame": start, "duration": duration, **part, **options}
         if independent:
             if body.get('inputStamp') != stamp:
                 return error(409, 'The canvas changed somewhere else. Reload it.')
@@ -726,7 +796,7 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
                 except OSError:
                     return error(422, 'An input image is missing.')
                 return None
-            return confirm_workspace(idea_id, node_id, version, stamp, model, inputs, est, prepare)
+            return confirm_workspace(idea_id, node_id, version, stamp, model, inputs, est, prepare, count, body.get('quoteStamp'))
         blocked = router.budget(model["kind"], est)  # spends the estimate; a failed job gives it back
         if blocked is not None:
             return blocked
@@ -759,6 +829,8 @@ def make_router(db, load, media_dir: Callable[[], Path], budget=lambda kind, usd
             return error(409, "Only an approved plan can generate.")
         if found.get('kind') == 'workspace':
             return error(422, workspaces.CHAIN_UNSUPPORTED)
+        if type(body.get('count', 1)) is not int or body.get('count', 1) != 1:
+            return error(422, 'Run each image separately before chaining a video.')
         if body.get("reference") is not None or body.get("videoReference") is not None:
             return error(422, "Run the whole shot doesn't send reference images yet. Use Generate on each node.")
         refs = body.get("references")  # for the storyboard image only; the video starts from that image

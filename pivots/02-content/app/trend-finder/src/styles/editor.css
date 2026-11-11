@@ -75,7 +75,7 @@
 .cv-ed-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-base); }
 .cv-ed-choice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); margin: 0; padding: 0; border: 0; font-size: var(--text-sm); }
 .cv-ed-choice legend { padding: 0; margin-bottom: var(--space-2xs); }
-.cv-ed-choice .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.cv-ed-choice .btn[aria-pressed="true"] { background: var(--blue); color: var(--accent-fg); }
 .cv-ed-volume { display: grid; grid-template-columns: 96px 1fr 48px; align-items: center; }
 .cv-ed-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: 600; }
 .cv-ed-license { display: flex; align-items: flex-start; gap: var(--space-sm); }

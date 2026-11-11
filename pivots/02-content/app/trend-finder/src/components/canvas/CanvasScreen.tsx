@@ -3,7 +3,7 @@ import { Background, MiniMap, ReactFlow, ReactFlowProvider, applyNodeChanges, us
 import '@xyflow/react/dist/style.css'
 import type { CanvasContext as CanvasResource } from '../../lib/canvas/resource'
 import type { CanvasDoc, CanvasNode, CanvasState, GenModel, Generation, NodeData, NodeKind, Budget } from '../../lib/canvas/types'
-import { getCanvas, getKit, getModels, getBudget, putCanvas, StaleCanvas, NoShots, quoteNode, startGen, pollGen, uploadMedia } from '../../lib/canvas/api'
+import { getCanvas, getKit, getModels, getBudget, putCanvas, StaleCanvas, NoShots, quoteNode, nodeQuoteMatches, generationItems, startGen, pollGen, uploadMedia } from '../../lib/canvas/api'
 import type { Kit, Shot } from '../../types'
 import { syncKit, kitTargets } from '../../lib/canvas/kit'
 import { legacyGenerationRequest, legacyInputsMatch, applyLegacyFrames } from '../../lib/canvas/legacy'
@@ -11,8 +11,8 @@ import { replaceUploadedMedia } from '../../lib/canvas/mediaReplacement'
 import { KitPanel } from './KitPanel'
 import { mergeVoiceOwnership } from '../../lib/canvas/voices'
 import { createOperationQueue, prepareCanvasLeave } from '../../lib/canvas/operations'
-import { createCanvasSession, draftStore, reconcileGenerations, selectGeneration, rememberGeneration } from '../../lib/canvas/session'
-import { genRequest, markStale, staleIds, priceOf, selectedGen } from '../../lib/canvas/graph'
+import { createCanvasSession, draftStore, reconcileGenerations, selectGeneration, rememberGeneration, rememberBatch } from '../../lib/canvas/session'
+import { genRequest, markStale, staleIds, priceOf, selectedGen, imageEstimate, normalizeImageSettings, modelRefusal, referenceEdge, reuseSettings } from '../../lib/canvas/graph'
 import { askAgent, applyAgentPlan, type AgentPlan } from '../../lib/canvas/agent'
 import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
 import { apiBase } from '../../lib/canvas/resource'
@@ -103,6 +103,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   const [runAll, setRunAll] = useState(false)
   const nextRun = useRef<() => void>(() => {})
   const [selected, setSelected] = useState<string[]>([])
+  const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({})
   const [dock, setDock] = useState<Dock>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; from?: string; at?: { x: number; y: number } } | null>(null)
   const [search, setSearch] = useState('')
@@ -114,7 +115,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   const [busy, setBusy] = useState<Set<string>>(new Set())
   const busyRef = useRef(new Set<string>())
   const [plan, setPlan] = useState<PromptPlan | (AgentPlan & { canvasVersion: number }) | null>(null)
-  const [quote, setQuote] = useState<{ id: string; usd: number; remaining: number | null; signature: string; inputStamp?: string } | null>(null)
+  const [quote, setQuote] = useState<{ id: string; usd: number; remaining: number | null; signature: string; inputStamp?: string; quoteStamp?: string } | null>(null)
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
   const mounted = useRef(true)
@@ -193,15 +194,12 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     setGens((gs) => [...gs.filter((g) => g.id !== gen.id), gen])
     const end = await pollGen(resource, gen.id, (g) => setGens((gs) => [...gs.filter((x) => x.id !== g.id), g]), { signal: abort.current.signal })
     if (!end) return
-    if (end.status !== 'done') {
-      await reconcileGenerations([end], selectionIO())
-      throw new Error(serverText(end.error) || t('canvas.err.start'))
-    }
     if (!mounted.current || leaving.current) return
     await operations.run(async () => {
-      if (!await selectGeneration(end, selectionIO())) throw new Error(ff('saveFirst'))
+      await reconcileGenerations([end], selectionIO())
       await refresh()
     })
+    if (end.status !== 'done') throw new Error(serverText(end.error) || t('canvas.err.start'))
   }
   const resumeRef = useRef<() => Promise<void>>(async () => {})
   resumeRef.current = async () => {
@@ -209,11 +207,11 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     const knownVoices = await getVoices(resource)
     if (!mounted.current || leaving.current) return
     setVoices(mergeVoiceOwnership(session.doc(), knownVoices))
-    await operations.run(() => reconcileGenerations(initial.generations, selectionIO(knownVoices)))
+    await operations.run(() => reconcileGenerations(initial.generations, selectionIO(knownVoices), { restoreBatches: true }))
     for (const g of initial.generations.filter((g) => ['queued', 'running', 'waiting'].includes(g.status))) {
       const n = session.doc().nodes.find((n) => n.id === g.nodeId)
       if (!n) continue
-      if (!n.data.awaiting) { change({ ...session.doc(), nodes: session.doc().nodes.map((node) => node.id === n.id ? { ...node, data: { ...node.data, awaiting: g.id } } : node) }); if (!await flush()) return }
+      if (!n.data.awaiting && n.data.awaitingBatch === undefined && !g.inputs.batchId) { change({ ...session.doc(), nodes: session.doc().nodes.map((node) => node.id === n.id ? { ...node, data: { ...node.data, awaiting: g.id } } : node) }); if (!await flush()) return }
       void follow(g).catch((e) => setNote(e.message))
     }
   }
@@ -228,6 +226,13 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   }
   const update = (id: string, patch: Partial<NodeData>) => {
     if (quote) return
+    const node = session.doc().nodes.find((n) => n.id === id)
+    const picked = patch.model && models.find((m) => m.id === patch.model)
+    if (node && picked) {
+      const why = modelRefusal(session.doc(), id, picked, gens, kit)
+      if (why) { setNote(why); return }
+      if (node.type === 'storyboard') patch = { ...patch, ...normalizeImageSettings({ ...node.data, ...patch }, resource.kind === 'workspace' ? picked : { ...picked, maxCount: 1 }) }
+    }
     const next = { ...session.doc(), nodes: session.doc().nodes.map((n) => n.id === id ? { ...n, data: { ...n.data, ...patch, ...(['storyboard', 'video', 'voice'].includes(n.type) && selectedGen(n, gens) ? { stale: true } : {}) } } : n) }
     change(markStale(next, id, gens))
   }
@@ -236,34 +241,41 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     const n = session.doc().nodes.find((n) => n.id === id)!
     const model = models.find((m) => m.id === n.data.model)
     if (!model?.available) throw new Error(t('canvas.err.models'))
+    const refusal = modelRefusal(session.doc(), id, model, gens, kit)
+    if (refusal) throw new Error(refusal)
     const needsKit = resource.kind === 'legacy-plan' && session.doc().edges.some((e) => e.target === id && e.targetHandle === 'in:kit')
     if (needsKit && (!kit || kitFailed)) throw new Error(ff('kitUnavailable'))
     const request = resource.kind === 'legacy-plan' ? legacyGenerationRequest(session.doc(), id, shots, gens, kit, model).request : genRequest(session.doc(), id, shots, gens, kit, model)
     if (resource.kind === 'workspace') request.prompt = connectedPrompt(session.doc(), id)
     const signature = JSON.stringify({ version: session.version(), model: n.data.model, request })
-    let usd = priceOf(model, n.data.duration)
+    let usd = model.kind === 'image' ? imageEstimate(model, n.data) : priceOf(model, n.data.duration)
     let remaining: number | null = budget?.[model.kind] ? budget[model.kind].cap - budget[model.kind].spent : null
     let inputStamp: string | undefined
+    let quoteStamp: string | undefined
     if (n.type === 'voice') {
       const q = await quoteTts(resource, request.prompt, model.id, id, session.version())
       usd = q.usd; remaining = q.remaining; inputStamp = q.inputStamp
     } else if (resource.kind === 'workspace') {
       const q = await quoteNode(resource, id, session.version())
-      usd = q.total; remaining = q.remaining[model.kind] ?? null; inputStamp = q.inputStamp
+      usd = q.total; remaining = q.remaining[model.kind] ?? null; inputStamp = q.inputStamp; quoteStamp = q.quoteStamp
     }
-    if (usd > 0 && (!confirmed || quote?.signature !== signature || quote.usd !== usd || quote.inputStamp !== inputStamp)) {
-      setQuote({ id, usd, remaining, signature, inputStamp })
+    const changedQuote = confirmed && (quote?.signature !== signature || !nodeQuoteMatches(quote, { total: usd, inputStamp, quoteStamp }))
+    if ((usd > 0 && !confirmed) || changedQuote) {
+      setQuote({ id, usd, remaining, signature, inputStamp, quoteStamp })
       if (confirmed) setNote(ff('changed'))
       return
     }
     setQuote(null)
     const g = await operations.run(async () => {
       if (!mounted.current || leaving.current) throw new Error(ff('saveFirst'))
-      const started = n.type === 'voice' ? await startTts(resource, request.prompt, model.id, id, session.version(), inputStamp) : await startGen(resource, { nodeId: id, model: model.id, ...request, canvasVersion: session.version(), inputStamp, confirm: confirmed || usd === 0 })
-      if (!await rememberGeneration(started, selectionIO())) throw new Error(ff('saveFirst'))
-      return started
+      const started = n.type === 'voice' ? await startTts(resource, request.prompt, model.id, id, session.version(), inputStamp) : await startGen(resource, { nodeId: id, model: model.id, ...request, canvasVersion: session.version(), inputStamp, quoteStamp, confirm: confirmed || usd === 0 })
+      const items = generationItems(started)
+      if (!await (items.length > 1 ? rememberBatch(items, selectionIO()) : rememberGeneration(items[0], selectionIO()))) throw new Error(ff('saveFirst'))
+      return items
     })
-    await follow(g)
+    const settled = await Promise.allSettled(g.map(follow))
+    const failed = settled.find((r) => r.status === 'rejected')
+    if (failed?.status === 'rejected') throw failed.reason
     setTimeout(() => nextRun.current(), 0)
   })
   nextRun.current = () => {
@@ -394,15 +406,56 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     if (!r.ok) throw new Error(serverText(body.error) || t('canvas.err.start'))
     setPlan(body)
   })
+  const selectVersion = (g: Generation) => void withBusy(`select:${g.nodeId}`, async () => {
+    const knownVoices = await getVoices(resource)
+    setVoices(mergeVoiceOwnership(session.doc(), knownVoices))
+    if (!await selectGeneration(g, selectionIO(knownVoices))) throw new Error(ff('saveFirst'))
+    setSelected([g.nodeId]); await refresh()
+  }, true)
+  const addReference = (source: string, target: string) => {
+    const edge = referenceEdge(source, target, session.doc().nodes.find((n) => n.id === source)?.type === 'kit')
+    const model = models.find((m) => m.id === session.doc().nodes.find((n) => n.id === target)?.data.model)
+    const why = model && modelRefusal({ ...session.doc(), edges: [...session.doc().edges, edge] }, target, model, gens, kit)
+    if (why) { setNote(why); return }
+    void connect(edge)
+  }
+  const uploadReference = (target: string, file: File) => void withBusy(`ref:${target}`, async () => {
+    if (quote || recoveryOpen || replacing) return
+    const targetNode = session.doc().nodes.find((n) => n.id === target)
+    if (!targetNode) return
+    const model = models.find((m) => m.id === targetNode.data.model)
+    const next = createNode(session.doc(), 'upload', { x: targetNode.position.x - 420, y: targetNode.position.y })
+    const source = next.nodes[next.nodes.length - 1]
+    source.data.media = 'image'
+    const edge = referenceEdge(source.id, target, false)
+    const check = canConnect(next, edge, models)
+    const why = model && modelRefusal({ ...next, edges: [...next.edges, edge] }, target, model, gens, kit)
+    if (!check.ok) throw new Error(t(check.reason, check.vars))
+    if (why) throw new Error(why)
+    change(next)
+    // Save the source first; an upload failure leaves a normal retryable Upload node.
+    if (!await flush()) throw new Error(ff('saveFirst'))
+    const gen = await uploadMedia(resource, source.id, file)
+    setGens((gs) => [...gs.filter((g) => g.id !== gen.id), gen])
+    change({ ...session.doc(), nodes: session.doc().nodes.map((n) => n.id === source.id ? { ...n, data: { ...n.data, selected: gen.id } } : n) })
+    await connect(edge)
+    if (!await flush()) throw new Error(ff('saveFirst'))
+    await refresh()
+  }, true)
   const actions: FreeformActions = {
+    selectVersion, addReference, uploadReference,
+    removeReference: (id) => { const edge = session.doc().edges.find((e) => e.id === id); if (edge) void removeEdges([edge]) },
     doc, gens, models, shots, voices, takes, kit, pickTake: (id) => void withBusy('take', async () => { setTakes(await chooseTake(resource.id, id)) }), freeform: resource.kind === 'workspace', project: edit.committedProject ?? null, readonly: readOnly || stale || navigating || replacing || recoveryOpen || reloadAsk || !!quote || !!edit.writing, busy, update, run: (id) => void begin(id), upload, remove,
     duplicate: (id) => { const next = duplicateNode(session.doc(), id); change(next); setSelected([next.nodes[next.nodes.length - 1].id]) },
     inspect: (id) => { setSelected([id]); setDock('inspect') }, openEditor: () => setEditing(true),
     connect: (id) => { const rect = flowBox.current!.getBoundingClientRect(); setMenu({ x: rect.width / 2, y: 150, from: id, at: screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + 150 }) }) },
   }
-  const nodes: FreeNode[] = useMemo(() => doc.nodes.map((node) => ({ id: node.id, type: 'freeform', position: node.position, data: { node }, selected: selected.includes(node.id), deletable: node.type !== 'shot' })), [doc.nodes, selected])
+  const nodes: FreeNode[] = useMemo(() => doc.nodes.map((node) => ({ id: node.id, type: 'freeform', position: node.position, data: { node }, selected: selected.includes(node.id), measured: measured[node.id], deletable: node.type !== 'shot' })), [doc.nodes, selected, measured])
   const edges = [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null, voices)].map((e) => ({ ...e, selected: selectedEdges.includes(e.id), className: `fc-edge media-${doc.nodes.find((n) => n.id === e.source)?.type === 'voice' ? 'audio' : 'image'}` }))
   const picked = doc.nodes.find((n) => selected.length === 1 && n.id === selected[0])
+  const quotedNode = doc.nodes.find((n) => n.id === quote?.id)
+  const quotedModel = models.find((m) => m.id === quotedNode?.data.model)
+  const quotedOptions = quotedNode?.type === 'storyboard' && quotedModel ? normalizeImageSettings(quotedNode.data, quotedModel) : null
   const assistantShots = shots.filter((s) => doc.nodes.some((n) => n.type === 'shot' && n.shotId === s.id && !n.data.removed))
   const canAsk = resource.kind === 'legacy-plan' ? assistantShots.some((s) => s.id === picked?.shotId) : picked?.type === 'prompt'
   const applyAssistant = () => {
@@ -476,6 +529,12 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
             nodesDraggable={!actions.readonly} nodesConnectable={!actions.readonly} deleteKeyCode={null}
             selectionOnDrag={!pan} panOnDrag={pan ? true : [1, 2]} colorMode={theme}
             onNodesChange={(changes) => {
+              // Keep ReactFlow measurements when rebuilding controlled nodes after a save.
+              if (changes.some((c) => c.type === 'dimensions')) setMeasured((before) => {
+                let next = before
+                for (const c of changes) if (c.type === 'dimensions' && c.dimensions && Number.isFinite(c.dimensions.width) && Number.isFinite(c.dimensions.height) && c.dimensions.width > 0 && c.dimensions.height > 0 && (next[c.id]?.width !== c.dimensions.width || next[c.id]?.height !== c.dimensions.height)) next = { ...next, [c.id]: c.dimensions }
+                return next
+              })
               let next = session.doc()
               const moved = applyNodeChanges(changes.filter((c) => c.type === 'position'), nodes)
               if (changes.some((c) => c.type === 'position')) { const pos = new Map(moved.map((n) => [n.id, n.position])); next = { ...next, nodes: next.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) }; change(next) }
@@ -489,7 +548,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
             isValidConnection={(c) => canConnect({ ...doc, edges: [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null, voices)] }, { ...c, targetHandle: c.targetHandle ?? '' }, models).ok}
             onMoveEnd={(e, viewport) => { if (e) change({ ...session.doc(), viewport }) }}
             onPaneClick={() => { setMenu(null); setSelected([]) }}
-            onKeyDown={(e) => { const el = e.target as HTMLElement; if (el.closest('input,textarea,select,button')) return; if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); if (selected.length) remove(selected); if (selectedEdges.length) void removeEdges(edges.filter((e) => selectedEdges.includes(e.id))) } if (e.key === 'Escape') { setMenu(null); setDock(null) } }}
+            onKeyDown={(e) => { const el = e.target as HTMLElement; if (el.closest('input,textarea,select,button,[role="listbox"]')) return; if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); if (selected.length) remove(selected); if (selectedEdges.length) void removeEdges(edges.filter((e) => selectedEdges.includes(e.id))) } if (e.key === 'Escape') { setMenu(null); setDock(null) } }}
             aria-label={t('canvas.flow.label')}>
             <Background gap={24} size={1} color={theme === 'light' ? '#d4d4d8' : '#292929'} /><MiniMap pannable zoomable /><ZoomBar />
           </ReactFlow>
@@ -505,7 +564,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
         </div>
         {dock && <aside className="fc-dock" aria-label={ff(dock)}><header><h2>{ff(dock)}</h2><button aria-label={ff('close')} onClick={() => setDock(null)}>×</button></header>
           {dock === 'inspect' && (picked ? <><h3>{ff(picked.type)}</h3>{picked.type === 'kit' && (kit ? <fieldset disabled={actions.readonly} className="fc-kit-management"><KitPanel clientId={clientId} kit={kit} selected={picked.data.kitItems ?? []} onKit={applyKit} onSelected={(ids) => { update(picked.id, { kitItems: ids }); for (const id of kitTargets(session.doc(), picked.id)) change(markStale(session.doc(), id, gens)) }} onClose={() => setDock(null)} /></fieldset> : <p>{ff('kitUnavailable')}</p>)}{['prompt', 'storyboard', 'video', 'voice'].includes(picked.type) && <NodeSettings node={picked} actions={actions} />}{picked.type === 'storyboard' && kit && doc.edges.some((e) => e.target === picked.id && e.targetHandle === 'in:kit') && <div className="fc-kit-picks"><h4>{ff('kit')}</h4>{kit.items.filter((item) => { const source = doc.edges.find((e) => e.target === picked.id && e.targetHandle === 'in:kit')?.source; return doc.nodes.find((n) => n.id === source)?.data.kitItems?.includes(item.id) }).map((item) => <label key={item.id}><input type="checkbox" checked={!picked.data.kitOff?.includes(item.id)} disabled={actions.readonly} onChange={(e) => update(picked.id, { kitOff: e.target.checked ? (picked.data.kitOff ?? []).filter((id) => id !== item.id) : [...(picked.data.kitOff ?? []), item.id] })} />{item.name}</label>)}<p>{legacyGenerationRequest(doc, picked.id, shots, gens, kit, models.find((m) => m.id === picked.data.model) ?? models.find((m) => m.kind === 'image')!).kitPreview}</p></div>}<h4>{ff('ports')}</h4>{PORTS_LABEL(picked)}{edges.filter((e) => e.target === picked.id).map((e) => <div className="fc-input-wire" key={e.id}><span>{ff(doc.nodes.find((n) => n.id === e.source)!.type)}</span><button disabled={actions.readonly} aria-label={ff('delete')} onClick={() => void removeEdges([e])}>×</button></div>)}{['storyboard', 'video', 'voice'].includes(picked.type) && <button className="fc-primary" disabled={actions.readonly || busy.has(picked.id)} onClick={() => void begin(picked.id)}>▶ {ff('run')}</button>}</> : <p>{ff('noSelection')}</p>)}
-          {dock === 'history' && <><div className="fc-wallet"><h3>{ff('budget')}</h3>{budget && Object.entries(budget).map(([k, b]) => <p key={k}><span>{ff(k as 'image' | 'video' | 'voice')}</span><b>{usd(Math.max(0, b.cap - b.spent))}</b></p>)}</div>{gens.length === 0 && <p>{ff('noHistory')}</p>}{[...gens].reverse().map((g) => <article className="fc-history" key={g.id}>{g.url && g.kind === 'image' && <img src={g.url} alt="" />}<strong>{g.model}</strong><span>{ff(g.status)} · {usd(g.actualUsd ?? g.estUsd)}</span>{g.status === 'done' && <button disabled={actions.readonly} onClick={() => void withBusy(g.nodeId, async () => { const knownVoices = await getVoices(resource); setVoices(mergeVoiceOwnership(session.doc(), knownVoices)); if (!await selectGeneration(g, selectionIO(knownVoices))) throw new Error(ff('saveFirst')); setSelected([g.nodeId]); await refresh() }, true)}>{ff('version')}</button>}{g.error && <p>{serverText(g.error)}</p>}</article>)}</>}
+          {dock === 'history' && <><div className="fc-wallet"><h3>{ff('budget')}</h3>{budget && Object.entries(budget).map(([k, b]) => <p key={k}><span>{ff(k as 'image' | 'video' | 'voice')}</span><b>{usd(Math.max(0, b.cap - b.spent))}</b></p>)}</div>{gens.length === 0 && <p>{ff('noHistory')}</p>}{[...gens].reverse().map((g) => <article className="fc-history" key={g.id}>{g.url && g.kind === 'image' && <img src={g.url} alt="" />}<strong>{g.model}</strong><span>{ff(g.status)} · {usd(g.actualUsd ?? g.estUsd)}</span>{g.status === 'done' && <button disabled={actions.readonly} aria-pressed={doc.nodes.find((n) => n.id === g.nodeId)?.data.selected === g.id} onClick={() => selectVersion(g)}>{ff('version')}</button>}{g.status === 'done' && <button disabled={actions.readonly} onClick={() => update(g.nodeId, reuseSettings(g))}>{ff('reuse')}</button>}{g.error && <p>{serverText(g.error)}</p>}</article>)}</>}
           {dock === 'assistant' && <><p>{ff(resource.kind === 'legacy-plan' ? 'assistantLegacyHint' : 'assistantHint')}</p>{resource.kind === 'legacy-plan' && <label>{ff('assistantShot')}<select aria-label={ff('assistantShot')} value={picked?.shotId ?? ''} disabled={actions.readonly || busy.has('assistant')} onChange={(e) => { const node = doc.nodes.find((n) => n.type === 'shot' && n.shotId === e.target.value); setSelected(node ? [node.id] : []) }}><option value="">{ff('assistantChooseShot')}</option>{assistantShots.map((s, i) => <option key={s.id} value={s.id}>{i + 1}. {s.line}</option>)}</select></label>}<button className="fc-primary" disabled={actions.readonly || busy.has('assistant') || !canAsk} onClick={() => void ask()}>{ff('preview')}</button>{plan && <div className="fc-agent-plan"><span className="fc-demo">{plan.source === 'demo' ? ff('demo') : `${ff('source')}: ${plan.source}`}</span>{'shotId' in plan && <h3>{ff('assistantShot')}: {shots.find((s) => s.id === plan.shotId)?.line}</h3>}<h3>{ff('storyboard')}</h3><p>{plan.storyboard.prompt}</p><small>{plan.storyboard.model}</small><h3>{ff('video')}</h3><p>{plan.video.prompt}</p><small>{plan.video.model} · {seconds(plan.video.duration)} · {usd(plan.planUsd)}</small><p>{ff(resource.kind === 'legacy-plan' ? 'assistantLegacyApply' : 'noAuto')}</p><button className="fc-primary" disabled={actions.readonly} onClick={applyAssistant}>{ff('apply')}</button></div>}</>}
         </aside>}
       </div>
@@ -514,7 +573,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
       {note && <div className="fc-notice" role="alert"><span>{note}</span><button aria-label={ff('close')} onClick={() => setNote('')}>×</button></div>}
       {recoveryOpen && <div className="fc-modal-back"><div className="fc-modal" role="dialog" aria-modal="true" aria-label={ff('recoverTitle')}><h2>{ff('recoverTitle')}</h2><p>{ff('recoverBody')}</p><footer><button onClick={() => { session.discard(); setRecoveryOpen(false) }}>{ff('discardDraft')}</button><button className="fc-primary" onClick={() => { session.restore(); setRecoveryOpen(false) }}>{ff('restoreDraft')}</button></footer></div></div>}
       {reloadAsk && <div className="fc-modal-back"><div className="fc-modal" role="dialog" aria-modal="true" aria-label={ff('unsavedTitle')}><h2>{ff('unsavedTitle')}</h2><p>{ff('unsavedBody')}</p><footer><button onClick={() => setReloadAsk(false)}>{ff('cancel')}</button><button onClick={() => void safeReload(true, true)}>{ff('discardDraft')}</button><button className="fc-primary" onClick={() => void safeReload(true)}>{ff('keepReload')}</button></footer></div></div>}
-      {quote && <div className="fc-modal-back"><div className="fc-modal" role="dialog" aria-modal="true" aria-label={ff('quote')}><h2>{ff('quote')}</h2><p>{models.find((m) => m.id === doc.nodes.find((n) => n.id === quote.id)?.data.model)?.label}</p><strong>{usd(quote.usd)}</strong><p>{ff('left')}: {quote.remaining === null ? '—' : usd(quote.remaining)}</p><footer><button onClick={() => { setQuote(null); runQueue.current = []; setRunAll(false) }}>{ff('cancel')}</button><button className="fc-primary" disabled={busy.has(quote.id)} onClick={() => void begin(quote.id, true)}>{ff('confirm')}</button></footer></div></div>}
+      {quote && <div className="fc-modal-back"><div className="fc-modal" role="dialog" aria-modal="true" aria-label={ff('quote')}><h2>{ff('quote')}</h2><p>{models.find((m) => m.id === doc.nodes.find((n) => n.id === quote.id)?.data.model)?.label}</p>{quotedOptions && <p>{quotedOptions.aspectRatio} · {quotedOptions.resolution ?? ff('modelDefault')} · ×{quotedOptions.count}</p>}<strong>{usd(quote.usd)}</strong><p>{ff('left')}: {quote.remaining === null ? '—' : usd(quote.remaining)}</p><footer><button onClick={() => { setQuote(null); runQueue.current = []; setRunAll(false) }}>{ff('cancel')}</button><button className="fc-primary" disabled={busy.has(quote.id)} onClick={() => void begin(quote.id, true)}>{ff('confirm')}</button></footer></div></div>}
       {link && <div className="fc-modal-back"><div className="fc-modal" role="dialog" aria-modal="true" aria-label={ff('share')}><h2>{ff('share')}</h2><input readOnly value={link} onFocus={(e) => e.target.select()} /><footer><button onClick={() => setLink('')}>{ff('close')}</button><button className="fc-primary" onClick={() => void navigator.clipboard.writeText(link).then(() => setCopied(true), (e) => setNote(e.message))}>{ff(copied ? 'copied' : 'copy')}</button></footer></div></div>}
     </div>
   </section>
