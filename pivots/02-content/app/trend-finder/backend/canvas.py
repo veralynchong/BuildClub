@@ -12,6 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+import analysis
 import generations
 import takes
 from models import Shot, fill_shot_ids
@@ -160,6 +161,7 @@ def make_router(db, load) -> APIRouter:
         with canvas_lock, db() as conn:
             version, doc = read(conn, idea_id)
             take_rows = takes.rows_of(conn, idea_id)
+            take_states = analysis.states(conn, idea_id)
             gen_rows = conn.execute(f"SELECT {generations.COLUMNS} FROM generations WHERE idea_id = ? "
                                     "ORDER BY created_at, rowid", (idea_id,)).fetchall()
             gens = [generations.to_json(r) for r in gen_rows]
@@ -169,7 +171,7 @@ def make_router(db, load) -> APIRouter:
             if new != doc:
                 version += 1
                 write(conn, idea_id, version, new)
-        return {"version": version, "doc": new, "generations": gens, "takes": [takes.to_json(r, i) for r, i in take_rows]}
+        return {"version": version, "doc": new, "generations": gens, "takes": [takes.to_json(r, i, take_states) for r, i in take_rows]}
 
     @router.put("/api/ideas/{idea_id}/canvas")
     async def put_canvas(idea_id: str, request: Request):

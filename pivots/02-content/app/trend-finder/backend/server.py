@@ -140,6 +140,8 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
 async def lifespan(_app):
     generations.recover(db, gen_jobs)
     renders.recover(db)  # a cut that was running when the server stopped will never finish
+    if takes.JOBS is not None:
+        takes.JOBS.resume()  # analyse takes that were queued at shutdown or never analysed
     editing.prewarm_bundle()  # builds the Remotion bundle in a background thread; never blocks startup
     yield
     editing.kill_active()  # no render outlives the server

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { Shot } from '../../types'
 import type { Generation } from '../../lib/canvas/types'
-import type { Take } from '../../lib/takes'
+import { listTakes, retryAnalysis, type Take } from '../../lib/takes'
 import { t } from '../../lib/i18n'
 import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import { sourceKey } from '../../lib/editor/timeline'
 import type { EditProject, SourceInfo } from '../../lib/editor/types'
+import { serverText } from '../../lib/serverText'
 import { ErrorText } from '../ErrorText'
 import type { ShotUpload } from '../../lib/editor/useShotUpload'
 import { clipLabel } from './clipName'
@@ -17,6 +18,8 @@ interface Props {
   error: string | null
   gens: Generation[]
   takes: Take[]
+  planId: string | null // the plan whose takes these are; null for a workspace
+  onTakes: (takes: Take[]) => void // the takes read again after a retry
   full: boolean // the reel is at its longest
   locked: boolean
   timeline: TimelineActions
@@ -27,12 +30,16 @@ interface Props {
 
 // The left column: each shot with its finished footage ("Shot 1 · v3", "Shot 2 · Take 1"). Putting one in the timeline
 // replaces the shot's one clip; the one already there shows so and selects its clip.
-export function ShotClips({ shots, project, sources, error, gens, takes, full, locked, timeline, selected, onSelect, uploads }: Props) {
+export function ShotClips({ shots, project, sources, error, gens, takes, planId, onTakes, full, locked, timeline, selected, onSelect, uploads }: Props) {
   const planned = shots.filter((s): s is Shot & { id: string } => !!s.id)
   const [dropOn, setDropOn] = useState<number | null>(null) // the shot a file is being dragged over
   const canUpload = !!uploads && !locked
   const take = (i: number, files: FileList | null) => {
     if (files && files.length) uploads?.upload(i, Array.from(files))
+  }
+  const retry = (takeId: string) => {
+    if (!planId) return
+    void retryAnalysis(planId, takeId).then(() => listTakes(planId)).then(onTakes).catch(() => undefined)
   }
   return (
     <section className="cv-ed-shots" aria-label={t('editor.shots.title')}>
@@ -74,6 +81,7 @@ export function ShotClips({ shots, project, sources, error, gens, takes, full, l
                         <span className="cv-ed-source-name">
                           {clipLabel(s, shots, gens, takes)} · {t('editor.clip.seconds', { sec: Math.round(s.duration * 10) / 10 })}
                         </span>
+                        <AnalysisChip take={s.kind === 'take' ? takes.find((x) => x.id === s.id) : undefined} onRetry={retry} locked={locked} />
                         {on ? (
                           <button type="button" className="cv-badge small cv-ed-on" onClick={() => clip && onSelect(clip.id)}>
                             {t('canvas.clip.on')}
@@ -119,4 +127,22 @@ export function ShotClips({ shots, project, sources, error, gens, takes, full, l
       </ol>
     </section>
   )
+}
+
+// "Analysing…" / "Ready" / "Couldn't analyse" for a take; the numbers it found show as a tooltip.
+function AnalysisChip({ take, onRetry, locked }: { take: Take | undefined; onRetry: (takeId: string) => void; locked: boolean }) {
+  const a = take?.analysis
+  if (!take || !a) return null
+  if (a.status === 'failed') {
+    return (
+      <span className="cv-ed-analysis" data-status="failed" title={a.error ? serverText(a.error) : undefined}>
+        <span role="status">{t('editor.analysis.failed')}</span>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={locked} onClick={() => onRetry(take.id)}>{t('editor.analysis.retry')}</button>
+      </span>
+    )
+  }
+  if (a.status !== 'done') return <span className="cv-ed-analysis" data-status="running" role="status">{t('editor.analysis.running')}</span>
+  const m = a.summary
+  const line = m ? t(m.speech === 'ok' ? 'editor.analysis.summary' : 'editor.analysis.summaryNoSpeech', { words: m.words, silences: m.silences, cuts: m.cuts }) : ''
+  return <span className="cv-ed-analysis" data-status="done" title={line} role="status">{t('editor.analysis.ready')}{line && <span className="muted">{line}</span>}</span>
 }

@@ -12,6 +12,7 @@ import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import type { EditHook } from '../../lib/editor/useEditProject'
 import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
+import { useTakeAnalysis } from '../../lib/editor/useTakeAnalysis'
 import { fillShotIds } from '../../lib/storyboard'
 import { addVoice, clipLength, clipStatus, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
@@ -101,6 +102,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const planId = typeof ideaId === 'string' ? ideaId : ideaId.kind === 'legacy-plan' ? ideaId.id : null // workspaces take no footage
   const uploads = useShotUpload(planId, footage.refresh, setFreshTakes)
   const allTakes = freshTakes ?? takes
+  useTakeAnalysis(planId, allTakes, setFreshTakes)
   // The canvas keeps its own list of takes; a take sent from here is not in it, so it would show as "Footage deleted".
   const timeline = useMemo<TimelineActions>(() => ({
     ...baseTimeline,
@@ -309,7 +311,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
       </header>
       <div className="cv-ed-main">
         <aside className="cv-ed-left">
-          <ShotClips uploads={uploads} shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={allTakes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
+          <ShotClips uploads={uploads} shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={allTakes} planId={planId} onTakes={setFreshTakes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
         </aside>
         <div className="cv-ed-centre">
           <div className="cv-ed-player">

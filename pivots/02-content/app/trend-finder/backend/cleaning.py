@@ -15,6 +15,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
+import analysis
 import cutting
 import takes
 from cutting import CutError
@@ -211,9 +212,14 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
                 new = (new_id, idea_id, old[2], "mp4", out.stat().st_size, old[5], 1, int(time.time() * 1000),
                        old[8], take_id)
                 conn.execute(f"INSERT INTO takes ({takes.COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new)
-                listed = [takes.to_json(r, i) for r, i in takes.rows_of(conn, idea_id)]
-                mine = takes.to_json(new, takes.current_index(new, ids))
+                rows = takes.rows_of(conn, idea_id)
             saved = True
+            if takes.JOBS is not None:
+                takes.JOBS.submit(idea_id, new_id)
+            with db() as conn:
+                states = analysis.states(conn, idea_id)
+            listed = [takes.to_json(r, i, states) for r, i in rows]
+            mine = takes.to_json(new, takes.current_index(new, ids), states)
             return JSONResponse({"take": mine, "takes": listed, **result}, status_code=201)
         finally:
             shutil.rmtree(work, ignore_errors=True)
