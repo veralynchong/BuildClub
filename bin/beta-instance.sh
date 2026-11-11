@@ -16,7 +16,8 @@ TF=pivots/02-content/app/trend-finder
 home="${BETA_HOME:-$HOME/beta}"
 agents="${BETA_LAUNCHAGENTS:-$HOME/Library/LaunchAgents}"
 source_env="${BETA_SOURCE_ENV:-/Users/tommy/Desktop/BuildClub/$TF/.env}"
-venv="${TF_VENV:-/Users/tommy/Desktop/BuildClub/$TF/backend/.venv}"
+# Not under ~/Desktop: macOS privacy protection blocks a launchd job from reading it, and uvicorn hangs at start.
+venv="${TF_VENV:-/Users/tommy/orca/workspaces/BuildClub/lunch/$TF/backend/.venv}"
 dist_src="${BETA_DIST:-$TF/dist}"
 cloudflared="${CLOUDFLARED:-/opt/homebrew/bin/cloudflared}"
 script="$(pwd)/bin/beta-instance.sh"
@@ -99,6 +100,8 @@ EOF
 
 load_agent() { # load_agent <plist file> <label>
   lc bootout "gui/$uid_/$2" 2>/dev/null || true
+  # bootout returns before the job is gone; bootstrap fails with an I/O error until it is.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do lc print "gui/$uid_/$2" >/dev/null 2>&1 || break; sleep 0.5; done
   lc bootstrap "gui/$uid_" "$1"
 }
 
