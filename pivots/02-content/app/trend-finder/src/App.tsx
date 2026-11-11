@@ -366,7 +366,7 @@ export default function App() {
           }
         }
         const sampleIds = new Set(sampleIdeas.map((i) => i.id))
-        const local = ideasNow.current.filter((i) => !sampleIds.has(i.id))
+        const local = ideasNow.current.filter((i) => i.savedInLive === true || !sampleIds.has(i.id))
         const pick = pickInitialIdeas(loadedIdeas.items, local, wasMigrated())
         let rev = loadedIdeas.rev
         let held = loadedIdeas.items ?? []
@@ -892,9 +892,9 @@ export default function App() {
     setToRecord(null)
   }, [toRecord, results, account, setSearchRuns])
 
-  // Live mode shows only ideas saved from real videos; sample mode only sample ones. Videos added to Research
-  // by link are the team's own, so their plans show in both.
-  const shownIdeas = ideas.filter((i) => Boolean(videoById.get(i.videoId)?.live) === live || i.videoId.startsWith('link-'))
+  // Explicitly saved sample plans, like videos added by link, can show in both modes.
+  // The per-plan flag keeps other clients' built-in examples isolated even when the video is shared.
+  const shownIdeas = ideas.filter((i) => Boolean(videoById.get(i.videoId)?.live) === live || i.videoId.startsWith('link-') || (live && synced && i.savedInLive === true))
 
   const chipGroups = buildChipGroups({
     client,
@@ -959,18 +959,33 @@ export default function App() {
 
   // Makes the plan for a video (Still planning), or returns the one it already has. `format` is for a video
   // added in the same click (not in formatById yet). `dueDate` defaults to two weeks from today.
-  const saveIdea = (videoId: string, format?: Format, dueDate?: string): SavedIdea => {
+  const saveIdea = (videoId: string, format?: Format, dueDate?: string, clientId = client.id): SavedIdea => {
     breakDown(videoId)
-    const existing = ideas.find((i) => i.videoId === videoId && i.clientId === client.id)
-    if (existing) return existing
-    const f = format ?? formatById.get(videoById.get(videoId)!.formatId)!
+    const existing = ideas.find((i) => i.videoId === videoId && i.clientId === clientId)
+    const v = videoById.get(videoId)
+    const f = format ?? formatById.get(v?.formatId ?? '')
+    const savedInLive = live && !!v && !v.live
+    if (savedInLive) {
+      // Preserve the original reference and breakdown for reloads and other browsers.
+      setLiveStore((prev) => ({
+        videos: prev.videos.some((x) => x.id === v.id) ? prev.videos : [...prev.videos, v],
+        formats: !f || prev.formats.some((x) => x.id === f.id) ? prev.formats : [...prev.formats, f],
+      }))
+    }
+    if (existing) {
+      if (!savedInLive || existing.savedInLive) return existing
+      const picked = { ...existing, savedInLive: true }
+      setIdeas((prev) => prev.map((i) => (i.id === existing.id ? { ...i, savedInLive: true } : i)))
+      return picked
+    }
     const idea: SavedIdea = {
-      id: `${client.id}-${videoId}`,
+      ...(savedInLive ? { savedInLive: true } : {}),
+      id: `${clientId}-${videoId}`,
       videoId,
-      clientId: client.id,
+      clientId,
       status: 'saved',
       dueDate: dueDate ?? inTwoWeeks(),
-      notes: f.editorNotes,
+      notes: f!.editorNotes,
     }
     setIdeas((prev) => [...prev, idea])
     return idea
@@ -1065,7 +1080,7 @@ export default function App() {
 
   const openPlan = (ideaId: string) => {
     const idea = ideas.find((i) => i.id === ideaId)
-    if (idea) breakDown(idea.videoId)
+    if (idea) saveIdea(idea.videoId, undefined, undefined, idea.clientId)
     setPlanFrom(view)
     setPlanIdeaId(ideaId)
     setView('plan')
@@ -1152,7 +1167,7 @@ export default function App() {
     const stillPlanning = (i: SavedIdea) => i.status === 'saved' || i.status === 'rejected'
     const plan = planOf(row, ideas)
     if (pick === 'picked') {
-      if (plan) return
+      if (plan) return planRow(rowId, false)
       // The same video's earlier pick steps down to Backup, and its plan goes.
       const before = row.slotId
         ? research.filter((e) => e.clientId === row.clientId && e.slotId === row.slotId && e.id !== row.id && planOf(e, ideas))
@@ -1648,7 +1663,7 @@ export default function App() {
             <ResearchScreen
               client={client}
               entries={myResearch}
-              statusOf={(e) => researchStatus(e, ideas)}
+              statusOf={(e) => researchStatus(e, shownIdeas)}
               onUpdate={(id, patch) => setResearch((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))}
               onRemove={removeResearch}
               onPick={pickRow}
@@ -1672,7 +1687,7 @@ export default function App() {
               onFindIdeas={() => navTo('search')}
               platforms={SEARCH_PLATFORMS}
               slots={researchSlots.filter((s) => s.clientId === client.id).sort((a, b) => a.number - b.number)}
-              summaryOf={(slot) => slotSummary(slot, research, ideas)}
+              summaryOf={(slot) => slotSummary(slot, research, shownIdeas)}
               onCreateSlot={({ number, topic, dueDate, refs }) => {
                 const slot = newSlot(client.id, researchSlots, topic, dueDate, Date.now(), number)
                 setResearchSlots((prev) => [...prev, slot])

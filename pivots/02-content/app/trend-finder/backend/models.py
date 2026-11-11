@@ -161,6 +161,8 @@ class Decision(BaseModel):
 
 
 class SavedIdea(BaseModel):
+    # Per-plan explicit save in live mode, not the reference video's source.
+    savedInLive: Optional[bool] = None
     id: str
     videoId: str
     clientId: str

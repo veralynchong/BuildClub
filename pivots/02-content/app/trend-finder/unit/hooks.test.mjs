@@ -90,3 +90,11 @@ test('withHookOptions: the writer answer becomes shot 1 options and the picked l
   assert.equal(withHookOptions(shots, { options: [] }), shots)
   assert.deepEqual(withHookOptions([], { line: 'A' }), [])
 })
+
+test('captionless TikTok keeps its brand casing in subjects and sample openings', () => {
+  const f = format({ short: 'TikTok video', name: 'TikTok video' })
+  const v = { hook: 'TikTok video' }
+  assert.equal(subjectOf(f, v), 'TikTok video')
+  assert.equal(inLang('en', () => sampleHooks(f, v, client, 1))[0], 'Did you know TikTok video could look like this?')
+  assert.equal(subjectOf(format({ short: 'TikTok recipes' }), video), 'TikTok recipes')
+})

@@ -218,6 +218,8 @@ export interface Decision {
 export type Stage = 'approved' | 'filming' | 'editing' | 'posted'
 
 export interface SavedIdea {
+  // Explicitly saved in live mode; does not change the reference video's source.
+  savedInLive?: boolean
   id: string
   videoId: string
   clientId: string
