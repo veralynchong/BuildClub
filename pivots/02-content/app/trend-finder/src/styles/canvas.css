@@ -622,3 +622,8 @@
 .fc-history-controls{justify-content:center;padding:6px}.fc-history-controls button{min-width:28px}
 .fc-batch{display:flex;flex-wrap:wrap;gap:5px;padding:8px;font-size:10px}.fc-batch strong{width:100%;font-weight:500}
 .fc-settings .cv-picker{width:100%;position:relative}.fc-settings .cv-model-list{position:static;min-width:0;width:100%;z-index:20;max-height:260px;overflow:auto}
+
+.fc-version-list { display:flex; flex-direction:column; gap:12px; padding:12px; border-top:1px solid var(--fc-line); }
+.fc-version { margin:0; border:1px solid var(--fc-line); border-radius:10px; overflow:hidden; }
+.fc-version figcaption { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; font-size:12px; color:var(--fc-muted); }
+.fc-version figcaption button { border:1px solid var(--fc-line); border-radius:6px; padding:5px 8px; background:var(--fc-panel); color:var(--fc-fg); cursor:pointer; }

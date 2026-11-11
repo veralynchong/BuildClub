@@ -1,6 +1,7 @@
 import { getActiveLang } from '../i18n.ts'
 
 const words = {
+  arrangeShots: ['Arrange shots', '排列鏡頭'], versions: ['Other versions', '其他版本'], versionLabel: ['Version', '版本'],
   estimate: ['Estimate', '預估'],
   ratio: ['Ratio', '比例'], size: ['Size', '尺寸'], count: ['Count', '張數'], modelDefault: ['Model default', '模型預設'],
   refsUnsupported: ['This model cannot use the connected references. Remove their connections first.', '此模型不支援已連接的參考圖片，請先移除連線。'], tooManyRefs: ['Connected references exceed this model’s limit', '已連接的參考圖片超過模型上限'], startUnsupported: ['This model cannot use the connected start frame.', '此模型不支援已連接的起始畫面。'],

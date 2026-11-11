@@ -1,5 +1,15 @@
 # STATUS
 
+## 2026-11-06：獨立六鏡逐步 Demo Canvas
+
+- 本 worktree `feat/six-shot-demo-canvas @ 2c069a8`，未 commit／push；依使用者授權以 `/tmp/buildclub-guided-demo/six-shot-canvas-baseline` 的428檔白名單快照逐檔SHA核對後起步。未修改原session、共享交接、8991／18991。
+- 六鏡改編資料、腳本、Prompt與Editor一致；原21鏡分析及3段來源引用保留。Canvas初始只有6張Shot，由左至右，Next逐步加入Prompt、連線與Image；首2鏡有詳細Prompt／History，後4鏡快速同流程；原生Run回放不同的S01/S03/S11/S12/S19/S20，queued/running/done且完成前Next鎖住。圖片是原片衍生分鏡，不是新AI；沒有6支新AI影片，既有下載stale且不含草稿修改。
+- 2026-11-06親跑 `bash bin/verify.sh full` GREEN：1109 passed、2 skipped（51.43s），frontend PASS；隔離build/lint exit0。既有無參數verify shell問題保留，使用明確full參數。
+- 真1440×900完整UI 38.68s VP9錄影PASS：29卡／Ever Green hero、6張初始卡、6次不同素材Run、History、reload／Previous、原Editor6段靜音時間軸與stale結果面板；pageerrors=[]，實際network writes=0。另UI通過shoot Skip後reload／Previous、reset清除輸出／恢復6shot、正式local/session與兄弟namespace不變。獨立唯讀review已通過。
+- 證據、逐檔before/after SHA、相對baseline patch與完整變更清單：`/tmp/buildclub-guided-demo/six-shot-canvas/`；錄影 `/Volumes/Huang T7/playwright-mcp/six-shot-canvas/success/`。自有8993靜態預覽及MacBook18993轉接保留供使用者查看，測試browser/context已關。未安裝／付費／外部傳訊。
+- 下一步：使用者查看獨立預覽；29卡正式發布仍由原session負責，本session不覆寫stable。沒有清除worktrees。
+
+
 ## 2026-11-05：交付隊友的統一分支（本輪最新）
 
 - 分支 `feat/demo-team-handoff`，目標 remote 為 `origin`（veralynchong/BuildClub）；使用者已明確授權 commit／push，main 合併由隊友執行。此處紀錄準備交付的本機快照，push 結果以 Git remote 核對為準。

@@ -65,7 +65,8 @@ function TikTokVideo({ video, src, control }: { video: Video; src: string; contr
   )
 }
 
-export function BestVideo({ video, onOpen, control }: { video: Video; onOpen?: () => void; control?: MutableRefObject<PlayerControl | null> }) {
+export function BestVideo({ video, onOpen, control, localPlayback }: { video: Video; onOpen?: () => void; control?: MutableRefObject<PlayerControl | null>; localPlayback?: string }) {
+  if (localPlayback) return <div className="best-video"><video src={localPlayback} controls playsInline preload="metadata" aria-label="Prepared reference video" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
   const src = embedSrc(video)
   if (src && video.platform === 'tiktok') return <TikTokVideo video={video} src={src} control={control} />
   if (src) {
