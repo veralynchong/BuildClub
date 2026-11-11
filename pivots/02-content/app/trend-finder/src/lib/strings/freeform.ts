@@ -1,6 +1,12 @@
 import { getActiveLang } from '../i18n.ts'
 
 const words = {
+  nextRunSettings: ['Edit these settings for your next generation.', '編輯下次生成使用的設定。'],
+  shotView: ['Shot view', '單鏡工作區'], fullCanvas: ['Full canvas', '完整畫布'], canvasView: ['Canvas view', '畫布檢視'], shotNavigation: ['Shot navigation', '鏡頭導覽'],
+  previousShot: ['Previous shot', '上一鏡'], nextShot: ['Next shot', '下一鏡'], shotReferences: ['References', '參考素材'], shotImages: ['AI images', 'AI 圖片'], shotVideos: ['Videos', '影片'],
+  noShotAssets: ['No result yet. Open settings to prepare this shot.', '尚無結果，請開啟設定準備此鏡頭。'], previewVersion: ['Preview version', '預覽版本'], expandPreview: ['Expand preview', '放大預覽'],
+  inEdit: ['In edit', '已放入剪輯'], storyboardChoice: ['Storyboard image', '分鏡選用圖'], nodeChoice: ['Current output', '目前輸出'], addImage: ['Add image generator', '新增圖片生成器'], addVideo: ['Add video generator', '新增影片生成器'],
+  arrangeShots: ['Arrange shots', '排列鏡頭'], versions: ['Other versions', '其他版本'], versionLabel: ['Version', '版本'],
   estimate: ['Estimate', '預估'],
   ratio: ['Ratio', '比例'], size: ['Size', '尺寸'], count: ['Count', '張數'], modelDefault: ['Model default', '模型預設'],
   refsUnsupported: ['This model cannot use the connected references. Remove their connections first.', '此模型不支援已連接的參考圖片，請先移除連線。'], tooManyRefs: ['Connected references exceed this model’s limit', '已連接的參考圖片超過模型上限'], startUnsupported: ['This model cannot use the connected start frame.', '此模型不支援已連接的起始畫面。'],

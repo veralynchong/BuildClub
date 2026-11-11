@@ -59,23 +59,25 @@ function handler(node, scope) {
   const code = ts.transpileModule(`const callback = ${node.getText(source)}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
   return new Function(...Object.keys(scope), `${code}; return callback`)(...Object.values(scope))
 }
-function componentAdds() {
-  let doc = { nodes: [], edges: [] }
+function componentAdds(options = {}) {
+  let doc = options.doc ?? { nodes: [], edges: [] }
   let menu = null
+  let note = null
   const connections = []
   const scope = {
     readOnly: false, stale: false, quote: null,
+    resource: { kind: 'workspace' }, selected: [], shots: [], ...options,
     flowBox: { current: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000 }) } },
     screenToFlowPosition: ({ x, y }) => ({ x: (x - 80) / 2, y: (y - 40) / 2 }),
     getNode: () => undefined, toolbarPosition, createNode, compatibleKinds,
     session: { doc: () => doc }, change: (next) => { doc = next },
     setSelected: () => {}, setSearch: () => {}, setMenu: (next) => { menu = next },
     connect: async (connection) => { connections.push(connection) },
-    drag: { current: null }, setNote: () => {}, ff: (key) => key,
+    drag: { current: null }, setNote: (next) => { note = next }, ff: (key) => key,
   }
   scope.add = handler(arrow('add'), scope)
   return {
-    doc: () => doc, connections,
+    doc: () => doc, connections, note: () => note,
     plus: () => handler(clicks(rail)[0], { ...scope, menu })(),
     choose: (k) => handler(menuClick, { ...scope, menu, k })(),
     icon: (k) => handler(clicks(rail).find((n) => n.getText(source) === '() => add(k)'), { ...scope, k })(),
@@ -105,4 +107,51 @@ test('actual drag-to-empty menu preserves transformed drop position and auto-con
   assert.deepEqual(image.position, { x: 440, y: 280 })
   assert.deepEqual(app.doc().nodes[0], prompt)
   assert.deepEqual(app.connections, [{ source: prompt.id, sourceHandle: 'out', target: image.id, targetHandle: 'in:text' }])
+})
+
+const legacyDoc = () => ({ nodes: [
+  { id: 'shot-2', type: 'shot', shotId: 's2', position: { x: 0, y: 0 }, data: {} },
+  { id: 'image-2', type: 'storyboard', shotId: 's2', position: { x: 400, y: 0 }, data: {} },
+], edges: [] })
+
+test('legacy toolbar video inherits the single selected shot without adding an edge', () => {
+  for (const selected of [['shot-2'], ['image-2']]) {
+    for (const menu of [false, true]) {
+      const app = componentAdds({ resource: { kind: 'legacy-plan' }, doc: legacyDoc(),
+        shots: [{ id: 's2' }], selected })
+      if (menu) { app.plus(); app.choose('video') } else app.icon('video')
+      assert.equal(app.doc().nodes.length, 3)
+      assert.equal(app.doc().nodes.at(-1).shotId, 's2')
+      assert.deepEqual(app.doc().edges, [])
+      assert.deepEqual(app.connections, [])
+    }
+  }
+})
+
+test('legacy video rejects missing, ambiguous, stale or removed shot selection', () => {
+  for (const options of [
+    { selected: [] }, { selected: ['shot-2', 'image-2'] }, { selected: ['missing'] },
+    { selected: ['image-2'], shots: [] },
+    { selected: ['image-2'], doc: { nodes: [legacyDoc().nodes[1]], edges: [] } },
+    { selected: ['image-2'], doc: { nodes: legacyDoc().nodes.map((n) =>
+      n.type === 'shot' ? { ...n, data: { removed: true } } : n), edges: [] } },
+  ]) {
+    const app = componentAdds({ resource: { kind: 'legacy-plan' }, doc: legacyDoc(),
+      shots: [{ id: 's2' }], ...options })
+    const before = structuredClone(app.doc())
+    app.icon('video')
+    assert.deepEqual(app.doc(), before)
+    assert.equal(app.note(), 'assistantChooseShot')
+    assert.deepEqual(app.connections, [])
+  }
+})
+
+test('legacy explicit source keeps shot inheritance and exactly one intended connection', () => {
+  const app = componentAdds({ resource: { kind: 'legacy-plan' }, doc: legacyDoc(),
+    shots: [{ id: 's2' }], selected: [] })
+  app.drop('image-2', { clientX: 960, clientY: 600 })
+  app.choose('video')
+  assert.equal(app.doc().nodes.at(-1).shotId, 's2')
+  assert.equal(app.connections.length, 1)
+  assert.equal(app.connections[0].source, 'image-2')
 })

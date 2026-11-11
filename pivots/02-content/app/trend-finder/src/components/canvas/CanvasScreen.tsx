@@ -12,11 +12,14 @@ import { KitPanel } from './KitPanel'
 import { mergeVoiceOwnership } from '../../lib/canvas/voices'
 import { createOperationQueue, prepareCanvasLeave } from '../../lib/canvas/operations'
 import { createCanvasSession, draftStore, reconcileGenerations, selectGeneration, rememberGeneration, rememberBatch } from '../../lib/canvas/session'
-import { genRequest, markStale, staleIds, priceOf, selectedGen, imageEstimate, normalizeImageSettings, modelRefusal, referenceEdge, reuseSettings } from '../../lib/canvas/graph'
+import { genRequest, markStale, staleIds, priceOf, selectedGen, imageEstimate, normalizeImageSettings, modelRefusal, referenceEdge, reuseSettings, successfulVersions } from '../../lib/canvas/graph'
 import { askAgent, applyAgentPlan, type AgentPlan } from '../../lib/canvas/agent'
 import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
 import { apiBase } from '../../lib/canvas/resource'
+import { useStored } from '../../state'
+import { ShotWorkspace } from './ShotWorkspace'
 import { toolbarPosition } from '../../lib/canvas/placement'
+import { arrangeShots, initialShotLayout } from '../../lib/canvas/shotLayout'
 import { applyPromptPlan, connectedPrompt, generationOrder, createNode, duplicateNode, editorEdges, removeEditorSource, type PromptPlan } from '../../lib/canvas/freeform'
 import { ff, usd, seconds } from '../../lib/strings/freeform'
 import { t } from '../../lib/i18n'
@@ -80,6 +83,12 @@ function canvasTheme(): 'dark' | 'light' {
 }
 function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName, onBack, openEditor = false, fullscreen, onFullscreen, reload }: Props & { initial: CanvasState; reload: () => void }) {
   const { resource, shots, readOnly, clientId, title } = context
+  const activeShots = shots.filter((shot) => shot.id && initial.doc.nodes.some((n) => n.type === 'shot' && n.shotId === shot.id && !n.data.removed))
+  const focusKey = `remake.canvas.focus:${resource.kind}:${resource.id}`
+  const [storedView, setStoredView] = useStored<'shot' | 'canvas'>(`${focusKey}:view`, 'shot')
+  const [focusedShot, setFocusedShot] = useStored<string>(`${focusKey}:shot`, activeShots[0]?.id ?? '')
+  const shotView = resource.kind === 'legacy-plan' && activeShots.length > 0 && storedView !== 'canvas'
+  const focusedShotId = activeShots.some((shot) => shot.id === focusedShot) ? focusedShot : activeShots[0]?.id ?? ''
   const [theme, setTheme] = useState(canvasTheme)
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -136,13 +145,31 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   const abort = useRef(new AbortController())
   const drag = useRef<string | null>(null)
   const flowBox = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition, fitView, getNode } = useReactFlow()
+  const { screenToFlowPosition, fitView, getNode, setViewport } = useReactFlow()
   const edit = useEditProject(resource, readOnly)
   const sources = useSources(resource, JSON.stringify(gens.map((g) => [g.id, g.status])))
   const timeline = useTimelineActions({ freeform: resource.kind === 'workspace', edit, sources, shots, doc, gens, takes, readOnly: readOnly || stale, onPlaced: () => {}, notify: (key) => setNote(t(key)) })
   const change = useCallback((next: CanvasDoc) => {
     if (!readOnly && !recoveryOpen) session.change(next)
   }, [readOnly, session, recoveryOpen])
+  const layoutSizes = useMemo(() => new Map(doc.nodes.map((n) => [n.id, {
+    width: Math.max(350, measured[n.id]?.width ?? 0),
+    height: Math.max(n.type === 'shot' ? 200 : 720 + 280 * Math.max(0, successfulVersions(n.id, gens).length - 1), measured[n.id]?.height ?? 0),
+  }])), [doc.nodes, gens, measured])
+  const arrange = () => {
+    const viewport = { x: 80, y: 32, zoom: 0.6 }
+    change({ ...arrangeShots(session.doc(), shots, layoutSizes), viewport })
+    void setViewport(viewport)
+  }
+  useEffect(() => {
+    if (resource.kind !== 'legacy-plan' || readOnly || stale || recoveryOpen || busy.size || quote) return
+    const imported = initialShotLayout(doc, shots)
+    if (shotView ? !imported : !doc.nodes.every((n) => measured[n.id])) return
+    if (doc.layout !== 'shots-horizontal' && !imported) return
+    const next = arrangeShots(doc, shots, layoutSizes)
+    if (next !== doc) change(next)
+    if (imported) void setViewport({ x: 80, y: 32, zoom: 0.6 })
+  }, [resource.kind, readOnly, stale, recoveryOpen, busy.size, quote, doc, shots, layoutSizes, measured, change, setViewport, shotView])
   const flush = useCallback(() => readOnly || !mounted.current ? Promise.resolve(false) : session.flush(), [session, readOnly])
   useEffect(() => { if (doc === session.saved() || readOnly || recoveryOpen) return; const timer = setTimeout(() => void flush(), 650); return () => clearTimeout(timer) }, [doc, flush, readOnly, session, recoveryOpen])
   useEffect(() => { mounted.current = true; abort.current = new AbortController(); return () => { mounted.current = false; abort.current.abort(); session.keepDraft() } }, [session])
@@ -347,10 +374,18 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   }, true)
   const add = (kind: NodeKind, at?: { x: number; y: number }, from?: string) => {
     if (readOnly || stale || quote) return
+    let shotId = from ? session.doc().nodes.find((n) => n.id === from)?.shotId : undefined
+    if (resource.kind === 'legacy-plan' && kind === 'video') {
+      if (!from && selected.length === 1) shotId = session.doc().nodes.find((n) => n.id === selected[0])?.shotId
+      if (!shotId || !shots.some((s) => s.id === shotId) || !session.doc().nodes.some((n) => n.type === 'shot' && n.shotId === shotId && !n.data.removed)) {
+        setNote(ff('assistantChooseShot'))
+        return
+      }
+    }
     const rect = flowBox.current?.getBoundingClientRect()
     const preferred = screenToFlowPosition({ x: (rect?.left ?? 0) + (rect?.width ?? 900) / 2 - 160, y: (rect?.top ?? 0) + 160 })
     const center = toolbarPosition(session.doc().nodes.map((n) => ({ position: n.position, measured: getNode(n.id)?.measured })), preferred, at)
-    const next = createNode(session.doc(), kind, center, from ? session.doc().nodes.find((n) => n.id === from)?.shotId : undefined)
+    const next = createNode(session.doc(), kind, center, shotId)
     const n = kind === 'editor' ? next.nodes.find((n) => n.type === 'editor')! : next.nodes[next.nodes.length - 1]!
     change(next); setSelected([n.id]); setMenu(null)
     if (from) { const opt = compatibleKinds(next, from).find((o) => o.kind === kind); if (opt) void connect({ source: from, sourceHandle: 'out', target: n.id, targetHandle: opt.handle }) }
@@ -410,7 +445,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     const knownVoices = await getVoices(resource)
     setVoices(mergeVoiceOwnership(session.doc(), knownVoices))
     if (!await selectGeneration(g, selectionIO(knownVoices))) throw new Error(ff('saveFirst'))
-    setSelected([g.nodeId]); await refresh()
+    setSelected([g.nodeId]); const selectedShot = session.doc().nodes.find((n) => n.id === g.nodeId)?.shotId; if (shotView && selectedShot && activeShots.some((s) => s.id === selectedShot)) setFocusedShot(selectedShot); await refresh()
   }, true)
   const addReference = (source: string, target: string) => {
     const edge = referenceEdge(source, target, session.doc().nodes.find((n) => n.id === source)?.type === 'kit')
@@ -424,7 +459,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     const targetNode = session.doc().nodes.find((n) => n.id === target)
     if (!targetNode) return
     const model = models.find((m) => m.id === targetNode.data.model)
-    const next = createNode(session.doc(), 'upload', { x: targetNode.position.x - 420, y: targetNode.position.y })
+    const next = createNode(session.doc(), 'upload', { x: targetNode.position.x - 420, y: targetNode.position.y }, session.doc().layout === 'shots-horizontal' ? targetNode.shotId : undefined)
     const source = next.nodes[next.nodes.length - 1]
     source.data.media = 'image'
     const edge = referenceEdge(source.id, target, false)
@@ -450,7 +485,8 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     inspect: (id) => { setSelected([id]); setDock('inspect') }, openEditor: () => setEditing(true),
     connect: (id) => { const rect = flowBox.current!.getBoundingClientRect(); setMenu({ x: rect.width / 2, y: 150, from: id, at: screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + 150 }) }) },
   }
-  const nodes: FreeNode[] = useMemo(() => doc.nodes.map((node) => ({ id: node.id, type: 'freeform', position: node.position, data: { node }, selected: selected.includes(node.id), measured: measured[node.id], deletable: node.type !== 'shot' })), [doc.nodes, selected, measured])
+  const displayedDoc = useMemo(() => readOnly && (doc.layout === 'shots-horizontal' || initialShotLayout(doc, shots)) ? arrangeShots(doc, shots, layoutSizes) : doc, [doc, shots, layoutSizes, readOnly])
+  const nodes: FreeNode[] = useMemo(() => displayedDoc.nodes.map((node) => ({ id: node.id, type: 'freeform', position: node.position, data: { node }, selected: selected.includes(node.id), measured: measured[node.id], deletable: node.type !== 'shot' })), [displayedDoc.nodes, selected, measured])
   const edges = [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null, voices)].map((e) => ({ ...e, selected: selectedEdges.includes(e.id), className: `fc-edge media-${doc.nodes.find((n) => n.id === e.source)?.type === 'voice' ? 'audio' : 'image'}` }))
   const picked = doc.nodes.find((n) => selected.length === 1 && n.id === selected[0])
   const quotedNode = doc.nodes.find((n) => n.id === quote?.id)
@@ -515,17 +551,22 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
       <header className="fc-top"><button className="fc-back" aria-label={ff('back')} onClick={() => void back()}>‹</button><div className="fc-crumb"><span className="fc-project-dot" />{clientName}<span>›</span><strong>{title}</strong></div><div className="fc-top-actions">
         <button aria-label={ff('reload')} onClick={() => void safeReload()}>↻</button>
         <button className={save === 'failed' ? 'fc-error-button' : 'fc-save'} onClick={() => void flush()}>{ff(save === 'saving' ? 'saving' : save === 'failed' ? 'failedSave' : 'saved')}</button>
+        {resource.kind === 'legacy-plan' && activeShots.length > 0 && <div className="fc-view-switch" role="group" aria-label={ff('canvasView')}>
+          <button type="button" aria-pressed={shotView} onClick={() => { setStoredView('shot'); setDock(null); setMenu(null) }}>{ff('shotView')}</button>
+          <button type="button" aria-pressed={!shotView} onClick={() => { setStoredView('canvas'); setDock(null); setMenu(null) }}>{ff('fullCanvas')}</button>
+        </div>}
+        {resource.kind === 'legacy-plan' && !shotView && <button disabled={actions.readonly || !!busy.size} onClick={arrange}>↔ {ff('arrangeShots')}</button>}
         {!readOnly && <button disabled={stale || (!!busy.size && !runAll) || !!quote} onClick={runAll ? () => { runQueue.current = []; setRunAll(false) } : runGraph}>{ff(runAll ? 'stop' : 'runAll')}</button>}
-        <button className={dock === 'assistant' ? 'is-active' : ''} onClick={() => setDock(dock === 'assistant' ? null : 'assistant')}>✧ {ff('assistant')}</button>
+        <button className={dock === 'assistant' ? 'is-active' : ''} onClick={() => { if (shotView && dock !== 'assistant') { const node = doc.nodes.find((n) => n.type === 'shot' && n.shotId === focusedShotId); setSelected(node ? [node.id] : []) } setDock(dock === 'assistant' ? null : 'assistant') }}>✧ {ff('assistant')}</button>
         <button className={dock === 'history' ? 'is-active' : ''} onClick={() => setDock(dock === 'history' ? null : 'history')}>◷ {ff('history')}</button>
         <button onClick={() => void withBusy('link', async () => { setLink((await createShareLink(clientId)).url) })}>↗ {ff('share')}</button>
         <button aria-label={fullscreen ? t('canvas.toolbar.exitFull') : t('canvas.toolbar.full')} onClick={() => onFullscreen(!fullscreen)}>⛶</button>
       </div></header>
       <FreeformContext.Provider value={actions}>
       <div className="fc-scene">
-        <div className="fc-flow" ref={flowBox}>
+        {shotView ? <ShotWorkspace shots={activeShots} activeId={focusedShotId} onSelect={(id) => { setFocusedShot(id); setSelected([]); setDock(null) }} onAdd={(kind, from) => add(kind, undefined, from)} /> : <div className="fc-flow" ref={flowBox}>
           <ReactFlow<FreeNode> nodes={nodes} edges={edges} nodeTypes={freeformNodeTypes}
-            defaultViewport={doc.viewport ?? { x: 0, y: 0, zoom: 1 }} minZoom={0.15} maxZoom={2}
+            defaultViewport={doc.viewport ?? { x: 0, y: 0, zoom: 1 }} minZoom={0.03} maxZoom={2}
             nodesDraggable={!actions.readonly} nodesConnectable={!actions.readonly} deleteKeyCode={null}
             selectionOnDrag={!pan} panOnDrag={pan ? true : [1, 2]} colorMode={theme}
             onNodesChange={(changes) => {
@@ -537,7 +578,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
               })
               let next = session.doc()
               const moved = applyNodeChanges(changes.filter((c) => c.type === 'position'), nodes)
-              if (changes.some((c) => c.type === 'position')) { const pos = new Map(moved.map((n) => [n.id, n.position])); next = { ...next, nodes: next.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) }; change(next) }
+              if (changes.some((c) => c.type === 'position')) { const pos = new Map(moved.map((n) => [n.id, n.position])); next = { ...next, layout: undefined, nodes: next.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) }; change(next) }
               const selects = changes.filter((c) => c.type === 'select')
               if (selects.length) setSelected((before) => { const ids = new Set(before); for (const c of selects) { if (c.selected) ids.add(c.id); else ids.delete(c.id) }; return [...ids] })
             }}
@@ -561,11 +602,11 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
           {selected.length > 1 && <div className="fc-multi"><span>{selected.length}</span><button disabled={actions.readonly} onClick={() => remove(selected)}>⌫ {ff('delete')}</button><button onClick={() => void fitView({ nodes: selected.map((id) => ({ id })), padding: 0.4 })}>⤢</button></div>}
           {menu && <div className="fc-create-menu" style={{ left: Math.min(menu.x, (flowBox.current?.clientWidth ?? 1000) - 250), top: Math.min(menu.y, (flowBox.current?.clientHeight ?? 700) - 350) }}><input autoFocus placeholder={ff('add')} value={search} onChange={(e) => setSearch(e.target.value)} />{menuKinds.filter((k) => ff(k).toLowerCase().includes(search.toLowerCase())).map((k) => <button key={k} onClick={() => add(k, menu.at, menu.from)}><span>{glyphs[kinds.indexOf(k)]}</span>{ff(k)}<small>↗</small></button>)}</div>}
           <div className="fc-page">▱ {ff('page')} <span>1</span></div>
-        </div>
+        </div>}
         {dock && <aside className="fc-dock" aria-label={ff(dock)}><header><h2>{ff(dock)}</h2><button aria-label={ff('close')} onClick={() => setDock(null)}>×</button></header>
-          {dock === 'inspect' && (picked ? <><h3>{ff(picked.type)}</h3>{picked.type === 'kit' && (kit ? <fieldset disabled={actions.readonly} className="fc-kit-management"><KitPanel clientId={clientId} kit={kit} selected={picked.data.kitItems ?? []} onKit={applyKit} onSelected={(ids) => { update(picked.id, { kitItems: ids }); for (const id of kitTargets(session.doc(), picked.id)) change(markStale(session.doc(), id, gens)) }} onClose={() => setDock(null)} /></fieldset> : <p>{ff('kitUnavailable')}</p>)}{['prompt', 'storyboard', 'video', 'voice'].includes(picked.type) && <NodeSettings node={picked} actions={actions} />}{picked.type === 'storyboard' && kit && doc.edges.some((e) => e.target === picked.id && e.targetHandle === 'in:kit') && <div className="fc-kit-picks"><h4>{ff('kit')}</h4>{kit.items.filter((item) => { const source = doc.edges.find((e) => e.target === picked.id && e.targetHandle === 'in:kit')?.source; return doc.nodes.find((n) => n.id === source)?.data.kitItems?.includes(item.id) }).map((item) => <label key={item.id}><input type="checkbox" checked={!picked.data.kitOff?.includes(item.id)} disabled={actions.readonly} onChange={(e) => update(picked.id, { kitOff: e.target.checked ? (picked.data.kitOff ?? []).filter((id) => id !== item.id) : [...(picked.data.kitOff ?? []), item.id] })} />{item.name}</label>)}<p>{legacyGenerationRequest(doc, picked.id, shots, gens, kit, models.find((m) => m.id === picked.data.model) ?? models.find((m) => m.kind === 'image')!).kitPreview}</p></div>}<h4>{ff('ports')}</h4>{PORTS_LABEL(picked)}{edges.filter((e) => e.target === picked.id).map((e) => <div className="fc-input-wire" key={e.id}><span>{ff(doc.nodes.find((n) => n.id === e.source)!.type)}</span><button disabled={actions.readonly} aria-label={ff('delete')} onClick={() => void removeEdges([e])}>×</button></div>)}{['storyboard', 'video', 'voice'].includes(picked.type) && <button className="fc-primary" disabled={actions.readonly || busy.has(picked.id)} onClick={() => void begin(picked.id)}>▶ {ff('run')}</button>}</> : <p>{ff('noSelection')}</p>)}
+          {dock === 'inspect' && (picked ? <><h3>{ff(picked.type)}</h3>{picked.type === 'kit' && (kit ? <fieldset disabled={actions.readonly} className="fc-kit-management"><KitPanel clientId={clientId} kit={kit} selected={picked.data.kitItems ?? []} onKit={applyKit} onSelected={(ids) => { update(picked.id, { kitItems: ids }); for (const id of kitTargets(session.doc(), picked.id)) change(markStale(session.doc(), id, gens)) }} onClose={() => setDock(null)} /></fieldset> : <p>{ff('kitUnavailable')}</p>)}{shotView && ['storyboard', 'video', 'voice'].includes(picked.type) && <p>{ff('nextRunSettings')}</p>}{['prompt', 'storyboard', 'video', 'voice'].includes(picked.type) && <NodeSettings node={picked} actions={actions} />}{picked.type === 'storyboard' && kit && doc.edges.some((e) => e.target === picked.id && e.targetHandle === 'in:kit') && <div className="fc-kit-picks"><h4>{ff('kit')}</h4>{kit.items.filter((item) => { const source = doc.edges.find((e) => e.target === picked.id && e.targetHandle === 'in:kit')?.source; return doc.nodes.find((n) => n.id === source)?.data.kitItems?.includes(item.id) }).map((item) => <label key={item.id}><input type="checkbox" checked={!picked.data.kitOff?.includes(item.id)} disabled={actions.readonly} onChange={(e) => update(picked.id, { kitOff: e.target.checked ? (picked.data.kitOff ?? []).filter((id) => id !== item.id) : [...(picked.data.kitOff ?? []), item.id] })} />{item.name}</label>)}<p>{legacyGenerationRequest(doc, picked.id, shots, gens, kit, models.find((m) => m.id === picked.data.model) ?? models.find((m) => m.kind === 'image')!).kitPreview}</p></div>}<h4>{ff('ports')}</h4>{PORTS_LABEL(picked)}{edges.filter((e) => e.target === picked.id).map((e) => <div className="fc-input-wire" key={e.id}><span>{ff(doc.nodes.find((n) => n.id === e.source)!.type)}</span><button disabled={actions.readonly} aria-label={ff('delete')} onClick={() => void removeEdges([e])}>×</button></div>)}{['storyboard', 'video', 'voice'].includes(picked.type) && <button className="fc-primary" disabled={actions.readonly || busy.has(picked.id)} onClick={() => void begin(picked.id)}>▶ {ff('run')}</button>}</> : <p>{ff('noSelection')}</p>)}
           {dock === 'history' && <><div className="fc-wallet"><h3>{ff('budget')}</h3>{budget && Object.entries(budget).map(([k, b]) => <p key={k}><span>{ff(k as 'image' | 'video' | 'voice')}</span><b>{usd(Math.max(0, b.cap - b.spent))}</b></p>)}</div>{gens.length === 0 && <p>{ff('noHistory')}</p>}{[...gens].reverse().map((g) => <article className="fc-history" key={g.id}>{g.url && g.kind === 'image' && <img src={g.url} alt="" />}<strong>{g.model}</strong><span>{ff(g.status)} · {usd(g.actualUsd ?? g.estUsd)}</span>{g.status === 'done' && <button disabled={actions.readonly} aria-pressed={doc.nodes.find((n) => n.id === g.nodeId)?.data.selected === g.id} onClick={() => selectVersion(g)}>{ff('version')}</button>}{g.status === 'done' && <button disabled={actions.readonly} onClick={() => update(g.nodeId, reuseSettings(g))}>{ff('reuse')}</button>}{g.error && <p>{serverText(g.error)}</p>}</article>)}</>}
-          {dock === 'assistant' && <><p>{ff(resource.kind === 'legacy-plan' ? 'assistantLegacyHint' : 'assistantHint')}</p>{resource.kind === 'legacy-plan' && <label>{ff('assistantShot')}<select aria-label={ff('assistantShot')} value={picked?.shotId ?? ''} disabled={actions.readonly || busy.has('assistant')} onChange={(e) => { const node = doc.nodes.find((n) => n.type === 'shot' && n.shotId === e.target.value); setSelected(node ? [node.id] : []) }}><option value="">{ff('assistantChooseShot')}</option>{assistantShots.map((s, i) => <option key={s.id} value={s.id}>{i + 1}. {s.line}</option>)}</select></label>}<button className="fc-primary" disabled={actions.readonly || busy.has('assistant') || !canAsk} onClick={() => void ask()}>{ff('preview')}</button>{plan && <div className="fc-agent-plan"><span className="fc-demo">{plan.source === 'demo' ? ff('demo') : `${ff('source')}: ${plan.source}`}</span>{'shotId' in plan && <h3>{ff('assistantShot')}: {shots.find((s) => s.id === plan.shotId)?.line}</h3>}<h3>{ff('storyboard')}</h3><p>{plan.storyboard.prompt}</p><small>{plan.storyboard.model}</small><h3>{ff('video')}</h3><p>{plan.video.prompt}</p><small>{plan.video.model} · {seconds(plan.video.duration)} · {usd(plan.planUsd)}</small><p>{ff(resource.kind === 'legacy-plan' ? 'assistantLegacyApply' : 'noAuto')}</p><button className="fc-primary" disabled={actions.readonly} onClick={applyAssistant}>{ff('apply')}</button></div>}</>}
+          {dock === 'assistant' && <><p>{ff(resource.kind === 'legacy-plan' ? 'assistantLegacyHint' : 'assistantHint')}</p>{resource.kind === 'legacy-plan' && <label>{ff('assistantShot')}<select aria-label={ff('assistantShot')} value={picked?.shotId ?? ''} disabled={actions.readonly || busy.has('assistant')} onChange={(e) => { const node = doc.nodes.find((n) => n.type === 'shot' && n.shotId === e.target.value); setSelected(node ? [node.id] : []); if (shotView && node?.shotId) setFocusedShot(node.shotId) }}><option value="">{ff('assistantChooseShot')}</option>{assistantShots.map((s, i) => <option key={s.id} value={s.id}>{i + 1}. {s.line}</option>)}</select></label>}<button className="fc-primary" disabled={actions.readonly || busy.has('assistant') || !canAsk} onClick={() => void ask()}>{ff('preview')}</button>{plan && <div className="fc-agent-plan"><span className="fc-demo">{plan.source === 'demo' ? ff('demo') : `${ff('source')}: ${plan.source}`}</span>{'shotId' in plan && <h3>{ff('assistantShot')}: {shots.find((s) => s.id === plan.shotId)?.line}</h3>}<h3>{ff('storyboard')}</h3><p>{plan.storyboard.prompt}</p><small>{plan.storyboard.model}</small><h3>{ff('video')}</h3><p>{plan.video.prompt}</p><small>{plan.video.model} · {seconds(plan.video.duration)} · {usd(plan.planUsd)}</small><p>{ff(resource.kind === 'legacy-plan' ? 'assistantLegacyApply' : 'noAuto')}</p><button className="fc-primary" disabled={actions.readonly} onClick={applyAssistant}>{ff('apply')}</button></div>}</>}
         </aside>}
       </div>
       </FreeformContext.Provider>

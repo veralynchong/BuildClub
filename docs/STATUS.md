@@ -1,3 +1,39 @@
+## 2026-11-06：依使用者要求恢復 Full Canvas，單鏡設計暫停
+
+- 使用者認為單鏡工作區與預期差很多，明確要求暫停，隨後要求回到上一版Full Canvas。已恢復8982 preview加入單鏡前的index；舊assets完整，HTTP實際回傳與備份逐byte相同，MacBook所有18982 Demo分頁已重新整理。
+- 已核對目前Demo的7個檔案仍等於本次integration after-hash，再安全反套本次patch，4個既有檔恢復before-hash、3個本輪新增source/test移除。只撤銷本輪單鏡工作區，不影響先前側欄入口修正／橫向排版／版本向下。data／media／edit／ledger保留。
+- demo-readiness為目前啟用的舊Full Canvas程式；video-canvas-entry／feat/shot-focus-workspace仍保留未提交的單鏡草稿，供重新對齊時參考，禁止直接重建套回展示。使用者未授權恢復開發，不再自動改設計。新AI生成批次的其他限制仍依最新G1紀錄，這次僅UI恢復。
+- 還原驗證：7檔before SHA全部相符；served index逐byte相符；frontend unit637 passed／0 failed in2186ms。無commit／push／安裝／新增付費。證據shot-workspace-20261106/full-canvas-restored.json，原設計與成功／失敗證據及patch均保留。
+
+## 2026-11-06：預設單鏡工作區與縮圖導覽（使用者已批准）
+
+- 預設legacy plan進Shot view，上方21鏡縮圖一排且可直接跳轉、上一鏡／下一鏡；下方References／AI images／Videos三欄獨立捲動、放大預覽、播放，設定按需開Inspector。保留Full canvas與全部92nodes，以及Open editor後回到同一鏡。standalone workspace維持完整Canvas。view／shot用每resource本機偏好保存，預覽本地狀態不改selected，Use才沿用既有保存／quote／readonly契約；In edit僅由真clip source ID判斷。
+- 新shotWorkspace純資料投影合併同鏡多節點與歷史Generation，沿edge找參考、共享來源不複製，支援真takes。review找到owned upload在visited中消失，新增回歸先RED後GREEN並修正；pending Run／Use／Upload保護、唯讀可看不可寫。Assistant與聚焦鏡頭同步，Inspector明示設定用於下次生成。
+- 隔離feat/shot-focus-workspace（video-canvas-entry）實作，7個前端／測試檔整合demo-readiness，原dirty保留；無後端、套件、付費變更、commit／push／merge。獨立只讀review最終ACCEPT，root看1440首鏡與S19／Inspector截圖ACCEPT。
+- root整合全套最後 `bash bin/verify.sh full` GREEN：1115 passed, 2 skipped in35.63s；frontend PASS；TS／ESLint／sandbox build PASS。先前full frontend因既有AST handler測試沒注入shotView而RED（641/642）；更新scope並驗兩種view、0 model requests後，定向13tests及full GREEN。shotWorkspace純測試5項PASS，資料不變／版本去重／共享與owned references／cycles／empty pending failed／真takes。
+- 1440 preview與實際8982 served完整11步PASS：21縮圖同排、點最末鏡、S19五張圖三支片、預覽不採用、各欄scroll、放大、影片真播放、Inspector不溢出、Full Canvas92nodes、view／shot重開持久、Assistant跟鏡、Editor返回同鏡。data／selected／edges／gens／takes／ideas／edit project皆保留，ledger SHA不變、paid0。另browser-only readonly／empty／pending-owned／zh-Hant四fixtures全PASS；全自有context/browser關閉。
+- UI初期native video metadata未等與Editor返回鈕帶箭頭造成harness FAIL，原JSON／錄影保留；查實際媒體readyState與按鈕文字後修harness，產品行為無為此繞過。實際成功連續錄影shot-workspace-demo.mp4：H2641440×900完整decode PASS，內容為既有cached素材的免費操作，不是真AI再生成。
+- 全部證據 `/Users/tommy/Downloads/buildclub-demo-reference/shot-workspace-20261106/`：live-result.json／fixtures-result.json／integration.patch與逐步截圖／錄影。重跑 `node /Users/tommy/Downloads/buildclub-demo-reference/shot-workspace-20261106/check.cjs --live`（讀既有案例並容許僅Canvas位置／viewport正常保存；不生成）。8982服務與MacBook18982轉接供使用者檢視保留，僅更新static frontend，未重啟後端。
+- 這不是新廣告生成驗收；新AI批次G1／Key／live費用限制狀態依其他最新節與runtime-progress.json，不能以本次UI GREEN解鎖paid。
+
+## 2026-11-06：鏡頭橫排、同鏡版本向下（使用者已批准）
+
+- 主流程按shots順序由左至右；同鏡的upload／image／video分欄，獨立變體往下。新增shotLayout純排版，沿edge推導無shotId來源，共用來源只保留一份置於上方。保守尺寸加實際量測與標題空間，穩定後不重複儲存。
+- 新分鏡僅在符合未修改後端初始座標時自動橫排；既有自訂畫布須點Arrange shots。水平模式新增同類節點往下；滑鼠或鍵盤手動移動會解除自動排列。唯讀初始分鏡僅映射顯示、不PUT。FreeformNode將成功歷史版本向下顯示並沿用原Use action，沒有複製generation或改既有選用結果；中英標籤保留。
+- 隔離分支fix/canvas-horizontal-layout（工作區video-canvas-entry）實作，將8個前端／測試檔整合demo-readiness，保留原CanvasScreen既有dirty。無backend／依賴／付費服務變更，未commit／push／merge。既有新AI廣告仍待OpenRouter安全設定與paid adapter，不因本輪UI GREEN宣稱paid-ready；其舊source hash證據只對原preflight版本有效。
+- root最終實際整合 `bash bin/verify.sh full` GREEN：1115 passed, 2 skipped in44.90s、frontend PASS。TS／ESLint／sandbox build PASS；純排版4項GREEN（先見新module缺失的預期RED），涵蓋順序、資料保存、來源歸屬、共享來源、實際尺寸無交疊、變體不推動其他鏡、未修改匯入與手動位置。
+- 1440前端先browser-only saves驗完整案例，再更新8982自有preview static並真UI點Arrange保存：21shots／92nodes／23videos、4歷史圖片向下、全部卡片與標題0交疊、idle PUT穩定、reload後位置相同；data／selected／edges／generations／takes／ideas與edit project不變，只有layout／position／viewport更新，ledger SHA不變、paid0。另browser-only pristine21shot核准自動保存／唯讀0PUT皆PASS；keyboard移動解除auto亦PASS。
+- 初期兩個UI harness FAIL保留（硬編不存在video node ID、焦點未選取就按箭頭）；查實際node IDs與已安裝ReactFlow keyboard條件後修正harness，未隱藏原FAIL。獨立只讀review最終ACCEPT，root看首鏡橫排與S19向下版本截圖ACCEPT。
+- 成功連續錄影horizontal-layout-demo.mp4：1440×900 H264完整decode PASS，明示既有cached素材＋即時免費排版／保存／重開，不是live生成。全部證據與重跑命令：`node /Users/tommy/Downloads/buildclub-demo-reference/horizontal-layout-20261106/check.cjs --live`。該命令會重新排列此Demo；完整結果live-result.json、import-result.json及來源integration.patch。MacBook18982與8982服務依使用者檢視需求保留；測試owned browser/context全關閉。
+
+## 2026-11-06：Video canvas 側欄入口修正
+
+- 使用者確認側欄 Video canvas 應進入生成 Canvas。修正 Sidebar.tsx 送出 canvas；App.tsx 在目前 client 只有一個 Plan 時直接開該 Plan 的生成 Canvas，0／多 Plan 進既有 CanvasPick。舊分鏡板與其資料保留。已在同一 Canvas 時不重載，跨資源先走 withCanvasLeave 保存／busy 保護；獨立只讀覆核 ACCEPT。
+- 原始修正在隔離工作區 video-canvas-entry／fix/video-canvas-entry @2c069a8；僅把 App.tsx、Sidebar.tsx 兩個乾淨基線檔整合至 demo-readiness／chore/fresh-ai-preflight，原有 dirty 保留。未commit／push／merge／安裝，無新付費。
+- 2026-11-06 root親跑實際整合工作區 `bash bin/verify.sh full`：1115 passed, 2 skipped in 34.12s；frontend PASS；verify GREEN。隔離起點1109 passed／2skipped GREEN；修改後TypeScript app/config、ESLint與sandbox build PASS，實際整合build PASS。
+- 1440真前端前後比較：原版側欄進 .board-canvas；修正版單Plan直接進 .fc-flow，92nodes／23video保留，再點同入口DOM與graph讀取次數不變；0／多Plan picker PASS（後兩者只在browser mock ideas，不改server DB）。更新8982專用preview靜態index/assets後再跑實際served三情境全PASS、ledger SHA不變、paid0；舊assets保留供已開分頁。沒有改DB、素材、guard或ledger；8982及MacBook18982轉接依使用者檢視需求保留。
+- 證據與可重跑命令：`node /Users/tommy/Downloads/buildclub-demo-reference/video-canvas-entry-20261106/check-served.cjs`；同目錄 result.json／served/result.json、前後截圖與錄影、integration.json／preview-update.json。此修正不等於卡片重疊已修，也不等於全新AI廣告已生成。
+
 # STATUS
 
 ## 2026-11-05：交付隊友的統一分支（本輪最新）

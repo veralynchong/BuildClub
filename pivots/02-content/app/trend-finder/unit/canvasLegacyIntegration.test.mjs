@@ -85,9 +85,13 @@ test('legacy assistant offers an explicit shot selection and never treats free p
   const select = find(source, (n) => ts.isJsxElement(n) && n.openingElement.tagName.getText(source) === 'select' && n.getText(source).includes('assistantShot'))[0]
   assert.ok(select, 'legacy users can select a shot from the assistant dock')
   const onChange = select.openingElement.attributes.properties.find((n) => n.name?.text === 'onChange').initializer.expression
-  let selected
-  evaluate(onChange, { doc, setSelected: (ids) => { selected = ids } })({ target: { value: 's1' } })
-  assert.deepEqual(selected, ['shot'])
+  for (const shotView of [false, true]) {
+    let selected, focused
+    evaluate(onChange, { doc, shotView, setSelected: (ids) => { selected = ids }, setFocusedShot: (id) => { focused = id } })({ target: { value: 's1' } })
+    assert.deepEqual(selected, ['shot'])
+    assert.equal(focused, shotView ? 's1' : undefined)
+  }
+  assert.equal(requests, 0, 'selecting the assistant shot never starts a model request')
 })
 
 test('assistant never applies a legacy preview after canvas version changes or requests after failed save', async (t) => {

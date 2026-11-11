@@ -622,3 +622,58 @@
 .fc-history-controls{justify-content:center;padding:6px}.fc-history-controls button{min-width:28px}
 .fc-batch{display:flex;flex-wrap:wrap;gap:5px;padding:8px;font-size:10px}.fc-batch strong{width:100%;font-weight:500}
 .fc-settings .cv-picker{width:100%;position:relative}.fc-settings .cv-model-list{position:static;min-width:0;width:100%;z-index:20;max-height:260px;overflow:auto}
+
+.fc-version-list { display:flex; flex-direction:column; gap:12px; padding:12px; border-top:1px solid var(--fc-line); }
+.fc-version { margin:0; border:1px solid var(--fc-line); border-radius:10px; overflow:hidden; }
+.fc-version figcaption { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; font-size:12px; color:var(--fc-muted); }
+.fc-version figcaption button { border:1px solid var(--fc-line); border-radius:6px; padding:5px 8px; background:var(--fc-panel); color:var(--fc-fg); cursor:pointer; }
+
+.fc-view-switch { display:flex; gap:2px; padding:2px; border:1px solid var(--fc-line); border-radius:8px; }
+.fc-view-switch button[aria-pressed="true"] { background:var(--fc-blue); color:#fff; }
+.fc-shot-workspace { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; gap:14px; padding:16px; overflow:hidden; }
+.fc-shot-nav { display:flex; flex:none; gap:4px; min-width:0; }
+.fc-shot-nav button { flex:1; min-width:0; max-width:72px; padding:4px; border:1px solid transparent; border-radius:8px; color:var(--fc-muted); background:transparent; font-size:11px; }
+.fc-shot-nav button[aria-pressed="true"] { border-color:var(--fc-blue); background:var(--fc-panel); color:var(--fc-fg); }
+.fc-shot-thumb { height:58px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:5px; margin-bottom:4px; background:var(--fc-panel); }
+.fc-shot-thumb :is(img,video) { width:100%; height:100%; object-fit:cover; }
+.fc-shot-heading { flex:none; display:flex; align-items:center; gap:16px; justify-content:space-between; min-height:44px; }
+.fc-shot-heading>div:first-child { min-width:0; }
+.fc-shot-heading h2 { font-size:16px; margin:0 0 3px; color:var(--fc-fg); }
+.fc-shot-heading h2 small,.fc-shot-column h3 small { color:var(--fc-muted); font-weight:400; }
+.fc-shot-heading p { margin:0; color:var(--fc-muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.fc-shot-step { display:flex; flex:none; gap:6px; }
+.fc-shot-step button,.fc-shot-tools button,.fc-shot-use { padding:6px 9px; border:1px solid var(--fc-line); border-radius:6px; background:var(--fc-panel); color:var(--fc-fg); font-size:11px; }
+.fc-shot-columns { flex:1; min-height:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.fc-shot-column { min-width:0; min-height:0; display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--fc-line); border-radius:12px; background:var(--fc-panel); }
+.fc-shot-column>header { display:flex; flex:none; align-items:center; justify-content:space-between; gap:6px; min-height:42px; padding:10px 12px; }
+.fc-shot-column h3 { margin:0; font-size:13px; color:var(--fc-fg); }
+.fc-shot-upload { color:var(--fc-muted); font-size:11px; cursor:pointer; }
+.fc-shot-upload.is-disabled { opacity:.5; cursor:default; }
+.fc-shot-upload input { display:none; }
+.fc-shot-hero { flex:none; height:clamp(170px,29vh,280px); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; background:#131313; color:#aaa; }
+.fc-shot-hero :is(img,video) { width:100%; height:100%; object-fit:contain; }
+.fc-shot-hero audio { width:90%; }
+.fc-shot-hero>p { padding:20px; font-size:13px; }
+.fc-shot-expand { position:absolute; top:8px; right:8px; padding:5px 8px; border:1px solid #ffffff55; background:#0009; color:#fff; border-radius:6px; }
+.fc-shot-tools { display:flex; flex:none; min-width:0; gap:8px; align-items:center; justify-content:space-between; padding:8px 10px; font-size:11px; color:var(--fc-muted); }
+.fc-shot-tools>span { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.fc-shot-tools>div { display:flex; flex:none; gap:5px; }
+.fc-shot-status { margin:0; padding:0 10px 8px; color:var(--fc-muted); font-size:11px; max-height:55px; overflow:auto; }
+.fc-shot-versions { flex:1; min-height:0; overflow-y:auto; padding:0 10px 10px; overscroll-behavior:contain; }
+.fc-shot-version { display:flex; align-items:center; min-width:0; gap:5px; margin:0 0 8px; border:1px solid var(--fc-line); border-radius:8px; padding:6px; }
+.fc-shot-version.is-previewed { border-color:var(--fc-blue); }
+.fc-shot-preview-button { display:flex; align-items:center; gap:10px; flex:1; min-width:0; padding:0; border:0; background:transparent; color:var(--fc-fg); text-align:left; }
+.fc-shot-version-thumb { width:54px; height:86px; flex:none; overflow:hidden; display:flex; align-items:center; justify-content:center; border-radius:5px; background:#131313; color:#aaa; }
+.fc-shot-version-thumb :is(img,video) { width:100%; height:100%; object-fit:contain; }
+.fc-shot-preview-button>span:last-child { min-width:0; }
+.fc-shot-preview-button strong { display:block; font-size:12px; font-weight:500; }
+.fc-shot-preview-button small { display:block; margin-top:4px; color:var(--fc-muted); font-size:10px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.fc-shot-preview-button .fc-shot-badge { color:var(--fc-blue); }
+.fc-shot-use { max-width:110px; flex:none; white-space:normal; }
+.fc-shot-lightbox { border:1px solid var(--fc-line); border-radius:12px; padding:12px; background:var(--fc-panel); color:var(--fc-fg); max-width:94vw; max-height:94vh; }
+.fc-shot-lightbox::backdrop { background:#000b; }
+.fc-shot-lightbox>button { display:block; margin-left:auto; border:0; background:transparent; color:var(--fc-fg); font-size:24px; cursor:pointer; }
+.fc-shot-lightbox>div { width:min(80vw,1100px); height:76vh; display:flex; align-items:center; justify-content:center; }
+.fc-shot-lightbox :is(img,video) { width:100%; height:100%; object-fit:contain; }
+.fc-shot-text { margin:0; padding:8px; overflow:auto; font-size:11px; }
+.fc-shot-workspace button:disabled { opacity:.5; cursor:default; }
