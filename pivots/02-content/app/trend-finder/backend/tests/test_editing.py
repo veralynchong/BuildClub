@@ -420,7 +420,7 @@ def test_render_project_builds_job_and_returns_facts(client, setup, monkeypatch,
     assert job["out"] == str(work / "next.mp4") and job["mediaDir"] == str(work / "media")
     assert job["cacheDir"] == str(tmp_path / "app" / ".remotion-bundle")
     assert len(seen["linked"]) == 1 and list(job["input"]["urls"].values()) == seen["linked"]
-    assert steps == [(0.05 + 0.9 * 0.5, "Exporting")]
+    assert steps == [(0.05 + 0.9 * 0.5, "Exporting"), (0.96, "Setting the sound level")]  # then the loudness pass
     assert result["size"] == 3 and result["clips"] == 2 and len(result["signature"]) == 16
     assert result["durationSec"] == 2.0
 

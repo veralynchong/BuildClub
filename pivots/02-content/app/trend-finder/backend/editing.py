@@ -70,6 +70,7 @@ VOICE_ALREADY_ADDED = "That voiceover was already added to the plan."
 VOICE_TOO_LONG = f"The audio is longer than {MAX_VOICE_S} seconds."
 
 
+EXPORT_PRESETS = ("tiktok", "reels", "shorts")  # the export popover's platforms; they only change the warnings shown
 LOGO_SIZES = ("small", "medium", "large")
 LOGO_CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
 # What a project without the logo fields looks like: the logo as it was drawn before they existed.
@@ -79,6 +80,10 @@ LOGO_DEFAULTS = {"logoSize": "medium", "logoCorner": "top-right"}
 def empty_project() -> dict:
     return {"fps": 30, "width": 1080, "height": 1920, "clips": [], "texts": [], "captions": {"enabled": False},
             "music": None, "voiceover": [], "primaries": {}, "showLogo": False, **LOGO_DEFAULTS}
+
+
+def loudnorm_on(project: dict) -> bool:
+    return (project.get("export") or {}).get("loudnorm", True)
 
 
 def source_key(src: dict) -> str:
@@ -221,6 +226,12 @@ def check_project(doc, voice_ids: Optional[set] = None) -> Optional[str]:
     if music is not None and (not isinstance(music, dict) or not _num(music.get("volume"))
                               or not 0 <= music["volume"] <= 1):
         return "Music must be null or have a volume between 0 and 1."
+    if music is not None and not isinstance(music.get("duck", True), bool):
+        return "Music ducking must be true or false."
+    exp = doc.get("export")
+    if exp is not None and (not isinstance(exp, dict) or exp.get("preset", "tiktok") not in EXPORT_PRESETS
+                            or not isinstance(exp.get("loudnorm", True), bool)):
+        return "The export settings need a platform preset and a loudness switch."
     if not isinstance(doc.get("primaries"), dict) or not all(
             _id(k) and isinstance(v, dict) and v.get("kind") in ("generation", "take") and _id(v.get("id"))
             for k, v in doc["primaries"].items()):
@@ -437,6 +448,8 @@ def signature(conn, media: Path, idea: dict, project: dict) -> str:
     relevant = {k: project.get(k) for k in RENDER_FIELDS}
     # Only a changed logo size or corner counts, so an export made before these fields existed stays current.
     relevant.update({k: project[k] for k, v in LOGO_DEFAULTS.items() if project.get(k, v) != v})
+    if not loudnorm_on(project):  # on is the default, so an export made before the switch existed stays current
+        relevant["loudnorm"] = False
     text = json.dumps([relevant, sorted(stamps.items()), client_brand(conn, idea["id"]),
                        shot_lines(conn, idea["id"]) if (project.get("captions") or {}).get("enabled") else {}],
                       sort_keys=True)
@@ -477,8 +490,15 @@ def render_input(conn, media: Path, idea: dict, project: dict, sources: dict) ->
             name = f"voice-{v['id']}{path.suffix}"
             files[name] = path
             voice.append({"id": v["id"], "url": name, "words": voice_words(path)})
+    import finishing  # finishing imports this module
+    duck = []
+    if music_url and project["music"].get("duck", True):  # the music goes down under speech
+        clips = project["clips"]
+        starts = {v["id"]: v["start"] for v in project.get("voiceover") or []}
+        spoken = [{"start": starts[v["id"]], "words": v["words"]} for v in voice]
+        duck = finishing.duck_ranges(clips, finishing.duck_inputs(conn, idea["id"], clips), spoken)
     reel = {"project": project, "urls": urls, "lines": shot_lines(conn, idea["id"]), "musicUrl": music_url, "voice": voice,
-            "brand": {"font": kit.get("font", "Noto Sans TC"), "color": kit.get("color"), "logoUrl": logo},
+            "duck": duck, "brand": {"font": kit.get("font", "Noto Sans TC"), "color": kit.get("color"), "logoUrl": logo},
             "fontUrl": ""}
     return reel, files
 
@@ -605,6 +625,11 @@ def render_project(db, media_dir: Path, idea_id: str, work: Path, out: Path, ste
                                "cacheDir": str(APP_DIR / ".remotion-bundle")}))
     spawn_render([NODE, str(APP_DIR / "render" / "render-reel.mjs"), str(job)],
                  lambda p: step(0.05 + 0.9 * p, "Exporting"), RENDER_TIMEOUT_S, work.parent / "render.pid")
+    if loudnorm_on(project):
+        import finishing  # finishing imports this module
+        step(0.96, "Setting the sound level")
+        if not finishing.normalise(out, work):
+            print("[editing] loudness pass skipped: nothing to measure, or ffmpeg failed", flush=True)
     try:
         info = cutting.probe(out)
     except cutting.CutError:  # its message names a folder

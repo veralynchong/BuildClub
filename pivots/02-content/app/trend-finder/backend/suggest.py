@@ -41,6 +41,8 @@ BAD_RANGE = "Send a valid in and out for the clip."
 BAD_REMOVALS = "Send the parts to remove as start and end times."
 NOTHING_LEFT = "Nothing would be left of the clip."
 BAD_CLIPS = "Send the timeline clips to caption."
+NO_SHOTS = "Add shots to the plan first."
+NO_FOOTAGE = "Upload footage to at least one shot first."
 
 PUNCT_END = re.compile(r"[.!?。！？]$")
 COMMA_END = re.compile(r"[,;:，；：、]$")
@@ -297,15 +299,107 @@ def reason_of(m: dict) -> str:
     return ", ".join(bits)
 
 
-def rank_takes(candidates: list[dict], line: Optional[str], limit: int = 3) -> list[dict]:
+def rank_takes(candidates: list[dict], line: Optional[str], limit: int = 3, pad_frames: int = PAD_DEFAULT) -> list[dict]:
     """`candidates` are {id, name, chosen, results}. The best `limit`, each with its score, metrics and a one-line reason.
     Ties keep the older take first."""
     scored = []
     for c in candidates:
-        m = take_metrics(c["results"], line)
+        m = take_metrics(c["results"], line, pad_frames)
         scored.append({"takeId": c["id"], "name": c["name"], "chosen": c.get("chosen", False), "duration": c["results"].get("duration"),
                        "score": score_take(m), "reason": reason_of(m), **m})
     return sorted(scored, key=lambda x: -x["score"])[:limit]
+
+
+# ---- 5. auto first cut ----
+
+def _mmss(sec: float) -> str:
+    m = int(sec // 60)
+    return f"{m}:{sec - m * 60:04.1f}"
+
+
+def _floor_frame(sec: float) -> float:
+    return math.floor(sec * FPS + 1e-6) / FPS
+
+
+def first_cut(shots: list[dict], takes_by_shot: dict, pad_frames: int = PAD_DEFAULT) -> dict:
+    """The first cut of a plan, shot by shot in plan order. `shots` are {id, line}; `takes_by_shot` maps a shot id to its
+    takes ({id, name, chosen, results}). Per shot: the top-ranked take (a lone take is that take), trimmed to the script
+    line when there is one, with the clean-up items removed (default padding). Returns the clips, the shot pins and a log:
+    one entry per decision, each with `at`, the second of the new timeline where it can be looked at."""
+    clips, log, pins, words_by_take = [], [], {}, {}
+    at, n_used = 0.0, set()
+
+    def note(kind: str, text: str, **extra) -> None:
+        log.append({"kind": kind, "text": text, **extra})
+
+    for n, shot in enumerate(shots, 1):
+        sid, line = shot["id"], shot.get("line")
+        cands = takes_by_shot.get(sid) or []
+        if not cands:
+            note("skip", f"Shot {n}: no footage, skipped", shot=n, at=round(at, 3), why="none")
+            continue
+        ranked = rank_takes(cands, line, limit=len(cands), pad_frames=pad_frames)
+        best = ranked[0]
+        results = next(c["results"] for c in cands if c["id"] == best["takeId"])
+        duration = _floor_frame(results.get("duration") or 0.0)
+        lo, hi = 0.0, duration
+        trimmed = best["in"] is not None and best["out"] is not None
+        if trimmed:
+            lo, hi = max(0.0, best["in"]), min(duration, best["out"])
+        if hi - lo < MIN_KEEP:
+            note("skip", f"Shot {n}: the take is too short to use, skipped", shot=n, at=round(at, 3), why="short")
+            continue
+        items = cleanup_items(results, lo, hi)
+        keeps = keep_ranges(lo, hi, [[i["start"], i["end"]] for i in items], pad_frames)
+        keeps = [[k[0], min(k[1], duration)] for k in keeps]
+        keeps = [k for k in keeps if k[1] - k[0] >= MIN_KEEP - 1e-6]
+        if not keeps:
+            note("skip", f"Shot {n}: nothing was left after the clean-up, skipped", shot=n, at=round(at, 3), why="empty")
+            continue
+        length = sum(k[1] - k[0] for k in keeps)
+        if len(clips) + len(keeps) > editing.MAX_CLIPS or at + length > editing.MAX_TOTAL_S - 1e-6:
+            note("limit", f"Shot {n}: the reel is full ({editing.MAX_TOTAL_S} seconds, {editing.MAX_CLIPS} clips at most), so this shot and the ones after it were left out",
+                 shot=n, at=round(at, 3))
+            break
+        # the log, in the order a person reads it: the pick, the trim, then each cut
+        others = len(cands) - 1
+        verb = "picked" if others else "used the only take,"
+        note("pick", f"Shot {n}: {verb} {best['name']} — {reason_of(best)}", shot=n, at=round(at, 3), takeId=best["takeId"],
+             name=best["name"], takes=len(cands), score=best["score"], speech=best["speech"], coverage=best["coverage"],
+             fillers=best["fillers"], longPauses=best["longPauses"], retakes=best["retakes"])
+        if trimmed and (lo > 0.05 or hi < duration - 0.05):
+            note("trim", f"Shot {n}: trimmed to the line, {_mmss(lo)} to {_mmss(hi)} of {_mmss(duration)}", shot=n, at=round(at, 3),
+                 start=lo, end=hi, duration=duration)
+        if best["missing"]:
+            note("missing", f"Shot {n}: not said in this take: {' · '.join(best['missing'])}", shot=n, at=round(at, 3), words=best["missing"])
+        for it in items:
+            if any(k[0] <= (it["start"] + it["end"]) / 2 <= k[1] for k in keeps):
+                continue  # the padding closed this cut: it stays in
+            seam = sum(max(0.0, min(k[1], it["start"]) - k[0]) for k in keeps)
+            sec = it["end"] - it["start"]
+            what = {"silence": f"removed {sec:.1f} s silence", "filler": f"removed the filler “{it.get('text', '')}”",
+                    "retake": f"removed an earlier try: “{it.get('text', '')}”"}[it["type"]]
+            note("cut", f"Shot {n}: {what} at {_mmss(it['start'])}", shot=n, at=round(at + seam, 3), type=it["type"],
+                 start=it["start"], end=it["end"], seconds=round(sec, 2), said=it.get("text"))
+        src = {"kind": "take", "id": best["takeId"], "shotId": sid}
+        for k in keeps:
+            clips.append({"id": f"c{len(clips) + 1}", "source": dict(src), "in": k[0], "out": k[1], "volume": 1, "muted": False})
+        at += length
+        pins[sid] = {"kind": "take", "id": best["takeId"], "shotId": sid}
+        words_by_take[best["takeId"]] = _words_of(results)
+        n_used.add(sid)
+    return {"clips": clips, "primaries": pins, "log": log, "seconds": round(at, 3), "shotsUsed": len(n_used),
+            "captions": caption_entries(clips, words_by_take)}
+
+
+def _words_of(results: dict) -> list[dict]:
+    tr = results.get("transcript") or {}
+    return tr.get("words") or [] if tr.get("status") == "ok" else []
+
+
+def caption_entries(clips: list[dict], words_by_take: dict) -> dict:
+    entries = timeline_captions(clips, words_by_take)
+    return {"status": "ok" if entries else "none", "entries": entries}
 
 
 # ---- routes ----
@@ -448,5 +542,44 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         entries = timeline_captions(clips, words)
         speech = "ok" if entries else "unavailable" if "unavailable" in status.values() else "none"
         return {"status": speech, "entries": entries}
+
+    @router.post("/api/ideas/{idea_id}/edit/suggest/first-cut")
+    async def first_cut_route(idea_id: str, request: Request):
+        """The auto first cut: top take per shot, trimmed to its line, cleaned up, in shot order, with the reasons."""
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        refused = gate(idea_id)
+        if refused:
+            return refused
+        pad = number((body or {}).get("paddingFrames") if isinstance(body, dict) else None, PAD_DEFAULT)
+        if pad is None:
+            return error(422, BAD_RANGE)
+        media = media_dir()
+        with db() as conn:
+            ids = takes.shot_ids_of(conn, idea_id)
+            if not ids:
+                return error(409, NO_SHOTS)
+            lines = editing.shot_lines(conn, idea_id)
+            by_shot: dict = {}
+            for row, index in takes.rows_of(conn, idea_id):
+                sid = shot_of(conn, idea_id, row, index)
+                if sid not in ids:
+                    continue
+                got = analysis.full(conn, row[0])
+                if got and got["status"] in ("queued", "running"):
+                    return error(409, NOT_READY, status=got["status"])
+                if got and got["status"] == "done" and got["results"]:
+                    results = got["results"]
+                else:  # never analysed or the analysis failed: the whole take, no speech to go by
+                    info = editing._probe(media / idea_id / f"{row[0]}.{row[3]}")
+                    if not info:
+                        continue
+                    results = {"duration": info["duration"]}
+                by_shot.setdefault(sid, []).append({"id": row[0], "name": row[5], "chosen": bool(row[6]), "results": results})
+        if not by_shot:
+            return error(409, NO_FOOTAGE)
+        return first_cut([{"id": s, "line": lines.get(s)} for s in ids], by_shot, int(pad))
 
     return router

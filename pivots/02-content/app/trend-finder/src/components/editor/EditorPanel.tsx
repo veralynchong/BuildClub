@@ -29,6 +29,12 @@ import { ClipSettings } from './ClipSettings'
 import { TextTool } from './tools/TextTool'
 import { CaptionTool } from './tools/CaptionTool'
 import { AiTool } from './AiTool'
+import { ExportOptions } from './ExportOptions'
+import { SafeZoneOverlay } from './SafeZoneOverlay'
+import { PLATFORMS, exportSettings, safeZoneWarnings } from '../../lib/editor/presets'
+import { projectPages } from '../../lib/editor/captions'
+import { useDuckRanges } from '../../lib/editor/useDuckRanges'
+import type { FirstCutEntry } from '../../lib/editor/aiApi'
 import { VoiceTool } from './tools/VoiceTool'
 import { MusicTool, type MusicFile } from './tools/MusicTool'
 import { BrandTool } from './tools/BrandTool'
@@ -93,6 +99,9 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   // AI changes: the edit as it was before the last one (one level of undo), and what the AI did this session.
   const [aiUndo, setAiUndo] = useState<{ project: EditProject; label: string } | null>(null)
   const [aiLog, setAiLog] = useState<string[]>([])
+  const [firstCut, setFirstCut] = useState<{ log: FirstCutEntry[]; label: string } | null>(null) // why the last auto first cut did what it did
+  const [safe, setSafe] = useState(false) // the safe-zone overlay on the preview
+  const playerBox = useRef<HTMLDivElement>(null)
   const [voices, setVoices] = useState<Record<string, VoiceInfo>>({})
   const { clients } = useApp()
   const client = clients.find((c) => c.id === clientId)
@@ -229,9 +238,11 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
 
   const brand = useMemo(() => reelBrand(kit, clientId), [kit, clientId])
   const musicUrl = musicFile ? `${apiBase(ideaId)}/cut/music/file?v=${encodeURIComponent(`${musicFile.name}-${musicFile.size}`)}` : null
+  const takesKey = allTakes.map((x) => `${x.id}:${x.analysis?.status ?? ''}`).join(',')
+  const duck = useDuckRanges(planId, project, !!musicUrl && project?.music != null && project.music.duck !== false, takesKey)
   const inputProps = useMemo<ReelInput | null>(
-    () => (project ? reelInput({ project, urls, shots: filled, musicUrl, voice: voiceInput, brand }) : null),
-    [project, urls, filled, musicUrl, voiceInput, brand],
+    () => (project ? reelInput({ project, urls, shots: filled, musicUrl, voice: voiceInput, brand, duck }) : null),
+    [project, urls, filled, musicUrl, voiceInput, brand, duck],
   )
 
   // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
@@ -278,6 +289,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const undoAi = () => {
     if (!aiUndo) return
     update(aiUndo.project)
+    setFirstCut((f) => (f?.label === aiUndo.label ? null : f))
     setAiLog((l) => [t('editor.ai.undone', { label: aiUndo.label }), ...l].slice(0, 8))
     setAiUndo(null)
   }
@@ -287,6 +299,9 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   }
   const total = totalLength(project)
   const full = total > MAX_TOTAL - 0.2
+  const settings = exportSettings(project)
+  const platform = PLATFORMS[settings.preset]
+  const zoneWarnings = safeZoneWarnings(project, projectPages(project, lines, words), settings.preset)
   const locked = readOnly || stale || !!edit.writing
   const fill = async () => setSkipped(await timeline.fill())
 
@@ -335,7 +350,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
           <ShotClips uploads={uploads} shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={allTakes} planId={planId} onTakes={setFreshTakes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
         </aside>
         <div className="cv-ed-centre">
-          <div className="cv-ed-player">
+          <div className="cv-ed-player" ref={playerBox}>
             <Player
               ref={player}
               component={Reel}
@@ -347,9 +362,23 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
               controls
               style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '100%' }}
             />
+            {safe && <SafeZoneOverlay player={player} host={playerBox} platform={platform} />}
           </div>
           {/* over the player, never over the tabs; always mounted, so a running export keeps being followed while closed */}
           <div id="cv-ed-export" className="cv-ed-export-pop" hidden={!exportOpen} onKeyDown={(e) => e.key === 'Escape' && setExportOpen(false)}>
+            <ExportOptions
+              project={project}
+              planId={planId}
+              seconds={total}
+              warnings={zoneWarnings}
+              safe={safe}
+              readOnly={locked}
+              hasMusic={!!musicFile}
+              onSafe={setSafe}
+              onProject={update}
+              onShow={(sec) => seek(Math.round(sec * 30))}
+              flush={flush}
+            />
             <ExportBar ideaId={ideaId} clientId={clientId} focus={focus} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} onCut={setCut} />
           </div>
         </div>
@@ -380,6 +409,9 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
                 readOnly={locked}
                 undo={aiUndo}
                 log={aiLog}
+                firstCut={firstCut}
+                onFirstCut={(log, label) => setFirstCut({ log, label })}
+                onSeek={seek}
                 onApply={applyAi}
                 onUndo={undoAi}
                 onPreview={preview}

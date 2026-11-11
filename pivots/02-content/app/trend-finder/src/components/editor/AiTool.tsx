@@ -6,10 +6,10 @@ import { t } from '../../lib/i18n'
 import { sourceKey, clipLength } from '../../lib/editor/timeline'
 import type { Clip, EditProject } from '../../lib/editor/types'
 import {
-  getClipSuggestions, getKeeps, getTakeRanking, NotReady,
-  type CleanupItem, type ClipSuggestions, type TakeRanking,
+  getClipSuggestions, getFirstCut, getKeeps, getTakeRanking, NotReady,
+  type CleanupItem, type ClipSuggestions, type FirstCutEntry, type TakeRanking,
 } from '../../lib/editor/aiApi'
-import { MAX_CLIPS, nextClipId, PAD_DEFAULT, PAD_MAX, previewFrame, rankReason, replaceWithRanges, setClipRange, stamp, swapTake } from '../../lib/editor/aiEdit'
+import { applyFirstCut, firstCutLine, MAX_CLIPS, nextClipId, PAD_DEFAULT, PAD_MAX, previewFrame, rankReason, replaceWithRanges, setClipRange, stamp, swapTake } from '../../lib/editor/aiEdit'
 import { ErrorText } from '../ErrorText'
 import { clipLabel } from './clipName'
 
@@ -24,6 +24,9 @@ interface Props {
   readOnly: boolean
   undo: { label: string } | null
   log: string[]
+  firstCut: { log: FirstCutEntry[] } | null // why the last auto first cut did what it did; null once undone
+  onFirstCut: (log: FirstCutEntry[], label: string) => void
+  onSeek: (frame: number) => void // move the player there
   onApply: (next: EditProject, label: string) => void
   onUndo: () => void
   onPreview: (frame: number) => void // seek the player there and play
@@ -43,6 +46,7 @@ export function AiTool(props: Props) {
   return (
     <div className="cv-ed-tool cv-ed-ai">
       <p className="muted small">{t('editor.ai.intro')}</p>
+      {planId && <FirstCutCard {...props} planId={planId} />}
       {undo && (
         <div className="cv-ed-ai-undo">
           <button type="button" className="btn btn-ghost btn-sm" disabled={readOnly} onClick={onUndo}>{t('editor.ai.undo')}</button>
@@ -268,6 +272,87 @@ function Ranking({ planId, clip, project, shots, gens, takes, durations, readOnl
           <p className="muted small">{t('editor.ai.takes.note')}</p>
           {note && <p className="muted small" role="status">{note}</p>}
         </>
+      )}
+    </section>
+  )
+}
+
+
+// "Take 2": the take's place among the takes of its shot, the way the shot list numbers them.
+function takeName(takes: Take[], takeId: string | undefined, fallback: string | undefined): string {
+  const x = takes.find((v) => v.id === takeId)
+  const k = x ? takes.filter((v) => v.shotId === x.shotId).sort((a, b) => a.createdAt - b.createdAt).findIndex((v) => v.id === x.id) + 1 : 0
+  return k > 0 ? t('editor.cut.take', { k }) : (fallback ?? '')
+}
+
+// One button makes the whole first cut; "Why these cuts" lists every decision, and each line jumps the player to it.
+function FirstCutCard({ planId, project, takes, readOnly, firstCut, onFirstCut, onApply, onSeek }: Props & { planId: string }) {
+  const [busy, setBusy] = useState(false)
+  const [ask, setAsk] = useState(false) // the timeline has clips: replace them?
+  const [note, setNote] = useState('')
+  const [err, setErr] = useState('')
+  const latest = useRef(project)
+  latest.current = project
+
+  const run = async () => {
+    if (busy) return
+    setBusy(true)
+    setAsk(false)
+    setNote('')
+    setErr('')
+    try {
+      const cut = await getFirstCut(planId, PAD_DEFAULT)
+      const base = latest.current
+      const next = applyFirstCut(base, cut)
+      if (next === base) return setNote(t('editor.ai.err'))
+      const label = t('editor.cut.label', { clips: cut.clips.length, shots: cut.shotsUsed })
+      onApply(next, label)
+      onFirstCut(cut.log, label)
+      setNote(cut.captions.entries.length === 0 ? t('editor.cut.noCaptions') : t('editor.cut.done', { clips: cut.clips.length, shots: cut.shotsUsed, sec: round1(cut.seconds) }))
+    } catch (e) {
+      if (e instanceof NotReady) setNote(t('editor.cut.waiting'))
+      else setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const click = () => (project.clips.length > 0 ? setAsk(true) : void run())
+
+  return (
+    <section className="cv-ed-ai-card" aria-label={t('editor.cut.title')} data-testid="first-cut">
+      <h4 className="cv-ed-sub">{t('editor.cut.title')}</h4>
+      <p className="muted small">{t('editor.cut.help')}</p>
+      <div className="cv-ed-tool-row">
+        <button type="button" className="btn btn-primary btn-sm" disabled={readOnly || busy} onClick={click}>
+          {busy ? t('editor.cut.working') : t('editor.cut.button')}
+        </button>
+      </div>
+      {ask && (
+        <div className="cv-ed-ai-confirm" role="alertdialog" aria-label={t('editor.cut.title')}>
+          <p className="small">{t('editor.cut.confirm', { n: project.clips.length })}</p>
+          <div className="cv-ed-tool-row">
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => void run()}>{t('editor.cut.replace')}</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAsk(false)}>{t('editor.cut.keep')}</button>
+          </div>
+        </div>
+      )}
+      {note && <p className="muted small" role="status">{note}</p>}
+      {err && <ErrorText text={err} />}
+      {firstCut && firstCut.log.length > 0 && (
+        <div aria-label={t('editor.cut.whyTitle')}>
+          <h4 className="cv-ed-sub">{t('editor.cut.whyTitle')}</h4>
+          <p className="muted small">{t('editor.cut.whyHelp')}</p>
+          <ul className="cv-ed-cut-log">
+            {firstCut.log.map((e, i) => (
+              <li key={i} data-kind={e.kind}>
+                <button type="button" className="cv-ed-cut-line small" onClick={() => onSeek(Math.round(e.at * 30))}>
+                  <span className="cv-ed-ai-time">{stamp(e.at)}</span>
+                  <span>{firstCutLine(e, takeName(takes, e.takeId, e.name))}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   )

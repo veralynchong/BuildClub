@@ -16,8 +16,9 @@ export function reelInput(a: {
   musicUrl: string | null
   voice: ReelInput['voice']
   brand: ReelInput['brand']
+  duck?: ReelInput['duck']
 }): ReelInput {
-  return { project: a.project, urls: a.urls, lines: shotLines(a.shots), musicUrl: a.musicUrl, voice: a.voice, brand: a.brand, fontUrl: FONT_URL }
+  return { project: a.project, urls: a.urls, lines: shotLines(a.shots), musicUrl: a.musicUrl, ...(a.duck ? { duck: a.duck } : {}), voice: a.voice, brand: a.brand, fontUrl: FONT_URL }
 }
 
 // The Timeline node's preview: no music or voiceover (each needs its own load; the full editor plays them).

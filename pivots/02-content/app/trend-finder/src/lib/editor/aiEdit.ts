@@ -3,7 +3,7 @@
 import { t, tp } from '../i18n.ts'
 import type { Clip, ClipSource, EditProject, SpeechCaption } from './types.ts'
 import { applyNewer, clipLength, clipStarts, FPS, MAX_TOTAL, MIN_CLIP, totalLength } from './timeline.ts'
-import type { RankedTake } from './aiApi.ts'
+import type { FirstCut, FirstCutEntry, RankedTake } from './aiApi.ts'
 
 export const MAX_CLIPS = 100 // backend/editing.py MAX_CLIPS
 export const PAD_DEFAULT = 4
@@ -99,3 +99,38 @@ export function rankReason(r: Pick<RankedTake, 'coverage' | 'fillers' | 'longPau
   if (r.retakes) parts.push(tp('editor.ai.rank.retakes', r.retakes))
   return parts.join(t('editor.ai.rank.sep'))
 }
+
+// The first cut as the edit: its clips replace the timeline, the shots follow the takes it picked, and the captions come from
+// the speech (left as they were when no speech was found). Texts, music and voiceover stay.
+export function applyFirstCut(p: EditProject, cut: Pick<FirstCut, 'clips' | 'primaries' | 'captions'>): EditProject {
+  if (cut.clips.length === 0) return p
+  const next = { ...p, clips: cut.clips, primaries: { ...p.primaries, ...cut.primaries } }
+  return cut.captions.status === 'ok' && cut.captions.entries.length > 0 ? withSpeechCaptions(next, cut.captions.entries) : next
+}
+
+// One line of "Why these cuts" in the current language. `take` is how the picked take is named ("Take 2").
+export function firstCutLine(e: FirstCutEntry, take: string): string {
+  const n = e.shot
+  switch (e.kind) {
+    case 'pick': {
+      const reason = rankReason({ coverage: e.coverage ?? null, fillers: e.fillers ?? 0, longPauses: e.longPauses ?? 0, retakes: e.retakes ?? 0, speech: e.speech ?? '' })
+      return (e.takes ?? 1) > 1 ? t('editor.cut.pickOf', { n, name: take, takes: e.takes ?? 1, reason }) : t('editor.cut.pickOnly', { n, name: take, reason })
+    }
+    case 'trim':
+      return t('editor.cut.trim', { n, from: stamp(e.start ?? 0), to: stamp(e.end ?? 0), total: stamp(e.duration ?? 0) })
+    case 'missing':
+      return t('editor.cut.missing', { n, words: (e.words ?? []).join(' · ') })
+    case 'cut': {
+      const at = stamp(e.start ?? 0)
+      if (e.type === 'filler') return t('editor.cut.cut.filler', { n, text: e.said ?? '', at })
+      if (e.type === 'retake') return t('editor.cut.cut.retake', { n, text: e.said ?? '', at })
+      return t('editor.cut.cut.silence', { n, sec: round1(e.seconds ?? 0), at })
+    }
+    case 'skip':
+      return t(e.why === 'short' ? 'editor.cut.skip.short' : e.why === 'empty' ? 'editor.cut.skip.empty' : 'editor.cut.skip.none', { n })
+    default:
+      return t('editor.cut.limit', { n })
+  }
+}
+
+const round1 = (n: number): string => (Math.round(n * 10) / 10).toFixed(1)

@@ -71,7 +71,7 @@ export function MusicTool({ ideaId, project, file, onFile, readOnly, onProject }
               step={5}
               value={Math.round(volume * 100)}
               disabled={off}
-              onChange={(e) => onProject({ ...project, music: { volume: Number(e.target.value) / 100 } })}
+              onChange={(e) => onProject({ ...project, music: { ...project.music, volume: Number(e.target.value) / 100 } })}
             />
             <span className="cv-ed-audio-pct">{Math.round(volume * 100)}%</span>
           </label>

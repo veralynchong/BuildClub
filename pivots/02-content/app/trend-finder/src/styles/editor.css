@@ -168,3 +168,20 @@
 .cv-ed-ai-rank li[data-current] { background: var(--accent-soft); }
 .cv-ed-ai-rank-body { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
 .cv-ed-capsource label { display: inline-flex; align-items: center; gap: var(--space-2xs); }
+
+/* auto first cut: the confirm box and "Why these cuts" */
+.cv-ed-ai-confirm { padding: var(--space-sm); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); }
+.cv-ed-cut-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cv-ed-cut-line { display: flex; gap: var(--space-sm); align-items: baseline; width: 100%; text-align: left; padding: var(--space-2xs) var(--space-xs); border: 0; border-radius: var(--radius-xs); background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.cv-ed-cut-line:hover, .cv-ed-cut-line:focus-visible { background: var(--surface-2, rgba(127, 127, 127, 0.12)); }
+.cv-ed-cut-log [data-kind="cut"] .cv-ed-cut-line { color: var(--muted, inherit); }
+.cv-ed-cut-log [data-kind="skip"] .cv-ed-cut-line, .cv-ed-cut-log [data-kind="limit"] .cv-ed-cut-line { color: var(--no); }
+
+/* export presets, loudness / ducking switches, safe-zone warnings */
+.cv-ed-expopts { display: flex; flex-direction: column; gap: var(--space-sm); padding-bottom: var(--space-base); margin-bottom: var(--space-base); border-bottom: 1px solid var(--line); }
+.cv-ed-expopts .cv-ed-switch { align-items: flex-start; }
+.cv-ed-expopts-warn { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.cv-ed-expopts-warn li { display: flex; gap: var(--space-sm); align-items: baseline; color: var(--no); }
+.cv-ed-safe { position: absolute; pointer-events: none; z-index: 3; }
+.cv-ed-safe > div { position: absolute; background: rgba(220, 38, 38, 0.28); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; text-align: center; text-shadow: 0 1px 2px #000; }
+.cv-ed-player { position: relative; }

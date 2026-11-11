@@ -1,6 +1,7 @@
 import { useMemo, type CSSProperties } from 'react'
 import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, staticFile } from 'remotion'
 import { pageEnd, projectPages } from '../lib/editor/captions.ts'
+import { musicVolume } from '../lib/editor/duck.ts'
 import { clipFrames, reelDurationInFrames, sourceKey, toFrames } from '../lib/editor/timeline.ts'
 import type { LogoCorner, LogoSize, ReelInput, TextItem } from '../lib/editor/types.ts'
 import { useReelFont } from './font.ts'
@@ -38,7 +39,7 @@ function textLook(color: TextItem['color'], brand: string | null): { fill: strin
 }
 
 export function Reel(props: ReelInput) {
-  const { project, urls, fontUrl, brand, musicUrl, lines, voice } = props
+  const { project, urls, fontUrl, brand, musicUrl, lines, voice, duck } = props
   useReelFont(fontUrl || staticFile(BUNDLED_FONT))
   const spans = clipFrames(project)
   const total = reelDurationInFrames(project)
@@ -127,7 +128,10 @@ export function Reel(props: ReelInput) {
           </Sequence>
         )
       })}
-      {project.music && musicUrl ? <Audio src={musicUrl} volume={project.music.volume} loop={false} /> : null}
+      {project.music && musicUrl ? (
+        // The music goes down under speech unless the project turns that off; the export gets the same ranges.
+        <Audio src={musicUrl} volume={project.music.duck === false || !duck?.length ? project.music.volume : (f) => musicVolume(project.music?.volume ?? 0, duck, f)} loop={false} />
+      ) : null}
     </AbsoluteFill>
   )
 }

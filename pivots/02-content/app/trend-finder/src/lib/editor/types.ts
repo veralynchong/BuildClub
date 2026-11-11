@@ -33,8 +33,13 @@ export type TextItem = {
   color: TextColor
 }
 
-// The music file is the plan's cut music; the project keeps only how loud it plays (0 to 1).
-export type MusicSetting = { volume: number }
+// The music file is the plan's cut music; the project keeps how loud it plays (0 to 1) and whether it goes down under speech
+// (absent means it does).
+export type MusicSetting = { volume: number; duck?: boolean }
+
+// The export popover's choices. Absent means TikTok with the loudness pass on. The platform only changes the warnings shown.
+export type ExportPreset = 'tiktok' | 'reels' | 'shorts'
+export type ExportSettings = { preset: ExportPreset; loudnorm: boolean }
 
 export type VoiceSeg = {
   id: string
@@ -73,6 +78,7 @@ export type EditProject = {
   showLogo: boolean
   logoSize: LogoSize // the backend fills these in for a project saved without them
   logoCorner: LogoCorner
+  export?: ExportSettings
 }
 
 // One footage item from list_sources, without the backend-only `path`.
@@ -96,6 +102,7 @@ export type ReelInput = {
   urls: Record<string, string>
   lines: Record<string, string>
   musicUrl: string | null
+  duck?: [number, number][] // timeline seconds in which the music goes down (speech); empty or absent: it stays level
   voice: { id: string; url: string; words: Word[] | null }[]
   brand: { font: string; color: string | null; logoUrl: string | null }
   fontUrl: string

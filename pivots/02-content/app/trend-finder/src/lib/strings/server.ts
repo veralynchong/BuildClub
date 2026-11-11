@@ -165,6 +165,7 @@ export const en = {
   "server.step.starting": "Starting",
   "server.step.waiting": "Waiting to start",
   "server.step.exporting": "Exporting",
+  "server.step.levelling": "Setting the sound level",
   "server.provider.inputNotImage": "An input image isn't a PNG, JPEG or WebP file.",
   "server.provider.fileUnusable": "The file fal produced can't be used.",
   "server.provider.mockVideo": "The mock video failed. Try again.",
@@ -178,6 +179,9 @@ export const en = {
   "server.suggest.removals": "Send the parts to remove as start and end times.",
   "server.suggest.nothingLeft": "Nothing would be left of the clip.",
   "server.suggest.clips": "Send the timeline clips to caption.",
+  "server.suggest.noShots": "Add shots to the plan first.",
+  "server.suggest.noFootage": "Upload footage to at least one shot first.",
+  "server.finishing.duck": "Send the timeline clips and the voiceover.",
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -343,6 +347,7 @@ export const zhHant: Record<keyof typeof en, string> = {
   "server.step.starting": "準備中",
   "server.step.waiting": "等待開始",
   "server.step.exporting": "出片中",
+  "server.step.levelling": "調整音量",
   "server.provider.inputNotImage": "輸入的圖片不是 PNG、JPEG 或 WebP 檔。",
   "server.provider.fileUnusable": "fal 產生的檔案無法使用。",
   "server.provider.mockVideo": "模擬影片失敗了，請再試一次。",
@@ -356,4 +361,7 @@ export const zhHant: Record<keyof typeof en, string> = {
   "server.suggest.removals": "請以開始和結束時間傳入要刪除的段落。",
   "server.suggest.nothingLeft": "這樣剪會一點都不剩。",
   "server.suggest.clips": "請傳入要做字幕的時間軸片段。",
+  "server.suggest.noShots": "請先在企劃加入分鏡。",
+  "server.finishing.duck": "請傳入時間軸片段和旁白。",
+  "server.suggest.noFootage": "請先為至少一個分鏡上傳素材。",
 }

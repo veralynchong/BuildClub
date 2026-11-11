@@ -1,6 +1,6 @@
 import { t } from '../i18n.ts'
 import { serverText } from '../serverText.ts'
-import type { Clip, SpeechCaption } from './types.ts'
+import type { Clip, ClipSource, EditProject, SpeechCaption } from './types.ts'
 
 // The editor's AI suggestions (backend/suggest.py). Every answer is a proposal; nothing is changed on the server.
 
@@ -105,3 +105,63 @@ export async function getSpeechCaptions(planId: string, clips: Clip[]): Promise<
   })
   return send(r)
 }
+
+// ---- auto first cut ----
+
+// One decision of the first cut. `at` is the second of the new timeline to look at; the other fields depend on `kind`.
+export interface FirstCutEntry {
+  kind: 'pick' | 'trim' | 'missing' | 'cut' | 'skip' | 'limit'
+  text: string // the sentence in English, as the server says it
+  shot: number // 1-based place in the shot list
+  at: number
+  takeId?: string
+  name?: string
+  takes?: number
+  speech?: string
+  coverage?: number | null
+  fillers?: number
+  longPauses?: number
+  retakes?: number
+  type?: CleanupType
+  start?: number
+  end?: number
+  duration?: number
+  seconds?: number
+  said?: string | null
+  words?: string[]
+  why?: 'none' | 'short' | 'empty' // skips only
+}
+
+export interface FirstCut {
+  clips: Clip[]
+  primaries: Record<string, ClipSource>
+  log: FirstCutEntry[]
+  seconds: number
+  shotsUsed: number
+  captions: { status: Speech; entries: SpeechCaption[] }
+}
+
+export async function getFirstCut(planId: string, paddingFrames: number): Promise<FirstCut> {
+  const r = await fetch(`${base(planId)}/first-cut`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ paddingFrames }),
+  })
+  return send(r)
+}
+
+// Where the music goes down for these clips (timeline seconds). The export works the same ranges out itself.
+export async function getDuckRanges(planId: string, project: Pick<EditProject, 'clips' | 'voiceover'>): Promise<[number, number][]> {
+  const r = await fetch(`/api/ideas/${encodeURIComponent(planId)}/edit/duck`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      clips: project.clips.map((c) => ({ source: { kind: c.source.kind, id: c.source.id }, in: c.in, out: c.out, volume: c.volume, muted: c.muted })),
+      voiceover: project.voiceover.map((v) => ({ id: v.id, start: v.start })),
+    }),
+  })
+  return (await send<{ ranges: [number, number][] }>(r)).ranges
+}
+
+// The saved timeline as an EDL (Premiere, DaVinci Resolve) or OpenTimelineIO.
+export const edlUrl = (planId: string, format: 'edl' | 'otio' = 'edl'): string => `/api/ideas/${encodeURIComponent(planId)}/edit/edl?format=${format}`
