@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { t } from '../../lib/i18n'
-import { clipLength, parseSeconds, setShotCaption, trimClip } from '../../lib/editor/timeline'
+import { clipLength, parseSeconds, setClipFit, setShotCaption, trimClip } from '../../lib/editor/timeline'
 import type { Clip, EditProject } from '../../lib/editor/types'
 
 interface Props {
@@ -50,6 +50,17 @@ function Settings({ project, clip, name, sourceDuration, nodeId, readOnly, onPro
           onKeyDown={(e) => e.key === 'Enter' && apply()}
         />
       </label>
+      <div className="cv-ed-field" role="group" aria-label={t('editor.clipSet.fit')}>
+        <span>{t('editor.clipSet.fit')}</span>
+        <div className="cv-ed-fitpick">
+          {(['fill', 'fit'] as const).map((f) => (
+            <button key={f} type="button" className={`btn btn-sm ${(clip.fit ?? 'fill') === f ? 'btn-primary' : 'btn-ghost'}`} aria-pressed={(clip.fit ?? 'fill') === f} disabled={readOnly} onClick={() => onProject(setClipFit(project, clip.id, f))}>
+              {t(`editor.clipSet.fit.${f}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="muted small">{t((clip.fit ?? 'fill') === 'fit' ? 'editor.clipSet.fit.fitHelp' : 'editor.clipSet.fit.fillHelp')}</p>
       {shotId && (
         <>
           <label className="cv-ed-switch">

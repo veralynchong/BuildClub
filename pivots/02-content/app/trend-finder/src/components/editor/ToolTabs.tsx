@@ -6,6 +6,7 @@ export type { Tool }
 
 const LABEL: Record<Tool, Key> = {
   clips: 'editor.tab.clips',
+  ai: 'editor.tab.ai',
   text: 'editor.tab.text',
   captions: 'editor.tab.captions',
   voice: 'editor.tab.voice',

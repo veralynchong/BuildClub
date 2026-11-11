@@ -3,4 +3,4 @@
 set -eu
 cd "$(dirname "$0")/.."
 exec /usr/bin/env -i PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
-  python3 -I bin/verify_offline.py "${@}"
+  python3 -I bin/verify_offline.py ${@+"$@"}

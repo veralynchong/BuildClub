@@ -15,19 +15,31 @@ export interface Take {
   createdAt: number
   url: string
   cleanedFrom: string | null // the take this one was cleaned from, null for an upload
+  analysis?: TakeAnalysis | null // what the server found out about the footage; absent in lists that don't carry it
 }
+
+// The background look at a take (words, pauses, picture cuts, loudness); `summary` is there once it is done.
+export interface TakeAnalysis {
+  status: 'queued' | 'running' | 'done' | 'failed'
+  error: string | null
+  summary?: { duration: number | null; words: number; speech: string | null; silences: number; cuts: number }
+}
+
+export const analysing = (take: Take): boolean => take.analysis?.status === 'queued' || take.analysis?.status === 'running'
 
 // Same limits and copy as backend/takes.py.
 export const MAX_TAKE_BYTES = 200 * 1024 * 1024
 
-type VideoType = 'video/mp4' | 'video/quicktime'
+const VIDEO_TYPES = { mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/x-m4v', webm: 'video/webm' } as const
+type VideoType = (typeof VIDEO_TYPES)[keyof typeof VIDEO_TYPES]
 
 // The upload's Content-Type. Some browsers leave file.type empty, so the extension decides then.
 export function videoType(file: { name: string; type: string }): VideoType | null {
-  if (file.type === 'video/mp4' || file.type === 'video/quicktime') return file.type
+  const known = Object.values(VIDEO_TYPES) as string[]
+  if (known.includes(file.type)) return file.type as VideoType
   if (file.type) return null
-  const ext = file.name.toLowerCase().split('.').pop()
-  return ext === 'mp4' ? 'video/mp4' : ext === 'mov' ? 'video/quicktime' : null
+  const ext = file.name.toLowerCase().split('.').pop() as keyof typeof VIDEO_TYPES
+  return VIDEO_TYPES[ext] ?? null
 }
 
 // The reason a file can't be uploaded, checked before sending it; null when it can.
@@ -84,6 +96,10 @@ export async function uploadTake(ideaId: string, shot: number, file: File): Prom
     headers: { 'content-type': videoType(file) ?? '', 'x-filename': encodeURIComponent(file.name) },
   })
   return send(r, t('plan.takes.err.upload'))
+}
+
+export async function retryAnalysis(ideaId: string, takeId: string): Promise<void> {
+  await send(await fetch(`${base(ideaId)}/takes/${encodeURIComponent(takeId)}/analysis/retry`, { method: 'POST' }), t('editor.analysis.retryFailed'))
 }
 
 export async function chooseTake(ideaId: string, takeId: string): Promise<Take[]> {

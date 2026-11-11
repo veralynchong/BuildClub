@@ -27,6 +27,9 @@ interface Props {
   onCut: (cut: CutState | null) => void // the latest state of the export, for the step bar
 }
 
+// Sending the export to the approver is off for now (AI edit plan, Phase 0); the code path stays for later.
+const SEND_FOR_APPROVAL = false
+
 const isActive = (c: CutState | null) => c?.status === 'queued' || c?.status === 'running'
 
 // Export the timeline as a video, show the render's progress, then preview it and send it for review.
@@ -181,7 +184,7 @@ export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, read
   const active = isActive(cut) && !pollDead
   const output = cut?.source === 'editor' ? cut.output : undefined
   const review = output ? (cut?.review ?? null) : null
-  const canSend = !readOnly && !!output && !cut?.stale && !active && review?.status !== 'waiting' && review?.status !== 'approved' && review?.status !== 'rejected'
+  const canSend = SEND_FOR_APPROVAL && !readOnly && !!output && !cut?.stale && !active && review?.status !== 'waiting' && review?.status !== 'approved' && review?.status !== 'rejected'
   const line = reviewLine(review, manager, formatDay)
 
   // Opened from the toolbar's Send for approval: focus Send the first time it exists (the export state loads after

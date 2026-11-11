@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import analyze  # noqa: E402
 import channels  # noqa: E402
 import covers  # noqa: E402
+import analysis  # noqa: E402
 import editing  # noqa: E402
 import server  # noqa: E402
 
@@ -55,6 +56,8 @@ def offline(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "DB_PATH", tmp_path / "data.db")
     monkeypatch.setattr(server, "MEDIA_DIR", tmp_path / "media")
     monkeypatch.setattr(analyze, "JOBS_DIR", tmp_path / "jobs")
+    # Uploading a take marks it queued but never starts the background worker; tests call jobs._one() themselves.
+    monkeypatch.setattr(analysis.AnalysisJobs, "_enqueue", lambda self, idea_id, take_id: None)
     monkeypatch.setattr(channels, "CHANNELS_DIR", tmp_path / "channels")
     monkeypatch.setenv("TYPESAFE_API_KEY", "test-jev-key")
     monkeypatch.setenv("SCRAPECREATORS_API_KEY", "test-sc-key")

@@ -259,3 +259,11 @@ def test_is_silent_only_when_the_pauses_cover_the_whole_file():
     assert cutting.is_silent([(0.0, 0.1), (0.1, 7.95)], 8.0)  # silencedetect's own rounding
     assert not cutting.is_silent([(1.0, 7.0)], 8.0)
     assert not cutting.is_silent([], 8.0) and not cutting.is_silent([(0.0, 0.0)], 0.0)
+
+
+def test_whisper_prompt_is_passed_only_when_given(tmp_path, monkeypatch):
+    calls = _fake_whisper(tmp_path, monkeypatch, knows_dtw=True)
+    cutting.transcribe_words(tmp_path / "a.wav", tmp_path)
+    cutting.transcribe_words(tmp_path / "a.wav", tmp_path, prompt="Umm, uh, so")
+    assert "--prompt" not in calls[0]
+    assert calls[1][calls[1].index("--prompt") + 1] == "Umm, uh, so"

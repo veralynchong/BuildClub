@@ -59,6 +59,9 @@ import workspaces
 import shotlist
 import storyboard
 import cleaning
+import editor_ai
+import suggest
+import finishing
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
 from compare import CompareJobs, compare_id_for
@@ -140,6 +143,8 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
 async def lifespan(_app):
     generations.recover(db, gen_jobs)
     renders.recover(db)  # a cut that was running when the server stopped will never finish
+    if takes.JOBS is not None:
+        takes.JOBS.resume()  # analyse takes that were queued at shutdown or never analysed
     editing.prewarm_bundle()  # builds the Remotion bundle in a background thread; never blocks startup
     yield
     editing.kill_active()  # no render outlives the server
@@ -769,7 +774,7 @@ def db() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
     migrate_medians(conn)
-    for statement in workspaces.SCHEMA + auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + editing.SCHEMA + generations.SCHEMA + renders.SCHEMA + recheck.SCHEMA:
+    for statement in workspaces.SCHEMA + auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + editing.SCHEMA + generations.SCHEMA + renders.SCHEMA + recheck.SCHEMA + editor_ai.SCHEMA:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
@@ -982,6 +987,9 @@ app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
 app.include_router(workspaces.make_router(db, load))
 app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR, gen_router))
+app.include_router(editor_ai.make_router(db, load, storyboard_budget))
+app.include_router(suggest.make_router(db, load, lambda: MEDIA_DIR))
+app.include_router(finishing.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(kit.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))

@@ -140,3 +140,60 @@
 .cv-ed-menu button { text-align: left; padding: var(--space-xs) var(--space-sm); font: inherit; font-size: var(--text-sm); color: var(--fg); background: none; border: 0; border-radius: var(--radius-xs); cursor: pointer; }
 .cv-ed-menu button:hover:not(:disabled), .cv-ed-menu button:focus-visible { background: var(--accent-soft); outline: none; }
 .cv-ed-menu button:disabled { color: var(--muted); cursor: not-allowed; }
+
+/* Footage sent from the shot list: the card is a drop target, each file shows while it is sent. */
+.cv-ed-shot[data-drop] { border-color: var(--accent); background: var(--accent-soft); }
+.cv-ed-upload { align-self: flex-start; position: relative; cursor: pointer; }
+.cv-ed-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.cv-ed-uploads { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.cv-ed-uploads li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-width: 0; overflow-wrap: anywhere; }
+.cv-ed-uploads progress { flex: none; width: 4rem; }
+.cv-ed-fitpick { display: flex; gap: var(--space-xs); }
+
+/* a take's analysis chip in the shot list */
+.cv-ed-analysis { display: inline-flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; font-size: var(--text-xs); color: var(--muted); }
+.cv-ed-analysis[data-status="done"] { color: var(--fg); }
+.cv-ed-analysis[data-status="failed"] { color: var(--no); }
+
+/* AI suggestions tab: script alignment, clean-up list, take ranking */
+.cv-ed-ai-card { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-sm); min-width: 0; }
+.cv-ed-ai-undo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }
+.cv-ed-ai-line { overflow-wrap: anywhere; }
+.cv-ed-ai-missing { color: var(--no); overflow-wrap: anywhere; }
+.cv-ed-ai-items, .cv-ed-ai-rank, .cv-ed-ai-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.cv-ed-ai-items li { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: var(--space-sm); font-size: var(--text-sm); }
+.cv-ed-ai-time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+.cv-ed-ai-label { min-width: 0; overflow-wrap: anywhere; }
+.cv-ed-ai-rank li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--space-sm); padding: var(--space-xs); border-radius: var(--radius-xs); }
+.cv-ed-ai-rank li[data-current] { background: var(--accent-soft); }
+.cv-ed-ai-rank-body { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.cv-ed-capsource label { display: inline-flex; align-items: center; gap: var(--space-2xs); }
+
+/* auto first cut: the confirm box and "Why these cuts" */
+.cv-ed-ai-confirm { padding: var(--space-sm); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); }
+.cv-ed-cut-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cv-ed-cut-line { display: flex; gap: var(--space-sm); align-items: baseline; width: 100%; text-align: left; padding: var(--space-2xs) var(--space-xs); border: 0; border-radius: var(--radius-xs); background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.cv-ed-cut-line:hover, .cv-ed-cut-line:focus-visible { background: var(--surface-2, rgba(127, 127, 127, 0.12)); }
+.cv-ed-cut-log [data-kind="cut"] .cv-ed-cut-line { color: var(--muted, inherit); }
+.cv-ed-cut-log [data-kind="skip"] .cv-ed-cut-line, .cv-ed-cut-log [data-kind="limit"] .cv-ed-cut-line { color: var(--no); }
+
+/* export presets, loudness / ducking switches, safe-zone warnings */
+.cv-ed-expopts { display: flex; flex-direction: column; gap: var(--space-sm); padding-bottom: var(--space-base); margin-bottom: var(--space-base); border-bottom: 1px solid var(--line); }
+.cv-ed-expopts .cv-ed-switch { align-items: flex-start; }
+.cv-ed-expopts-warn { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.cv-ed-expopts-warn li { display: flex; gap: var(--space-sm); align-items: baseline; color: var(--no); }
+.cv-ed-safe { position: absolute; pointer-events: none; z-index: 3; }
+.cv-ed-safe > div { position: absolute; background: rgba(220, 38, 38, 0.28); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; text-align: center; text-shadow: 0 1px 2px #000; }
+.cv-ed-player { position: relative; }
+.cv-ed-copy-block { display: flex; flex-direction: column; gap: var(--space-xs); padding-top: var(--space-sm); border-top: 1px solid var(--line); }
+.cv-ed-copy-list { margin: 0; padding-left: var(--space-md); display: flex; flex-direction: column; gap: var(--space-2xs); }
+.cv-ed-copy-diffs, .cv-ed-notes, .cv-ed-tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+.cv-ed-copy-diffs li { display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-xs); border: 1px solid var(--line); border-radius: var(--radius-xs); }
+.cv-ed-copy-diffs p { margin: 0; overflow-wrap: anywhere; }
+.cv-ed-copy-diffs ins { text-decoration: none; font-weight: 600; }
+.cv-ed-copy-post { margin: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.cv-ed-copy-post dd { margin: 0 0 var(--space-xs); overflow-wrap: anywhere; }
+.cv-ed-notes li { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: var(--space-sm); }
+.cv-ed-note-time { background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; color: var(--accent); }
+.cv-ed-tasks li { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: var(--space-sm); }
+.cv-ed-tasks li[data-done] .cv-ed-task-action { text-decoration: line-through; color: var(--muted); }

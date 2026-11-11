@@ -12,9 +12,10 @@ import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import type { EditHook } from '../../lib/editor/useEditProject'
 import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
+import { useTakeAnalysis } from '../../lib/editor/useTakeAnalysis'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, clipLength, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
-import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
+import { addVoice, clipLength, clipStatus, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import type { EditProject, ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
 import { stepsDone, tabsDone } from '../../lib/editor/steps'
@@ -23,9 +24,17 @@ import { clipNode } from '../../lib/canvas/timelineNode'
 import type { Take } from '../../lib/takes'
 import { ToolTabs, type Tool } from './ToolTabs'
 import { ShotClips } from './ShotClips'
+import { useShotUpload } from '../../lib/editor/useShotUpload'
 import { ClipSettings } from './ClipSettings'
 import { TextTool } from './tools/TextTool'
 import { CaptionTool } from './tools/CaptionTool'
+import { AiTool } from './AiTool'
+import { ExportOptions } from './ExportOptions'
+import { SafeZoneOverlay } from './SafeZoneOverlay'
+import { PLATFORMS, exportSettings, safeZoneWarnings } from '../../lib/editor/presets'
+import { projectPages } from '../../lib/editor/captions'
+import { useDuckRanges } from '../../lib/editor/useDuckRanges'
+import type { FirstCutEntry } from '../../lib/editor/aiApi'
 import { VoiceTool } from './tools/VoiceTool'
 import { MusicTool, type MusicFile } from './tools/MusicTool'
 import { BrandTool } from './tools/BrandTool'
@@ -50,7 +59,7 @@ interface Props {
   focus?: 'export' | 'send' | null // open with the export panel showing and that control focused (the Timeline node's Export)
 }
 
-export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, doc, gens, takes, readOnly, onBack, onJumpToNode, focus = null }: Props) {
+export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline: baseTimeline, doc, gens, takes, readOnly, onBack, onJumpToNode, focus = null }: Props) {
   const { project, loadError, save, stale, update, flush, current, reload } = edit
   const { sources, error: sourceError } = footage
   const [skipped, setSkipped] = useState<string[]>([])
@@ -87,6 +96,12 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const ttsGoing = useRef(false) // a second click can never start (and charge) a second job
   const ttsAbort = useRef<AbortController | null>(null)
   const frameRef = useRef(0)
+  // AI changes: the edit as it was before the last one (one level of undo), and what the AI did this session.
+  const [aiUndo, setAiUndo] = useState<{ project: EditProject; label: string } | null>(null)
+  const [aiLog, setAiLog] = useState<string[]>([])
+  const [firstCut, setFirstCut] = useState<{ log: FirstCutEntry[]; label: string } | null>(null) // why the last auto first cut did what it did
+  const [safe, setSafe] = useState(false) // the safe-zone overlay on the preview
+  const playerBox = useRef<HTMLDivElement>(null)
   const [voices, setVoices] = useState<Record<string, VoiceInfo>>({})
   const { clients } = useApp()
   const client = clients.find((c) => c.id === clientId)
@@ -95,6 +110,20 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
 
   const byKey = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s])), [sources])
   const shotSources = useMemo(() => (sources ? sourcesWithShots(sources, doc) : null), [sources, doc])
+  // Footage sent from the shot list: the plan's takes are read again so the new take is named right away.
+  const [freshTakes, setFreshTakes] = useState<Take[] | null>(null)
+  const planId = typeof ideaId === 'string' ? ideaId : ideaId.kind === 'legacy-plan' ? ideaId.id : null // workspaces take no footage
+  const uploads = useShotUpload(planId, footage.refresh, setFreshTakes)
+  const allTakes = freshTakes ?? takes
+  useTakeAnalysis(planId, allTakes, setFreshTakes)
+  // The canvas keeps its own list of takes; a take sent from here is not in it, so it would show as "Footage deleted".
+  const timeline = useMemo<TimelineActions>(() => ({
+    ...baseTimeline,
+    statusOf: (c) => {
+      const s = baseTimeline.statusOf(c)
+      return s.state === 'missing' && c.source.kind === 'take' && allTakes.some((x) => x.id === c.source.id) ? clipStatus(c, doc, gens, allTakes) : s
+    },
+  }), [baseTimeline, allTakes, doc, gens])
   const urls = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s.url])), [sources])
   // The plan's music track is looked up once; MusicTool keeps it current after an upload or removal.
   useEffect(() => {
@@ -209,9 +238,11 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
 
   const brand = useMemo(() => reelBrand(kit, clientId), [kit, clientId])
   const musicUrl = musicFile ? `${apiBase(ideaId)}/cut/music/file?v=${encodeURIComponent(`${musicFile.name}-${musicFile.size}`)}` : null
+  const takesKey = allTakes.map((x) => `${x.id}:${x.analysis?.status ?? ''}`).join(',')
+  const duck = useDuckRanges(planId, project, !!musicUrl && project?.music != null && project.music.duck !== false, takesKey)
   const inputProps = useMemo<ReelInput | null>(
-    () => (project ? reelInput({ project, urls, shots: filled, musicUrl, voice: voiceInput, brand }) : null),
-    [project, urls, filled, musicUrl, voiceInput, brand],
+    () => (project ? reelInput({ project, urls, shots: filled, musicUrl, voice: voiceInput, brand, duck }) : null),
+    [project, urls, filled, musicUrl, voiceInput, brand, duck],
   )
 
   // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
@@ -248,8 +279,31 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     player.current?.seekTo(f)
     setFrame(f)
   }
+  const applyAi = (next: EditProject, label: string) => {
+    const before = current()
+    if (!before || next === before) return
+    setAiUndo({ project: before, label })
+    setAiLog((l) => [label, ...l].slice(0, 8))
+    update(next)
+  }
+  const undoAi = () => {
+    if (!aiUndo) return
+    update(aiUndo.project)
+    setFirstCut((f) => (f?.label === aiUndo.label ? null : f))
+    setAiLog((l) => [t('editor.ai.undone', { label: aiUndo.label }), ...l].slice(0, 8))
+    setAiUndo(null)
+  }
+  const preview = (f: number) => {
+    seek(f)
+    player.current?.play()
+  }
   const total = totalLength(project)
   const full = total > MAX_TOTAL - 0.2
+  const settings = exportSettings(project)
+  const platform = PLATFORMS[settings.preset]
+  const pages = projectPages(project, lines, words)
+  const pageLines = pages.map((pg) => ({ start: pg.startMs / 1000, end: (pg.startMs + pg.durationMs) / 1000, text: pg.text }))
+  const zoneWarnings = safeZoneWarnings(project, pages, settings.preset)
   const locked = readOnly || stale || !!edit.writing
   const fill = async () => setSkipped(await timeline.fill())
 
@@ -258,7 +312,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     { project, clientHasLogo: !!kit?.logo, cut, texts: project.texts.length, voices: project.voiceover.length, music: !!musicFile && project.music !== null },
     visited,
   )
-  const nameOf = (c: (typeof project.clips)[number]) => clipLabel(c.source, filled, gens, takes)
+  const nameOf = (c: (typeof project.clips)[number]) => clipLabel(c.source, filled, gens, allTakes)
   const nodeOf = (c: (typeof project.clips)[number]) => clipNode(doc, c.source)
   const selClip = project.clips.find((c) => c.id === selected) ?? null
   const pick = (clipId: string) => {
@@ -295,10 +349,10 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
       </header>
       <div className="cv-ed-main">
         <aside className="cv-ed-left">
-          <ShotClips shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={takes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
+          <ShotClips uploads={uploads} shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={allTakes} planId={planId} onTakes={setFreshTakes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
         </aside>
         <div className="cv-ed-centre">
-          <div className="cv-ed-player">
+          <div className="cv-ed-player" ref={playerBox}>
             <Player
               ref={player}
               component={Reel}
@@ -310,9 +364,23 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
               controls
               style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '100%' }}
             />
+            {safe && <SafeZoneOverlay player={player} host={playerBox} platform={platform} />}
           </div>
           {/* over the player, never over the tabs; always mounted, so a running export keeps being followed while closed */}
           <div id="cv-ed-export" className="cv-ed-export-pop" hidden={!exportOpen} onKeyDown={(e) => e.key === 'Escape' && setExportOpen(false)}>
+            <ExportOptions
+              project={project}
+              planId={planId}
+              seconds={total}
+              warnings={zoneWarnings}
+              safe={safe}
+              readOnly={locked}
+              hasMusic={!!musicFile}
+              onSafe={setSafe}
+              onProject={update}
+              onShow={(sec) => seek(Math.round(sec * 30))}
+              flush={flush}
+            />
             <ExportBar ideaId={ideaId} clientId={clientId} focus={focus} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} onCut={setCut} />
           </div>
         </div>
@@ -331,8 +399,29 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
                 onJump={onJumpToNode}
               />
             )}
+            {tool === 'ai' && (
+              <AiTool
+                planId={planId}
+                project={project}
+                clip={selClip}
+                shots={filled}
+                gens={gens}
+                takes={allTakes}
+                durations={Object.fromEntries((sources ?? []).map((s) => [s.key, s.duration]))}
+                readOnly={locked}
+                undo={aiUndo}
+                log={aiLog}
+                captionLines={pageLines}
+                firstCut={firstCut}
+                onFirstCut={(log, label) => setFirstCut({ log, label })}
+                onSeek={seek}
+                onApply={applyAi}
+                onUndo={undoAi}
+                onPreview={preview}
+              />
+            )}
             {tool === 'text' && <TextTool project={project} seconds={frame / 30} readOnly={locked} onProject={update} />}
-            {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} />}
+            {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} planId={planId} onAi={applyAi} undo={aiUndo} onUndo={undoAi} />}
             {tool === 'voice' && (
               <VoiceTool
                 ideaId={ideaId}

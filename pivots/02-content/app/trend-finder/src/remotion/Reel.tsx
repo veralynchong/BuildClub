@@ -1,6 +1,7 @@
 import { useMemo, type CSSProperties } from 'react'
 import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, staticFile } from 'remotion'
 import { pageEnd, projectPages } from '../lib/editor/captions.ts'
+import { musicVolume } from '../lib/editor/duck.ts'
 import { clipFrames, reelDurationInFrames, sourceKey, toFrames } from '../lib/editor/timeline.ts'
 import type { LogoCorner, LogoSize, ReelInput, TextItem } from '../lib/editor/types.ts'
 import { useReelFont } from './font.ts'
@@ -20,6 +21,9 @@ const POSITION: Record<TextItem['position'], CSSProperties> = {
 // Captions: 56 px, white with a black outline, centred in the same column, the bottom edge at y = 1460.
 const CAPTION_BOX: CSSProperties = { position: 'absolute', left: 70, width: 940, bottom: 1920 - 1460, textAlign: 'center', overflowWrap: 'anywhere' }
 
+// Both layers of a 'fit' clip sit on top of each other, each filling the frame.
+const FILL: CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%' }
+
 // The logo: medium in the top-right corner (48 px in) is how it looked before size and corner could be chosen.
 const LOGO_WIDTH: Record<LogoSize, number> = { small: 120, medium: 180, large: 260 }
 function cornerStyle(corner: LogoCorner | undefined): CSSProperties {
@@ -35,7 +39,7 @@ function textLook(color: TextItem['color'], brand: string | null): { fill: strin
 }
 
 export function Reel(props: ReelInput) {
-  const { project, urls, fontUrl, brand, musicUrl, lines, voice } = props
+  const { project, urls, fontUrl, brand, musicUrl, lines, voice, duck } = props
   useReelFont(fontUrl || staticFile(BUNDLED_FONT))
   const spans = clipFrames(project)
   const total = reelDurationInFrames(project)
@@ -51,12 +55,23 @@ export function Reel(props: ReelInput) {
         return (
           <Sequence key={c.id} from={spans[i].from} durationInFrames={spans[i].duration} premountFor={30}>
             {src ? (
-              <OffthreadVideo
-                src={src}
-                trimBefore={toFrames(c.in)}
-                volume={c.muted ? 0 : c.volume}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
+              <>
+                {c.fit === 'fit' ? (
+                  // The same footage again, scaled up, blurred and silent, behind the contained one.
+                  <OffthreadVideo
+                    src={src}
+                    trimBefore={toFrames(c.in)}
+                    volume={0}
+                    style={{ ...FILL, objectFit: 'cover', filter: 'blur(40px)', transform: 'scale(1.2)' }}
+                  />
+                ) : null}
+                <OffthreadVideo
+                  src={src}
+                  trimBefore={toFrames(c.in)}
+                  volume={c.muted ? 0 : c.volume}
+                  style={{ ...FILL, objectFit: c.fit === 'fit' ? 'contain' : 'cover' }}
+                />
+              </>
             ) : null}
           </Sequence>
         )
@@ -113,7 +128,10 @@ export function Reel(props: ReelInput) {
           </Sequence>
         )
       })}
-      {project.music && musicUrl ? <Audio src={musicUrl} volume={project.music.volume} loop={false} /> : null}
+      {project.music && musicUrl ? (
+        // The music goes down under speech unless the project turns that off; the export gets the same ranges.
+        <Audio src={musicUrl} volume={project.music.duck === false || !duck?.length ? project.music.volume : (f) => musicVolume(project.music?.volume ?? 0, duck, f)} loop={false} />
+      ) : null}
     </AbsoluteFill>
   )
 }

@@ -54,13 +54,21 @@ def bad(mutate):
     project(clip(a=2.0, b=2.0)),
     project(clip(a=0.0, b=0.1)),
     project(clip(volume=3)),
+    project(clip(fit="stretch")),
     project(clip(b=100.0), clip("c2", 0, 81.0)),
     project(*[clip(f"c{i}", 0, 1) for i in range(101)]),
     bad(lambda p: p["clips"][0]["source"].update(kind="upload")),
     project(clip(b=float("nan"))),
-], ids=["in>=out", "under-0.2s", "volume-3", "total-181s", "101-clips", "unknown-kind", "nan"])
+], ids=["in>=out", "under-0.2s", "volume-3", "bad-fit", "total-181s", "101-clips", "unknown-kind", "nan"])
 def test_check_project_rejects(doc):
     assert editing.check_project(doc)
+
+
+def test_clip_fit_is_accepted_and_kept(client, setup):
+    p = project(clip(fit="fit"), clip("c2", fit="fill"), clip("c3"))
+    assert editing.check_project(p) is None
+    assert client.put("/api/ideas/ia/edit", json={"version": 0, "project": p}).status_code == 200
+    assert client.get("/api/ideas/ia/edit").json()["project"] == p
 
 
 def test_check_project_accepts_drift_and_empty():
@@ -412,7 +420,7 @@ def test_render_project_builds_job_and_returns_facts(client, setup, monkeypatch,
     assert job["out"] == str(work / "next.mp4") and job["mediaDir"] == str(work / "media")
     assert job["cacheDir"] == str(tmp_path / "app" / ".remotion-bundle")
     assert len(seen["linked"]) == 1 and list(job["input"]["urls"].values()) == seen["linked"]
-    assert steps == [(0.05 + 0.9 * 0.5, "Exporting")]
+    assert steps == [(0.05 + 0.9 * 0.5, "Exporting"), (0.96, "Setting the sound level")]  # then the loudness pass
     assert result["size"] == 3 and result["clips"] == 2 and len(result["signature"]) == 16
     assert result["durationSec"] == 2.0
 

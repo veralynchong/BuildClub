@@ -13,6 +13,12 @@ from urllib.parse import unquote
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
+
+import analysis
+import cutting
+import transcode
+from cutting import CutError
 from models import Shot, fill_shot_ids
 
 SCHEMA = (
@@ -20,16 +26,19 @@ SCHEMA = (
     "ext TEXT NOT NULL, size INTEGER NOT NULL, name TEXT NOT NULL, chosen INTEGER NOT NULL DEFAULT 0, "
     "created_at INTEGER NOT NULL, shot_id TEXT, cleaned_from TEXT)",
     "CREATE INDEX IF NOT EXISTS takes_by_shot ON takes (idea_id, shot)",
-)
+) + analysis.SCHEMA
 
 MAX_TAKE_BYTES = 200 * 1024 * 1024
 LIMIT_TEXT = "The file is over the 200 MB limit."
-VIDEO_TYPES = {"video/mp4": "mp4", "video/quicktime": "mov"}
-MEDIA_TYPES = {ext: kind for kind, ext in VIDEO_TYPES.items()}
+# What may arrive. Anything that is not an H.264 SDR mp4 is converted to one (transcode.py) and stored as mp4.
+VIDEO_TYPES = {"video/mp4": "mp4", "video/quicktime": "mov", "video/x-m4v": "m4v", "video/webm": "webm"}
+MEDIA_TYPES = {"mp4": "video/mp4", "mov": "video/quicktime"}  # what is stored and served
 MAX_TAKES_PER_SHOT = 10
 MAX_SHOTS = 50
 MAX_NAME = 200
-NOT_VIDEO = "Upload an .mp4 or .mov video file."
+UNREADABLE = "Couldn't read this video, so it wasn't analysed."
+JOBS: Optional[analysis.AnalysisJobs] = None  # set by make_router; the server resumes unfinished analyses at start
+NOT_VIDEO = "Upload an .mp4, .mov, .m4v or .webm video file."
 
 # Counting a shot's takes and adding one, or moving the pick, take turns.
 takes_lock = threading.Lock()
@@ -88,10 +97,20 @@ def chosen_takes(conn, idea_id: str, limit: int) -> list[tuple]:
     return [(r, i) for r, i in rows_of(conn, idea_id) if r[6] and i is not None and i < limit]
 
 
-def to_json(row, index: Optional[int]) -> dict:
+def to_json(row, index: Optional[int], states: Optional[dict] = None) -> dict:
+    """`states` (analysis.states) adds each take's analysis summary; callers without it leave the field out."""
     tid, idea_id, _stored, _ext, size, name, chosen, created, shot_id, cleaned_from = row
-    return {"id": tid, "ideaId": idea_id, "shot": index, "shotId": shot_id, "name": name, "size": size,
-            "chosen": bool(chosen), "createdAt": created, "cleanedFrom": cleaned_from, "url": f"/api/ideas/{idea_id}/takes/{tid}/file"}
+    out = {"id": tid, "ideaId": idea_id, "shot": index, "shotId": shot_id, "name": name, "size": size,
+           "chosen": bool(chosen), "createdAt": created, "cleanedFrom": cleaned_from, "url": f"/api/ideas/{idea_id}/takes/{tid}/file"}
+    if states is not None:
+        out["analysis"] = states.get(tid)
+    return out
+
+
+def discard(*paths: Optional[Path]) -> None:
+    for p in paths:
+        if p is not None:
+            p.unlink(missing_ok=True)
 
 
 def error(status: int, message: str) -> JSONResponse:
@@ -99,14 +118,17 @@ def error(status: int, message: str) -> JSONResponse:
 
 
 def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
+    global JOBS
     router = APIRouter()
+    jobs = JOBS = analysis.AnalysisJobs(db, media_dir)
 
     def find_idea(idea_id: str):
         return next((i for i in load("ideas") or [] if i["id"] == idea_id), None)
 
     def listed(idea_id: str) -> list:
         with db() as conn:
-            return [to_json(r, i) for r, i in rows_of(conn, idea_id)]
+            states = analysis.states(conn, idea_id)
+            return [to_json(r, i, states) for r, i in rows_of(conn, idea_id)]
 
     async def receive(request: Request, part: Path) -> int:
         """Stream the body to `part`; the size, or -1 once it passes the cap. `part` is removed on any failure."""
@@ -154,34 +176,64 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             return error(413, LIMIT_TEXT)
         with part.open("rb") as f:
             head = f.read(12)
-        if head[4:8] != b"ftyp":
+        webm = head[:4] == b"\x1a\x45\xdf\xa3"
+        if head[4:8] != b"ftyp" and not (webm and ext == "webm"):
             part.unlink(missing_ok=True)
             return error(415, NOT_VIDEO)
+        if head[8:12] == b"qt  ":  # a QuickTime file sent as mp4
+            ext = "mov"
+        stored, original = ext, None
+        try:
+            info = await run_in_threadpool(cutting.probe, part)
+        except CutError:
+            info = None  # not readable by ffprobe (or no ffprobe): kept as sent, as before, unless it must be converted
+        if info is None and ext not in ("mp4", "mov"):
+            part.unlink(missing_ok=True)
+            return error(415, NOT_VIDEO)
+        if info is not None and info.get("width") and info.get("vcodec") and transcode.needs_transcode(info, ext):
+            original = folder / f"{take_id}.orig.{ext}"
+            os.replace(part, original)
+            try:
+                await run_in_threadpool(transcode.to_proxy, original, folder / f"{take_id}.mp4", info)
+            except CutError:
+                original.unlink(missing_ok=True)
+                return error(422, "Couldn't convert this video to a format the editor can play.")
+            stored = "mp4"
+        elif info is not None and "width" in info and not info["width"]:
+            part.unlink(missing_ok=True)
+            return error(415, "That file has no video in it.")
 
         name = unquote(request.headers.get("x-filename", ""))[:MAX_NAME].strip() or f"take.{ext}"
         with takes_lock:
             current = find_idea(idea_id)  # the plan may have been reopened while the body was arriving
             if current is None or current["status"] != "approved":
-                part.unlink(missing_ok=True)
+                discard(part, original, folder / f"{take_id}.mp4")
                 return error(409, "Only an approved plan can take footage.")
             with db() as conn:
                 ids = shot_ids_of(conn, idea_id)
                 backfill(conn, idea_id, ids)
                 if ids and shot >= len(ids):  # no shot to attach it to: it could never be listed or chosen
-                    part.unlink(missing_ok=True)
+                    discard(part, original, folder / f"{take_id}.mp4")
                     return error(422, "That shot isn't on this plan.")
                 shot_id = ids[shot] if shot < len(ids) else None
                 where, args = same_shot(shot_id, shot)
                 count = conn.execute(f"SELECT COUNT(*) FROM takes WHERE idea_id = ? AND {where}",
                                      (idea_id, *args)).fetchone()[0]
                 if count >= MAX_TAKES_PER_SHOT:
-                    part.unlink(missing_ok=True)
+                    discard(part, original, folder / f"{take_id}.mp4")
                     return error(409, f"This shot has the most takes it can hold ({MAX_TAKES_PER_SHOT}).")
-                os.replace(part, folder / f"{take_id}.{ext}")
-                row = (take_id, idea_id, shot, ext, size, name, int(count == 0), int(time.time() * 1000), shot_id, None)
+                if original is None:
+                    os.replace(part, folder / f"{take_id}.{stored}")
+                row = (take_id, idea_id, shot, stored, size, name, int(count == 0), int(time.time() * 1000), shot_id, None)
                 conn.execute(f"INSERT INTO takes ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
                 index = current_index(row, ids)
-        return to_json(row, index)
+                if info is None:  # ffprobe could not read it: nothing to analyse
+                    conn.execute("INSERT OR REPLACE INTO take_analysis (take_id, idea_id, status, error, results, updated_at) "
+                                 "VALUES (?, ?, 'failed', ?, NULL, ?)", (take_id, idea_id, UNREADABLE, row[7]))
+        if info is not None:
+            jobs.submit(idea_id, take_id)
+        with db() as conn:
+            return to_json(row, index, analysis.states(conn, idea_id))
 
     @router.get("/api/ideas/{idea_id}/takes")
     def listing(idea_id: str):
@@ -208,6 +260,40 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
         row = conn.execute("SELECT shot, ext, shot_id FROM takes WHERE id = ? AND idea_id = ?", (take_id, idea_id)).fetchone()
         return row or error(404, "That take doesn't exist.")
 
+    def own_take(idea_id: str, take_id: str) -> bool:
+        """True when the plan exists and the take is its own."""
+        if find_idea(idea_id) is None:
+            return False
+        with db() as conn:
+            return conn.execute("SELECT 1 FROM takes WHERE id = ? AND idea_id = ?", (take_id, idea_id)).fetchone() is not None
+
+    @router.get("/api/ideas/{idea_id}/takes/{take_id}/analysis")
+    def analysis_of(idea_id: str, take_id: str):
+        if not own_take(idea_id, take_id):
+            return error(404, "That take doesn't exist.")
+        with db() as conn:
+            got = analysis.full(conn, take_id)
+        if got is None:  # a take from before analysis existed
+            jobs.submit(idea_id, take_id)
+            got = {"status": "queued", "error": None, "results": None}
+        return got
+
+    @router.post("/api/ideas/{idea_id}/takes/{take_id}/analysis/retry")
+    def retry_analysis(idea_id: str, take_id: str):
+        if not own_take(idea_id, take_id):
+            return error(404, "That take doesn't exist.")
+        jobs.submit(idea_id, take_id)
+        return {"status": "queued", "error": None, "results": None}
+
+    @router.get("/api/ideas/{idea_id}/takes/{take_id}/analysis/thumbs/{n}")
+    def thumb(idea_id: str, take_id: str, n: int):
+        if not own_take(idea_id, take_id) or not 0 <= n < analysis.FILM_MAX:
+            return error(404, "That thumbnail doesn't exist.")
+        path = analysis.film_dir(media_dir() / idea_id, take_id) / f"{n:02d}.jpg"
+        if not path.is_file():
+            return error(404, "That thumbnail doesn't exist.")
+        return FileResponse(path, media_type="image/jpeg")
+
     @router.post("/api/ideas/{idea_id}/takes/{take_id}/choose")
     def choose(idea_id: str, take_id: str):
         with takes_lock, db() as conn:
@@ -225,7 +311,11 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             if isinstance(got, JSONResponse):
                 return got
             conn.execute("DELETE FROM takes WHERE id = ?", (take_id,))
-        (media_dir() / idea_id / f"{take_id}.{got[1]}").unlink(missing_ok=True)
+            analysis.remove(conn, media_dir() / idea_id, take_id)
+        folder = media_dir() / idea_id
+        (folder / f"{take_id}.{got[1]}").unlink(missing_ok=True)
+        for kept in folder.glob(f"{take_id}.orig.*"):  # the upload a converted take came from
+            kept.unlink(missing_ok=True)
         return listed(idea_id)
 
     return router
