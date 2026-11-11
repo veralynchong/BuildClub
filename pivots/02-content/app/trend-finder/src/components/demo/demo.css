@@ -1,0 +1,47 @@
+/* Apply demo-guide-space to the demo layout so its scroll region clears the bar. */
+.demo-guide-space {
+  --demo-guide-reserved-height: 128px;
+  padding-bottom: var(--demo-guide-reserved-height);
+  scroll-padding-bottom: var(--demo-guide-reserved-height);
+}
+
+.demo-guide {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 104px;
+  padding: 16px 32px;
+  box-sizing: border-box;
+  background: var(--surface);
+  color: var(--fg);
+  border-top: 1px solid var(--line);
+}
+
+.demo-guide__copy { min-width: 0; }
+.demo-guide__progress { display: block; font-size: 12px; color: var(--muted); }
+.demo-guide__title { display: block; margin-top: 4px; font-size: 16px; }
+.demo-guide__description { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.demo-guide__actions { display: flex; align-items: center; flex-shrink: 0; gap: 8px; }
+.demo-guide__actions button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+.demo-guide__actions .demo-guide__next { background: var(--fg); color: var(--surface); }
+.demo-guide__actions button:disabled { opacity: .45; cursor: default; }
+.demo-guide__actions button:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+
+@media (max-width: 1000px) {
+  .demo-guide-space { --demo-guide-reserved-height: 220px; }
+  .demo-guide { flex-wrap: wrap; gap: 12px; padding: 16px; }
+  .demo-guide__actions { flex-wrap: wrap; }
+}
