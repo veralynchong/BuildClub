@@ -18,6 +18,8 @@ export type View =
   | 'plan'
   | 'canvas'
   | 'canvasPick'
+  // Pick an approved plan to open in the video editor (the sidebar's Video edit).
+  | 'editPick'
   // Pick a plan's legacy planning board.
   | 'boardPick'
   // The planning board for the open plan (components/board/ShotBoard.tsx).
@@ -33,6 +35,7 @@ const paths: Record<string, string> = {
   saved: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z',
   approvals: 'M20 6 9 17l-5-5',
   canvas: 'M4 4h16v16H4zM8 9h4v4H8zM15 8h2M15 12h2M8 17h8',
+  edit: 'M4 5h16v14H4zM8 5v14M16 5v14M4 9.5h4M4 14.5h4M16 9.5h4M16 14.5h4',
   plans: 'M8 4h11v16H8zM5 4v16M11 8h5M11 12h5M11 16h3',
   research: 'M4 5h16v14H4zM4 10h16M4 14.5h16M10 10v9',
   settings: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4',
@@ -77,6 +80,7 @@ interface Props {
   open: boolean
   onClose: () => void
   live: boolean
+  editing?: boolean // the canvas is showing with its editor open: Video edit is the current item, not Canvas
   compact?: boolean // icons only (the canvas view): each item keeps its label as title and aria-label
 }
 
@@ -244,8 +248,10 @@ export function Sidebar(p: Props) {
               {item('research', 'research', t('shell.side.research'), p.counts.research)}
               {/* Plans = the board of plans + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
-              {/* "Video canvas" opens the freeform canvas again (12 Nov 2026), via the canvas chooser; the planning board stays on the Plan page. */}
-              {item('canvas', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvas', 'canvasPick'].includes(p.view))}
+              {/* "Canvas" opens the freeform canvas (12 Nov 2026), via the canvas chooser; the planning board stays on the Plan page. */}
+              {item('canvas', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvasPick'].includes(p.view) || (p.view === 'canvas' && !p.editing))}
+              {/* "Video edit" opens a plan's canvas with the editor already open, like the Plans board's "Make the video". */}
+              {item('editPick', 'edit', t('shell.side.edit'), undefined, p.view === 'editPick' || (p.view === 'canvas' && !!p.editing))}
               <div className="side-sep" />
               {/* "Channel" was taken off the menu (12 Nov 2026); the 'channel' view and ChannelScreen stay in App.tsx. */}
               {item('settings', 'brief', t('shell.side.brief'))}

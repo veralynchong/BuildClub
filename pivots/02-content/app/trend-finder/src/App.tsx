@@ -78,7 +78,7 @@ import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
 import { CanvasPick } from './components/CanvasPick'
 import { BoardPick } from './components/BoardPick'
-import { boardPlans } from './lib/canvasPick'
+import { approvedPlans, boardPlans } from './lib/canvasPick'
 import type { CanvasContext as CanvasResource, Workspace as CanvasWorkspace } from './lib/canvas/resource'
 import { hasMissingLegacyPlan } from './lib/canvas/resource'
 import { readFullscreen, writeFullscreen } from './lib/canvas/shell'
@@ -1395,6 +1395,7 @@ export default function App() {
     plan: t('shell.back.plan'),
     canvas: t('shell.back.canvas'),
     canvasPick: t('shell.back.canvas'),
+    editPick: t('shell.back.editPick'),
     boardPick: t('shell.back.boardPick'),
     board: t('board.backLabel'),
     settings: t('shell.back.settings'),
@@ -1455,10 +1456,19 @@ export default function App() {
     if (v === 'canvas') {
       const plans = boardPlans(shownIdeas, client.id)
       if (plans.length === 1) {
-        if (view === 'canvas' && canvasContext?.resource.kind === 'legacy-plan' && canvasContext.resource.id === plans[0].id) return
+        if (view === 'canvas' && !canvasEditor && canvasContext?.resource.kind === 'legacy-plan' && canvasContext.resource.id === plans[0].id) return
         return withCanvasLeave(() => openPlanCanvas(plans[0].id))
       }
       return setView('canvasPick')
+    }
+    // Sidebar "Video edit" (12 Nov 2026): an approved plan's canvas with the editor open. One plan opens straight away.
+    if (v === 'editPick') {
+      const plans = approvedPlans(shownIdeas, client.id)
+      if (plans.length === 1) {
+        if (view === 'canvas' && canvasEditor && canvasContext?.resource.kind === 'legacy-plan' && canvasContext.resource.id === plans[0].id) return
+        return withCanvasLeave(() => makeVideo(plans[0].id))
+      }
+      return setView('editPick')
     }
     if (v === 'search' && lastSearch && shownSearch === `${client.id}|${lastSearch}`) return setView('results')
     setView(v)
@@ -1703,6 +1713,7 @@ export default function App() {
         workspace={workspace}
         setWorkspace={setWorkspace}
         view={view}
+        editing={canvasEditor}
         setView={navTo}
         counts={counts}
         onLogo={() => setShowLanding(true)}
@@ -2014,6 +2025,18 @@ export default function App() {
             />
           )}
 
+          {inClient && view === 'editPick' && (
+            <BoardPick
+              clientName={client.name}
+              plans={approvedPlans(shownIdeas, client.id)}
+              videoById={videoById}
+              formatById={formatById}
+              onPick={makeVideo}
+              onGoPlans={() => setView('shortlist')}
+              copy={{ title: t('shell.editPick.title'), intro: t('shell.editPick.intro'), empty: t('shell.editPick.empty'), go: t('shell.side.plans') }}
+            />
+          )}
+
           {inClient && view === 'boardPick' && (
             <BoardPick
               clientName={client.name}
@@ -2029,6 +2052,7 @@ export default function App() {
           {inClient && view === 'canvas' && canvasContext && (
             <Suspense fallback={<p className="muted">{t('canvas.loading')}</p>}>
               <CanvasScreen
+                key={`${canvasContext.resource.id}:${canvasEditor ? 'edit' : 'canvas'}`}
                 context={canvasContext}
                 registerLeaveGuard={registerCanvasLeaveGuard}
                 registerGuide={guidedRuntime ? registerGuideCanvas : undefined}
