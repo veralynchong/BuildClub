@@ -1,5 +1,20 @@
 # STATUS
 
+## 2026-11-12：剪輯器改版 stage A，專業深色介面與多軌時間軸（`feat/editor-timeline`）
+
+- 一行狀態：剪輯器改成類 Remotion Studio 的深色介面，多軌時間軸、播放列、快捷鍵、多層復原都做好了，已 push 到 `feat/editor-timeline`（疊在 `feat/editor-real-footage` / PR #56 上），尚未開 PR、未合併。計畫在 `docs/` 的時間軸研究與計畫（9c9e5c9）。
+- Commits：f48144e（lanes/snap/undo 純邏輯 + 14 個測試）、b6b3aff（深色介面、時間軸、transport、快捷鍵）。
+- 內容：頂列（返回、麵包屑、復原/重做、Export）；左側 Shots 分頁；中間 Player + 安全區；右側 inspector 圖示分頁跟著選取切換；transport（Fit、速度、循環、靜音、逐格、吸附、全螢幕、縮放）；時間軸有 mm:ss.ff 時間碼、刻度尺、可拖的紅色播放頭、軌道標頭眼睛/喇叭；五軌 Text / Captions / Video / Voiceover / Music（含避讓區段）；文字和原聲字幕可拖、可修剪；吸附（Shift+M）；快捷鍵 Space、S、Delete、←/→、Shift+←/→、Alt+←/→、Home/End、⌘Z / ⇧⌘Z。「Clip sound」移到 Clips 分頁的 Sound 群組。
+- 最後驗證：2026-11-12，`bash bin/verify.sh full` GREEN（後端 1220 passed、3 skipped；前端 unit 667 pass）；tsc、eslint、build 都通過。在 :8797 零花費後端用 1440x900 瀏覽器走過選取、拖曳吸附、分割、刪除、復原/重做、播放、匯出選單。
+- 已知缺口：
+  - 軌道隱藏/靜音只影響預覽，不存檔、不影響匯出；Video 軌隱藏時聲音還在。
+  - 由台詞或配音產生的字幕只能選取，不能拖。配音條只能移動，不能修剪。
+  - 沒做 in/out 標記；Fit 只縮放時間軸，不影響預覽。
+  - 左側 Transcript 分頁（stage C）、AI 標記和縮圖條/波形（stage B）都還沒做。
+  - 500ms 內的連續修改合成一步復原。
+  - 舊的未使用字串（editor.audio.title、moveLeft/Right、keys、total）還留在 strings 檔。
+- 下一步：使用者看過介面後決定是否開 PR（base `feat/editor-real-footage`），再做 stage B。
+
 ## 2026-11-12：剪輯器 AI 自動剪輯 Phase 0–4（draft PR #56）
 
 - 一行狀態：剪輯器的 AI 自動剪輯 Phase 0–4 都做完了，驗證全綠，已 push 到 `feat/editor-real-footage`，draft PR veralynchong/BuildClub#56 尚未合併。計畫在 `docs/ai-edit-plan.md`，研究報告在 `research/reports/AI 短影音自動剪輯調查.md`（Artifact https://claude.ai/artifact/G3B2ojehfKsu9o57rLD1aH）。
