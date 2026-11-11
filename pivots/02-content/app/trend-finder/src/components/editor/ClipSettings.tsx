@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { t } from '../../lib/i18n'
-import { clipLength, parseSeconds, setClipFit, setShotCaption, trimClip } from '../../lib/editor/timeline'
+import { Icon } from './icons'
+import { clipLength, parseSeconds, setClipAudio, setClipFit, setShotCaption, trimClip } from '../../lib/editor/timeline'
 import type { Clip, EditProject } from '../../lib/editor/types'
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
   clip: Clip | null // the selected timeline clip
   name: string // its label, "Shot 1 · v3"
   sourceDuration: number // how long its footage is, the longest it can be trimmed to
+  silent: boolean // its footage has no sound track
   nodeId: string | null // its node on the canvas, null when that is gone
   readOnly: boolean
   onProject: (p: EditProject) => void
@@ -16,14 +18,14 @@ interface Props {
 
 const fmt = (sec: number) => (Math.round(sec * 10) / 10).toString()
 
-// The Clips tab: the selected clip's length, whether its shot shows a caption, and a jump to its node on the canvas.
+// The Clips tab: the selected clip's length, fit, sound, whether its shot shows a caption, and a jump to its node on the canvas.
 // No transition setting: the edit project has none (plan "Spec gaps" 2).
-export function ClipSettings({ project, clip, name, sourceDuration, nodeId, readOnly, onProject, onJump }: Props) {
+export function ClipSettings({ project, clip, name, sourceDuration, silent, nodeId, readOnly, onProject, onJump }: Props) {
   if (!clip) return <p className="muted small">{t('editor.clipSet.none')}</p>
-  return <Settings key={clip.id} project={project} clip={clip} name={name} sourceDuration={sourceDuration} nodeId={nodeId} readOnly={readOnly} onProject={onProject} onJump={onJump} />
+  return <Settings key={clip.id} project={project} clip={clip} name={name} sourceDuration={sourceDuration} silent={silent} nodeId={nodeId} readOnly={readOnly} onProject={onProject} onJump={onJump} />
 }
 
-function Settings({ project, clip, name, sourceDuration, nodeId, readOnly, onProject, onJump }: Props & { clip: Clip }) {
+function Settings({ project, clip, name, sourceDuration, silent, nodeId, readOnly, onProject, onJump }: Props & { clip: Clip }) {
   const len = clipLength(clip)
   const [draft, setDraft] = useState<string | null>(null) // the length being typed, applied on Enter or leaving the field
   const shotId = clip.source.shotId
@@ -61,6 +63,29 @@ function Settings({ project, clip, name, sourceDuration, nodeId, readOnly, onPro
         </div>
       </div>
       <p className="muted small">{t((clip.fit ?? 'fill') === 'fit' ? 'editor.clipSet.fit.fitHelp' : 'editor.clipSet.fit.fillHelp')}</p>
+      <div className="cv-ed-field" role="group" aria-label={t('editor.clipSet.sound')}>
+        <span>{t('editor.clipSet.sound')}</span>
+        {silent ? (
+          <p className="muted small">{t('editor.audio.silent')}</p>
+        ) : (
+          <div className="cv-ed-sound">
+            <button type="button" className="cv-ed-ib" aria-pressed={clip.muted} aria-label={t(clip.muted ? 'editor.audio.unmute' : 'editor.audio.mute')} title={t(clip.muted ? 'editor.audio.unmute' : 'editor.audio.mute')} disabled={readOnly} onClick={() => onProject(setClipAudio(project, clip.id, { muted: !clip.muted }))}>
+              <Icon name={clip.muted ? 'volumeOff' : 'volume'} />
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={200}
+              step={5}
+              value={Math.round(clip.volume * 100)}
+              aria-label={t('editor.audio.volume', { name })}
+              disabled={readOnly || clip.muted}
+              onChange={(e) => onProject(setClipAudio(project, clip.id, { volume: Number(e.target.value) / 100 }))}
+            />
+            <span className="cv-ed-sound-pct">{clip.muted ? '0%' : `${Math.round(clip.volume * 100)}%`}</span>
+          </div>
+        )}
+      </div>
       {shotId && (
         <>
           <label className="cv-ed-switch">

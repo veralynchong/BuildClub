@@ -106,4 +106,5 @@ export type ReelInput = {
   voice: { id: string; url: string; words: Word[] | null }[]
   brand: { font: string; color: string | null; logoUrl: string | null }
   fontUrl: string
+  hideVideo?: boolean // the editor's preview with the video track hidden: the footage is not drawn (its sound still plays)
 }

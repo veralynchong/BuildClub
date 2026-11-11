@@ -34,10 +34,11 @@ interface Props {
   lineTexts: string[] // every shot's script line, in order
   readOnly: boolean
   onProject: (p: EditProject) => void
+  selected?: string | null // the voiceover selected on the timeline
 }
 
 // Voiceovers: record, upload, or have an AI voice read the lines. Each one has a start, a volume and a remove button.
-export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVoiceGone, tts, pending, onImport, lineTexts, readOnly, onProject }: Props) {
+export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVoiceGone, tts, pending, onImport, lineTexts, readOnly, onProject, selected = null }: Props) {
   const [busy, setBusy] = useState(false)
   const [recording, setRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -177,7 +178,7 @@ export function VoiceTool({ ideaId, project, current, flush, voices, adopt, onVo
       ) : (
         <ul className="cv-ed-voice-list" aria-label={t('editor.voice.list')}>
           {project.voiceover.map((v, i) => (
-            <li key={v.id} className="cv-ed-voice">
+            <li key={v.id} className="cv-ed-voice" data-selected={v.id === selected ? '' : undefined}>
               <strong className="small">
                 {t('editor.voice.seg', { n: i + 1, source: t(`editor.voice.source.${v.source}` as const), sec: round1(voices[v.id]?.duration ?? 0) })}
               </strong>

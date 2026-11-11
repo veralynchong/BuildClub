@@ -16,11 +16,15 @@ interface Props {
   seconds: number // the playhead
   readOnly: boolean
   onProject: (p: EditProject) => void
+  picked?: string | null // the text selected on the timeline; with onPick the selection is the editor's, not this tab's
+  onPick?: (id: string) => void
 }
 
 // Words on screen: add one at the playhead, then change its words, timing, place and colour.
-export function TextTool({ project, seconds, readOnly, onProject }: Props) {
-  const [picked, setPicked] = useState<string | null>(null)
+export function TextTool({ project, seconds, readOnly, onProject, picked: shared, onPick }: Props) {
+  const [own, setOwn] = useState<string | null>(null)
+  const picked = onPick ? (shared ?? null) : own
+  const setPicked = onPick ?? setOwn
   const selected = project.texts.find((x) => x.id === picked) ?? project.texts[0] ?? null
   const noClips = project.clips.length === 0 || totalLength(project) <= 0
   const full = project.texts.length >= MAX_TEXTS

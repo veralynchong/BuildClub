@@ -39,7 +39,7 @@ function textLook(color: TextItem['color'], brand: string | null): { fill: strin
 }
 
 export function Reel(props: ReelInput) {
-  const { project, urls, fontUrl, brand, musicUrl, lines, voice, duck } = props
+  const { project, urls, fontUrl, brand, musicUrl, lines, voice, duck, hideVideo } = props
   useReelFont(fontUrl || staticFile(BUNDLED_FONT))
   const spans = clipFrames(project)
   const total = reelDurationInFrames(project)
@@ -62,14 +62,14 @@ export function Reel(props: ReelInput) {
                     src={src}
                     trimBefore={toFrames(c.in)}
                     volume={0}
-                    style={{ ...FILL, objectFit: 'cover', filter: 'blur(40px)', transform: 'scale(1.2)' }}
+                    style={{ ...FILL, objectFit: 'cover', filter: 'blur(40px)', transform: 'scale(1.2)', opacity: hideVideo ? 0 : 1 }}
                   />
                 ) : null}
                 <OffthreadVideo
                   src={src}
                   trimBefore={toFrames(c.in)}
                   volume={c.muted ? 0 : c.volume}
-                  style={{ ...FILL, objectFit: c.fit === 'fit' ? 'contain' : 'cover' }}
+                  style={{ ...FILL, objectFit: c.fit === 'fit' ? 'contain' : 'cover', opacity: hideVideo ? 0 : 1 }}
                 />
               </>
             ) : null}

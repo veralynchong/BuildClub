@@ -14,7 +14,7 @@ import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { useTakeAnalysis } from '../../lib/editor/useTakeAnalysis'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, clipLength, clipStatus, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import { addVoice, clipLength, clipStatus, FPS, moveClip, newClipId, reelDurationInFrames, sourceKey, sourcesWithShots, splitAt, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { EditProject, ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
@@ -32,13 +32,17 @@ import { AiTool } from './AiTool'
 import { ExportOptions } from './ExportOptions'
 import { SafeZoneOverlay } from './SafeZoneOverlay'
 import { PLATFORMS, exportSettings, safeZoneWarnings } from '../../lib/editor/presets'
-import { projectPages } from '../../lib/editor/captions'
+import { captionMode, projectPages } from '../../lib/editor/captions'
+import { MAX_PX, MIN_PX, fitZoom, followScroll, laneBars, previewOf, removeBar, type LaneId } from '../../lib/editor/lanes'
+import { emptyHistory, lastAi, record, redo as redoStep, undo as undoStep, type History } from '../../lib/editor/history'
 import { useDuckRanges } from '../../lib/editor/useDuckRanges'
 import type { FirstCutEntry } from '../../lib/editor/aiApi'
 import { VoiceTool } from './tools/VoiceTool'
 import { MusicTool, type MusicFile } from './tools/MusicTool'
 import { BrandTool } from './tools/BrandTool'
-import { Timeline } from './Timeline'
+import { HEAD_PX, Timeline, type Selection } from './Timeline'
+import { Transport } from './Transport'
+import { Icon } from './icons'
 import { clipLabel } from './clipName'
 import { ErrorText } from '../ErrorText'
 import { ExportBar } from './ExportBar'
@@ -70,7 +74,8 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     setTool(next)
     setVisited((v) => (v.has(next) ? v : new Set(v).add(next)))
   }
-  const [selected, setSelected] = useState<string | null>(null) // the timeline clip the Clips tab shows
+  const [selection, setSelection] = useState<Selection>(null) // the bar picked on the timeline; the inspector follows it
+  const selected = selection?.lane === 'video' ? selection.id : null // the timeline clip the Clips tab shows
   const [cut, setCut] = useState<CutState | null>(null) // the export's state, reported by ExportBar for the export button
   const [exportOpen, setExportOpen] = useState(!!focus)
   // The export popover closes on Escape anywhere and on a press outside it (its own toggle button excepted).
@@ -96,8 +101,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const ttsGoing = useRef(false) // a second click can never start (and charge) a second job
   const ttsAbort = useRef<AbortController | null>(null)
   const frameRef = useRef(0)
-  // AI changes: the edit as it was before the last one (one level of undo), and what the AI did this session.
-  const [aiUndo, setAiUndo] = useState<{ project: EditProject; label: string } | null>(null)
+  // What the AI did this session; undoing it goes through the undo history below.
   const [aiLog, setAiLog] = useState<string[]>([])
   const [firstCut, setFirstCut] = useState<{ log: FirstCutEntry[]; label: string } | null>(null) // why the last auto first cut did what it did
   const [safe, setSafe] = useState(false) // the safe-zone overlay on the preview
@@ -107,6 +111,45 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const client = clients.find((c) => c.id === clientId)
   const kit = client?.brand
   const player = useRef<PlayerRef>(null)
+  // Playback, the timeline's view (zoom, snapping) and the tracks hidden or muted in the preview only.
+  const [playing, setPlaying] = useState(false)
+  const [rate, setRate] = useState(1)
+  const [loop, setLoop] = useState(false)
+  const [pmuted, setPmuted] = useState(false)
+  const [snap, setSnap] = useState(true)
+  const [pxPerSec, setPx] = useState(40)
+  const [hidden, setHidden] = useState<ReadonlySet<LaneId>>(() => new Set())
+  const [mutedLanes, setMutedLanes] = useState<ReadonlySet<LaneId>>(() => new Set())
+  const flip = (set: ReadonlySet<LaneId>, lane: LaneId) => {
+    const next = new Set(set)
+    if (!next.delete(lane)) next.add(lane)
+    return next
+  }
+  const tlScroll = useRef<HTMLDivElement>(null)
+
+  // Undo and redo: every change to the project is recorded, whichever tool made it. An AI change carries its name, so
+  // the AI tab can offer "Undo last AI change" while it is still the last step.
+  const hist = useRef<History>(emptyHistory())
+  const [, setHistTick] = useState(0)
+  const prevProject = useRef<EditProject | null>(null)
+  const skipRecord = useRef<EditProject | null>(null)
+  const nextLabel = useRef<string | null>(null)
+  useEffect(() => {
+    const prev = prevProject.current
+    prevProject.current = project
+    if (!project) {
+      hist.current = emptyHistory()
+      return
+    }
+    if (!prev || prev === project) return
+    if (skipRecord.current === project) {
+      skipRecord.current = null
+      return
+    }
+    hist.current = record(hist.current, prev, nextLabel.current, Date.now())
+    nextLabel.current = null
+    setHistTick((n) => n + 1)
+  }, [project])
 
   const byKey = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s])), [sources])
   const shotSources = useMemo(() => (sources ? sourcesWithShots(sources, doc) : null), [sources, doc])
@@ -241,8 +284,8 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const takesKey = allTakes.map((x) => `${x.id}:${x.analysis?.status ?? ''}`).join(',')
   const duck = useDuckRanges(planId, project, !!musicUrl && project?.music != null && project.music.duck !== false, takesKey)
   const inputProps = useMemo<ReelInput | null>(
-    () => (project ? reelInput({ project, urls, shots: filled, musicUrl, voice: voiceInput, brand, duck }) : null),
-    [project, urls, filled, musicUrl, voiceInput, brand, duck],
+    () => (project ? { ...reelInput({ project: previewOf(project, hidden, mutedLanes), urls, shots: filled, musicUrl, voice: voiceInput, brand, duck }), hideVideo: hidden.has('video') } : null),
+    [project, urls, filled, musicUrl, voiceInput, brand, duck, hidden, mutedLanes],
   )
 
   // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
@@ -251,11 +294,22 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     const p = player.current
     if (!p) return
     const on = (e: { detail: { frame: number } }) => setFrame(e.detail.frame)
+    const onPlay = () => setPlaying(true)
+    const onPause = () => setPlaying(false)
+    const onMute = (e: { detail: { isMuted: boolean } }) => setPmuted(e.detail.isMuted)
     p.addEventListener('frameupdate', on)
     p.addEventListener('seeked', on)
+    p.addEventListener('play', onPlay)
+    p.addEventListener('pause', onPause)
+    p.addEventListener('ended', onPause)
+    p.addEventListener('mutechange', onMute)
     return () => {
       p.removeEventListener('frameupdate', on)
       p.removeEventListener('seeked', on)
+      p.removeEventListener('play', onPlay)
+      p.removeEventListener('pause', onPause)
+      p.removeEventListener('ended', onPause)
+      p.removeEventListener('mutechange', onMute)
     }
   }, [ready])
 
@@ -272,26 +326,103 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     return () => cancelAnimationFrame(raf)
   }, [focus, ready])
 
-  if (loadError) return <ErrorText text={loadError} />
-  if (!project || !inputProps) return <p className="muted">{t('editor.loading')}</p>
-
+  const locked = readOnly || stale || !!edit.writing
+  // Keyboard: Space plays, S splits, Delete removes the selected bar, arrows step frames (Shift: a second), Alt+arrows
+  // move the selected clip, Shift+M toggles snapping, Cmd/Ctrl+Z undoes and Shift+Cmd/Ctrl+Z (or Ctrl+Y) redoes. Typing
+  // in a field, and the export panel, keep their keys.
+  const onKey = (e: KeyboardEvent) => {
+    if (e.defaultPrevented) return
+    const el = e.target as HTMLElement | null
+    if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.closest('#cv-ed-export, .cv-ed-menu'))) return
+    const p = current()
+    if (!p) return
+    const mod = e.metaKey || e.ctrlKey
+    const key = e.key
+    const last = Math.max(0, reelDurationInFrames(p) - 1)
+    const go = (f: number) => seek(Math.min(Math.max(0, f), last))
+    if (mod && !e.altKey && (key === 'z' || key === 'Z')) { if (e.shiftKey) redo(); else undo() }
+    else if (mod && !e.altKey && (key === 'y' || key === 'Y')) redo()
+    else if (mod) return
+    else if (key === ' ') player.current?.toggle()
+    else if (e.altKey && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+      const i = selection?.lane === 'video' ? p.clips.findIndex((c) => c.id === selection.id) : -1
+      if (i < 0 || locked) return
+      update(moveClip(p, i, i + (key === 'ArrowLeft' ? -1 : 1)))
+    } else if (key === 'ArrowLeft' || key === 'ArrowRight') go(frameRef.current + (key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? FPS : 1))
+    else if (key === 'Home') go(0)
+    else if (key === 'End') go(last)
+    else if (e.shiftKey && (key === 'm' || key === 'M')) setSnap((v) => !v)
+    else if (!e.shiftKey && !e.altKey && (key === 's' || key === 'S')) {
+      if (locked) return
+      update(splitAt(p, frameRef.current / FPS, newClipId(p)))
+    } else if (key === 'Delete' || key === 'Backspace') {
+      if (!selection || locked) return
+      const next = removeBar(p, selection.lane, selection.id)
+      if (next === p) return
+      update(next)
+      setSelection(null)
+    } else return
+    e.preventDefault()
+  }
+  const keyRef = useRef(onKey)
+  useEffect(() => {
+    keyRef.current = onKey
+  })
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => keyRef.current(e)
+    document.addEventListener('keydown', on)
+    return () => document.removeEventListener('keydown', on)
+  }, [])
+  // While playing, the timeline scrolls on so the playhead stays in view.
+  useEffect(() => {
+    const el = tlScroll.current
+    if (!playing || !el) return
+    const to = followScroll((frame / FPS) * pxPerSec, el.scrollLeft, el.clientWidth - HEAD_PX)
+    if (to !== null) el.scrollLeft = to
+  }, [frame, playing, pxPerSec])
   const seek = (f: number) => {
     player.current?.seekTo(f)
     setFrame(f)
   }
+  const step = (dir: 'undo' | 'redo') => {
+    const cur = current()
+    if (!cur || locked) return
+    const r = (dir === 'undo' ? undoStep : redoStep)(hist.current, cur)
+    if (!r) return
+    skipRecord.current = r.project
+    update(r.project)
+    if (current() !== r.project) {
+      skipRecord.current = null
+      return
+    }
+    hist.current = r.history
+    setHistTick((n) => n + 1)
+    if (r.label) {
+      const label = r.label
+      if (dir === 'undo') setFirstCut((f) => (f?.label === label ? null : f))
+      setAiLog((l) => [t(dir === 'undo' ? 'editor.ai.undone' : 'editor.redone', { label }), ...l].slice(0, 8))
+    }
+  }
+  const undo = () => step('undo')
+  const redo = () => step('redo')
+
+  if (loadError) return <ErrorText text={loadError} />
+  if (!project || !inputProps) return <p className="muted">{t('editor.loading')}</p>
+
   const applyAi = (next: EditProject, label: string) => {
     const before = current()
     if (!before || next === before) return
-    setAiUndo({ project: before, label })
-    setAiLog((l) => [label, ...l].slice(0, 8))
+    nextLabel.current = label
     update(next)
+    if (current() !== next) {
+      nextLabel.current = null
+      return
+    }
+    setAiLog((l) => [label, ...l].slice(0, 8))
   }
+  const aiUndo = lastAi(hist.current)
   const undoAi = () => {
-    if (!aiUndo) return
-    update(aiUndo.project)
-    setFirstCut((f) => (f?.label === aiUndo.label ? null : f))
-    setAiLog((l) => [t('editor.ai.undone', { label: aiUndo.label }), ...l].slice(0, 8))
-    setAiUndo(null)
+    if (aiUndo) undo()
   }
   const preview = (f: number) => {
     seek(f)
@@ -304,7 +435,6 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const pages = projectPages(project, lines, words)
   const pageLines = pages.map((pg) => ({ start: pg.startMs / 1000, end: (pg.startMs + pg.durationMs) / 1000, text: pg.text }))
   const zoneWarnings = safeZoneWarnings(project, pages, settings.preset)
-  const locked = readOnly || stale || !!edit.writing
   const fill = async () => setSkipped(await timeline.fill())
 
   const steps = stepsDone({ project, clientHasLogo: !!kit?.logo, cut })
@@ -315,15 +445,46 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const nameOf = (c: (typeof project.clips)[number]) => clipLabel(c.source, filled, gens, allTakes)
   const nodeOf = (c: (typeof project.clips)[number]) => clipNode(doc, c.source)
   const selClip = project.clips.find((c) => c.id === selected) ?? null
-  const pick = (clipId: string) => {
-    setSelected(clipId)
-    openTool('clips')
+  // Picking a bar on the timeline opens the inspector tab that edits it.
+  const select = (sel: Selection) => {
+    setSelection(sel)
+    if (sel) openTool(LANE_TOOL[sel.lane])
   }
+  const pick = (clipId: string) => select({ lane: 'video', id: clipId })
+  const lanes = laneBars(project, {
+    captionMode: captionMode(project, words),
+    pages,
+    voiceSeconds: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.duration])),
+    voiceLabel: (i) => t('editor.lane.voiceBar', { n: i + 1 }),
+    musicLabel: musicFile && project.music ? musicFile.name : null,
+  })
+  const frames = reelDurationInFrames(project)
+  const canDelete = !!selection && removeBar(project, selection.lane, selection.id) !== project
+  const split = () => update(splitAt(project, frame / FPS, newClipId(project)))
+  const removeSelected = () => {
+    if (!selection) return
+    update(removeBar(project, selection.lane, selection.id))
+    setSelection(null)
+  }
+  const fit = () => {
+    const el = tlScroll.current
+    if (el) setPx(fitZoom(total, el.clientWidth - HEAD_PX - 24, MIN_PX, MAX_PX))
+  }
+  const canUndo = hist.current.past.length > 0
+  const canRedo = hist.current.future.length > 0
 
   return (
-    <div className="cv-ed cv-ed-full nokey">
+    <div className="cv-ed cv-ed-full cv-ed-dark nokey">
       <header className="cv-ed-top">
-        <button type="button" className="link-btn" onClick={onBack}>{t('editor.back')}</button>
+        <button type="button" className="cv-ed-ib" aria-label={t('editor.back')} title={t('editor.back')} onClick={onBack}>
+          <Icon name="back" />
+        </button>
+        <nav className="cv-ed-crumb" aria-label={t('editor.crumb')}>
+          {client?.name && <span className="cv-ed-crumb-dim">{client.name}</span>}
+          {client?.name && <span className="cv-ed-crumb-dim" aria-hidden="true">/</span>}
+          <b>{t('editor.crumb')}</b>
+          {selClip && <span className="cv-ed-crumb-dim">· {nameOf(selClip)}</span>}
+        </nav>
         <div className="cv-ed-top-end">
           <div className="cv-ed-status" role="status">
             {stale ? (
@@ -334,22 +495,34 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
             ) : save === 'failed' ? (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => void flush()}>{t('editor.save.failed')}</button>
             ) : save === 'saving' ? (
-              <span className="muted">{t('editor.save.saving')}</span>
+              <span className="cv-ed-save">{t('editor.save.saving')}</span>
             ) : save === 'saved' ? (
-              <span className="muted">{t('editor.save.saved')}</span>
+              <span className="cv-ed-save"><Icon name="check" size={12} />{t('editor.save.saved')}</span>
             ) : null}
-            {readOnly && <span className="muted">{t('editor.readOnly')}</span>}
+            {readOnly && <span className="cv-ed-save">{t('editor.readOnly')}</span>}
           </div>
-          <button type="button" className="btn btn-primary btn-sm" aria-expanded={exportOpen} aria-controls="cv-ed-export" data-done={steps.export || undefined} onClick={() => setExportOpen((o) => !o)}>
-            {steps.export && <span aria-hidden="true">✓ </span>}
+          <button type="button" className="cv-ed-ib" aria-label={t('editor.tp.undo')} title={t('editor.tp.undo')} disabled={locked || !canUndo} onClick={undo}>
+            <Icon name="undo" />
+          </button>
+          <button type="button" className="cv-ed-ib" aria-label={t('editor.tp.redo')} title={t('editor.tp.redo')} disabled={locked || !canRedo} onClick={redo}>
+            <Icon name="redo" />
+          </button>
+          <button type="button" className="cv-ed-export-btn" aria-expanded={exportOpen} aria-controls="cv-ed-export" data-done={steps.export || undefined} onClick={() => setExportOpen((o) => !o)}>
+            <Icon name={steps.export ? 'check' : 'export'} />
             {t('editor.exportMenu')}
             {steps.export && <span className="sr-only"> ({t('editor.step.done')})</span>}
+            <Icon name="chevronDown" size={12} />
           </button>
         </div>
       </header>
       <div className="cv-ed-main">
         <aside className="cv-ed-left">
-          <ShotClips uploads={uploads} shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={allTakes} planId={planId} onTakes={setFreshTakes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
+          <div className="cv-ed-ptabs" role="tablist" aria-label={t('editor.left.tabs')}>
+            <button type="button" role="tab" className="cv-ed-ptab" aria-selected="true" id="cv-ed-ltab-shots" aria-controls="cv-ed-lpanel-shots">{t('editor.shots.title')}</button>
+          </div>
+          <div className="cv-ed-left-body" role="tabpanel" id="cv-ed-lpanel-shots" aria-labelledby="cv-ed-ltab-shots">
+            <ShotClips uploads={uploads} shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={allTakes} planId={planId} onTakes={setFreshTakes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
+          </div>
         </aside>
         <div className="cv-ed-centre">
           <div className="cv-ed-player" ref={playerBox}>
@@ -357,12 +530,16 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
               ref={player}
               component={Reel}
               inputProps={inputProps}
-              durationInFrames={reelDurationInFrames(project)}
+              durationInFrames={frames}
               compositionWidth={1080}
               compositionHeight={1920}
               fps={30}
-              controls
-              style={{ width: '100%', aspectRatio: '9 / 16', maxHeight: '100%' }}
+              controls={false}
+              clickToPlay
+              loop={loop}
+              playbackRate={rate}
+              spaceKeyToPlayOrPause={false}
+              style={{ height: '100%', aspectRatio: '9 / 16', maxWidth: '100%' }}
             />
             {safe && <SafeZoneOverlay player={player} host={playerBox} platform={platform} />}
           </div>
@@ -384,7 +561,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
             <ExportBar ideaId={ideaId} clientId={clientId} focus={focus} edit={edit} timeline={timeline} readOnly={locked} brandKey={`${kit?.logo ?? ''}|${kit?.color ?? ''}|${kit?.font ?? ''}`} musicKey={musicKey} linesKey={JSON.stringify(lines)} onCut={setCut} />
           </div>
         </div>
-        <div className="cv-ed-side">
+        <div className="cv-ed-side" aria-label={t('editor.inspector')}>
           <ToolTabs tool={tool} onTool={openTool} done={done} />
           <div className="cv-ed-panel" role="tabpanel" id={`cv-ed-panel-${tool}`} aria-labelledby={`cv-ed-tab-${tool}`}>
             {tool === 'clips' && (
@@ -393,6 +570,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
                 clip={selClip}
                 name={selClip ? nameOf(selClip) : ''}
                 sourceDuration={selClip ? (byKey[sourceKey(selClip.source)]?.duration ?? clipLength(selClip) + selClip.in) : 0}
+                silent={selClip ? byKey[sourceKey(selClip.source)]?.hasAudio === false : false}
                 nodeId={selClip ? nodeOf(selClip) : null}
                 readOnly={locked}
                 onProject={update}
@@ -420,8 +598,8 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
                 onPreview={preview}
               />
             )}
-            {tool === 'text' && <TextTool project={project} seconds={frame / 30} readOnly={locked} onProject={update} />}
-            {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} planId={planId} onAi={applyAi} undo={aiUndo} onUndo={undoAi} />}
+            {tool === 'text' && <TextTool project={project} seconds={frame / 30} readOnly={locked} onProject={update} picked={selection?.lane === 'text' ? selection.id : null} onPick={(id) => setSelection({ lane: 'text', id })} />}
+            {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} planId={planId} onAi={applyAi} undo={aiUndo} onUndo={undoAi} selected={selection?.lane === 'captions' ? selection.id : null} />}
             {tool === 'voice' && (
               <VoiceTool
                 ideaId={ideaId}
@@ -437,6 +615,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
                 lineTexts={filled.map((s) => s.line ?? '')}
                 readOnly={locked}
                 onProject={update}
+                selected={selection?.lane === 'voice' ? selection.id : null}
               />
             )}
             {tool === 'music' && <MusicTool ideaId={ideaId} project={project} file={musicFile} onFile={(f) => { setMusicFile(f); setMusicKey((n) => n + 1) }} readOnly={locked} onProject={update} />}
@@ -444,17 +623,43 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
           </div>
         </div>
       </div>
+      <Transport
+        playing={playing}
+        frame={frame}
+        frames={frames}
+        rate={rate}
+        loop={loop}
+        muted={pmuted}
+        snap={snap}
+        safe={safe}
+        pxPerSec={pxPerSec}
+        canSplit={project.clips.length > 0}
+        canDelete={canDelete}
+        readOnly={locked}
+        onToggle={() => player.current?.toggle()}
+        onSeek={seek}
+        onRate={setRate}
+        onLoop={() => setLoop((v) => !v)}
+        onMute={() => (player.current?.isMuted() ? player.current?.unmute() : player.current?.mute())}
+        onSnap={() => setSnap((v) => !v)}
+        onSafe={() => setSafe((v) => !v)}
+        onFullscreen={() => player.current?.requestFullscreen()}
+        onFit={fit}
+        onZoom={setPx}
+        onSplit={split}
+        onDelete={removeSelected}
+      />
       <div className="cv-ed-bottom">
         {project.clips.length === 0 && (
           <div className="cv-ed-empty">
-            <p className="muted">{filled.length ? t('editor.empty') : ff('composeHint')}</p>
+            <p>{filled.length ? t('editor.empty') : ff('composeHint')}</p>
             {filled.length > 0 && <button type="button" className="btn btn-primary btn-sm" disabled={locked || filled.length === 0} onClick={() => void fill()}>
               {t('editor.fill')}
             </button>}
           </div>
         )}
         {skipped.length > 0 && (
-          <ul className="cv-ed-skipped small muted" role="status">
+          <ul className="cv-ed-skipped" role="status">
             {skipped
               .map((id) => ({ id, n: shots.findIndex((s) => s.id === id) + 1 }))
               .filter((x) => x.n > 0)
@@ -465,19 +670,31 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
         )}
         <Timeline
           project={project}
+          lanes={lanes}
           sources={byKey}
           frame={frame}
           readOnly={locked}
           timeline={timeline}
-          selected={selected}
-          onSelect={setSelected}
+          selection={selection}
+          onSelect={select}
           nameOf={nameOf}
           nodeOf={nodeOf}
           onJump={onJumpToNode}
           onProject={update}
           onSeek={seek}
+          pxPerSec={pxPerSec}
+          snap={snap}
+          hidden={hidden}
+          muted={mutedLanes}
+          onHide={(lane) => setHidden((h) => flip(h, lane))}
+          onMute={(lane) => setMutedLanes((m) => flip(m, lane))}
+          duck={project.music && project.music.duck !== false && duck.length ? duck : null}
+          scrollRef={tlScroll}
         />
+        <p className="cv-ed-hint">{t('editor.keys2')}</p>
       </div>
     </div>
   )
 }
+
+const LANE_TOOL: Record<LaneId, Tool> = { video: 'clips', text: 'text', captions: 'captions', voice: 'voice', music: 'music' }

@@ -20,11 +20,12 @@ interface Props {
   onAi: (p: EditProject, label: string) => void // a change the AI made: it can be undone from the AI tab
   undo: { label: string } | null
   onUndo: () => void
+  selected?: string | null // the speech caption line selected on the timeline
 }
 
 // Captions on or off, and their words. Without a voiceover the captions are the shots' lines (one field per shot, the
 // pages below it are only shown); with one they follow the voice and each page can be fixed (F26, F27).
-export function CaptionTool({ project, lines, shotIds, words, readOnly, onProject, planId, onAi, undo, onUndo }: Props) {
+export function CaptionTool({ project, lines, shotIds, words, readOnly, onProject, planId, onAi, undo, onUndo, selected = null }: Props) {
   const mode = captionMode(project, words)
   return (
     <div className="cv-ed-tool">
@@ -45,7 +46,7 @@ export function CaptionTool({ project, lines, shotIds, words, readOnly, onProjec
         </div>
       )}
       {mode === 'speech' ? (
-        <SpeechLines project={project} readOnly={readOnly} onProject={onProject} />
+        <SpeechLines project={project} readOnly={readOnly} onProject={onProject} selected={selected} />
       ) : mode === 'voice' ? (
         <VoicePages project={project} words={words} readOnly={readOnly} onProject={onProject} />
       ) : (
@@ -188,13 +189,13 @@ function SpeechSource({ project, readOnly, planId, onProject, onAi }: Pick<Props
 }
 
 // The caption lines made from speech, each with editable text.
-function SpeechLines({ project, readOnly, onProject }: Pick<Props, 'project' | 'readOnly' | 'onProject'>) {
+function SpeechLines({ project, readOnly, onProject, selected }: Pick<Props, 'project' | 'readOnly' | 'onProject'> & { selected: string | null }) {
   const lines = project.captions.speech ?? []
   if (lines.length === 0) return <p className="muted small">{t('editor.cap.speech.empty')}</p>
   return (
     <fieldset className="cv-ed-choice cv-ed-seg">
       {lines.map((e) => (
-        <label key={e.id} className="cv-ed-page">
+        <label key={e.id} className="cv-ed-page" data-selected={e.id === selected ? '' : undefined} ref={e.id === selected ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}>
           <span className="small muted">{t('editor.cap.pageTime', { start: round1(e.start) })}</span>
           <input
             type="text"
