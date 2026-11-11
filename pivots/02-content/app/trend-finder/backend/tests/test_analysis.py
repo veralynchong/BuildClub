@@ -1,6 +1,8 @@
 """Background analysis of a take: silences, picture cuts, loudness, thumbnails, words (whisper faked)."""
 
 import subprocess
+from array import array
+
 import pytest
 
 import analysis
@@ -46,6 +48,38 @@ def test_analyse_finds_words_silence_loudness_and_thumbs(tmp_path, fake_whisper)
     assert out["loudness"]["integratedLufs"] < 0 and out["loudness"]["lra"] is not None
     assert len(out["filmstrip"]["times"]) == 3
     assert len(list((tmp_path / "film").glob("*.jpg"))) == 3
+    assert out["peaks"]["rate"] == 50 and len(out["peaks"]["values"]) == pytest.approx(175, abs=2)
+    assert max(out["peaks"]["values"][60:115]) < 0.02 < max(out["peaks"]["values"][5:45])
+
+
+def sine_and_silence_wav(path):
+    """1 s of a 440 Hz sine at full scale, 1.5 s of silence, then 1 s of the sine at half scale: mono 16 kHz."""
+    cmd = ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=440:d=1:r=16000", "-f", "lavfi", "-t", "1.5",
+           "-i", "anullsrc=r=16000:cl=mono", "-f", "lavfi", "-i", "sine=f=440:d=1:r=16000",
+           "-filter_complex", "[0:a]volume=8[a0];[2:a]volume=4[a2];[a0][1:a][a2]concat=n=3:v=0:a=1,aformat=channel_layouts=mono[a]",
+           "-map", "[a]", "-ar", "16000", "-ac", "1", str(path)]
+    r = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    assert r.returncode == 0, r.stderr
+    return path
+
+
+@need_ffmpeg
+def test_peaks_are_high_in_tone_and_low_in_silence(tmp_path):
+    wav = sine_and_silence_wav(tmp_path / "tone.wav")
+    got = analysis.audio_peaks(wav, tmp_path, 3.5)
+    assert got["rate"] == 50
+    v = got["values"]
+    assert len(v) == pytest.approx(175, abs=2)
+    assert all(0 <= x <= 1 for x in v) and all(x == round(x, 2) for x in v)
+    tone, quiet, half = v[5:45], v[60:115], v[130:170]  # away from the joins
+    assert min(tone) > 0.5 and max(quiet) < 0.02 and 0.2 < min(half) and max(half) < max(tone)
+
+
+def test_peaks_of_and_rate():
+    assert analysis.peaks_of(array("h", [0, 16384, -32768, 100, 0, 0]), 4, 2) == [0.5, 1.0, 0.0]
+    assert analysis.peaks_of(array("h", [8192, -16384, 3]), 2, 1) == [0.5, 0.0]
+    assert analysis.peak_rate(60) == 50 and analysis.peak_rate(120) == 50
+    assert analysis.peak_rate(300) == 20 and analysis.peak_rate(300) * 300 <= analysis.PEAK_MAX
 
 
 @need_ffmpeg
@@ -61,7 +95,7 @@ def test_whisper_missing_is_unavailable_not_failed(tmp_path, monkeypatch):
 @need_ffmpeg
 def test_hard_colour_cut_is_found(tmp_path):
     out = analysis.analyse(colour_cut_clip(tmp_path / "cut.mp4"), tmp_path / "film")
-    assert out["hasAudio"] is False and out["loudness"] is None and out["transcript"]["status"] == "none"
+    assert out["hasAudio"] is False and out["loudness"] is None and out["peaks"] is None and out["transcript"]["status"] == "none"
     assert len(out["cuts"]) == 1 and out["cuts"][0]["t"] == pytest.approx(2.0, abs=0.1)
 
 
@@ -93,6 +127,7 @@ def test_job_runs_and_results_are_served(client, setup):
     assert got["status"] == "done" and got["results"]["silences"] == [[0.1, 0.5]]
     listed = client.get("/api/ideas/ia/takes").json()[0]["analysis"]
     assert listed["status"] == "done" and listed["summary"]["words"] == 1 and listed["summary"]["silences"] == 1
+    assert isinstance(listed["updatedAt"], int) and listed["updatedAt"] > 0
 
 
 def test_failed_job_then_retry(client, setup):

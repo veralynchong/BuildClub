@@ -1,10 +1,12 @@
 """What is in a take, worked out once in the background after upload: the words with times (whisper.cpp),
-the pauses, the picture cuts, the loudness and a strip of small thumbnails. Phase 2 and 3 of the editor's AI
+the pauses, the picture cuts, the loudness, the sound's peaks for the timeline's waveform and a strip of small thumbnails. Phase 2 and 3 of the editor's AI
 edit read these results instead of looking at the video again. Rows live in take_analysis, thumbnails in
 <media>/<ideaId>/<takeId>.film/. Everything is local and free; no step needs the network."""
 
 import json
 import logging
+import sys
+from array import array
 import queue
 import re
 import shutil
@@ -29,6 +31,9 @@ SILENCE_MIN = 0.3        # seconds; shorter pauses are not reported
 SCENE_THRESHOLD = 10     # scdet score (0-100) a frame must pass to count as a cut
 FILM_MAX = 12            # thumbnails per take
 FILM_HEIGHT = 120
+PEAK_RATE = 50           # waveform buckets per second
+PEAK_MAX = 6000          # at most this many buckets (2 minutes at 50 a second); longer takes get fewer a second
+PEAK_SAMPLE_RATE = 8000  # the sound is read this coarsely for the peaks
 MAX_ERROR = 300
 # Whisper drops "um" and "uh" unless the text before the audio has them; the clean-up lists them for removal.
 FILLER_PROMPT = "Umm, uh, so, like, you know, I mean, erm."
@@ -82,6 +87,33 @@ def transcript_of(path: Path, work: Path, total: float, silences: list[tuple[flo
     return {"status": "ok", "words": [{"text": w[2], "start": round(w[0], 3), "end": round(w[1], 3)} for w in words]}
 
 
+def peak_rate(total: float) -> int:
+    """Buckets a second for a take this long, so the list stays under PEAK_MAX."""
+    return PEAK_RATE if total * PEAK_RATE <= PEAK_MAX else max(1, int(PEAK_MAX / max(total, 1e-6)))
+
+
+def peaks_of(samples, sample_rate: int, rate: int) -> list[float]:
+    """The loudest sample of each 1/rate second bucket of 16-bit samples, 0 to 1 on two decimals."""
+    size = max(1, sample_rate // rate)
+    out = []
+    for i in range(0, len(samples), size):
+        chunk = samples[i:i + size]
+        out.append(round(min(1.0, max(max(chunk), -min(chunk)) / 32768), 2))
+    return out
+
+
+def audio_peaks(wav: Path, work: Path, total: float) -> dict:
+    """{rate, values}: the waveform the timeline draws under a clip, read from the take's mono wav."""
+    raw = work / "peaks.raw"
+    cutting._ffmpeg(["-i", str(wav), "-ac", "1", "-ar", str(PEAK_SAMPLE_RATE), "-f", "s16le", str(raw)], "Reading the peaks")
+    samples = array("h")
+    samples.frombytes(raw.read_bytes()[: (raw.stat().st_size // 2) * 2])
+    if sys.byteorder != "little":
+        samples.byteswap()
+    rate = peak_rate(total)
+    return {"rate": rate, "values": peaks_of(samples, PEAK_SAMPLE_RATE, rate)}
+
+
 def make_filmstrip(path: Path, dest: Path, total: float) -> list[float]:
     """Up to FILM_MAX JPEGs (one a second when the take is short, else spread over it); the times they show."""
     shutil.rmtree(dest, ignore_errors=True)
@@ -105,7 +137,8 @@ def analyse(path: Path, film: Path) -> dict:
         raise CutError("That file has no video in it.")
     total = info["duration"]
     out = {"duration": round(total, 3), "fps": info["fps"], "width": info["width"], "height": info["height"],
-           "hasAudio": info["hasAudio"], "transcript": {"status": "none", "words": []}, "silences": [], "loudness": None}
+           "hasAudio": info["hasAudio"], "transcript": {"status": "none", "words": []}, "silences": [], "loudness": None,
+           "peaks": None}
     if info["hasAudio"]:
         with tempfile.TemporaryDirectory(prefix="analysis-") as tmp:
             work = Path(tmp)
@@ -117,6 +150,7 @@ def analyse(path: Path, film: Path) -> dict:
             r = cutting._ffmpeg(["-i", str(wav), "-af", "loudnorm=print_format=json", "-f", "null", "-"],
                                 "Measuring the loudness", quiet=False)
             out["loudness"] = parse_loudness(r.stderr)
+            out["peaks"] = audio_peaks(wav, work, total)
     r = cutting._ffmpeg(["-i", str(path), "-an", "-vf", f"scale=320:-2,scdet=t={SCENE_THRESHOLD}:s=1", "-f", "null", "-"],
                         "Finding the cuts", quiet=False)
     out["cuts"] = parse_cuts(r.stderr)
@@ -124,9 +158,10 @@ def analyse(path: Path, film: Path) -> dict:
     return out
 
 
-def summary_of(status: str, error: Optional[str], results: Optional[dict]) -> dict:
-    """The small form that rides along in the takes list."""
-    out = {"status": status, "error": error}
+def summary_of(status: str, error: Optional[str], results: Optional[dict], updated_at: Optional[int] = None) -> dict:
+    """The small form that rides along in the takes list. `updatedAt` changes with every run, so the editor can tell
+    when what it fetched for a take is out of date."""
+    out = {"status": status, "error": error, "updatedAt": updated_at}
     if results:
         tr = results.get("transcript") or {}
         out["summary"] = {"duration": results.get("duration"), "words": len(tr.get("words") or []),
@@ -137,9 +172,9 @@ def summary_of(status: str, error: Optional[str], results: Optional[dict]) -> di
 
 def states(conn, idea_id: str) -> dict:
     """take id -> summary for every analysed take of the plan."""
-    return {tid: summary_of(status, error, json.loads(results) if results else None)
-            for tid, status, error, results in conn.execute(
-                "SELECT take_id, status, error, results FROM take_analysis WHERE idea_id = ?", (idea_id,))}
+    return {tid: summary_of(status, error, json.loads(results) if results else None, updated)
+            for tid, status, error, results, updated in conn.execute(
+                "SELECT take_id, status, error, results, updated_at FROM take_analysis WHERE idea_id = ?", (idea_id,))}
 
 
 def full(conn, take_id: str) -> Optional[dict]:
