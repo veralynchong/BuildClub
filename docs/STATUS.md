@@ -1,4 +1,220 @@
+## 2026-11-06：全新 AI 21 鏡成片最後交付完成（接手實跑）
+
+使用者明確批准由監督 session 接手；只完成既有生成成果的免費匯入、剪輯、文字匯出、錄影及重啟驗證。實際 app 在 `chore/final-ai-delivery`，HEAD 與 origin/main 均 2c069a8，所有其他 dirty 保留，未 commit／push／安裝／新增付費。
+
+- 成片：`/Users/tommy/Downloads/buildclub-demo-reference/batch-20261106-fresh-ai/deliverables/final21/ever-green-fresh-ai-ad.mp4`，SHA256 `be20427fd3dc0eaadc3379dadd3e98136eeb25b60bb68c9d0f931294972edc14`。H264 1080×1920、30fps、315幀／10.5秒；AAC 容器10.517秒、解碼PCM全零，沒有原曲／配音。三組英文畫面文字已實看開頭、中段、CTA。
+- 實際UI完成：上傳已生成21鏡組片→Canvas→原生Editor20次Split形成21片段→三組文字→Export／Download→員工完整播放→送審waiting→同頁登出／清cookie→匿名完整播放ended。最新version `1793949486916819995`，非真人批准。
+- 真重啟：自有PID41763正常停止後PID43419用同state啟動，bootId不同；時間線、文字、媒體SHA、最新waiting與匿名播放均保留。成功連續原錄影與重啟錄影在 `evidence/final21-takeover-20261106-1812/attempt5/`；友善檔名錄影在 final21/full-demo-walkthrough.mp4。自有browser/context/backend全部關閉，8978／8979／8980釋放，test-slot held=false；其他Demo服務未碰。
+- 來源／費用：52筆原provider receipts及所有ledger SHA不變（28圖＋24影片；選用9H＋12V）。fal預留3.52美元、實際帳單未知；OpenRouter供應商回報2.40美元；接手新增付費0。`delivery-manifest.json`與`source-manifest.json`保留完整來源及所有失敗。
+- runner實跑修正只在batch交付工具：未使用的FastAPI status參數被誤判必填query（422）；上傳契約實際200而非201；隔離Canvas正常保存被工具封鎖造成leave guard不通；匿名頁尚未出現video就計數。已按真實API／截圖／網路證據修正，保留attempt1–4全部FAIL，attempt5兩階段PASS。只放行此隔離idea的原生Canvas PUT；generation、人類approve、其他idea／外部請求仍禁止。沒有改產品程式或Shot.line。
+- 親跑驗證：app `bash bin/verify.sh full`：1115 passed、2 skipped in45.30s（交付後重跑），frontend PASS，verify GREEN；交付工具47 Node＋6 Python測試PASS；`python3 -B .../deliverables/final21/verify-delivery.py` 四項PASS，驗成片規格／完整decode／靜音、兩段成功錄影、真重啟、來源與費用帳本不變及cleanup。
+- 品質限制保留：S11只是攪拌中、macro看不到接收麵糊、白盤／綠碗與手部連續性有差異、包裝細字不可靠。raw全片獨立QA為LIMITED、無新增阻斷，不能宣稱無瑕或真人已批准。
+- 六鏡Demo是另一個已驗收分支；本次21鏡完整片尚未自動替換六鏡Editor或假裝六鏡重新匯出。下一步由Demo owner依新影片manifest明示接入；本輪最後交付已完成。
+
+2026-11-06最新進度：原3張補圖pilot已真正生成/Use/reload/完整錄影decodePASS；獨立圖QA s2PASS、s13PASS、s16LIMITED（熟餅正確但白線已有3–4段）。累計24圖/10Hailuo；原31品質鎖不改，repair3另記，fal總reserve2.96/publicestimate2.86/actual未知。繼續原Hailuo補做quota中的s2單支動態免費實作/覆核（若執行max新.20、合計3.16<=4），未新增支出；不需新cap批准才能作此一支。fal實際餘額GET403、OR正常Key未載入未查帳；不可把reserve當餘額。原21動態/成片仍未完成。
+
+2026-11-06續行：使用者再次要求持續完成goal。原授權尚有3張補圖quota，現只準備s2/s13/s16原Seedream文字補圖pilot，每張.04／新增最多.12，合併fal預留最多2.96<=原cap4；總image最多24。另建read-only linked aggregate guard與獨立repair state，不解原31筆品質鎖、不reset歷史；獨立review與逐鏡視覺QA仍必要。新fal6提案尚未批准，不得啟用。
+
+最新核實（2026-11-06 AEDT）：新AI批次21圖／10支Hailuo已生成；獨立視覺QA未過，s13/16/17/18錯食物/動作且多鏡整塊豆腐復原。s10回收後品質鎖halted，31requests全done，fal預留US$2.84／公開估價US$2.74／actual未知，OR0；未重送、未reset舊ledger。16圖修正草案B/correction-candidate.json需另批fal累計6/OR3及擴quota，尚未批准；OpenRouter正常後端未載入。完整21動態、成片、最終前端錄影尚未完成，不能稱goal完成。自有8978與browser已關，舊8982/3/4不動。
+
+## 2026-11-06：新批次鎖定前端與 offline 全工程鏈已跑通
+
+- root實際啟動新8978生成鎖定環境，正常後端安全載入既有fal；status顯fal可用／OpenRouter未繼承、provider requests0。真登入→選client→21shot Canvas／三model標籤PASS，無舊frame/footage/import，錄影decodePASS；只關自己的PID8722與browser/context，舊8982不動，lease已釋放。
+- 初期鎖定UI兩FAIL保留：實際APP/dist缺失導致404；新QA seed缺savedInLive被live filter隱藏。用既有Vite envFile=false/configFile=false只build到新state/dist；再以meaningful seed regression RED→GREEN修新SavedIdea.savedInLive=True（保留QA非真人批准註記），不改產品篩選邏輯。後端18tests PASS in2.271s、實際app full1115passed/2skipped in32.92s、frontendPASS、GREEN。
+- 離線前端工程完整PASS：B/evidence/offline-smoke-1793922762302041000/result.json，11checks包含真UI201→done圖/片→History Use→Editor2s trim→native1080x1920/30fps H264 export/download/full decode/ended→send waiting→無cookiepublic ended→reload。影像為本機testsrc，明示OFFLINE，並非新AI廣告；mode隔離、no inherited keys、paid0；owned backend20598正常停止，ctx/browser finally關閉，lease釋放。先前login race與未選client兩FAIL保留，依HTTP/截圖證據修runner。
+- 正式source production ledger仍0請求；3張付費pilot尚未執行。只在零generation／零binding前，依原片產品包裝的視覺分析補純文字描述與手部一致性；原片影格只作分析，imageInputs全部空。改新B/fresh-plan與新production frozen-plan的prompt，沒有重設任何ledger，舊batch不動。
+- 現source code／hash／C provisional接受及root integration delta在B/runtime-progress.json。下一步覆核savedInLive單欄seed delta與受限3圖pilot runner；沿已批准Seedream4.5／fal4+OR3=7，先s1/s14/s20三張各.04、總.12估價/上限，完成QA再擴。OpenRouter仍需使用者從同一環境啟動後端來傳入，不讀共用秘密檔或複製Key。
+
+## 2026-11-06：依使用者要求恢復 Full Canvas，單鏡設計暫停
+
+- 使用者認為單鏡工作區與預期差很多，明確要求暫停，隨後要求回到上一版Full Canvas。已恢復8982 preview加入單鏡前的index；舊assets完整，HTTP實際回傳與備份逐byte相同，MacBook所有18982 Demo分頁已重新整理。
+- 已核對目前Demo的7個檔案仍等於本次integration after-hash，再安全反套本次patch，4個既有檔恢復before-hash、3個本輪新增source/test移除。只撤銷本輪單鏡工作區，不影響先前側欄入口修正／橫向排版／版本向下。data／media／edit／ledger保留。
+- demo-readiness為目前啟用的舊Full Canvas程式；video-canvas-entry／feat/shot-focus-workspace仍保留未提交的單鏡草稿，供重新對齊時參考，禁止直接重建套回展示。使用者未授權恢復開發，不再自動改設計。新AI生成批次的其他限制仍依最新G1紀錄，這次僅UI恢復。
+- 還原驗證：7檔before SHA全部相符；served index逐byte相符；frontend unit637 passed／0 failed in2186ms。無commit／push／安裝／新增付費。證據shot-workspace-20261106/full-canvas-restored.json，原設計與成功／失敗證據及patch均保留。
+
+## 2026-11-06：預設單鏡工作區與縮圖導覽（使用者已批准）
+
+- 預設legacy plan進Shot view，上方21鏡縮圖一排且可直接跳轉、上一鏡／下一鏡；下方References／AI images／Videos三欄獨立捲動、放大預覽、播放，設定按需開Inspector。保留Full canvas與全部92nodes，以及Open editor後回到同一鏡。standalone workspace維持完整Canvas。view／shot用每resource本機偏好保存，預覽本地狀態不改selected，Use才沿用既有保存／quote／readonly契約；In edit僅由真clip source ID判斷。
+- 新shotWorkspace純資料投影合併同鏡多節點與歷史Generation，沿edge找參考、共享來源不複製，支援真takes。review找到owned upload在visited中消失，新增回歸先RED後GREEN並修正；pending Run／Use／Upload保護、唯讀可看不可寫。Assistant與聚焦鏡頭同步，Inspector明示設定用於下次生成。
+- 隔離feat/shot-focus-workspace（video-canvas-entry）實作，7個前端／測試檔整合demo-readiness，原dirty保留；無後端、套件、付費變更、commit／push／merge。獨立只讀review最終ACCEPT，root看1440首鏡與S19／Inspector截圖ACCEPT。
+- root整合全套最後 `bash bin/verify.sh full` GREEN：1115 passed, 2 skipped in35.63s；frontend PASS；TS／ESLint／sandbox build PASS。先前full frontend因既有AST handler測試沒注入shotView而RED（641/642）；更新scope並驗兩種view、0 model requests後，定向13tests及full GREEN。shotWorkspace純測試5項PASS，資料不變／版本去重／共享與owned references／cycles／empty pending failed／真takes。
+- 1440 preview與實際8982 served完整11步PASS：21縮圖同排、點最末鏡、S19五張圖三支片、預覽不採用、各欄scroll、放大、影片真播放、Inspector不溢出、Full Canvas92nodes、view／shot重開持久、Assistant跟鏡、Editor返回同鏡。data／selected／edges／gens／takes／ideas／edit project皆保留，ledger SHA不變、paid0。另browser-only readonly／empty／pending-owned／zh-Hant四fixtures全PASS；全自有context/browser關閉。
+- UI初期native video metadata未等與Editor返回鈕帶箭頭造成harness FAIL，原JSON／錄影保留；查實際媒體readyState與按鈕文字後修harness，產品行為無為此繞過。實際成功連續錄影shot-workspace-demo.mp4：H2641440×900完整decode PASS，內容為既有cached素材的免費操作，不是真AI再生成。
+- 全部證據 `/Users/tommy/Downloads/buildclub-demo-reference/shot-workspace-20261106/`：live-result.json／fixtures-result.json／integration.patch與逐步截圖／錄影。重跑 `node /Users/tommy/Downloads/buildclub-demo-reference/shot-workspace-20261106/check.cjs --live`（讀既有案例並容許僅Canvas位置／viewport正常保存；不生成）。8982服務與MacBook18982轉接供使用者檢視保留，僅更新static frontend，未重啟後端。
+- 這不是新廣告生成驗收；新AI批次G1／Key／live費用限制狀態依其他最新節與runtime-progress.json，不能以本次UI GREEN解鎖paid。
+
+## 2026-11-06：使用者go批准固定單價替代方案，接線待覆核
+
+- 使用者在估價4.92美元／cap fal4+OpenRouter3=7／Seedream4.5純文字新圖提案後回go，已記錄新批次授權；原片與舊衍生圖依舊禁止generation input。21圖＋12Hailuo6秒＋9Veo4秒無音，各最多3補做。未新增付費請求，支出0。
+- 新batch fixed_runtime.py/provider_transport.py實作固定model／payload／單張、單次POST、先保存provider receipt後GET polling、首圖同bytes、分帳cap與counts、下載不帶Key到CDN；runtime.py支援mode/policy分離，原Nano Banana live仍拒絕。只fake HTTP跑40focused tests PASS，還不能當真provider驗證或paid-ready。現候選精確hash見runtime-progress.json fixedReviewFiles，待獨立覆核。
+- 使用者詢問Key已載入要去哪裡看，尚不是後端載入確認。check-account.py僅由使用者已載入環境執行，顯示存在布林與免費OpenRouter account結果，不顯示或另存Key；agent不讀取共用秘密設定。此輪app baseline full1115passed/2skipped in38.42s，frontendPASS、GREEN；保留其他session新橫排UI dirty及舊8982/3/4。
+
+## 2026-11-06：新廣告 G1 離線防護通過，live 仍 blocked
+
+- 正式 goal 已建立。兩個唯讀研究／QA代理完成；第三位獨立 reviewer 第一輪 REJECT，root重現問題後修正，第二輪spec/quality ACCEPT。root核對 HEAD2c069a8 與兩檔SHA256一致，僅接受offline候選，不是付費ready或committed approval。
+- 新batch runtime.py/test_runtime.py新增完整payload限制、原子獨立預算、固定首圖bytes與hash、不可任意finish導入來源、未知提交/真程序crash後停批、輸出格式與解碼。第一輪新增回歸3FAIL已重現；修復audio-only MP4誤收與帳本暫存/lock symlink後，root24tests PASS in1.365s；reviewer24PASS in1.205s。live模式仍無條件拒絕，所有測試素材標offlineSimulation，沒有生成真廣告。
+- 狀態及精確review hash：`/Users/tommy/Downloads/buildclub-demo-reference/batch-20261106-fresh-ai/runtime-progress.json`。阻礙仍為使用者側安全載入Key尚未確認，以及指定圖片模型完整thinking/output成本上限未證；US$0、無新paid requests。既有產品code/dirty及8982/3/4未改。
+- 下一步只在具體關卡解除後接續：收到使用者終端Key檢查結果；取得指定模型成本限制的可執行證據，或使用者另批准有固定單張成本的替代模型/預算配置；然後受限live adapter獨立覆核、3圖pilot，再21鏡與完整成片錄影。不可用本次24offline PASS解鎖paid。
+
+## 2026-11-06：鏡頭橫排、同鏡版本向下（使用者已批准）
+
+- 主流程按shots順序由左至右；同鏡的upload／image／video分欄，獨立變體往下。新增shotLayout純排版，沿edge推導無shotId來源，共用來源只保留一份置於上方。保守尺寸加實際量測與標題空間，穩定後不重複儲存。
+- 新分鏡僅在符合未修改後端初始座標時自動橫排；既有自訂畫布須點Arrange shots。水平模式新增同類節點往下；滑鼠或鍵盤手動移動會解除自動排列。唯讀初始分鏡僅映射顯示、不PUT。FreeformNode將成功歷史版本向下顯示並沿用原Use action，沒有複製generation或改既有選用結果；中英標籤保留。
+- 隔離分支fix/canvas-horizontal-layout（工作區video-canvas-entry）實作，將8個前端／測試檔整合demo-readiness，保留原CanvasScreen既有dirty。無backend／依賴／付費服務變更，未commit／push／merge。既有新AI廣告仍待OpenRouter安全設定與paid adapter，不因本輪UI GREEN宣稱paid-ready；其舊source hash證據只對原preflight版本有效。
+- root最終實際整合 `bash bin/verify.sh full` GREEN：1115 passed, 2 skipped in44.90s、frontend PASS。TS／ESLint／sandbox build PASS；純排版4項GREEN（先見新module缺失的預期RED），涵蓋順序、資料保存、來源歸屬、共享來源、實際尺寸無交疊、變體不推動其他鏡、未修改匯入與手動位置。
+- 1440前端先browser-only saves驗完整案例，再更新8982自有preview static並真UI點Arrange保存：21shots／92nodes／23videos、4歷史圖片向下、全部卡片與標題0交疊、idle PUT穩定、reload後位置相同；data／selected／edges／generations／takes／ideas與edit project不變，只有layout／position／viewport更新，ledger SHA不變、paid0。另browser-only pristine21shot核准自動保存／唯讀0PUT皆PASS；keyboard移動解除auto亦PASS。
+- 初期兩個UI harness FAIL保留（硬編不存在video node ID、焦點未選取就按箭頭）；查實際node IDs與已安裝ReactFlow keyboard條件後修正harness，未隱藏原FAIL。獨立只讀review最終ACCEPT，root看首鏡橫排與S19向下版本截圖ACCEPT。
+- 成功連續錄影horizontal-layout-demo.mp4：1440×900 H264完整decode PASS，明示既有cached素材＋即時免費排版／保存／重開，不是live生成。全部證據與重跑命令：`node /Users/tommy/Downloads/buildclub-demo-reference/horizontal-layout-20261106/check.cjs --live`。該命令會重新排列此Demo；完整結果live-result.json、import-result.json及來源integration.patch。MacBook18982與8982服務依使用者檢視需求保留；測試owned browser/context全關閉。
+
+## 2026-11-06：Video canvas 側欄入口修正
+
+- 使用者確認側欄 Video canvas 應進入生成 Canvas。修正 Sidebar.tsx 送出 canvas；App.tsx 在目前 client 只有一個 Plan 時直接開該 Plan 的生成 Canvas，0／多 Plan 進既有 CanvasPick。舊分鏡板與其資料保留。已在同一 Canvas 時不重載，跨資源先走 withCanvasLeave 保存／busy 保護；獨立只讀覆核 ACCEPT。
+- 原始修正在隔離工作區 video-canvas-entry／fix/video-canvas-entry @2c069a8；僅把 App.tsx、Sidebar.tsx 兩個乾淨基線檔整合至 demo-readiness／chore/fresh-ai-preflight，原有 dirty 保留。未commit／push／merge／安裝，無新付費。
+- 2026-11-06 root親跑實際整合工作區 `bash bin/verify.sh full`：1115 passed, 2 skipped in 34.12s；frontend PASS；verify GREEN。隔離起點1109 passed／2skipped GREEN；修改後TypeScript app/config、ESLint與sandbox build PASS，實際整合build PASS。
+- 1440真前端前後比較：原版側欄進 .board-canvas；修正版單Plan直接進 .fc-flow，92nodes／23video保留，再點同入口DOM與graph讀取次數不變；0／多Plan picker PASS（後兩者只在browser mock ideas，不改server DB）。更新8982專用preview靜態index/assets後再跑實際served三情境全PASS、ledger SHA不變、paid0；舊assets保留供已開分頁。沒有改DB、素材、guard或ledger；8982及MacBook18982轉接依使用者檢視需求保留。
+- 證據與可重跑命令：`node /Users/tommy/Downloads/buildclub-demo-reference/video-canvas-entry-20261106/check-served.cjs`；同目錄 result.json／served/result.json、前後截圖與錄影、integration.json／preview-update.json。此修正不等於卡片重疊已修，也不等於全新AI廣告已生成。
+
+## 全新 AI 廣告批次：免費準備完成，缺 OpenRouter Key（2026-11-06）
+
+本輪目標是全部21鏡新圖＋新AI動態；下方舊Demo完成紀錄只屬舊批次，不能代替新需求。實際工作區分支已由`test/demo-readiness`切至`chore/fresh-ai-preflight`，HEAD仍`2c069a8`、無upstream；原有dirty保留，未commit/push/安裝。
+
+- 新批次：`/Users/tommy/Downloads/buildclub-demo-reference/batch-20261106-fresh-ai/`。21組純文字新場景提示、315frames/30fps剪輯節奏、獨立空media/state/ledger；僅復用原片文字分析，沒有原片frame或舊衍生圖進generation，攝影師路線不重做。本輪付費請求0、支出US$0，fal3／OpenRouter10授權分開未動用，餘額未查。
+- 正常設定載入檢查只輸出布林：demo-readiness三Key皆無；舊批次正常canvas-p1入口fal/Anthropic有、OpenRouter無。具體阻礙為`OPENROUTER_API_KEY`尚未透過正常後端設定提供；沒有讀印或複製秘密，不source keys.fish。未執行新圖、新影片或新成片。
+- 官方免費catalog快照已保存。Hailuo standard 768p/6秒US$0.19；Veo Lite 1080p/4秒/無音訊US$0.20。最終1080p匯出不代表Hailuo來源原生1080p。Nano Banana現有images adapter沒有可證的輸出token硬上限；chat/max_tokens3072的US$0.19保留僅提案，待嚴格input bound與實際傳遞約束，不能稱paid-ready。
+- 新離線記帳契約7測試PASS，但尚未接HTTP，不是已完成付費防護。獨立覆核要求真接線前綁完整payload、provider回應bytes/requestID/immutable輸出hash，以及video輸入同bytes/hash；詳見`paid-readiness-review.json`。原舊guard/ledger/state沒有修改。
+- 自有8972前端13項PASS、zero-spend32PASS、真重啟DB/media hash相同；owned groups空、lease釋放。8976隔離登入→選client→Research→Plans錄影PASS且完整decode，僅錄影能力證據，不是新廣告完整成功錄影。兩次先前FAIL保留（ffmpeg快取路徑、漏選client），無安裝。所有自有context/browser/backend已關閉。
+- 驗證：`bash bin/verify.sh full` GREEN，1115 passed/2 skipped（40.25s）、frontend PASS；canvas-p1五步GREEN。既有產品code與runner逐hash維持原dirty。8982/8983/8984依協作通知交由原session展示舊Demo，本session未啟停或寫入。
+- 下一步：正常後端設定安全提供OpenRouter Key後，先免費驗account與request-bound cap；完成最小受限adapter與來源綁定，再3張新關鍵圖QA→21圖→12Hailuo＋9Veo→Editor成片/匿名送審/reload/完整成功錄影。授權不需重問，同模型批次變更或額外花費才另問。
+
+## 固定原片兩路 Demo：已完成（2026-11-06）
+
+本階段已結束：Ever Green豆腐原片DVp3xOdFaHL的真Research分析／21shots／Canvas主線生成、攝影提案、原生Editor成片、主管角色QA與完整連續回放均完成，停在最新成片待真人審核。全部mini；本機dirty依指示保留，未commit/push/merge。
+
+- 交付根：`/Users/tommy/Downloads/buildclub-demo-reference/batch-20261106/deliverables/`。`ever-green-ai-recreation.mp4`原生H2641080×1920／30fps／315frames（video10.5s、AAC容器10.517s），無配樂；21主圖及storyboard-main.jpg；photographer-concepts.jpg及高角度／低macro各圖+5.875s真影片。
+- `complete-prepared-demo.mp4`：111.68s單一page連續、1440×900H264、完整decode PASS；原片→Research→21shot/script→Canvas主圖/兩alt→Editor→即時免費Export→送最新version waiting→登出public完整播放，不Approve。分析與AI素材為先前真生成的prepared/cached回放，不宣稱本次重錄又付費生成。Canvas目標header/media全入鏡及9點未遮擋，root實際view兩截圖ACCEPT。第一版85.4s功能PASS保留，另註可讀性限制。
+- 最新待審version：1793898844797185424。主管登入Plan／ShotBoard看圖與獨立script已用Demo QA角色Approve with changes測過；public成片QA批准舊version1793895431131841818。最新version保留waiting，root另以無cookie GET review list及media range206核對。這不是真人主管簽核；public頁目前不顯示圖片／獨立script，須登入審圖。
+- 已實際重啟專用後端驗證ideas/clients/library值、ledgerbyte及交付主MP4hash保留；新browser流程可讀同21clips/script/graph；重啟與重錄無新增付費。最後backend正常停止，8982/8983/8984空、owned browser0、test-slot heldfalse，state/media保留。`start-demo.sh`已實際啟動health200測過，可在mini重開8982，維持原ledger上限。
+- 費用：1Claude＋26image＋23video＝50unique paid requests（49fal HTTP200）；3張拒絕圖費用保留且沒送video。分析token10861/3707估價0.117584，合UIquote估算US$5.573584；帳本reserve US$6.14／授權10，不是供應商帳單實支；fal餘額read403未知，3.86只是本批reservation空間。financial-final-verification.json與cost-summary.json。
+- 最後root code驗證：`bash bin/verify.sh full` → `1115 passed, 2 skipped in 34.86s`、`PASS  frontend unit tests`、`verify: GREEN`。其後無產品code更動。成片／兩alt／連續回放全decodePASS，實際native/public播放ended；原21clipproject/source-script/ledger未變。mobile依1440桌面scope waived。
+- 已知範圍：script為免費初始化後手工填入Claude來源onScreen文字，Say全空（原片無VO），不宣稱AI自動script回填；Shot.line不動。包裝小字／構圖／字體非完全相同；原6秒素材尾段可能漂移，主片只用root驗過的source精確選段（S12前14/30s、S20前15/30s等）。不是Pixel-perfect remake。
+
+成功／費用／檔案與限制見batch的acceptance.json、delivery-manifest.json及完整artifact-inventory.json。merged且clean工作樹只列4個候選於worktree-cleanup-candidates.json，0移除、需另批。額外測試登入資料檔因安全hook判定URL含帳密而省略，沒有改寫指令繞過。
+
+## 21鏡頭主線素材完成檢查點（2026-11-06）
+
+真前端生成21張主圖／21段影片，另保留1張被拒絕S12圖，沒有unknown或paid重送。Ledger核對1analysis／22image／21video，保留額US$5.58（不是供應商帳單實支）；analysis token估價US$0.117584。全片素材decode、reload後21shot/node/selected/in:start連線、Editor21sources均PASS。root獨立看全部21片首幀及最後使用幀，按source精確315frames/30fps的選段ACCEPT；S12/S20/S19較後段有漂移，原始長片不做整段忠實品質保證。S20主品牌可辨，細小包裝字與構圖有差異，明確不是像素或文字完全相同重製。
+
+證據：batch-20261106/main-batch-verification.json、selected-trim-qc/verification.json；21主圖與storyboard-main.jpg已整理到該batch/deliverables/。影片與數段操作錄影完整decode通過；先前FAIL與中斷片段保留，不冒稱已有一次整套成功Demo錄影。
+
+目前唯一UI worker處理script→原生Editor→主MP4。已核對PlanScript現有卡片可編輯：免費Write the script只作建立卡片，之後清空所有Say，onScreen逐shot填Claude原片文字，保留無VO與獨立Shot.line契約，不宣稱產品已自動AI回填。主線Export／2攝影提案／審片／完整成功回放／最終持久驗證尚未完成。
+
+## 固定原片 Demo 批次執行檢查點（2026-11-06）
+
+使用者已明確授權後端安全載入既有 Anthropic／fal 兩個 Key，按 US$10 批次預算無人值守執行；較早「US$0／未選影片／待逐次確認」紀錄僅為歷史狀態。固定案例 DVp3xOdFaHL、沿用 Ever Green 豆腐產品，主線 Research → Plan → Canvas，兩路素材為 AI 重現與攝影替代角度。全部在 mini，無安裝、提交、推送或外部通知。
+
+- 已完成：真前端 Research 選原片 → Claude 一次請求 → 21 shots → Plan／規劃畫布；QA manager 測試角色批准後，生成 Canvas 自動建立21組 Shot／Storyboard。未冒充真人主管同意。
+- Anthropic 回傳10861 input／3707 output tokens，依本批定價估計 US$0.117584；安全帳本保留 US$0.50 reservation、不回收。總額10／分析0.50／image3／video6.50；Seedream edit單張0.04，Hailuo Fast 6秒每次保留0.20。fal balance讀取403，餘額未知，沒有充值。
+- 專用8982服務使用實際整合app、自己的持久DB/media及正常設定載入；批次guard只允許凍結原片分析與指定fal endpoint，拒絕其他付費入口／重複payload，未知提交全批停止。這是本機預約上限，不是供應商帳戶全域bill cap。
+- 原始證據：`/Users/tommy/Downloads/buildclub-demo-reference/batch-20261106/`。phase1真分析與Canvas成功，錄影saveAs失敗使runner標FAIL；recording兩個原始WebM仍存在，ffprobe皆1440×900、約91秒，尚待完整解碼。後續inspect證據另存，不改寫原FAIL。
+- 最近整合驗證：`bash bin/verify.sh full`：backend compiles／loads without dotenv PASS；1115 passed, 2 skipped；frontend unit tests PASS；verify GREEN。之後未改產品程式。唯一新產品patch為Claude禁SDK retries／fallback，已獨立覆核並整合。
+- 進行中：第一張真參考image與第一段真video的前端操作及品質檢查；尚未聲稱整批素材、成片、剪輯、最終主管review或完整成功錄影完成。下一步先檢查生成回傳／帳本，再擴大批次，不重送原片分析。
+
 # STATUS
+
+## 2026-11-06：固定Reel免費前端已錄影，Claude分析取消自動重試
+
+- Tommy選定原片產品／Reel `DVp3xOdFaHL`，主線固定Research→Plan→Canvas；AI重現與攝影提案兩路，全部在mini執行保存。人工21段只作準備與對照，不代替真自動分析。
+- mini來源與準備在`/Users/tommy/Downloads/buildclub-demo-reference/`：原片、21張人工參考畫格／prompt；另`analysis-input-20261106`依現有analyzer得20個候選段／12張送Claude尺寸畫格，沒有呼叫provider。
+- 免費UI錄影run06（6PASS）及run08（8PASS）在`frontend-evidence-20261106/`：真UI建client→Research加入原Reel→reload→Pick送Plan→analysis預期429零預算拒絕→打開來源Plan。shotList仍空；無自動分析、生成或正式MP4成功宣稱。Research前綴只證明browser-local保存；不宣稱跨browser同步。自有browser/context與服務均清理、groups空後release。
+- 本次只整合`backend/analyze.py`與`backend/tests/test_analyze.py`：Anthropic(max_retries=0)，移除本函式請求的server fallback；保留模型、16000 output tokens、結果與錯誤處理。獨立review ACCEPT、root明確接受patch SHA256 9b6ad1c728d31308160a77931f364faad065160ba3b20eeff206960f71de6c30，兩檔source hash與worker一致。整合前9個既有dirty檔逐byte一致，之後只追加本次文件紀錄。
+- root親跑基線full1112/2、整合後`bash bin/verify.sh full` GREEN1115 passed/2 skipped in33.62s、frontend PASS；`git diff --check` exit0。worker三項先RED再GREEN；fake測試不是live HTTP證據。
+- 未完成：付費前端報價／確認、美元硬上限、真Claude分析與原片frame→shot接線、script與shot台詞權威契約、雙路正式成品／正式錄影／彩排。本機0.08記帳不是硬cap；僅取消重試不代表已能花錢。尚未讀key、帳戶餘額或修改provider設定；US$0、未提交／推送／合併。
+- 本輪詳細計畫仍在canvas-p1既有`pivots/02-content/docs/plans/2026-11-05-saturday-demo-plan.md`的最新2026-11-06節；此處保留本分支原計畫與歷史。
+
+## 2026-11-06：不依賴主題的工程驗收已完成；整份Demo計畫尚有產品決策
+
+- 工作區 demo-readiness／test/demo-readiness，HEAD與origin/main仍2c069a84569cd9ed2a70c4d284626057e5118e36；本輪全部未提交，無PR、push或merge授權。
+- 完成：保存script/boardLayout/shot.footage metadata；legacy toolbar video只繼承單選有效shot且無效不新增；原地程式＋自有持久DB/media的零支出UI/HTTP runner。產品兩patch c6c676ee…/8121e314…及最終工具4df8e8d0…均獨立spec/quality ACCEPT，root接受。
+- 最終工具Python f7eeabd4c26b45b862421acaa3671e2e61266ca0d05083ae9ef58292ece00b90、CJS9e941bb1ada844e30b42a6c12dc7746d8011a145417a366415d9b98f33105905；root已替換並親跑正常UI exit0，證據 /private/tmp/buildclub-readiness-b-r1/run-1793886924801846000。
+- 最終驗證：同產品tree full1112 passed/2 skipped in38.76s、frontend PASS；最終工具13UI PASS、zero32 passed in0.69s，Vite build PASS；TypeScript app/node及ESLint exit0。root source/artifact manifest /tmp/buildclub-readiness-root-final-manifest.json，full與quality輸出 /tmp/buildclub-readiness-root-full.log、/tmp/buildclub-readiness-root-quality.json。
+- root真HTTP PID72060→73387，DB/media hash一致、3rows/3POST未重送；browser/context關閉、owned groups空、cleanup完成後lease釋放。B最終新五lifecycle＋舊四cleanup同hash通過且A接受，manifest /tmp/buildclub-readiness-b-r1/final-manifest.json（root未重跑這九probe）。
+- 待決：完整script要即時同步Shot.line，或保留獨立草稿。async選項未回覆，不擅自實作。onScreen自動export未授權；board metadata非server take、舊無shot節點未遷移、原片frame自動帶入未接、搜尋錯誤只有API測試、theme未做computed對比/overflow、真provider/真人品質/正式影片未驗。正式影片依最新指示等隊友選題。
+- 本階段止於已授權工程驗收完成；完整Demo計畫不標全部Done。後續先決定script契約，再固定主題／素材、逐次批准真模型、正式MP4與實機彩排。無付費或依賴安裝。
+
+
+## 2026-11-06：root已驗6ba版全綠，最後launch-gate增量待綁定
+
+- root接受A msg_a69ab9d86e65後整合工具460e5662…（Python6ba0ccdb…/CJS762c2d74…），親跑full1112/2 in38.76s、frontend PASS；正常13UI/HTTP、zero32 in0.99s、TypeScript app/node與ESLint全GREEN。
+- root正常證據 /private/tmp/buildclub-readiness-b-r1/run-1793886362799808000：PID53537→54765，DB/media hash一致、3rows/3POST不重送、owned groups空、browser/context closed、cleanup後release。完整log /tmp/buildclub-readiness-root-full.log，quality /tmp/buildclub-readiness-root-quality.json。
+- B收尾另補登記前留tracked父group的launch gate，候選patch4df8e8d0faf37942144fe9bf252c7d4d500c2d16df0f2726b879c252b882ccf8／Pythonf7eeabd4…／CJS9e941bb1…（wrapper-only spawn增6行，13UI邏輯未變）。root尚未套新版；A ctx_8aa8925dd5b2候選review無blocking、新五probe綠，但等B新版同hash正常run/manifest，不能把root舊run綁新版。
+- 已要求B凍結最後候選，不自行擴其他強化；本輪最後只做delta覆核及受影響正常啟動/UI回歸，不重跑未變產品套件。整份計畫仍未標Done；腳本權威選項待答覆。
+
+
+## 2026-11-06：manual lease新五probe綠，獨立覆核中
+
+- B新Python hash6ba0ccdb42eaf802d751d46552fe27ef5d9270717dc9db36b27841ba6bf7cffa；工具候選patch460e566217c9c7453dbec358aa6297422bcaea29f4bf0b47991a130246db7461。尚未整合。
+- 新lifecycle selftest exit0，證據 /tmp/buildclub-readiness-b-r1/run-1793885944034407000/lifecycle-tests.json：owner-term、inside-term、真watchdog exit124、startup exception、leader-exit；root親跑JSON斷言核五case、租約owner一致/cleanup前held、groups無survivor、release最後，exit0。是否精確測到所有實作路徑仍由A覆核。
+- 舊watchdog真RED /private/tmp/buildclub-readiness-b-r1-red-1793885402756098000/red.json：exit124時租約已釋放但3actor存活；B事後按birth清理。兩次前置診斷失敗未混稱RED成功。
+- A ctx_09d21c92ac30覆核固定候選與新證據，B ctx_77e708837c3f重跑manual lease正常流程；產品pair保持不變。待接受後才整合工具及最終root gate。
+
+
+## 2026-11-06：R1改採manual lease活owner策略（工具未整合）
+
+- B確認全域with-command timeout直接SIGKILL child group並release，群組內handler無法保證detached child清理。root採技能已文件化manual lease，由外層活main持有真port租約、監督sandbox workload、核token/kernel-birth/PGID清理本次owned程序後最後release，不改全域skill或加guardian框架。
+- 要求新RED/GREEN覆蓋owner TERM、inside TERM、真正with-command短watchdog殺workload但owner/真port lease保持至groups空、startup exception及leader消失group audit；同hash新patch/manifest後覆核。不可捕捉owner SIGKILL/斷電不在自動清理保證範圍。
+- 既有13UI限定成功與已接受產品兩patch保留；新工具正常路徑須回歸，B ctx_77e708837c3f執行中。script同步產品選項待答覆。
+
+
+## 2026-11-06：13項正向UI完成，R1外層清理未接受
+
+- B在兩份已接受產品patch上交13項UI PASS，final manifest /tmp/buildclub-readiness-b-r2/final-manifest.json；root核27個artifact hash及checks/errors/cleanup一致，並未據此接受runner整體。
+- 工具52cecf4037c844b925f4e408282bf1e990b5547c508bce72246fcefc74f065bb的Python仍ae4a3e65舊版，只有原4cleanup cases，欠outer watchdog/Python TERM/start exception。root/A均拒絕R1總通過宣稱；未整合工具。UI成功仍保留。
+- A ctx_48fb2c6635f8僅覆核13UI斷言/產品相容並維持R1 REJECT。B已自動續接ctx_77e708837c3f，Orca曾turn-start-unobserved；root親讀exact transcript確認新turn已讀4封新R1郵件且liveness live，未重複啟動或重送prompt。
+- 下一步：B只修新R1並交新hash與真失敗路徑證據；A覆核後root才整合工具/最終驗證。script權威同步選項未答覆；其餘正式影片/真provider仍延後。
+
+
+## 2026-11-06：runner外層timeout清理仍阻擋驗收
+
+- A對工具snapshot6171c78a2900b6f598b6701f5870e6c22e845bc0ff4ac55304f640a590eb2599確認原driver-error/server與context.close/browser兩點修復；但outer test-slot watchdog只清inside group，server/driver/browser另session可能殘留，且Python無TERM cleanup、start health例外有handle窗口。R1仍REJECT。
+- 新鮮獨立證據已交B ctx_8c0f72d7b000，要求先Python TERM／outer短timeout／startup exception聚焦RED/GREEN，再修兩工具；禁止加長timeout掩蓋或動全域skill。正常路徑四probe不等於外層失敗通過。
+- 產品兩份已接受patch保持不變；工具未整合，final UI/HTTP尚未接受。script同步選項仍待答覆。
+
+
+## 2026-11-06：legacy toolbar shot歸屬修正進入覆核
+
+- 依A有界查核，root只追加改 CanvasScreen.tsx與unit/canvasPlacement.test.mjs；既有plan新增video必須沿用單選且存在/未removed的shot，無有效選擇使用既有提示並不新增；明確from才自動連線，workspace自由節點保持原行為。舊保存的無shot節點不遷移，不宣稱已修復。
+- actual production add handler regression先RED，再修正後root親跑 `node --test unit/canvasPlacement.test.mjs` 9/9 GREEN；patch SHA256 8121e314a37c5e771f8d3bd7690d4b3596025d60657ed7484bd70dd9688c9a6a。A ctx_33771905afec spec/quality ACCEPT且hash一致，root已接受；已授權B套toolbar patch做真UI回歸。root另親跑full GREEN1112/2 in34.43s、frontend PASS。
+- B ctx_8c0f72d7b000已交R1異常清理artifact及R2舊版正向RED，root核對cleanup JSON；正等待兩patch套用後UI結果及新版工具獨立覆核。之後須補toolbar真UI、手選history/字幕設定保存及合成素材真upload/take接Editor。正式影片品質與真provider仍不做。
+- 已向使用者提出script即時同步shot台詞或獨立草稿選項；此產品契約未答覆前不實作同步或onScreen export。其他工作照常推進。
+
+
+## 2026-11-06：保存修正覆核接受，測試工具待修
+
+- root核對兩產品檔diff SHA256 c6c676ee6392bb196282073eb4192f95b8564db82062acc5d252a85a41992a81 與 /tmp/buildclub-readiness-a/review-persistence.md 一致，明確接受 spec/quality ACCEPT。此結論只涵蓋保存，不代表腳本與字幕接線或整體UI成功。
+- B工具覆核有R1異常清理與R2舊缺陷斷言兩項blocking。已續派 ctx_8c0f72d7b000（同隔離UI工作區）修兩工具並驗已覆核保存patch，舊FAIL artifact保留，新結果另存。
+- 已提供 /tmp/buildclub-readiness-persistence-reviewed.patch，僅 models.py/test_store.py；B只可套這份產品patch，不可另改產品。
+- 2026-11-06：A已正式worker_done保存ACCEPT/工具REJECT；另派ctx_c342507aab10唯讀釐清toolbar shot繼承及script台詞/字幕契約最小方案，不改外觀、不與B重複。
+- 下一步：B交付異常cleanup回歸、正向script/layout/footage保存與HTTP重啟；A覆核新版工具後才整合。legacy toolbar shot association、script與shot台詞/字幕仍open。整體未完成，無付費／提交／推送。
+
+
+## 2026-11-05：資料保存修正與獨立覆核進行中
+
+- 使用者授權無一般問題時自動繼續，目標完成既定 plan；正式主題與真生成仍延後。
+- A 查核 /tmp/buildclub-readiness-a/report.md 確認 script/boardLayout/shot.footage 被後端 schema 丟棄；另有 script 未同步 shot 台詞及 board upload 僅裝置素材限制。B 抓到 legacy toolbar video 無 shotId 無法進 Editor，已保留 FAIL 並續驗既有 shotId 路徑。
+- 新修正 worker 的派工文字兩次被 hook 誤判秘密存取攔截；未改寫重試／改 hook／讀取秘密。使用者確認後，改由 root 在本隔離工作區直接做已授權兩檔修正。
+- 產品僅改 backend/models.py、backend/tests/test_store.py；真 PUT→GET 回歸先 RED：script/footage KeyError 兩項、其他1110 passed/2 skipped；再補明確 Footage/BoardPos/ScriptLine/PlanScript，舊計畫 optional 相容，board metadata 不等於 server take。
+- 獨立覆核已派 ctx_35f1b56b007f（A follow-up）；B ctx_5c1c5ba841dc 繼續 UI/HTTP。root 親跑 full GREEN：1112 passed/2 skipped in 35.03s、frontend PASS；zero-spend 32 passed in 1.39s。B 原base替代路徑7項UI/HTTP通過，兩產品FAIL保留；root已核對PID/DB/media/提交數/cleanup與hash。A正在覆核保存修正與B工具；修正版UI尚未跑，整體未驗收完成。無付費、安裝、commit/push/merge。
+
+
+## 2026-11-05：Demo readiness 驗收開始（未提交）
+
+- 使用者授權寫分階段計畫並以 multi-agent 執行；正式主題／影片等待隊友，付費批准 US$0，不 commit/push/merge。
+- 基準 origin/main `2c069a84569cd9ed2a70c4d284626057e5118e36`，工作區 demo-readiness／分支 test/demo-readiness。舊交付 8ee2459 已包含於 main。
+- 計畫見 `pivots/02-content/docs/plans/2026-11-05-saturday-demo-plan.md` 最前更新：契約查核、原地程式＋自有資料的持久 HTTP/UI 驗收、最小修正與獨立覆核、最終 gate。
+- 起跑首次因新工作區缺 .venv RED；只連結既有依賴後親跑 `bash bin/verify.sh full` GREEN：1109 passed、2 skipped（32.59s）、frontend PASS。未安裝依賴。
+- 已派 A `ctx_93ea8db23c4a` 唯讀契約查核、B `ctx_5c1c5ba841dc` 獨立工作區唯一 UI 持有人；run `run_1dfae916faa8`，等待事件回報。只修改既有計畫、STATUS、test-log；產品未改。舊 backend 副本路線不重試，禁止外網與付費憑證。
+- 未完成：最新整合版 UI、持久 HTTP 重啟、資料契約查核與獨立覆核；真生成／正式影片／彩排不在本輪。
+
 
 ## 2026-11-05：交付隊友的統一分支（本輪最新）
 
@@ -411,3 +627,7 @@ Open items:
 - `pivots/02-content/docs/plans/2026-11-05-saturday-demo-plan.md`
 
 另有ignored本機依賴連結（node_modules、backend/.venv）、build產生的dist與其中qa-existing-footage-proof.mp4連結；只指向既有依賴／本輪證據，不安裝或改共享套件。
+
+2026-11-06 本輪收尾再跑 `bash bin/verify.sh full`：1115 passed, 2 skipped in 33.99s；frontend unit tests PASS；verify: GREEN。`git diff --check` PASS。新廣告仍blocked，費用0。
+
+2026-11-06 待使用者決定：固定單價Seedream4.5純文字生圖21張(.04/張)＋12Hailuo6秒(.19/支)＋9Veo1080p4秒無音(.20/支)，基礎估價4.92美元；提案fal cap4／OpenRouter cap3、總cap7，各最多3次補做，最高planned reservation6.36。只是替代提案，尚未批准／切換／付費；原Nano Banana方案成本上限仍未證。詳runtime-progress.json pendingDecision。

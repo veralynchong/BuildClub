@@ -12,11 +12,12 @@ import { KitPanel } from './KitPanel'
 import { mergeVoiceOwnership } from '../../lib/canvas/voices'
 import { createOperationQueue, prepareCanvasLeave } from '../../lib/canvas/operations'
 import { createCanvasSession, draftStore, reconcileGenerations, selectGeneration, rememberGeneration, rememberBatch } from '../../lib/canvas/session'
-import { genRequest, markStale, staleIds, priceOf, selectedGen, imageEstimate, normalizeImageSettings, modelRefusal, referenceEdge, reuseSettings } from '../../lib/canvas/graph'
+import { genRequest, markStale, staleIds, priceOf, selectedGen, imageEstimate, normalizeImageSettings, modelRefusal, referenceEdge, reuseSettings, successfulVersions } from '../../lib/canvas/graph'
 import { askAgent, applyAgentPlan, type AgentPlan } from '../../lib/canvas/agent'
 import { canConnect, compatibleKinds } from '../../lib/canvas/ports'
 import { apiBase } from '../../lib/canvas/resource'
 import { toolbarPosition } from '../../lib/canvas/placement'
+import { arrangeShots, initialShotLayout } from '../../lib/canvas/shotLayout'
 import { applyPromptPlan, connectedPrompt, generationOrder, createNode, duplicateNode, editorEdges, removeEditorSource, type PromptPlan } from '../../lib/canvas/freeform'
 import { ff, usd, seconds } from '../../lib/strings/freeform'
 import { t } from '../../lib/i18n'
@@ -136,13 +137,30 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   const abort = useRef(new AbortController())
   const drag = useRef<string | null>(null)
   const flowBox = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition, fitView, getNode } = useReactFlow()
+  const { screenToFlowPosition, fitView, getNode, setViewport } = useReactFlow()
   const edit = useEditProject(resource, readOnly)
   const sources = useSources(resource, JSON.stringify(gens.map((g) => [g.id, g.status])))
   const timeline = useTimelineActions({ freeform: resource.kind === 'workspace', edit, sources, shots, doc, gens, takes, readOnly: readOnly || stale, onPlaced: () => {}, notify: (key) => setNote(t(key)) })
   const change = useCallback((next: CanvasDoc) => {
     if (!readOnly && !recoveryOpen) session.change(next)
   }, [readOnly, session, recoveryOpen])
+  const layoutSizes = useMemo(() => new Map(doc.nodes.map((n) => [n.id, {
+    width: Math.max(350, measured[n.id]?.width ?? 0),
+    height: Math.max(n.type === 'shot' ? 200 : 720 + 280 * Math.max(0, successfulVersions(n.id, gens).length - 1), measured[n.id]?.height ?? 0),
+  }])), [doc.nodes, gens, measured])
+  const arrange = () => {
+    const viewport = { x: 80, y: 32, zoom: 0.6 }
+    change({ ...arrangeShots(session.doc(), shots, layoutSizes), viewport })
+    void setViewport(viewport)
+  }
+  useEffect(() => {
+    if (resource.kind !== 'legacy-plan' || readOnly || stale || recoveryOpen || busy.size || quote || !doc.nodes.every((n) => measured[n.id])) return
+    const imported = initialShotLayout(doc, shots)
+    if (doc.layout !== 'shots-horizontal' && !imported) return
+    const next = arrangeShots(doc, shots, layoutSizes)
+    if (next !== doc) change(next)
+    if (imported) void setViewport({ x: 80, y: 32, zoom: 0.6 })
+  }, [resource.kind, readOnly, stale, recoveryOpen, busy.size, quote, doc, shots, layoutSizes, measured, change, setViewport])
   const flush = useCallback(() => readOnly || !mounted.current ? Promise.resolve(false) : session.flush(), [session, readOnly])
   useEffect(() => { if (doc === session.saved() || readOnly || recoveryOpen) return; const timer = setTimeout(() => void flush(), 650); return () => clearTimeout(timer) }, [doc, flush, readOnly, session, recoveryOpen])
   useEffect(() => { mounted.current = true; abort.current = new AbortController(); return () => { mounted.current = false; abort.current.abort(); session.keepDraft() } }, [session])
@@ -347,10 +365,18 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   }, true)
   const add = (kind: NodeKind, at?: { x: number; y: number }, from?: string) => {
     if (readOnly || stale || quote) return
+    let shotId = from ? session.doc().nodes.find((n) => n.id === from)?.shotId : undefined
+    if (resource.kind === 'legacy-plan' && kind === 'video') {
+      if (!from && selected.length === 1) shotId = session.doc().nodes.find((n) => n.id === selected[0])?.shotId
+      if (!shotId || !shots.some((s) => s.id === shotId) || !session.doc().nodes.some((n) => n.type === 'shot' && n.shotId === shotId && !n.data.removed)) {
+        setNote(ff('assistantChooseShot'))
+        return
+      }
+    }
     const rect = flowBox.current?.getBoundingClientRect()
     const preferred = screenToFlowPosition({ x: (rect?.left ?? 0) + (rect?.width ?? 900) / 2 - 160, y: (rect?.top ?? 0) + 160 })
     const center = toolbarPosition(session.doc().nodes.map((n) => ({ position: n.position, measured: getNode(n.id)?.measured })), preferred, at)
-    const next = createNode(session.doc(), kind, center, from ? session.doc().nodes.find((n) => n.id === from)?.shotId : undefined)
+    const next = createNode(session.doc(), kind, center, shotId)
     const n = kind === 'editor' ? next.nodes.find((n) => n.type === 'editor')! : next.nodes[next.nodes.length - 1]!
     change(next); setSelected([n.id]); setMenu(null)
     if (from) { const opt = compatibleKinds(next, from).find((o) => o.kind === kind); if (opt) void connect({ source: from, sourceHandle: 'out', target: n.id, targetHandle: opt.handle }) }
@@ -424,7 +450,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     const targetNode = session.doc().nodes.find((n) => n.id === target)
     if (!targetNode) return
     const model = models.find((m) => m.id === targetNode.data.model)
-    const next = createNode(session.doc(), 'upload', { x: targetNode.position.x - 420, y: targetNode.position.y })
+    const next = createNode(session.doc(), 'upload', { x: targetNode.position.x - 420, y: targetNode.position.y }, session.doc().layout === 'shots-horizontal' ? targetNode.shotId : undefined)
     const source = next.nodes[next.nodes.length - 1]
     source.data.media = 'image'
     const edge = referenceEdge(source.id, target, false)
@@ -450,7 +476,8 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
     inspect: (id) => { setSelected([id]); setDock('inspect') }, openEditor: () => setEditing(true),
     connect: (id) => { const rect = flowBox.current!.getBoundingClientRect(); setMenu({ x: rect.width / 2, y: 150, from: id, at: screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + 150 }) }) },
   }
-  const nodes: FreeNode[] = useMemo(() => doc.nodes.map((node) => ({ id: node.id, type: 'freeform', position: node.position, data: { node }, selected: selected.includes(node.id), measured: measured[node.id], deletable: node.type !== 'shot' })), [doc.nodes, selected, measured])
+  const displayedDoc = useMemo(() => readOnly && (doc.layout === 'shots-horizontal' || initialShotLayout(doc, shots)) ? arrangeShots(doc, shots, layoutSizes) : doc, [doc, shots, layoutSizes, readOnly])
+  const nodes: FreeNode[] = useMemo(() => displayedDoc.nodes.map((node) => ({ id: node.id, type: 'freeform', position: node.position, data: { node }, selected: selected.includes(node.id), measured: measured[node.id], deletable: node.type !== 'shot' })), [displayedDoc.nodes, selected, measured])
   const edges = [...doc.edges, ...editorEdges(doc, edit.committedProject ?? null, voices)].map((e) => ({ ...e, selected: selectedEdges.includes(e.id), className: `fc-edge media-${doc.nodes.find((n) => n.id === e.source)?.type === 'voice' ? 'audio' : 'image'}` }))
   const picked = doc.nodes.find((n) => selected.length === 1 && n.id === selected[0])
   const quotedNode = doc.nodes.find((n) => n.id === quote?.id)
@@ -515,6 +542,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
       <header className="fc-top"><button className="fc-back" aria-label={ff('back')} onClick={() => void back()}>‹</button><div className="fc-crumb"><span className="fc-project-dot" />{clientName}<span>›</span><strong>{title}</strong></div><div className="fc-top-actions">
         <button aria-label={ff('reload')} onClick={() => void safeReload()}>↻</button>
         <button className={save === 'failed' ? 'fc-error-button' : 'fc-save'} onClick={() => void flush()}>{ff(save === 'saving' ? 'saving' : save === 'failed' ? 'failedSave' : 'saved')}</button>
+        {resource.kind === 'legacy-plan' && <button disabled={actions.readonly || !!busy.size} onClick={arrange}>↔ {ff('arrangeShots')}</button>}
         {!readOnly && <button disabled={stale || (!!busy.size && !runAll) || !!quote} onClick={runAll ? () => { runQueue.current = []; setRunAll(false) } : runGraph}>{ff(runAll ? 'stop' : 'runAll')}</button>}
         <button className={dock === 'assistant' ? 'is-active' : ''} onClick={() => setDock(dock === 'assistant' ? null : 'assistant')}>✧ {ff('assistant')}</button>
         <button className={dock === 'history' ? 'is-active' : ''} onClick={() => setDock(dock === 'history' ? null : 'history')}>◷ {ff('history')}</button>
@@ -525,7 +553,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
       <div className="fc-scene">
         <div className="fc-flow" ref={flowBox}>
           <ReactFlow<FreeNode> nodes={nodes} edges={edges} nodeTypes={freeformNodeTypes}
-            defaultViewport={doc.viewport ?? { x: 0, y: 0, zoom: 1 }} minZoom={0.15} maxZoom={2}
+            defaultViewport={doc.viewport ?? { x: 0, y: 0, zoom: 1 }} minZoom={0.03} maxZoom={2}
             nodesDraggable={!actions.readonly} nodesConnectable={!actions.readonly} deleteKeyCode={null}
             selectionOnDrag={!pan} panOnDrag={pan ? true : [1, 2]} colorMode={theme}
             onNodesChange={(changes) => {
@@ -537,7 +565,7 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
               })
               let next = session.doc()
               const moved = applyNodeChanges(changes.filter((c) => c.type === 'position'), nodes)
-              if (changes.some((c) => c.type === 'position')) { const pos = new Map(moved.map((n) => [n.id, n.position])); next = { ...next, nodes: next.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) }; change(next) }
+              if (changes.some((c) => c.type === 'position')) { const pos = new Map(moved.map((n) => [n.id, n.position])); next = { ...next, layout: undefined, nodes: next.nodes.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })) }; change(next) }
               const selects = changes.filter((c) => c.type === 'select')
               if (selects.length) setSelected((before) => { const ids = new Set(before); for (const c of selects) { if (c.selected) ids.add(c.id); else ids.delete(c.id) }; return [...ids] })
             }}

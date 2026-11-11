@@ -48,6 +48,7 @@ export interface CanvasEdge {
 }
 
 export interface CanvasDoc {
+  layout?: 'shots-horizontal'
   nodes: CanvasNode[]
   edges: CanvasEdge[]
   viewport?: { x: number; y: number; zoom: number }

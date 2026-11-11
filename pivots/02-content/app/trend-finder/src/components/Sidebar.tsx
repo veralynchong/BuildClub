@@ -18,7 +18,7 @@ export type View =
   | 'plan'
   | 'canvas'
   | 'canvasPick'
-  // Sidebar "Video canvas" with more than one plan: pick the plan whose planning board to open.
+  // Pick a plan's legacy planning board.
   | 'boardPick'
   // The planning board for the open plan (components/board/ShotBoard.tsx).
   | 'board'
@@ -244,8 +244,8 @@ export function Sidebar(p: Props) {
               {item('research', 'research', t('shell.side.research'), p.counts.research)}
               {/* Plans = the board of plans + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
-              {/* "Video canvas" (was "Canvas", 5 Nov 2026) opens the planning board, or a plan chooser when there are several. */}
-              {item('board', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvas', 'canvasPick'].includes(p.view))}
+              {/* Video canvas opens the generation canvas, or its picker when there are several plans. */}
+              {item('canvas', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvas', 'canvasPick'].includes(p.view))}
               <div className="side-sep" />
               {item('channel', 'channel', t('shell.side.channel'))}
               {item('settings', 'brief', t('shell.side.brief'))}

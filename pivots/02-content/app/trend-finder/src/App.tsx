@@ -1159,7 +1159,7 @@ export default function App() {
     if (planIdeaId) setView('board')
   }
 
-  // Sidebar "Video canvas": one plan's planning board, opened straight from the sidebar or the plan chooser.
+  // Open a plan's legacy planning board from its chooser.
   const openPlanBoard = (ideaId: string) => {
     const idea = ideas.find((i) => i.id === ideaId)
     if (!idea) return
@@ -1403,14 +1403,16 @@ export default function App() {
 
   // Sidebar "Find ideas": come back to this client's last results if they're still on screen, not an empty search page.
   const navTo = (v: View) => {
-    // "Video canvas" (5 Nov 2026): the planning board. One plan opens straight away; more than one, pick a plan.
-    // The 'canvas' branch below (approved plans' CanvasScreen) is no longer on the sidebar but is kept.
     if (v === 'board') {
       const plans = boardPlans(shownIdeas, client.id)
       return plans.length === 1 ? openPlanBoard(plans[0].id) : setView('boardPick')
     }
     if (v === 'canvas') {
-      // One approved plan opens its canvas straight away; otherwise pick one (or see why there is none).
+      const plans = boardPlans(shownIdeas, client.id)
+      if (plans.length === 1) {
+        if (view === 'canvas' && canvasContext?.resource.kind === 'legacy-plan' && canvasContext.resource.id === plans[0].id) return
+        return withCanvasLeave(() => openPlanCanvas(plans[0].id))
+      }
       return setView('canvasPick')
     }
     if (v === 'search' && lastSearch && shownSearch === `${client.id}|${lastSearch}`) return setView('results')

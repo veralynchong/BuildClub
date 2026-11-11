@@ -4,6 +4,7 @@ import subprocess
 import time
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 import analyze
@@ -99,12 +100,19 @@ class FakeAnthropic:
     sent = {}
     stop_reason = "end_turn"
     answer = RESULT
+    constructors = []
+    parse_calls = 0
+    transport_error = None
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        FakeAnthropic.constructors.append(kwargs)
         self.beta = SimpleNamespace(messages=SimpleNamespace(parse=self.parse))
 
     def parse(self, **kwargs):
+        FakeAnthropic.parse_calls += 1
         FakeAnthropic.sent = kwargs
+        if self.transport_error is not None:
+            raise self.transport_error
         parsed = FakeAnthropic.answer if self.stop_reason == "end_turn" else None
         return SimpleNamespace(model="claude-opus-5-5", stop_reason=self.stop_reason, parsed_output=parsed,
                                usage=SimpleNamespace(input_tokens=10, output_tokens=20))
@@ -113,6 +121,9 @@ class FakeAnthropic:
 @pytest.fixture
 def prepared(tmp_path, monkeypatch):
     monkeypatch.setattr(analyze.anthropic, "Anthropic", FakeAnthropic)
+    monkeypatch.setattr(FakeAnthropic, "constructors", [])
+    monkeypatch.setattr(FakeAnthropic, "parse_calls", 0)
+    monkeypatch.setattr(FakeAnthropic, "sent", {})
     (tmp_path / "frames").mkdir()
     (tmp_path / "frames" / "00.jpg").write_bytes(b"jpg")
     return {"lengthSec": 2, "shots": [{"start": 0, "end": 2}], "frames": [{"t": 0.5, "file": "frames/00.jpg"}],
@@ -121,8 +132,9 @@ def prepared(tmp_path, monkeypatch):
 
 def test_breakdown_sends_frames_and_transcript(prepared, tmp_path, monkeypatch):
     monkeypatch.setattr(FakeAnthropic, "stop_reason", "end_turn")
-    assert analyze.breakdown(prepared, tmp_path) == RESULT
-    assert analyze.breakdown(prepared, tmp_path).why.hookType == "visual"
+    result = analyze.breakdown(prepared, tmp_path)
+    assert result == RESULT
+    assert result.why.hookType == "visual"
     sent = FakeAnthropic.sent
     assert sent["model"] == analyze.AI_MODEL
     assert sent["max_tokens"] == analyze.AI_MAX_TOKENS
@@ -132,6 +144,31 @@ def test_breakdown_sends_frames_and_transcript(prepared, tmp_path, monkeypatch):
     assert [c["type"] for c in content] == ["text", "text", "image", "text"]
     assert "[0.0-1.5s] hello" in content[-1]["text"]
     assert json.loads((tmp_path / "usage.json").read_text())["output"] == 20
+
+
+def test_breakdown_disables_client_retries(prepared, tmp_path):
+    analyze.breakdown(prepared, tmp_path)
+    assert FakeAnthropic.constructors == [{"max_retries": 0}]
+    assert FakeAnthropic.parse_calls == 1
+
+
+def test_breakdown_sends_no_fallback_configuration(prepared, tmp_path):
+    analyze.breakdown(prepared, tmp_path)
+    assert "betas" not in FakeAnthropic.sent
+    assert "fallbacks" not in FakeAnthropic.sent
+    assert FakeAnthropic.parse_calls == 1
+    assert len(FakeAnthropic.constructors) == 1
+
+
+def test_breakdown_surfaces_transport_failure_without_retry(prepared, tmp_path, monkeypatch):
+    error = analyze.anthropic.APIConnectionError(request=httpx.Request("POST", "https://example.invalid/messages"))
+    monkeypatch.setattr(FakeAnthropic, "transport_error", error)
+    with pytest.raises(analyze.anthropic.APIConnectionError) as raised:
+        analyze.breakdown(prepared, tmp_path)
+    assert raised.value is error
+    assert FakeAnthropic.parse_calls == 1
+    assert FakeAnthropic.constructors == [{"max_retries": 0}]
+    assert not (tmp_path / "usage.json").exists()
 
 
 @pytest.mark.parametrize("stop", ["refusal", "max_tokens"])

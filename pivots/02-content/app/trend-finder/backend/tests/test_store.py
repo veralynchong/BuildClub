@@ -22,6 +22,41 @@ def test_ideas_round_trip(client):
     assert [{k: v for k, v in i.items() if k != "updatedAt"} for i in got] == [expected]
 
 
+def test_plan_script_and_board_layout_round_trip(client):
+    script = {"lines": [{"say": "Edited narration", "onScreen": "Fresh today"}],
+              "basedOn": "original shot list", "writtenAt": 1793880000000, "edited": True}
+    layout = [{"x": -48.5, "y": 120}]
+    idea = {**IDEA, "script": script, "boardLayout": layout}
+    response = client.put("/api/ideas", json=[idea])
+    assert response.status_code == 200
+    for saved in (response.json()[0], client.get("/api/ideas").json()[0]):
+        assert saved["script"] == script
+        assert saved["boardLayout"] == layout
+
+
+def test_planning_board_footage_round_trips(client):
+    image = {"key": "image-1", "kind": "image", "name": "reference.png",
+             "src": "data:image/png;base64,iVBORw0KGgo="}
+    video = {"key": "video-1", "kind": "video", "name": "take.mp4", "deviceOnly": True}
+    idea = {**IDEA, "shots": [{**IDEA["shots"][0], "footage": image},
+                              {"time": "2-4s", "shot": "wide", "footage": video}]}
+    response = client.put("/api/ideas", json=[idea])
+    assert response.status_code == 200
+    for saved in (response.json()[0], client.get("/api/ideas").json()[0]):
+        assert [shot["footage"] for shot in saved["shots"]] == [image, video]
+
+
+def test_plan_script_and_layout_can_be_cleared(client):
+    idea = {**IDEA, "script": {"lines": [], "basedOn": "", "writtenAt": 1},
+            "boardLayout": []}
+    assert client.put("/api/ideas", json=[idea]).status_code == 200
+    response = client.put("/api/ideas", json=[{**IDEA, "script": None, "boardLayout": None}])
+    assert response.status_code == 200
+    saved = client.get("/api/ideas").json()[0]
+    assert saved.get("script") is None
+    assert saved.get("boardLayout") is None
+
+
 def test_bad_idea_status_is_rejected(client):
     assert client.put("/api/ideas", json=[{**IDEA, "status": "maybe"}]).status_code == 422
 
