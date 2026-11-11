@@ -1,5 +1,5 @@
 // Pure timeline maths for the edit project. No remotion import: the Vite app and the unit tests use it too.
-import type { Clip, ClipSource, EditProject, SourceInfo, TextItem, VoiceSeg } from './types.ts'
+import type { Clip, ClipFit, ClipSource, EditProject, SourceInfo, TextItem, VoiceSeg } from './types.ts'
 import type { Shot } from '../../types'
 import type { CanvasDoc, CanvasNode, Generation } from '../canvas/types.ts'
 import type { Take } from '../takes.ts'
@@ -208,6 +208,11 @@ export function setClipAudio(p: EditProject, clipId: string, patch: { volume?: n
         : c,
     ),
   )
+}
+
+export function setClipFit(p: EditProject, clipId: string, fit: ClipFit): EditProject {
+  if (!p.clips.some((c) => c.id === clipId)) return p
+  return withClips(p, p.clips.map((c) => (c.id === clipId ? { ...c, fit } : c)))
 }
 
 // Where a dragged clip lands: before the first clip whose left half holds x (px from the timeline start).

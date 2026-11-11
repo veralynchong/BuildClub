@@ -116,6 +116,8 @@ def _check_clip(c, seen: set) -> Optional[str]:
         return "A clip's muted must be true or false."
     if "caption" in c and not isinstance(c["caption"], str):
         return "A clip caption must be text."
+    if "fit" in c and c["fit"] not in ("fill", "fit"):
+        return "A clip's fit must be fill or fit."
     return None
 
 

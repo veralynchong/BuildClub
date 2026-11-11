@@ -15,7 +15,11 @@ export type Clip = {
   volume: number
   muted: boolean
   caption?: string
+  fit?: ClipFit // how the footage sits in the 9:16 frame; absent means 'fill'
 }
+
+// 'fill' crops the video to cover the frame; 'fit' shows all of it over a blurred copy of itself.
+export type ClipFit = 'fill' | 'fit'
 
 export type TextPosition = 'top' | 'middle' | 'bottom'
 export type TextColor = 'brand' | 'white' | 'black'

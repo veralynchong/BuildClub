@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Shot } from '../../types'
 import type { Generation } from '../../lib/canvas/types'
 import type { Take } from '../../lib/takes'
@@ -6,6 +7,7 @@ import type { TimelineActions } from '../../lib/editor/useTimelineActions'
 import { sourceKey } from '../../lib/editor/timeline'
 import type { EditProject, SourceInfo } from '../../lib/editor/types'
 import { ErrorText } from '../ErrorText'
+import type { ShotUpload } from '../../lib/editor/useShotUpload'
 import { clipLabel } from './clipName'
 
 interface Props {
@@ -20,12 +22,18 @@ interface Props {
   timeline: TimelineActions
   selected: string | null // the selected timeline clip
   onSelect: (clipId: string) => void
+  uploads: ShotUpload | null // sending footage from here; null when this plan can't take footage
 }
 
 // The left column: each shot with its finished footage ("Shot 1 · v3", "Shot 2 · Take 1"). Putting one in the timeline
 // replaces the shot's one clip; the one already there shows so and selects its clip.
-export function ShotClips({ shots, project, sources, error, gens, takes, full, locked, timeline, selected, onSelect }: Props) {
+export function ShotClips({ shots, project, sources, error, gens, takes, full, locked, timeline, selected, onSelect, uploads }: Props) {
   const planned = shots.filter((s): s is Shot & { id: string } => !!s.id)
+  const [dropOn, setDropOn] = useState<number | null>(null) // the shot a file is being dragged over
+  const canUpload = !!uploads && !locked
+  const take = (i: number, files: FileList | null) => {
+    if (files && files.length) uploads?.upload(i, Array.from(files))
+  }
   return (
     <section className="cv-ed-shots" aria-label={t('editor.shots.title')}>
       <h3>{t('editor.shots.title')}</h3>
@@ -42,13 +50,20 @@ export function ShotClips({ shots, project, sources, error, gens, takes, full, l
         {planned.map((shot, i) => {
           const mine = (sources ?? []).filter((s) => s.shotId === shot.id)
           return (
-            <li key={shot.id} className="cv-ed-shot">
+            <li
+              key={shot.id}
+              className="cv-ed-shot"
+              data-drop={dropOn === i ? '' : undefined}
+              onDragOver={(e) => { if (canUpload && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropOn(i) } }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropOn((d) => (d === i ? null : d)) }}
+              onDrop={(e) => { if (!canUpload) return; e.preventDefault(); setDropOn(null); take(i, e.dataTransfer.files) }}
+            >
               <div className="cv-ed-shot-head">
                 <b>{t('editor.clip.shot', { n: i + 1 })}</b>
                 {shot.shot && <span className="cv-ed-shot-desc muted">{shot.shot}</span>}
               </div>
               {mine.length === 0 ? (
-                <p className="muted small">{t('editor.shots.none')}</p>
+                <p className="muted small">{t('editor.shots.none')}{canUpload && <> {t('editor.shots.drop')}</>}</p>
               ) : (
                 <ul className="cv-ed-source-list">
                   {mine.map((s) => {
@@ -72,6 +87,31 @@ export function ShotClips({ shots, project, sources, error, gens, takes, full, l
                     )
                   })}
                 </ul>
+              )}
+              {uploads && (uploads.items[i] ?? []).length > 0 && (
+                <ul className="cv-ed-uploads">
+                  {(uploads.items[i] ?? []).map((u) => (
+                    <li key={u.id} data-status={u.status} role={u.status === 'failed' ? 'alert' : 'status'}>
+                      {u.status === 'failed' ? (
+                        <>
+                          <span className="error small">{t('editor.shots.uploadFailed', { name: u.name, reason: u.error ?? '' })}</span>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => uploads.dismiss(i, u.id)}>{t('canvas.note.dismiss')}</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="muted small">{u.status === 'uploading' ? t('editor.shots.uploading', { name: u.name }) : u.name}</span>
+                          {u.status === 'uploading' && <progress aria-label={u.name} />}
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {canUpload && (
+                <label className="btn btn-ghost btn-sm cv-ed-upload">
+                  {t(mine.length === 0 ? 'editor.shots.upload' : 'editor.shots.uploadMore')}
+                  <input type="file" multiple accept="video/mp4,video/quicktime,video/x-m4v,video/webm,.mp4,.mov,.m4v,.webm" onChange={(e) => { take(i, e.target.files); e.target.value = '' }} />
+                </label>
               )}
             </li>
           )

@@ -13,6 +13,11 @@ from urllib.parse import unquote
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
+
+import cutting
+import transcode
+from cutting import CutError
 from models import Shot, fill_shot_ids
 
 SCHEMA = (
@@ -24,12 +29,13 @@ SCHEMA = (
 
 MAX_TAKE_BYTES = 200 * 1024 * 1024
 LIMIT_TEXT = "The file is over the 200 MB limit."
-VIDEO_TYPES = {"video/mp4": "mp4", "video/quicktime": "mov"}
-MEDIA_TYPES = {ext: kind for kind, ext in VIDEO_TYPES.items()}
+# What may arrive. Anything that is not an H.264 SDR mp4 is converted to one (transcode.py) and stored as mp4.
+VIDEO_TYPES = {"video/mp4": "mp4", "video/quicktime": "mov", "video/x-m4v": "m4v", "video/webm": "webm"}
+MEDIA_TYPES = {"mp4": "video/mp4", "mov": "video/quicktime"}  # what is stored and served
 MAX_TAKES_PER_SHOT = 10
 MAX_SHOTS = 50
 MAX_NAME = 200
-NOT_VIDEO = "Upload an .mp4 or .mov video file."
+NOT_VIDEO = "Upload an .mp4, .mov, .m4v or .webm video file."
 
 # Counting a shot's takes and adding one, or moving the pick, take turns.
 takes_lock = threading.Lock()
@@ -94,6 +100,12 @@ def to_json(row, index: Optional[int]) -> dict:
             "chosen": bool(chosen), "createdAt": created, "cleanedFrom": cleaned_from, "url": f"/api/ideas/{idea_id}/takes/{tid}/file"}
 
 
+def discard(*paths: Optional[Path]) -> None:
+    for p in paths:
+        if p is not None:
+            p.unlink(missing_ok=True)
+
+
 def error(status: int, message: str) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
 
@@ -154,31 +166,55 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             return error(413, LIMIT_TEXT)
         with part.open("rb") as f:
             head = f.read(12)
-        if head[4:8] != b"ftyp":
+        webm = head[:4] == b"\x1a\x45\xdf\xa3"
+        if head[4:8] != b"ftyp" and not (webm and ext == "webm"):
             part.unlink(missing_ok=True)
             return error(415, NOT_VIDEO)
+        if head[8:12] == b"qt  ":  # a QuickTime file sent as mp4
+            ext = "mov"
+        stored, original = ext, None
+        try:
+            info = await run_in_threadpool(cutting.probe, part)
+        except CutError:
+            info = None  # not readable by ffprobe (or no ffprobe): kept as sent, as before, unless it must be converted
+        if info is None and ext not in ("mp4", "mov"):
+            part.unlink(missing_ok=True)
+            return error(415, NOT_VIDEO)
+        if info is not None and info.get("width") and info.get("vcodec") and transcode.needs_transcode(info, ext):
+            original = folder / f"{take_id}.orig.{ext}"
+            os.replace(part, original)
+            try:
+                await run_in_threadpool(transcode.to_proxy, original, folder / f"{take_id}.mp4", info)
+            except CutError:
+                original.unlink(missing_ok=True)
+                return error(422, "Couldn't convert this video to a format the editor can play.")
+            stored = "mp4"
+        elif info is not None and "width" in info and not info["width"]:
+            part.unlink(missing_ok=True)
+            return error(415, "That file has no video in it.")
 
         name = unquote(request.headers.get("x-filename", ""))[:MAX_NAME].strip() or f"take.{ext}"
         with takes_lock:
             current = find_idea(idea_id)  # the plan may have been reopened while the body was arriving
             if current is None or current["status"] != "approved":
-                part.unlink(missing_ok=True)
+                discard(part, original, folder / f"{take_id}.mp4")
                 return error(409, "Only an approved plan can take footage.")
             with db() as conn:
                 ids = shot_ids_of(conn, idea_id)
                 backfill(conn, idea_id, ids)
                 if ids and shot >= len(ids):  # no shot to attach it to: it could never be listed or chosen
-                    part.unlink(missing_ok=True)
+                    discard(part, original, folder / f"{take_id}.mp4")
                     return error(422, "That shot isn't on this plan.")
                 shot_id = ids[shot] if shot < len(ids) else None
                 where, args = same_shot(shot_id, shot)
                 count = conn.execute(f"SELECT COUNT(*) FROM takes WHERE idea_id = ? AND {where}",
                                      (idea_id, *args)).fetchone()[0]
                 if count >= MAX_TAKES_PER_SHOT:
-                    part.unlink(missing_ok=True)
+                    discard(part, original, folder / f"{take_id}.mp4")
                     return error(409, f"This shot has the most takes it can hold ({MAX_TAKES_PER_SHOT}).")
-                os.replace(part, folder / f"{take_id}.{ext}")
-                row = (take_id, idea_id, shot, ext, size, name, int(count == 0), int(time.time() * 1000), shot_id, None)
+                if original is None:
+                    os.replace(part, folder / f"{take_id}.{stored}")
+                row = (take_id, idea_id, shot, stored, size, name, int(count == 0), int(time.time() * 1000), shot_id, None)
                 conn.execute(f"INSERT INTO takes ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
                 index = current_index(row, ids)
         return to_json(row, index)
@@ -225,7 +261,10 @@ def make_router(db, load, media_dir: Callable[[], Path]) -> APIRouter:
             if isinstance(got, JSONResponse):
                 return got
             conn.execute("DELETE FROM takes WHERE id = ?", (take_id,))
-        (media_dir() / idea_id / f"{take_id}.{got[1]}").unlink(missing_ok=True)
+        folder = media_dir() / idea_id
+        (folder / f"{take_id}.{got[1]}").unlink(missing_ok=True)
+        for kept in folder.glob(f"{take_id}.orig.*"):  # the upload a converted take came from
+            kept.unlink(missing_ok=True)
         return listed(idea_id)
 
     return router

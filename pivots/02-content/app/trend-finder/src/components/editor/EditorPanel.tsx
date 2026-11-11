@@ -13,7 +13,7 @@ import type { EditHook } from '../../lib/editor/useEditProject'
 import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, clipLength, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import { addVoice, clipLength, clipStatus, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
@@ -23,6 +23,7 @@ import { clipNode } from '../../lib/canvas/timelineNode'
 import type { Take } from '../../lib/takes'
 import { ToolTabs, type Tool } from './ToolTabs'
 import { ShotClips } from './ShotClips'
+import { useShotUpload } from '../../lib/editor/useShotUpload'
 import { ClipSettings } from './ClipSettings'
 import { TextTool } from './tools/TextTool'
 import { CaptionTool } from './tools/CaptionTool'
@@ -50,7 +51,7 @@ interface Props {
   focus?: 'export' | 'send' | null // open with the export panel showing and that control focused (the Timeline node's Export)
 }
 
-export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline, doc, gens, takes, readOnly, onBack, onJumpToNode, focus = null }: Props) {
+export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline: baseTimeline, doc, gens, takes, readOnly, onBack, onJumpToNode, focus = null }: Props) {
   const { project, loadError, save, stale, update, flush, current, reload } = edit
   const { sources, error: sourceError } = footage
   const [skipped, setSkipped] = useState<string[]>([])
@@ -95,6 +96,19 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
 
   const byKey = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s])), [sources])
   const shotSources = useMemo(() => (sources ? sourcesWithShots(sources, doc) : null), [sources, doc])
+  // Footage sent from the shot list: the plan's takes are read again so the new take is named right away.
+  const [freshTakes, setFreshTakes] = useState<Take[] | null>(null)
+  const planId = typeof ideaId === 'string' ? ideaId : ideaId.kind === 'legacy-plan' ? ideaId.id : null // workspaces take no footage
+  const uploads = useShotUpload(planId, footage.refresh, setFreshTakes)
+  const allTakes = freshTakes ?? takes
+  // The canvas keeps its own list of takes; a take sent from here is not in it, so it would show as "Footage deleted".
+  const timeline = useMemo<TimelineActions>(() => ({
+    ...baseTimeline,
+    statusOf: (c) => {
+      const s = baseTimeline.statusOf(c)
+      return s.state === 'missing' && c.source.kind === 'take' && allTakes.some((x) => x.id === c.source.id) ? clipStatus(c, doc, gens, allTakes) : s
+    },
+  }), [baseTimeline, allTakes, doc, gens])
   const urls = useMemo(() => Object.fromEntries((sources ?? []).map((s) => [s.key, s.url])), [sources])
   // The plan's music track is looked up once; MusicTool keeps it current after an upload or removal.
   useEffect(() => {
@@ -258,7 +272,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     { project, clientHasLogo: !!kit?.logo, cut, texts: project.texts.length, voices: project.voiceover.length, music: !!musicFile && project.music !== null },
     visited,
   )
-  const nameOf = (c: (typeof project.clips)[number]) => clipLabel(c.source, filled, gens, takes)
+  const nameOf = (c: (typeof project.clips)[number]) => clipLabel(c.source, filled, gens, allTakes)
   const nodeOf = (c: (typeof project.clips)[number]) => clipNode(doc, c.source)
   const selClip = project.clips.find((c) => c.id === selected) ?? null
   const pick = (clipId: string) => {
@@ -295,7 +309,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
       </header>
       <div className="cv-ed-main">
         <aside className="cv-ed-left">
-          <ShotClips shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={takes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
+          <ShotClips uploads={uploads} shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={allTakes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
         </aside>
         <div className="cv-ed-centre">
           <div className="cv-ed-player">

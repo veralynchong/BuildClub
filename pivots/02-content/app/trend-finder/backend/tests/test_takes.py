@@ -66,12 +66,12 @@ def test_survives_restart(client, setup):
 
 def test_wrong_content_type_415(client, setup):
     r = up(client, ctype="text/plain")
-    assert r.status_code == 415 and r.json()["error"] == "Upload an .mp4 or .mov video file."
+    assert r.status_code == 415 and r.json()["error"] == "Upload an .mp4, .mov, .m4v or .webm video file."
 
 
 def test_wrong_magic_bytes_415(client, setup):
     r = up(client, body=b"hello world, not a video at all")
-    assert r.status_code == 415 and r.json()["error"] == "Upload an .mp4 or .mov video file."
+    assert r.status_code == 415 and r.json()["error"] == "Upload an .mp4, .mov, .m4v or .webm video file."
     assert client.get("/api/ideas/ia/takes").json() == []
     assert media_files() == []
 
@@ -291,3 +291,94 @@ def test_upload_past_the_shot_list_422(client, setup):
     assert r.status_code == 422 and r.json()["error"] == "That shot isn't on this plan."
     assert client.get("/api/ideas/ia/takes").json() == [] and media_files() == []
     assert up(client, shot=1).status_code == 200
+
+
+# --- phone formats are converted to an H.264 SDR mp4 ---
+
+import shutil
+import subprocess
+
+import cutting
+
+need_ffmpeg = pytest.mark.skipif(not (shutil.which("ffmpeg") and shutil.which("ffprobe")), reason="needs ffmpeg")
+
+
+def encode(path, *codec, container=None, size="320x180"):
+    """A 1 s testsrc clip with a tone, encoded with the given ffmpeg video options."""
+    cmd = ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"testsrc=s={size}:r=24:d=1",
+           "-f", "lavfi", "-i", "sine=f=440:d=1", "-t", "1", *codec, str(path)]
+    r = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    assert r.returncode == 0, r.stderr
+    return path.read_bytes()
+
+
+H264 = ("-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac")
+
+
+@need_ffmpeg
+def test_h264_mp4_is_kept_as_uploaded(client, setup, tmp_path):
+    body = encode(tmp_path / "a.mp4", *H264)
+    t = up(client, body=body).json()
+    assert client.get(t["url"]).content == body
+    assert [p.name for p in media_files()] == [f"{t['id']}.mp4"]
+
+
+@need_ffmpeg
+def test_mov_is_converted_to_mp4_and_the_original_kept(client, setup, tmp_path):
+    body = encode(tmp_path / "a.mov", *H264)
+    t = up(client, body=body, ctype="video/quicktime", name="IMG_1.MOV").json()
+    f = client.get(t["url"])
+    assert f.status_code == 200 and f.headers["content-type"] == "video/mp4" and f.content[4:8] == b"ftyp"
+    assert t["size"] == len(body)
+    assert sorted(p.name for p in media_files()) == [f"{t['id']}.mp4", f"{t['id']}.orig.mov"]
+    assert (server.MEDIA_DIR / "ia" / f"{t['id']}.orig.mov").read_bytes() == body
+    # deleting the take removes both files
+    assert client.delete(f"/api/ideas/ia/takes/{t['id']}").status_code == 200
+    assert media_files() == []
+
+
+@need_ffmpeg
+def test_hevc_is_converted_to_h264(client, setup, tmp_path):
+    body = encode(tmp_path / "a.mp4", "-c:v", "libx265", "-pix_fmt", "yuv420p", "-tag:v", "hvc1", "-c:a", "aac")
+    t = up(client, body=body).json()
+    out = tmp_path / "out.mp4"
+    out.write_bytes(client.get(t["url"]).content)
+    info = cutting.probe(out)
+    assert info["vcodec"] == "h264" and info["pix_fmt"] == "yuv420p" and info["hasAudio"]
+
+
+@need_ffmpeg
+def test_hdr_ten_bit_is_converted_to_sdr_8_bit(client, setup, tmp_path):
+    body = encode(tmp_path / "a.mp4", "-c:v", "libx265", "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1",
+                  "-x265-params", "colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc", "-c:a", "aac")
+    assert cutting.probe(tmp_path / "a.mp4")["color_transfer"] == "arib-std-b67"
+    t = up(client, body=body).json()
+    out = tmp_path / "out.mp4"
+    out.write_bytes(client.get(t["url"]).content)
+    info = cutting.probe(out)
+    assert info["vcodec"] == "h264" and info["pix_fmt"] == "yuv420p" and info["color_transfer"] not in ("arib-std-b67", "smpte2084")
+
+
+@need_ffmpeg
+def test_webm_and_m4v_are_accepted(client, setup, tmp_path):
+    # no VP8 encoder is assumed: H.264 in a Matroska file (same EBML signature as webm) stands in
+    webm = encode(tmp_path / "a.webm", "-f", "matroska", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac")
+    t = up(client, body=webm, ctype="video/webm", name="a.webm").json()
+    assert client.get(t["url"]).headers["content-type"] == "video/mp4"
+    m4v = encode(tmp_path / "a.m4v", *H264)
+    assert up(client, shot=1, body=m4v, ctype="video/x-m4v", name="a.m4v").status_code == 200
+
+
+@need_ffmpeg
+def test_failed_conversion_is_422_and_leaves_nothing(client, setup, tmp_path, monkeypatch):
+    def broken(src, out, info):
+        raise cutting.CutError("boom")
+    monkeypatch.setattr(takes.transcode, "to_proxy", broken)
+    r = up(client, body=encode(tmp_path / "a.mov", *H264), ctype="video/quicktime")
+    assert r.status_code == 422 and r.json()["error"] == "Couldn't convert this video to a format the editor can play."
+    assert media_files() == [] and client.get("/api/ideas/ia/takes").json() == []
+
+
+def test_webm_with_a_wrong_signature_415(client, setup):
+    r = up(client, body=MP4, ctype="video/webm")
+    assert r.status_code == 415
