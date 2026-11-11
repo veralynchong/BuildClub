@@ -1,5 +1,23 @@
 # STATUS
 
+## 2026-11-12：剪輯器 stage C，文字稿視圖（`feat/editor-timeline`）
+
+- 一行狀態：左側多了「Transcript」分頁，點字跳播放頭、播放時高亮目前的字並自動捲動、選字按 Delete 就剪掉那段（可 ⌘Z）、停頓顯示成「(0.8s)」小膠囊也可刪、雙擊改字會同步改「從原聲產生」的字幕；原聲字幕改用真正的逐字時間。已 push 到 `feat/editor-timeline`，未開 PR、未合併。
+- Commits：52890c8（後端：`timeline_captions` 每行字幕多帶 `words`（時間軸秒數＋take 字的 key `<take>:<ms>`）；`check_project` 驗證 `words` 和新的 `transcriptFixes`；2 個測試）、f68e15e（前端：`transcript.ts` 純邏輯＋12 個測試、`Transcript.tsx`、EditorPanel 分頁、字幕逐字時間）。
+- 做法：
+  - 字來自 take 分析結果（whisper 逐字），每個片段一組，依片段的 in/out 換算到時間軸；字的中點在修剪範圍外就不顯示（不做刪除線）。贅詞用黃色標出（和後端同一份清單）。字與字之間 ≥0.5 秒的停頓顯示成膠囊，片段頭尾也算。
+  - 刪除：每個片段算出一段要剪的 take 範圍，走和 AI 清剪相同的 `suggest/keeps` + `replaceWithRanges`（被 4 格空檔合起來時改用 1 格再試）；整段都選到就移除片段；跨片段一起剪，算一步復原（有名稱的步驟，所以 AI 分頁的「復原上一個 AI 修改」也會出現）。刪字時往兩邊停頓多吃最多 0.15 秒，讓保留的空氣來自停頓而不是被刪的字。
+  - 改字：存在專案的 `transcriptFixes`（key 對文字，時間不變）。字幕已產生時直接改對應那行；還沒產生時先存著，之後按「從原聲產生」或一鍵初剪時自動套上。字幕那行如果被手動改過，就只在找得到原字的地方替換。
+  - 字幕時間：字幕行的文字仍等於它的字時，每個字用自己的時間顯示；手動改過的行或舊資料（沒有 `words`）退回按字寬分配。
+- 最後驗證：2026-11-12，`bash bin/verify.sh full` GREEN（後端 1224 passed、3 skipped；前端 unit 687 pass）；tsc、eslint、build 通過。在 :8797 零花費後端（重啟並重新 seed 3 個 take 和音樂）用 1440x900 走過：空狀態、點字跳到 00:06.20、播放時高亮從 everyone→today→I→showing…、選「Um. (0.8s) First,」刪除後片段一分為二、長度 19.02→17.16、⌘Z 還原、刪 2.4 秒停頓、先改「tea.」→「chai.」再產生原聲字幕（套上了）、字幕產生後改「Hello」→「Hi」預覽字幕即時變成「Hi everyone,」。截圖在 session scratchpad 的 `stageC/`。
+- 已知缺口：
+  - 舊的原聲字幕（stage C 前產生的）沒有 `words`，改字不會同步、時間仍按字寬；按「Make them again」即可。
+  - 剛開剪輯器、播放器還在初始化時點字，有一次沒跳過去（之後都正常），沒追到原因。
+  - 文字稿刪除會出現在 AI 分頁的「復原上一個 AI 修改」裡。
+  - 贅詞「like」的判斷和後端一樣只看逗號。
+  - 中文逐字（whisper 一個詞多個字）只在單元測試層級處理，沒用真人中文素材測過。
+- 下一步：使用者看過介面後決定是否開 PR（base `feat/editor-real-footage`）。
+
 ## 2026-11-12：剪輯器 stage B，時間軸上的 AI 標記、縮圖條與波形（`feat/editor-timeline`）
 
 - 一行狀態：影片條上顯示 AI 清剪標記（可保留/刪除、可復原），初剪理由變成刻度尺上的圖釘，片段有縮圖條和紫色波形，音樂軌有綠色波形；已 push 到 `feat/editor-timeline`，未開 PR、未合併。
