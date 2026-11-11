@@ -1,3 +1,4 @@
+import { OPENING_MODEL, OPENING_PREFIX, OPENING_VERSIONS, openingVersion } from '../../lib/guided/shootOpening'
 import { useContext, useState } from 'react'
 import { Handle, NodeToolbar, Position, useViewport, type NodeProps } from '@xyflow/react'
 import { FreeformContext, type FreeformActions, type FreeNode } from './freeformContext'
@@ -12,15 +13,22 @@ import type { CanvasNode } from '../../lib/canvas/types'
 
 const portLabels = { 'in:text': 'textPort', 'in:start': 'startPort', 'in:ref': 'referencePort', 'in:kit': 'kitPort', 'in:clips': 'video', 'in:audio': 'audio' } as const
 const icons: Record<CanvasNode['type'], string> = { prompt: 'T', storyboard: '▧', video: '▷', upload: '↑', voice: '♫', editor: '▤', shot: '▦', footage: '▣', kit: '◈' }
-export function NodeSettings({ node, actions }: { node: CanvasNode; actions: FreeformActions }) {
+export function NodeSettings({ node, actions, hidePrompt = false }: { node: CanvasNode; actions: FreeformActions; hidePrompt?: boolean }) {
   const kind = node.type === 'storyboard' ? 'image' : node.type
   const options = actions.models.filter((m) => m.kind === kind)
   const model = options.find((m) => m.id === node.data.model)
   const countMax = actions.freeform ? model?.maxCount ?? 1 : 1
   const value = node.type === 'prompt' ? node.data.text : node.data.prompt
+  const opening = node.data.model === OPENING_MODEL
+  const draft = openingVersion(value)
   const incoming = genRequest(actions.doc, node.id, actions.shots, actions.gens).prompt
   return <div className="fc-settings nodrag nopan nowheel">
-    <label><span>{ff('prompt')}</span><textarea rows={3} aria-label={ff('prompt')} placeholder={incoming || ff('hint')} value={value ?? ''} disabled={actions.readonly} onChange={(e) => actions.update(node.id, node.type === 'prompt' ? { text: e.target.value } : { prompt: e.target.value })} /></label>
+    {!hidePrompt && <label className={opening ? 'fc-demo-prompt' : undefined}><span>{ff(opening ? 'nextPrompt' : 'prompt')}</span><textarea rows={3} aria-label={ff('prompt')} placeholder={incoming || ff('hint')} value={value ?? ''} disabled={actions.readonly} onChange={(e) => actions.update(node.id, node.type === 'prompt' ? { text: e.target.value } : { prompt: e.target.value })} /></label>}
+    {opening && <div className="fc-prompt-samples">
+      <div role="group" aria-label={ff('demoPrompt')}>{OPENING_VERSIONS.map((version, i) => <button type="button" key={version.sourceId} aria-pressed={draft === version} disabled={actions.readonly || actions.busy.has(node.id)} onClick={() => actions.update(node.id, { prompt: version.prompt })}>{ff(i === 0 ? 'samplePrompt1' : 'samplePrompt2')}</button>)}</div>
+      {draft && <p className="fc-prompt-change" aria-live="polite"><span>{ff('promptChanged')}: </span><mark>{draft.change}</mark></p>}
+      <small>{ff('preparedFraming')}</small>
+    </div>}
     {options.length > 0 && (kind === 'image' || kind === 'video' ? <label><span>{ff('model')}</span><ModelPicker models={actions.models} kind={kind} value={node.data.model} seconds={node.data.duration} imageSettings={node.data} refuses={(m) => modelRefusal(actions.doc, node.id, m, actions.gens, actions.kit)} disabled={actions.readonly || actions.busy.has(node.id)} onPick={(id) => {
       const picked = options.find((m) => m.id === id)!
       actions.update(node.id, { model: id, duration: picked.durations?.includes(node.data.duration ?? -1) ? node.data.duration : picked.durations?.[0], ...(kind === 'image' ? normalizeImageSettings(node.data, actions.freeform ? picked : { ...picked, maxCount: 1 }) : {}) })
@@ -64,6 +72,7 @@ function InlineReferences({ node, actions }: { node: CanvasNode; actions: Freefo
 export function FreeformNode({ id, data: { node }, selected }: NodeProps<FreeNode>) {
   const actions = useContext(FreeformContext)!
   const { zoom } = useViewport()
+  const clean = !!actions.guidedPresentation && ['n_shot_s1', 'n_six_prompt_s1', 'n_six_image_s1'].includes(id)
   const simple = zoom < 0.45
   const mine = actions.takes.filter((t) => t.shotId === node.shotId && node.type === 'footage')
   const take = actions.takes.find((t) => t.id === node.data.takeId) ?? mine.find((t) => t.chosen)
@@ -81,7 +90,7 @@ export function FreeformNode({ id, data: { node }, selected }: NodeProps<FreeNod
   const ports = PORTS[node.type].inputs
   const shot = actions.shots.find((s) => s.id === node.shotId)
   return <div className={`fc-node ${selected ? 'is-selected' : ''} ${simple ? 'is-simple' : ''}`} data-kind={node.type}>
-    <NodeToolbar isVisible={selected && !actions.readonly} offset={34}>
+    <NodeToolbar isVisible={selected && !actions.readonly && !clean} offset={34}>
       <div className="fc-floating nodrag nopan">
         {generated && <button title={ff('run')} aria-label={ff('run')} disabled={busy} onClick={() => actions.run(id)}>▶</button>}
         {out && <button title={ff('connect')} aria-label={ff('connect')} onClick={() => actions.connect(id)}>⌁</button>}
@@ -96,23 +105,29 @@ export function FreeformNode({ id, data: { node }, selected }: NodeProps<FreeNod
         <span className="fc-composition-icon">▤</span><h3>{ff('editor')}</h3><p>{ff('composeHint')}</p>
         <div className="fc-composition-count">{actions.project?.clips.length ?? 0} {ff('clips')} · {actions.project?.voiceover.length ?? 0} {ff('voices')}</div>
         <button className="fc-primary nodrag" onClick={actions.openEditor}>{ff('openEditor')} ↗</button>
-      </div> : node.type === 'prompt' ? <textarea className="fc-prompt nodrag nopan nowheel" aria-label={ff('prompt')} placeholder={ff('hint')} value={node.data.text ?? ''} disabled={actions.readonly} onChange={(e) => actions.update(id, { text: e.target.value })} />
+      </div> : node.type === 'prompt' && clean ? <div className="fc-demo-prompt-copy" key={node.data.text} aria-label={ff('prompt')}>{openingVersion(node.data.text) ? <>{OPENING_PREFIX}<mark>{openingVersion(node.data.text)!.change}</mark></> : node.data.text}</div> : node.type === 'prompt' ? <textarea className="fc-prompt nodrag nopan nowheel" aria-label={ff('prompt')} placeholder={ff('hint')} value={node.data.text ?? ''} disabled={actions.readonly} onChange={(e) => actions.update(id, { text: e.target.value })} />
       : node.type === 'kit' ? <div className="fc-kit-summary"><h3>{ff('kit')}</h3>{(actions.kit?.items ?? []).filter((item) => node.data.kitItems?.includes(item.id)).map((item) => <div key={item.id}><strong>{item.name}</strong><p>{item.note}</p></div>)}<button className="nodrag" onClick={() => actions.inspect(id)}>{ff('settings')}</button></div>
       : node.type === 'shot' ? <div className="fc-shot"><h3>{shot?.shot}</h3><p>{shot?.line}</p></div>
       : <>
-        <div className={`fc-preview ${busy ? 'is-running' : ''}`}>
-          {take ? <video className="nodrag nopan" src={take.url} controls playsInline preload="metadata" /> : shown?.url ? shown.kind === 'image' ? <img src={shown.url} alt={ff('storyboard')} draggable={false} /> : shown.kind === 'voice' ? <audio className="nodrag nopan" src={shown.url} controls /> : <video className="nodrag nopan" src={shown.url} controls playsInline preload="metadata" />
+        <div className={`fc-preview ${busy ? 'is-running' : ''}`} aria-busy={busy}>
+          {take ? <video className="nodrag nopan" src={take.url} controls playsInline preload="metadata" /> : shown?.url ? shown.kind === 'image' ? <img src={shown.url} alt={ff('storyboard')} draggable={false} /> : shown.kind === 'voice' ? <audio className="nodrag nopan" src={shown.url} controls /> : <video key={shown.id} className="nodrag nopan" src={shown.url} controls playsInline preload="metadata" />
             : node.data.voiceId ? <audio className="nodrag nopan" controls src={actions.voices.find((v) => v.id === node.data.voiceId)?.url} />
             : <span className="fc-preview-icon">{busy ? '◌' : icons[node.type]}</span>}
           {!take && !shown?.url && !node.data.voiceId && !busy && <span className="fc-preview-note">{ff(node.type === 'upload' || node.type === 'footage' ? 'uploadHint' : 'noResult')}</span>}
         </div>
+        {busy && <div className="fc-generation-status" role="status"><span className="fc-spinner" aria-hidden="true" /><span>{pending ? ff(pending.status === 'running' ? 'running' : pending.status === 'waiting' ? 'waiting' : 'queued') : ff('running')}{model?.provider === 'prepared' && <> · {ff('preparedReplay')}</>}</span><progress aria-label={ff('running')} /></div>}
         {versions.length > 0 && <div className="fc-history-controls nodrag nopan"><button aria-label={ff('previous')} disabled={actions.readonly || versionIndex <= 0} onClick={() => actions.selectVersion(versions[versionIndex - 1])}>‹</button><span>{versionIndex + 1}/{versions.length}</span><button aria-label={ff('next')} disabled={actions.readonly || versionIndex < 0 || versionIndex >= versions.length - 1} onClick={() => actions.selectVersion(versions[versionIndex + 1])}>›</button></div>}
+        {(shown?.model === OPENING_MODEL || clean && shown && openingVersion(shown.inputs.prompt)) && <div className="fc-version-prompt nodrag nopan" aria-live="polite">
+          <strong>{ff('promptUsed')} · {ff('versionLabel')} {versionIndex + 1}</strong>
+          <p>{openingVersion(shown.inputs.prompt) ? <>{OPENING_PREFIX}<mark>{openingVersion(shown.inputs.prompt)!.change}</mark></> : shown.inputs.prompt}</p>
+        </div>}
         {batch.length > 0 && <div className="fc-batch nodrag nopan" aria-live="polite"><strong>{ff('batch')} · {batch.filter((g) => g.status === 'done').length}/{batch.length} {ff('done')} · {batch.filter((g) => g.status === 'failed').length} {ff('failed')} · {batch.filter((g) => g.status === 'unknown').length} {ff('unknown')}</strong>{batch.map((g, i) => <span key={g.id}>#{(g.inputs.batchIndex ?? i) + 1} {ff(g.status)}</span>)}</div>}
         {mine.length > 0 && <div className="fc-legacy-takes nodrag nopan">{mine.map((t) => <div key={t.id}><span>{t.name}</span><button disabled={actions.readonly || t.chosen} onClick={() => actions.pickTake(t.id)}>{t.chosen ? ff('ready') : ff('version')}</button></div>)}</div>}
-        {generated && <NodeSettings node={node} actions={actions} />}
+        {generated && <NodeSettings node={node} hidePrompt={clean} actions={clean ? { ...actions, models: actions.models.filter(model => model.id === node.data.model) } : actions} />}
         {(node.type === 'upload' || node.type === 'footage') && <label className="fc-upload nodrag nopan">↑ {ff('choose')}<input type="file" accept={node.type === 'footage' ? 'video/mp4,video/quicktime,.mp4,.mov' : actions.freeform ? 'image/*,video/*,audio/*' : 'image/*,audio/*'} disabled={actions.readonly || busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) actions.upload(id, f) }} /></label>}
-        {generated && <div className="fc-run-row"><span>{ff('estimate')} · {model ? (model.kind === 'image' ? imageEstimate(model, node.data) : priceOf(model, node.data.duration)) === 0 ? ff('free') : usd((model.kind === 'image' ? imageEstimate(model, node.data) : priceOf(model, node.data.duration))) : '—'}</span><button className="fc-run nodrag nopan" disabled={actions.readonly || busy || !model?.available || !!modelRefusal(actions.doc, id, model, actions.gens, actions.kit)} aria-label={ff('run')} onClick={() => actions.run(id)}>{busy ? '◌' : '▶'}</button></div>}
-        {node.data.stale && <p className="fc-stale">◷ {ff('stale')}</p>}
+        {generated && !clean && <div className="fc-run-row"><span>{ff('estimate')} · {model ? (model.kind === 'image' ? imageEstimate(model, node.data) : priceOf(model, node.data.duration)) === 0 ? ff('free') : usd((model.kind === 'image' ? imageEstimate(model, node.data) : priceOf(model, node.data.duration))) : '—'}</span><button className="fc-run nodrag nopan" disabled={actions.readonly || busy || !model?.available || !!modelRefusal(actions.doc, id, model, actions.gens, actions.kit)} aria-label={ff('run')} onClick={() => actions.run(id)}>{busy ? '◌' : '▶'}</button></div>}
+        {!clean && shown && actions.useInEdit && actions.canUseInEdit?.(shown) && <button className="fc-primary nodrag nopan" disabled={actions.readonly || busy} onClick={() => actions.useInEdit?.(shown)}>{ff('useInEdit')}</button>}
+        {!clean && node.data.stale && <p className="fc-stale">◷ {ff('stale')}</p>}
         {error && <p className="fc-node-error" role="alert">{serverText(error)}</p>}
       </>}
     </div>

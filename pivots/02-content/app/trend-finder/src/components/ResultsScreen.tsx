@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { TopicResults } from './publish/TopicResults'
 import { useCountUp } from '../lib/motion'
 import { resultsShortcuts, useResultsShortcuts } from '../lib/useShortcuts'
@@ -6,7 +6,6 @@ import type { Format, IdeaStatus, Platform, Video } from '../types'
 import type { Query, Sort } from '../state'
 import type { FormatTrend } from '../lib/metrics'
 import type { Interpretation } from '../lib/parseQuery'
-import type { Answer } from '../lib/answer'
 import { byFollowers, compact, scoreBase, groupFailures, hasScore, outlierScore, platformName, tierOf } from '../lib/metrics'
 import { beatUsual, platformsText } from './find/words'
 import { t, tp } from '../lib/i18n'
@@ -35,11 +34,13 @@ export type Chip =
   | { kind: 'source' }
 
 interface Props {
+  initialFilters?: ResultFilters
+  recommendedVideoId?: string
+  onVisibleResults?: (ids: readonly string[]) => void
   error: string | null
   query: Query
   setQuery: (q: Query) => void
   interp: Interpretation
-  answer: Answer | null
   formats: Format[]
   allVideos: Video[]
   onSearch: (text: string) => void
@@ -69,6 +70,7 @@ interface Props {
   inResearch: Set<string>
   onOpen: (id: string) => void
   // Save to the client's Research, or take it off again (only while it has no plan).
+  guidedSave?: { saved: boolean; onSave: () => void }
   onToggleSave: (id: string) => void
   onGoResearch: () => void
   // Which of the client's videos a saved video was filed under ("Video 3 · Street taste test", or Unsorted).
@@ -93,14 +95,21 @@ interface Props {
 }
 
 export function ResultsScreen(p: Props) {
+  const { onVisibleResults } = p
   const manager = useManagerName()
   // The default filters still apply; their tags were taken off this page.
-  const [filters] = useState<ResultFilters>(DEFAULT_FILTERS)
+  const [filters] = useState<ResultFilters>(p.initialFilters ?? DEFAULT_FILTERS)
   const byFormat = p.formatFilter ? p.results.filter((v) => v.formatId === p.formatFilter) : p.results
-  const filtered = applyFilters(byFormat, filters)
   // New since the last run first (keeping the chosen order within each part).
   const isNew = (v: Video) => p.newIds.has(v.id)
-  const shown = p.newIds.size ? [...filtered.filter(isNew), ...filtered.filter((v) => !isNew(v))] : filtered
+  const shown = useMemo(() => {
+    const selected = p.formatFilter ? p.results.filter((video) => video.formatId === p.formatFilter) : p.results
+    const filtered = applyFilters(selected, filters)
+    const ordered = p.newIds.size ? [...filtered.filter((video) => p.newIds.has(video.id)), ...filtered.filter((video) => !p.newIds.has(video.id))] : filtered
+    const recommended = ordered.find((video) => video.id === p.recommendedVideoId)
+    return recommended ? [recommended, ...ordered.filter((video) => video.id !== recommended.id)] : ordered
+  }, [p.formatFilter, p.results, p.newIds, p.recommendedVideoId, filters])
+  useEffect(() => onVisibleResults?.(shown.map((video) => video.id)), [onVisibleResults, shown])
   const newCount = p.results.filter(isNew).length
   const activeTrend = p.trends.find((tr) => tr.format.id === p.formatFilter)
   const [draft, setDraft] = useState(p.interp.text)
@@ -124,7 +133,7 @@ export function ResultsScreen(p: Props) {
     return s !== 'waiting' && s !== 'approved' && !p.blockedFormatIds.has(v.formatId)
   })
   const proven = open.filter((v) => ['early', 'rising'].includes(trendOf(v)?.stage ?? ''))
-  const best = proven[0] ?? open[0] ?? ranked[0]
+  const best = shown.find((video) => video.id === p.recommendedVideoId) ?? proven[0] ?? open[0] ?? ranked[0]
   const bestStatus = best ? p.ideaStatus.get(best.id) : undefined
   const platformCounts = (['tiktok', 'instagram', 'youtube', 'reddit', 'x'] as Platform[])
     .map((pl) => {
@@ -136,7 +145,7 @@ export function ResultsScreen(p: Props) {
     })
     .filter((x) => x.n > 0)
   const platformNames = platformsText(platformCounts.map((x) => x.pl))
-  const bestSaved = best ? p.inResearch.has(best.id) : false
+  const bestSaved = p.guidedSave ? p.guidedSave.saved : best ? p.inResearch.has(best.id) : false
   const i = p.interp
   const queryLabel = i.source ? '' : i.text.trim()
 
@@ -202,20 +211,6 @@ export function ResultsScreen(p: Props) {
 
       {p.likeThis}
 
-      {p.answer && (
-        <div className="answer" role="note">
-          <div className="answer-head">
-            <strong>{i.text.trim()}</strong>
-          </div>
-          {p.answer.lines.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-          <span className="small muted">
-            {t('find.res.sampleAnswer', { basis: p.answer.basis })}
-          </span>
-        </div>
-      )}
-
       {p.results.length === 0 ? (
         <>
           <div className="filters">{filterControls}</div>
@@ -271,11 +266,12 @@ export function ResultsScreen(p: Props) {
                 <button
                     className={`tile-save ${bestSaved ? 'tile-save-on' : ''} ${bestPop ? 'tile-save-pop' : ''}`}
                     aria-pressed={bestSaved}
-                    aria-label={bestSaved ? t('find.tile.unsaveAria') : t('find.tile.saveIdea')}
+                    aria-label={bestSaved ? t(p.guidedSave ? 'find.tile.savedTitle' : 'find.tile.unsaveAria') : t('find.tile.saveIdea')}
                     title={bestSaved ? t('find.tile.savedTitle') : t('find.tile.saveIdea')}
                     onClick={() => {
                       setBestPop(true)
-                      p.onToggleSave(best.id)
+                      if (p.guidedSave) p.guidedSave.onSave()
+                      else p.onToggleSave(best.id)
                     }}
                     onAnimationEnd={() => setBestPop(false)}
                   >
@@ -289,7 +285,7 @@ export function ResultsScreen(p: Props) {
                 {/* Usual → this video, so the jump reads without decoding the × score. Keyed so it animates once per pick. */}
                 {hasScore(best) && <BestCompare key={best.id} video={best} />}
                 <div className="best-actions">
-                  {bestStatus ? (
+                  {bestStatus && !p.guidedSave ? (
                     <button className="btn btn-primary" onClick={() => p.onPlan(best.id)}>
                       {bestStatus === 'waiting'
                         ? t('find.planWaiting', { manager })

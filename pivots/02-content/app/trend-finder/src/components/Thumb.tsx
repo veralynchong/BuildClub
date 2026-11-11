@@ -1,3 +1,6 @@
+import { instagramPlayback, instagramUnavailable } from '../lib/guided/instagramAssets'
+import { getGuidedRuntime } from '../lib/guided/runtime'
+import { GUIDED_IDS } from '../lib/guided/contracts'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { Video } from '../types'
 import { platformName } from '../lib/metrics'
@@ -101,6 +104,8 @@ function PreviewPlayer({ id, hovering }: { id: string; hovering: boolean }) {
 export function Thumb({ video, large = false, preview = false }: { video: Video; large?: boolean; preview?: boolean }) {
   const [broken, setBroken] = useState(false)
   const [hovering, setHovering] = useState(false)
+  const localVideo = useRef<HTMLVideoElement>(null)
+  const localPlayback = preview && getGuidedRuntime() ? video.id === GUIDED_IDS.videoId ? '/demo-assets/source.mp4' : instagramPlayback(video) : undefined
   const timer = useRef<number | undefined>(undefined)
   const id = preview && video.live && video.url && video.platform === 'tiktok' ? tiktokVideoId(video.url) : undefined
   const active = useSyncExternalStore(subscribePreviews, getActivePreview) === id
@@ -112,27 +117,39 @@ export function Thumb({ video, large = false, preview = false }: { video: Video;
     },
     [id],
   )
+  useEffect(() => {
+    const player = localVideo.current
+    if (!localPlayback || !hovering || !player) return
+    player.src = localPlayback
+    void player.play().catch(() => {})
+    return () => {
+      player.pause()
+      player.removeAttribute('src')
+      player.load()
+    }
+  }, [localPlayback, hovering])
   const stop = () => {
     window.clearTimeout(timer.current)
     setHovering(false)
+    localVideo.current?.pause()
   }
   const hue = hues[video.formatId] ?? 180
   const showImage = video.thumbnail && !broken
   return (
     <div className={`thumb ${large ? 'thumb-lg' : ''} ${showImage ? 'thumb-img' : ''} ${id && (failed || (hovering && active)) ? 'thumb-has-ctl' : ''}`} style={{ '--hue': hue } as React.CSSProperties}
       onPointerEnter={
-        id
+        (id || localPlayback)
           ? (e) => {
               if (e.pointerType !== 'mouse') return
               window.clearTimeout(timer.current)
               timer.current = window.setTimeout(() => {
                 setHovering(true)
-                if (!isPreviewFailed(id)) setActivePreview(id)
+                if (!localPlayback && id && !isPreviewFailed(id)) setActivePreview(id)
               }, 300)
             }
           : undefined
       }
-      onPointerLeave={id ? stop : undefined}
+      onPointerLeave={id || localPlayback ? stop : undefined}
     >
       {showImage && (
         <img
@@ -144,12 +161,14 @@ export function Thumb({ video, large = false, preview = false }: { video: Video;
           onError={() => setBroken(true)}
         />
       )}
+      {localPlayback && <video ref={localVideo} className={`thumb-player ${hovering ? '' : 'thumb-player-idle'}`} muted playsInline loop preload="none" aria-hidden="true" onError={stop} />}
       {id && active && !failed && <PreviewPlayer id={id} hovering={hovering} />}
       {failed && video.url && (
         <ThumbControl role="link" className="thumb-fail" label={t('find.watchOn', { platform: 'TikTok' })} onActivate={() => window.open(video.url, '_blank', 'noopener,noreferrer')}>
           {t('find.watchOn', { platform: 'TikTok' })} ↗
         </ThumbControl>
       )}
+      {getGuidedRuntime() && video.url && instagramUnavailable(video) && <ThumbControl role="link" className="thumb-unavailable" label={t('find.thumb.unavailable')} onActivate={() => window.open(video.url, '_blank', 'noopener,noreferrer')}>{t('find.thumb.unavailable')}</ThumbControl>}
       <span className={`plat plat-${video.platform}`} title={platformName[video.platform]}>
         <PlatformLogo platform={video.platform} size={large ? 16 : 14} />
       </span>

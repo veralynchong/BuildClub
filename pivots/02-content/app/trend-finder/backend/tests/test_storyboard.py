@@ -346,3 +346,24 @@ def test_camera_fields_round_trip_and_old_plans_have_none(client, setup):
 def test_bad_camera_value_is_rejected(client, setup):
     r = client.put("/api/ideas", json=[idea("c2", [{**SHOTS[0], "framing": "giant"}])])
     assert r.status_code == 422
+
+
+def test_script_expected_basis_matches_saved_shots(client, setup):
+    basis = [[s["shot"], s.get("line", ""), s.get("text", "")] for s in SHOTS]
+    r = client.post("/api/ideas/i1/script", json={"expectedBasis": json.dumps(basis)})
+    assert r.status_code == 200
+    assert all(s["line"] for s in r.json()["shots"])
+
+
+def test_script_stale_basis_refuses_before_provider_or_spend(client, setup, monkeypatch):
+    monkeypatch.setattr(storyboard, "use_claude", lambda: True)
+    monkeypatch.setattr(storyboard, "claude_lines", lambda *args: pytest.fail("Stale draft reached provider"))
+    basis = [[s["shot"], s.get("line", ""), s.get("text", "")] for s in SHOTS]
+    before = server.load(f"spend:{server.today()}")
+    for column in range(3):
+        changed = [row[:] for row in basis]
+        changed[0][column] = "An unsaved change"
+        r = client.post("/api/ideas/i1/script", json={"expectedBasis": json.dumps(changed)})
+        assert r.status_code == 409
+    assert server.load(f"spend:{server.today()}") == before
+    assert client.post("/api/ideas/i1/script", json={"expectedBasis": "bad json"}).status_code == 400

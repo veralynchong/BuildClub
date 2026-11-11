@@ -15,7 +15,7 @@ function ThemeSetting() {
     applyTheme(c)
   }
   return (
-    <div className="theme-seg" role="radiogroup" aria-label={t('shell.prefs.themeLabel')}>
+    <div className="theme-seg two" role="radiogroup" aria-label={t('shell.prefs.themeLabel')}>
       {THEME_CHOICES.map((c) => (
         <button key={c} type="button" role="radio" aria-checked={choice === c} className={choice === c ? 'on' : ''} onClick={() => pick(c)}>
           {themeLabel(c)}

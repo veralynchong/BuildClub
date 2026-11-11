@@ -46,6 +46,7 @@ export interface ResearchScreenProps {
   onRemove: (id: string) => void
   // The Status control. 'picked' makes the row's plan (Still planning) without leaving the page; the video's
   // earlier pick steps down to Backup and its plan is deleted. 'none' / 'backup' on a picked row deletes its plan.
+  canPick?: (entry: ResearchEntry) => boolean
   onPick: (id: string, pick: RowPick) => void
   // Whether a picked row's plan has work in it (shots, notes, sent before). Picking another row in the same video
   // asks first only then; an untouched plan is replaced at once. Without it, every switch asks.
@@ -379,11 +380,12 @@ export function ResearchScreen(p: ResearchScreenProps) {
   const pickInfo = (e: ResearchEntry, group: Group): PickInfo => {
     const s = statusOf(e)
     const value: RowPick = s !== 'none' ? 'picked' : e.backup ? 'backup' : 'none'
-    const locked = s !== 'none' && s !== 'planning'
+    const referenceOnly = p.canPick?.(e) === false
+    const locked = referenceOnly || s !== 'none' && s !== 'planning'
     const other = group.summary?.picked && group.summary.picked.id !== e.id ? group.summary.picked : undefined
     const otherLocked = !!other && group.summary!.status !== 'planning'
     const choose = (to: RowPick) => {
-      if (to === value) return
+      if (referenceOnly || to === value) return
       if (value === 'picked') return setAsking({ id: e.id, to, text: t('research.pick.askUnpick', { account: e.account }) })
       if (to === 'picked' && other && (p.planHasWork?.(other) ?? true))
         return setAsking({ id: e.id, to, text: t('research.pick.askSwitch', { account: other.account }) })
@@ -391,7 +393,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
       if (sent?.id === e.id) setSent(null)
       p.onPick(e.id, to)
     }
-    return { status: s, isPicked: value === 'picked', locked, otherLocked, choose }
+    return { referenceOnly, status: s, isPicked: value === 'picked', locked, otherLocked, choose }
   }
   // "This deletes the plan for …": Continue / Cancel, under the pick control.
   const askBox = (e: ResearchEntry) => {
@@ -419,7 +421,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
     )
   }
   const pickControl = (e: ResearchEntry, group: Group) => {
-    const { status: s, isPicked, locked, otherLocked, choose } = pickInfo(e, group)
+    const { status: s, isPicked, locked, otherLocked, referenceOnly, choose } = pickInfo(e, group)
     // One button (founder, 4 Nov 2026): "Pick this", or "★ Picked" to take the pick back.
     return (
       <span className="rs-pick-wrap">
@@ -433,7 +435,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
         >
           {t(isPicked ? 'research.pick.picked' : 'research.pick.pickThis')}
         </button>
-        {locked && <span className="rs-locked small muted">{t('research.pick.locked', { status: statusText(s) })}</span>}
+        {locked && <span className="rs-locked small muted">{referenceOnly ? t('research.referenceOnly') : t('research.pick.locked', { status: statusText(s) })}</span>}
         {askBox(e)}
       </span>
     )
@@ -643,7 +645,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
   const sheetGroups = indexGroups.filter((g) => !filtered || g.rows.length > 0)
   const isOpen = (groupId: string) => {
     if (filtered) return (searchOpen.q === filterKey ? searchOpen.map[groupId] : undefined) ?? true
-    // Every video starts closed (founder, 4 Nov 2026); while searching, videos with matches open.
+    // Projects start closed; the viewer opens the references they want to inspect.
     return sheetOpen[groupId] ?? false
   }
   const toggleOpen = (groupId: string) => {

@@ -1,5 +1,6 @@
 import type { Client, PlanScript, ScriptLine, Shot } from '../types'
 import { t } from './i18n.ts'
+import { writeScript } from './storyboard.ts'
 
 // The plan's script: one spoken line, plus any on-screen words, per shot. Shot 1 says the picked hook.
 // Pure logic only, so it can be unit tested; components/PlanScript.tsx shows and edits it.
@@ -60,13 +61,14 @@ export function makeScript(input: ScriptInput, now = Date.now()): PlanScript {
   return { lines: buildScript(input), basedOn: scriptBasis(input.shots), writtenAt: now }
 }
 
-// Writes the script for a plan.
-// API SEAM: this is the one place a backend call replaces the in-browser writer. When the teammate's backend
-// writes scripts (storyboard.ts already has writeScript() for POST /api/ideas/{id}/script), call it here with
-// the plan id, map its answer to ScriptLine[] and keep `basedOn: scriptBasis(input.shots)`, so "out of date"
-// still works. Until then, and in sample mode, the script is built here by buildScript().
-export async function draftScript(_ideaId: string, input: ScriptInput): Promise<PlanScript> {
-  return makeScript(input)
+// Native plans use the backend writer; sample mode remains local and never calls a provider.
+export async function draftScript(ideaId: string, input: ScriptInput, live = false, force = false): Promise<PlanScript> {
+  if (!live) return makeScript(input)
+  const written = await writeScript(ideaId, force, scriptBasis(input.shots))
+  if (!Array.isArray(written.shots) || written.shots.length !== input.shots.length) throw new Error(t('plan.script.stale'))
+  if (written.shots.some((shot, i) => 'shot' in shot && shot.shot !== input.shots[i].shot)) throw new Error(t('plan.script.stale'))
+  if (written.shots.some(shot => typeof shot.line !== 'string')) throw new Error(t('plan.sb.err.write'))
+  return { lines: written.shots.map((shot, i) => ({ say: shot.line!, onScreen: clean(input.shots[i].text) })), basedOn: scriptBasis(input.shots), writtenAt: Date.now() }
 }
 
 // The user's change to one line. The script is then marked as edited, so writing it again asks first.

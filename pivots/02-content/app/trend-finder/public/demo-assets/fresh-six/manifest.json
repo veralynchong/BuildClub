@@ -1,0 +1,353 @@
+{
+  "version": 1,
+  "routes": {
+    "ai": {
+      "sources": [
+        {
+          "id": "ai-s1",
+          "shotId": "s1",
+          "nodeId": "n_six_video_s1",
+          "path": "ai-s1.mp4",
+          "sha256": "736caecb8ad21c4c2430c91ebcedd564c4f6fb5d4f1bca3d549a3b7623163cb1",
+          "label": "Tofu reveal",
+          "provenance": "Real AI I2V with traceable text-generated Seedream 4.5 source image; asset is an empty tofu tray above tofu, does not show tofu being added."
+        },
+        {
+          "id": "ai-s2",
+          "shotId": "s2",
+          "nodeId": "n_six_image_s2",
+          "path": "ai-s2.mp4",
+          "sha256": "4af6bf7b0a2d57a29ecf373f4c3d127acf005cd9dd0cd634ffbe076f9c677d50",
+          "label": "Add ingredients",
+          "provenance": "Static frame extracted from prepared AI video; no action is implied."
+        },
+        {
+          "id": "ai-s3",
+          "shotId": "s3",
+          "nodeId": "n_six_image_s3",
+          "path": "ai-s3.mp4",
+          "sha256": "035a2a69a7f1a18ae8b4125d0c65cbd9d5335753fefb8dcba2444f710bb61771",
+          "label": "Mix together",
+          "provenance": "Still hold reads as mixing in progress only; foreground strands remain uncoated. Stronger fully-coated prompt remains FAIL."
+        },
+        {
+          "id": "ai-s4",
+          "shotId": "s4",
+          "nodeId": "n_six_video_s4",
+          "path": "ai-s4.mp4",
+          "sha256": "5929533e7014a92fb759f5b0a195a22da5118b95f1e62e5db9f908236f20d0dc",
+          "label": "Into the pan",
+          "provenance": "Real text-to-video; short accepted source interval only. Hold extends duration; no claim that it is a separately animated still."
+        },
+        {
+          "id": "ai-s5",
+          "shotId": "s5",
+          "nodeId": "n_six_video_s5",
+          "path": "ai-s5.mp4",
+          "sha256": "089c1c417a1fa4ff3a4117b6601eeb037a40a54e9cecd164c9816823b34d1c9f",
+          "label": "Finished dish",
+          "provenance": "Real image-to-video descended from generated image asset 0a284729...; source frame is digitally enlarged/cropped, with no claim of obvious steam."
+        },
+        {
+          "id": "ai-s6",
+          "shotId": "s6",
+          "nodeId": "n_six_image_s6",
+          "path": "ai-s6.mp4",
+          "sha256": "44778dd0027a5d14afa68bdc8f25e62054d34f51fa927f605aa8903ca2ca1943",
+          "label": "Product CTA",
+          "provenance": "Still product hold. Packaging fine text is unreliable; visible wordmark/product identity can support CTA but recommend superimposed exact CTA copy."
+        }
+      ],
+      "project": {
+        "fps": 30,
+        "width": 1080,
+        "height": 1920,
+        "clips": [
+          {
+            "id": "ai-clip-s1",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s1",
+              "shotId": "s1"
+            },
+            "in": 0,
+            "out": 1.4,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s2",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s2",
+              "shotId": "s2"
+            },
+            "in": 0,
+            "out": 1.2,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s3",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s3",
+              "shotId": "s3"
+            },
+            "in": 0,
+            "out": 1.6,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s4",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s4",
+              "shotId": "s4"
+            },
+            "in": 0,
+            "out": 1.5,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s5",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s5",
+              "shotId": "s5"
+            },
+            "in": 0,
+            "out": 2.8,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "ai-clip-s6",
+            "source": {
+              "kind": "generation",
+              "id": "ai-s6",
+              "shotId": "s6"
+            },
+            "in": 0,
+            "out": 2.0,
+            "volume": 0,
+            "muted": true
+          }
+        ],
+        "texts": [
+          {
+            "id": "hook",
+            "text": "Silken tofu. Crispy possibilities.",
+            "start": 0,
+            "end": 2.6,
+            "position": "top",
+            "color": "white"
+          },
+          {
+            "id": "method",
+            "text": "Mix. Shape. Pan-fry.",
+            "start": 2.6,
+            "end": 5.7,
+            "position": "top",
+            "color": "white"
+          },
+          {
+            "id": "cta",
+            "text": "Make it with Ever Green.",
+            "start": 8.5,
+            "end": 10.5,
+            "position": "top",
+            "color": "white"
+          }
+        ],
+        "captions": {
+          "enabled": false
+        },
+        "music": null,
+        "voiceover": [],
+        "primaries": {},
+        "showLogo": false,
+        "logoSize": "medium",
+        "logoCorner": "top-right"
+      }
+    },
+    "shoot": {
+      "sources": [
+        {
+          "id": "shoot-s1",
+          "shotId": "s1",
+          "nodeId": "n_six_image_s1",
+          "path": "shoot-s1.mp4",
+          "sha256": "6652b2a691fa7573a1b8c7f24bababe2d6f8bcc0373e6788dc0d33211e0effd4",
+          "label": "Tofu reveal",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s2",
+          "shotId": "s2",
+          "nodeId": "n_six_image_s2",
+          "path": "shoot-s2.mp4",
+          "sha256": "ff505543fe325933365be59aef36f5744e3f929e2420f4746b8aa44c63cfeb01",
+          "label": "Add ingredients",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s3",
+          "shotId": "s3",
+          "nodeId": "n_six_image_s3",
+          "path": "shoot-s3.mp4",
+          "sha256": "6f1f87094f1fbad78ce2475abbc19dfdd31e1a17c8dd41509c44a2fcf50770a5",
+          "label": "Mix together",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s4",
+          "shotId": "s4",
+          "nodeId": "n_six_image_s4",
+          "path": "shoot-s4.mp4",
+          "sha256": "4ced1b76b6dbeefcc094c9c42571e051717a5c124eeb76094d285016cbd4b1ae",
+          "label": "Into the pan",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s5",
+          "shotId": "s5",
+          "nodeId": "n_six_image_s5",
+          "path": "shoot-s5.mp4",
+          "sha256": "b9bf9f24de08880e86e001040988a818c1c8bff82f907e418b9d80ea28fd7670",
+          "label": "Finished dish",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        },
+        {
+          "id": "shoot-s6",
+          "shotId": "s6",
+          "nodeId": "n_six_image_s6",
+          "path": "shoot-s6.mp4",
+          "sha256": "aca0b2b66f534850acf17b9e653bf23f6356298581dce17bee1ab28d46830ae1",
+          "label": "Product CTA",
+          "provenance": "Source-derived storyboard reference presented as a static animatic; not filmed footage."
+        }
+      ],
+      "project": {
+        "fps": 30,
+        "width": 1080,
+        "height": 1920,
+        "clips": [
+          {
+            "id": "shoot-clip-s1",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s1",
+              "shotId": "s1"
+            },
+            "in": 0,
+            "out": 1.4,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s2",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s2",
+              "shotId": "s2"
+            },
+            "in": 0,
+            "out": 1.2,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s3",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s3",
+              "shotId": "s3"
+            },
+            "in": 0,
+            "out": 1.6,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s4",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s4",
+              "shotId": "s4"
+            },
+            "in": 0,
+            "out": 1.5,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s5",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s5",
+              "shotId": "s5"
+            },
+            "in": 0,
+            "out": 2.8,
+            "volume": 0,
+            "muted": true
+          },
+          {
+            "id": "shoot-clip-s6",
+            "source": {
+              "kind": "generation",
+              "id": "shoot-s6",
+              "shotId": "s6"
+            },
+            "in": 0,
+            "out": 2.0,
+            "volume": 0,
+            "muted": true
+          }
+        ],
+        "texts": [],
+        "captions": {
+          "enabled": false
+        },
+        "music": null,
+        "voiceover": [],
+        "primaries": {},
+        "showLogo": false,
+        "logoSize": "medium",
+        "logoCorner": "top-right"
+      },
+      "variants": [
+        {
+          "id": "shoot-s1-v2",
+          "shotId": "s1",
+          "nodeId": "n_six_image_s1",
+          "path": "shoot-s1-v2.mp4",
+          "sha256": "99829756c8be4620c3571a77603354eb6ff7f876b260e0a29f4e9ae6cc82508e",
+          "label": "Tofu reveal \u00b7 alternative AI reference",
+          "provenance": "Existing AI opening parent image (ai-s1-parent.png) presented as an alternative static storyboard reference; no new AI generation or filmed footage."
+        },
+        {
+          "id": "shoot-s1-motion-a",
+          "shotId": "s1",
+          "nodeId": "n_six_video_s1",
+          "path": "opening-a.mp4",
+          "sha256": "0257dbe99aed865dda5e09cb80dfa493021891f63686b7cd41aa54996bb63f1b",
+          "label": "Tofu reveal \u00b7 close crop",
+          "provenance": "Prepared close crop of existing AI opening clip ai-s1.mp4; digital framing variation, no new AI generation."
+        },
+        {
+          "id": "shoot-s1-motion-b",
+          "shotId": "s1",
+          "nodeId": "n_six_video_s1",
+          "path": "opening-b.mp4",
+          "sha256": "736caecb8ad21c4c2430c91ebcedd564c4f6fb5d4f1bca3d549a3b7623163cb1",
+          "label": "Tofu reveal \u00b7 wider original framing",
+          "provenance": "Prepared wider original framing of existing AI opening clip ai-s1.mp4; digital framing variation, no new AI generation."
+        }
+      ]
+    }
+  }
+}

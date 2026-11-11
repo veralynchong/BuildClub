@@ -1,0 +1,142 @@
+{
+  "references": [
+    {
+      "videoId": "ig-3965228470707584451",
+      "sourceUrl": "https://www.instagram.com/p/DcHUkkRyn3D/",
+      "author": "asanebo_restaurant",
+      "path": "/demo-assets/instagram-previews/DcHUkkRyn3D.mp4",
+      "sha256": "c573409880a23336b69480d249660a8df21e2d0a7bd7f8c160087688974b51d6",
+      "duration": 67.265351,
+      "bytes": 13451471,
+      "width": 720,
+      "height": 1280,
+      "codec": "h264",
+      "cachedOn": "2026-11-06",
+      "source": "Public Instagram embed video; no login or provider call"
+    },
+    {
+      "videoId": "ig-3967092331747788579",
+      "sourceUrl": "https://www.instagram.com/p/DcN8XUJAMcj/",
+      "author": "erinphamvn2uk",
+      "path": "/demo-assets/instagram-previews/DcN8XUJAMcj.mp4",
+      "sha256": "9ae89699ce28539c2bf88ff6c4830ccc748075c9232e839ceed90fdc8fae030f",
+      "duration": 86.561134,
+      "bytes": 31333339,
+      "width": 720,
+      "height": 1280,
+      "codec": "h264",
+      "cachedOn": "2026-11-06",
+      "source": "Public Instagram embed video; no login or provider call"
+    },
+    {
+      "videoId": "ig-3977423352452053149",
+      "sourceUrl": "https://www.instagram.com/p/DcypXc8P3id/",
+      "author": "sarahsvegankitchen_",
+      "path": "/demo-assets/instagram-previews/DcypXc8P3id.mp4",
+      "sha256": "0a13c2ac1525c406b3c97ae01e52897e2885ff5679437cc8dcdc61a24525e4f7",
+      "duration": 62.249841,
+      "bytes": 13771494,
+      "width": 720,
+      "height": 1280,
+      "codec": "h264",
+      "cachedOn": "2026-11-06",
+      "source": "Public Instagram embed video; no login or provider call"
+    },
+    {
+      "videoId": "ig-3984140265618652354",
+      "sourceUrl": "https://www.instagram.com/p/DdKgnZzh7zC/",
+      "author": "consciouschris",
+      "path": "/demo-assets/instagram-previews/DdKgnZzh7zC.mp4",
+      "sha256": "04bae21106a4c458b5284ed4967d658f7bc6ea22f0342a0ab4310c731c319fc3",
+      "duration": 39.192426,
+      "bytes": 13651469,
+      "width": 720,
+      "height": 1280,
+      "codec": "h264",
+      "cachedOn": "2026-11-06",
+      "source": "Public Instagram embed video; no login or provider call"
+    },
+    {
+      "videoId": "ig-3987396006155819614",
+      "sourceUrl": "https://www.instagram.com/p/DdWE4qduppe/",
+      "author": "xiaomei.china",
+      "path": "/demo-assets/instagram-previews/DdWE4qduppe.mp4",
+      "sha256": "bc51fa11f42c3cb74594bdf4c72db56fe46dd3ba2d259c26b1a0c520d2678e69",
+      "duration": 174.868073,
+      "bytes": 35971877,
+      "width": 720,
+      "height": 1280,
+      "codec": "h264",
+      "cachedOn": "2026-11-06",
+      "source": "Public Instagram embed video; no login or provider call"
+    },
+    {
+      "videoId": "ig-3966801412116726269",
+      "sourceUrl": "https://www.instagram.com/p/DcM6N4HvEH9/",
+      "author": "thaotamto",
+      "path": "/demo-assets/instagram-previews/DcM6N4HvEH9.mp4",
+      "sha256": "cf8181d91eba800971829bb9e0896e0ea6205a0cdd7975f339e8d4e27b03ff16",
+      "duration": 74.184898,
+      "bytes": 11408446,
+      "width": 720,
+      "height": 1280,
+      "codec": "h264",
+      "cachedOn": "2026-11-06",
+      "source": "Public Instagram embed video; no login or provider call"
+    },
+    {
+      "videoId": "ig-3972350465685289944",
+      "sourceUrl": "https://www.instagram.com/p/Dcgn7O-h3vY/",
+      "author": "naturallieplantbased",
+      "path": "/demo-assets/instagram-previews/Dcgn7O-h3vY.mp4",
+      "sha256": "bf6d9d97ef5dcc86becbfa1b4e7f2702178824728ef9d63a68ad0b2ce2498668",
+      "duration": 19.362585,
+      "bytes": 6766981,
+      "width": 720,
+      "height": 1280,
+      "codec": "h264",
+      "cachedOn": "2026-11-06",
+      "source": "Public Instagram embed video; no login or provider call"
+    },
+    {
+      "videoId": "ig-4019712954486887122",
+      "sourceUrl": "https://www.instagram.com/p/DfI46J_OhLS/",
+      "author": "vegscratchkitchen",
+      "path": "/demo-assets/instagram-previews/DfI46J_OhLS.mp4",
+      "sha256": "ac01eb62db9e343538f4a9e4170668b40af27140c285065c76f20d9c59b1deb7",
+      "duration": 28.882766,
+      "bytes": 5628195,
+      "width": 720,
+      "height": 1280,
+      "codec": "h264",
+      "cachedOn": "2026-11-06",
+      "source": "Public Instagram embed video; no login or provider call"
+    }
+  ],
+  "unavailable": [
+    {
+      "videoId": "ig-3989438398069123761",
+      "author": "_cookwithm_",
+      "errorType": "ValueError",
+      "message": "Instagram withheld public playback for this post",
+      "sourceUrl": "https://www.instagram.com/p/DddVRYKNqqx/",
+      "copyrightBlocked": true
+    },
+    {
+      "videoId": "ig-4015077580985586337",
+      "author": "vegan_high_protein",
+      "errorType": "ValueError",
+      "message": "Instagram withheld public playback for this post",
+      "sourceUrl": "https://www.instagram.com/p/De4a8mAR9Kh/",
+      "copyrightBlocked": true
+    },
+    {
+      "videoId": "ig-4009438326035664179",
+      "author": "linyue_xiaoxi",
+      "errorType": "ValueError",
+      "message": "Instagram withheld public playback for this post",
+      "sourceUrl": "https://www.instagram.com/p/DekYuokMU0z/",
+      "copyrightBlocked": true
+    }
+  ]
+}

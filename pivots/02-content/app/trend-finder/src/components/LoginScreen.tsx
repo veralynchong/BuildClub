@@ -6,6 +6,7 @@ import { login } from '../lib/auth'
 import { googleErrorMessage } from '../lib/googleError'
 
 interface Props {
+  onGuidedDemo: () => void
   // `real` is true when the API has accounts: staff then sign in with email and password.
   // Without accounts it stays the demo sign-in, where no password is checked.
   real?: boolean
@@ -18,7 +19,7 @@ interface Props {
 
 // Staff covers the whole agency (team members and the manager who approves); clients get their own account.
 // Clients never see the agency's client list: their login is a separate second step (not built yet).
-export function LoginScreen({ real = false, startAtLogin = false, onSignIn, startOn = 'landing' }: Props) {
+export function LoginScreen({ real = false, startAtLogin = false, onSignIn, startOn = 'landing', onGuidedDemo }: Props) {
   const { role: savedRole, setRole } = useApp()
   const [mode, setMode] = useState<'landing' | 'login' | 'register' | 'client'>(startAtLogin ? 'login' : startOn)
   const [email, setEmail] = useState('')
@@ -52,7 +53,7 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
     setRole('member')
     onSignIn()
   }
-  if (mode === 'landing') return <LandingAltitude onLogIn={() => setMode('login')} onDemo={real ? () => setMode('login') : tryDemo} />
+  if (mode === 'landing') return <LandingAltitude onGuidedDemo={onGuidedDemo} onLogIn={() => setMode('login')} onDemo={real ? () => setMode('login') : tryDemo} />
 
   const register = mode === 'register'
   const isClient = account === 'client'

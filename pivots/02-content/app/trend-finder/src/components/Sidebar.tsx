@@ -18,7 +18,7 @@ export type View =
   | 'plan'
   | 'canvas'
   | 'canvasPick'
-  // Sidebar "Video canvas" with more than one plan: pick the plan whose planning board to open.
+  // Pick a plan's legacy planning board.
   | 'boardPick'
   // The planning board for the open plan (components/board/ShotBoard.tsx).
   | 'board'
@@ -209,7 +209,7 @@ export function Sidebar(p: Props) {
               p.onLogo()
             }}
           >
-            <Logo height={22} />
+            <Logo height={p.compact ? 18 : 22} />
           </button>
         </div>
 
@@ -244,8 +244,8 @@ export function Sidebar(p: Props) {
               {item('research', 'research', t('shell.side.research'), p.counts.research)}
               {/* Plans = the board of plans + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
-              {/* "Video canvas" (was "Canvas", 5 Nov 2026) opens the planning board, or a plan chooser when there are several. */}
-              {item('board', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvas', 'canvasPick'].includes(p.view))}
+              {/* "Video canvas" opens the freeform canvas again (12 Nov 2026), via the canvas chooser; the planning board stays on the Plan page. */}
+              {item('canvas', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvas', 'canvasPick'].includes(p.view))}
               <div className="side-sep" />
               {/* "Channel" was taken off the menu (12 Nov 2026); the 'channel' view and ChannelScreen stay in App.tsx. */}
               {item('settings', 'brief', t('shell.side.brief'))}

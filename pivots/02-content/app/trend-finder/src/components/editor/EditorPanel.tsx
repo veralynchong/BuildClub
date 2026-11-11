@@ -53,6 +53,9 @@ import { Transcript } from './Transcript'
 import { selectionCuts, selectionLabel, setWordFix, transcriptGroups, type TakeSpeech } from '../../lib/editor/transcript'
 
 interface Props {
+  // The guided demo (?guided=...) opens the export panel and watches the editor's state (demo-day 7 Nov 2026).
+  guideExport?: boolean
+  onGuideState?: (state: { ready: boolean; exportOpen: boolean; busy: boolean; error?: string }) => void
   ideaId: ResourceInput
   clientId: string
   shots: Shot[]
@@ -68,7 +71,7 @@ interface Props {
   focus?: 'export' | 'send' | null // open with the export panel showing and that control focused (the Timeline node's Export)
 }
 
-export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline: baseTimeline, doc, gens, takes, readOnly, onBack, onJumpToNode, focus = null }: Props) {
+export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, timeline: baseTimeline, doc, gens, takes, readOnly, onBack, onJumpToNode, focus = null, guideExport, onGuideState }: Props) {
   const { project, loadError, save, stale, update, flush, current, reload } = edit
   const { sources, error: sourceError } = footage
   const [skipped, setSkipped] = useState<string[]>([])
@@ -301,6 +304,13 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
 
   // The player reports its frame as it plays or seeks; the playhead on the timeline follows.
   const ready = project !== null // the player only exists once the project has loaded
+  useEffect(() => {
+    if (guideExport !== undefined) setExportOpen(guideExport)
+  }, [guideExport])
+  useEffect(() => {
+    const guideReady = ready && !!inputProps && sources !== null && !sourceError && !loadError
+    onGuideState?.({ error: loadError || sourceError || undefined, ready: guideReady, exportOpen, busy: readOnly || stale || !!edit.writing })
+  }, [onGuideState, ready, inputProps, loadError, sources, sourceError, exportOpen, readOnly, stale, edit.writing])
   useEffect(() => {
     const p = player.current
     if (!p) return

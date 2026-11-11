@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en" data-ui="altitude">
+<html lang="en" data-ui="altitude" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Remake</title>
     <script>
-      // Apply the saved Light / Dark choice before first paint (System sets nothing). Keep in step with src/lib/theme.ts.
+      // Light is the default before first paint; retain an explicit saved Dark choice.
       try {
         var t = localStorage.getItem('remake.theme')
         if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t)
