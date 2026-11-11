@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { DndContext, PointerSensor, useDraggable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { t } from '../../lib/i18n'
 import type { Key } from '../../lib/i18n'
@@ -7,6 +7,9 @@ import { clipLength, clipStarts, dropIndex, FPS, MIN_CLIP, moveClip, removeClip,
 import { LANES, setBarTime, snapMove, snapTargets, snapThreshold, snapTime, tickStep, timecode, type Bar, type LaneId } from '../../lib/editor/lanes'
 import type { Clip, EditProject, SourceInfo } from '../../lib/editor/types'
 import { Icon } from './icons'
+import { filmTiles, peaksSpan, waveformPath, type Mark, type Peaks, type Pin } from '../../lib/editor/marks'
+import type { TakeLook } from '../../lib/editor/useTimelineMedia'
+import { itemLabel, reasonOf, stamp } from '../../lib/editor/aiEdit'
 
 export const HEAD_PX = 168 // the track headers column
 const PAD_PX = 16 // room after the last bar
@@ -41,27 +44,67 @@ interface Props {
   onMute: (lane: LaneId) => void
   duck: [number, number][] | null // music ducking ranges, when the music goes down under speech
   scrollRef: RefObject<HTMLDivElement | null>
+  looks: Record<string, TakeLook> // per take: filmstrip and waveform data
+  thumbSrc: (takeId: string, n: number, version: string) => string
+  marks: Record<string, Mark[]> // per clip: the AI clean-up suggestions showing on it (none while markers are hidden)
+  pins: Pin[] // why the last first cut did what it did
+  onKeepMark: (mark: Mark) => void
+  onRemoveMark: (clipId: string, mark: Mark) => Promise<string | null> // an error to show, or null once removed
+  musicPeaks: Peaks | null
 }
+
+const WAVE_PX = 2 // one waveform column per this many pixels
+const MAX_COLS = 2000
+const FILM_ROW_PX = 26 // the filmstrip row's height
+const columnsFor = (widthPx: number) => Math.min(MAX_COLS, Math.max(1, Math.round(widthPx / WAVE_PX)))
 
 // The multi-track timeline: a time code and ruler on top, then one lane per kind of thing (text, captions, video,
 // voiceover, music) with its header on the left. Bars are selected by a click; texts and speech captions are dragged and
 // trimmed, clips are reordered and trimmed. Drags snap to edges and the playhead while snapping is on.
 export function Timeline(props: Props) {
-  const { project, lanes, sources, frame, readOnly, timeline, selection, onSelect, nameOf, nodeOf, onJump, onProject, onSeek, pxPerSec, snap, hidden, muted, onHide, onMute, duck, scrollRef } = props
+  const { project, lanes, sources, frame, readOnly, timeline, selection, onSelect, nameOf, nodeOf, onJump, onProject, onSeek, pxPerSec, snap, hidden, muted, onHide, onMute, duck, scrollRef, looks, thumbSrc, marks, pins, onKeepMark, onRemoveMark, musicPeaks } = props
   const [menu, setMenu] = useState<{ clipId: string; x: number; y: number } | null>(null) // a clip's right-click menu
+  const [pop, setPop] = useState<{ clipId: string; mark: Mark; x: number; y: number } | null>(null) // an AI marker's popover
+  const [popBusy, setPopBusy] = useState(false)
+  const [popErr, setPopErr] = useState('')
+  const [tip, setTip] = useState<{ pin: Pin; x: number; y: number } | null>(null) // a first-cut pin's tooltip
   const box = useRef<HTMLElement>(null)
-  // The menu closes on Escape and on a press outside it.
+  // The menu and the marker popover close on Escape and on a press outside them.
   useEffect(() => {
-    if (!menu) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenu(null)
-    const onDown = (e: PointerEvent) => !(e.target as Element | null)?.closest('.cv-ed-menu') && setMenu(null)
+    if (!menu && !pop) return
+    const close = () => {
+      setMenu(null)
+      setPop(null)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
+    const onDown = (e: PointerEvent) => !(e.target as Element | null)?.closest('.cv-ed-menu, .cv-ed-markpop, .cv-ed-mark') && close()
     document.addEventListener('keydown', onKey)
     document.addEventListener('pointerdown', onDown)
     return () => {
       document.removeEventListener('keydown', onKey)
       document.removeEventListener('pointerdown', onDown)
     }
-  }, [menu])
+  }, [menu, pop])
+  const at = (e: { clientX: number; clientY: number }) => {
+    const r = box.current?.getBoundingClientRect()
+    return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) }
+  }
+  const openMark = (clipId: string, mark: Mark, e: React.MouseEvent) => {
+    setMenu(null)
+    setPopErr('')
+    setPop({ clipId, mark, ...at(e) })
+  }
+  // A marker the popover shows may be gone (its clip was cut or undone); the popover goes with it.
+  const popLive = pop && (marks[pop.clipId] ?? []).some((m) => m.key === pop.mark.key) ? pop : null
+  const removeMark = async () => {
+    if (!popLive || popBusy) return
+    setPopBusy(true)
+    setPopErr('')
+    const err = await onRemoveMark(popLive.clipId, popLive.mark)
+    setPopBusy(false)
+    if (err) setPopErr(err)
+    else setPop(null)
+  }
   const openMenu = (clipId: string, e: React.MouseEvent) => {
     e.preventDefault()
     onSelect({ lane: 'video', id: clipId })
@@ -73,6 +116,12 @@ export function Timeline(props: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const total = totalLength(project)
   const starts = clipStarts(project)
+  const musicVol = project.music ? project.music.volume : null
+  const musicWave = useMemo(() => {
+    if (!musicPeaks || musicVol === null || total <= 0) return null
+    const cols = peaksSpan(musicPeaks, 0, total, columnsFor(total * pxPerSec))
+    return { d: waveformPath(cols, Math.min(2, musicVol * 1.6)), cols: cols.length }
+  }, [musicPeaks, musicVol, total, pxPerSec])
   const playhead = frame / FPS
   const width = Math.max(total * pxPerSec, 1) + PAD_PX
   const targetsFor = (skip: string | null) => (snap ? snapTargets(lanes, playhead, total, skip) : [])
@@ -179,6 +228,22 @@ export function Timeline(props: Props) {
                   {big ? <span className="cv-ed-tick-label">{timecode(s * FPS)}</span> : null}
                 </span>
               ))}
+              {pins.map((pin) => (
+                <button
+                  key={pin.at}
+                  type="button"
+                  className="cv-ed-pin"
+                  data-cut={pin.cut ? '' : undefined}
+                  style={{ left: pin.at * pxPerSec }}
+                  aria-label={`${t('editor.pin.title')}: ${pin.lines.join(' ')}`}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerEnter={(e) => setTip({ pin, ...at(e) })}
+                  onPointerLeave={() => setTip(null)}
+                  onFocus={(e) => { const r = e.currentTarget.getBoundingClientRect(); setTip({ pin, ...at({ clientX: r.left, clientY: r.bottom }) }) }}
+                  onBlur={() => setTip(null)}
+                  onClick={() => onSeek(Math.round(pin.at * FPS))}
+                />
+              ))}
             </div>
           </div>
           {LANES.map((lane) => {
@@ -217,6 +282,11 @@ export function Timeline(props: Props) {
                           pxPerSec={pxPerSec}
                           sourceDuration={sources[sourceKey(c.source)]?.duration ?? c.out}
                           project={project}
+                          look={c.source.kind === 'take' ? looks[c.source.id] : undefined}
+                          thumbSrc={thumbSrc}
+                          marks={marks[c.id] ?? []}
+                          openMark={pop?.clipId === c.id ? pop.mark.key : null}
+                          onMark={(m, e) => openMark(c.id, m, e)}
                           snapTo={(sec) => snapTime(sec, targetsFor(c.id), threshold)}
                           onSelect={() => onSelect({ lane: 'video', id: c.id })}
                           onMenu={(e) => openMenu(c.id, e)}
@@ -238,6 +308,7 @@ export function Timeline(props: Props) {
                         targets={() => targetsFor(b.id)}
                         threshold={threshold}
                         duck={lane === 'music' ? duck : null}
+                        wave={lane === 'music' ? musicWave : null}
                         onSelect={() => onSelect({ lane, id: b.id })}
                         onProject={onProject}
                       />
@@ -252,6 +323,24 @@ export function Timeline(props: Props) {
           </div>
         </div>
       </div>
+      {popLive && (
+        <div className="cv-ed-markpop" role="dialog" aria-label={itemLabel(popLive.mark.item)} data-type={popLive.mark.item.type} style={{ left: popLive.x, top: popLive.y }}>
+          <b className="cv-ed-markpop-title">{itemLabel(popLive.mark.item)}</b>
+          <p className="cv-ed-markpop-why">{reasonOf(popLive.mark.item)}</p>
+          <p className="cv-ed-markpop-at">{t('editor.mark.at', { from: stamp(popLive.mark.item.start), to: stamp(popLive.mark.item.end) })}</p>
+          {popErr && <p className="cv-ed-markpop-err" role="alert">{popErr}</p>}
+          <div className="cv-ed-markpop-row">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { onKeepMark(popLive.mark); setPop(null) }}>{t('editor.mark.keep')}</button>
+            <button type="button" className="btn btn-primary btn-sm" autoFocus disabled={readOnly || popBusy} onClick={() => void removeMark()}>{t('editor.mark.remove')}</button>
+          </div>
+        </div>
+      )}
+      {tip && (
+        <div className="cv-ed-pintip" role="tooltip" style={{ left: tip.x, top: tip.y + 14 }}>
+          <b>{t('editor.pin.title')}</b>
+          {tip.pin.lines.map((l, i) => <span key={i}>{l}</span>)}
+        </div>
+      )}
       {menu && menuClip && (
         <div className="cv-ed-menu" role="menu" aria-label={t('editor.clip.menu')} style={{ left: menu.x, top: menu.y }}>
           <button
@@ -291,11 +380,16 @@ interface ClipProps {
   onSelect: () => void
   onMenu: (e: React.MouseEvent) => void // right-click: "Show on canvas"
   onProject: (p: EditProject) => void
+  look: TakeLook | undefined // the take's filmstrip and waveform, once fetched
+  thumbSrc: (takeId: string, n: number, version: string) => string
+  marks: Mark[]
+  openMark: string | null // the key of the marker whose popover is open
+  onMark: (mark: Mark, e: React.MouseEvent) => void
 }
 
-// A clip on the video lane: drag to reorder, drag an edge to trim. The bar keeps a row free under its name for the
-// filmstrip and waveform (stage B).
-function ClipBar({ clip, left, width, start, name, selected, state, disabled, pxPerSec, sourceDuration, project, snapTo, onSelect, onMenu, onProject }: ClipProps) {
+// A clip on the video lane: drag to reorder, drag an edge to trim. Under its name a filmstrip and a waveform of the part of
+// the take it shows; AI clean-up suggestions lie over it as hatched marks that open a Keep / Remove popover.
+function ClipBar({ clip, left, width, start, name, selected, state, disabled, pxPerSec, sourceDuration, project, snapTo, onSelect, onMenu, onProject, look, thumbSrc, marks, openMark, onMark }: ClipProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: clip.id, disabled })
   // Trimming works from the project as it was when the edge was grabbed, so the drag is one smooth gesture.
   const grab = useRef<{ edge: 'in' | 'out'; x: number; start: EditProject; value: number } | null>(null)
@@ -324,6 +418,15 @@ function ClipBar({ clip, left, width, start, name, selected, state, disabled, px
     },
   })
 
+  // Drawn from the take's analysis; recomputed only when the trim, the zoom or the volume changes, not on every frame.
+  const peaks = look?.peaks ?? null
+  const cols = useMemo(() => (peaks ? peaksSpan(peaks, clip.in, clip.out, columnsFor(width)) : null), [peaks, clip.in, clip.out, width])
+  const wave = useMemo(() => (cols ? waveformPath(cols, clip.muted ? 0 : clip.volume) : ''), [cols, clip.muted, clip.volume])
+  const film = look?.filmstrip ?? null
+  const aspect = look?.width && look.height ? look.width / look.height : 9 / 16
+  const tiles = useMemo(() => (film ? filmTiles(film.times, clip.in, clip.out, width, Math.max(18, FILM_ROW_PX * aspect)) : []), [film, clip.in, clip.out, width, aspect])
+  const takeId = clip.source.id
+
   return (
     <div
       ref={setNodeRef}
@@ -332,8 +435,9 @@ function ClipBar({ clip, left, width, start, name, selected, state, disabled, px
       data-state={state === 'ok' ? undefined : state}
       data-dragging={isDragging ? '' : undefined}
       style={{ left, width, transform: transform ? `translate3d(${transform.x}px, 0, 0)` : undefined }}
-      onPointerDownCapture={onSelect}
+      onPointerDownCapture={(e) => { if (!(e.target as Element).closest('.cv-ed-mark')) onSelect() }}
       onContextMenu={onMenu}
+      data-media={look ? '' : undefined}
       {...attributes}
       {...listeners}
       role="button"
@@ -347,7 +451,32 @@ function ClipBar({ clip, left, width, start, name, selected, state, disabled, px
         <span className="cv-ed-clip-len">{t('editor.clip.seconds', { sec: fmt(clipLength(clip)) })}</span>
         {clip.muted && <Icon name="volumeOff" size={12} />}
       </span>
-      <span className="cv-ed-bar-media" aria-hidden="true" />
+      <span className="cv-ed-bar-media" aria-hidden="true">
+        {tiles.length > 0 && look && (
+          <span className="cv-ed-film">
+            {tiles.map((x) => <img key={x.left} src={thumbSrc(takeId, x.n, look.version)} alt="" draggable={false} style={{ left: x.left, width: x.width }} />)}
+          </span>
+        )}
+        {wave && (
+          <svg className="cv-ed-wave" viewBox={`0 0 ${cols?.length ?? 1} 100`} preserveAspectRatio="none" data-muted={clip.muted ? '' : undefined}>
+            <path d={wave} />
+          </svg>
+        )}
+      </span>
+      {marks.map((m) => (
+        <button
+          key={m.key}
+          type="button"
+          className="cv-ed-mark"
+          data-type={m.item.type}
+          data-open={openMark === m.key ? '' : undefined}
+          style={{ left: (m.from - start) * pxPerSec, width: Math.max((m.to - m.from) * pxPerSec, 3) }}
+          aria-label={`${t('editor.mark.open')}: ${itemLabel(m.item)}`}
+          title={itemLabel(m.item)}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onMark(m, e) }}
+        />
+      ))}
       <span className="cv-ed-edge cv-ed-edge-out" role="separator" aria-label={t('editor.clip.trimOut')} {...edge('out')} />
     </div>
   )
@@ -364,6 +493,7 @@ interface BarProps {
   targets: () => number[]
   threshold: number
   duck: [number, number][] | null
+  wave: { d: string; cols: number } | null // the music's waveform, spread over the bar
   onSelect: () => void
   onProject: (p: EditProject) => void
 }
@@ -371,7 +501,7 @@ interface BarProps {
 const MOVE_PX = 3 // a press that moves less than this is a click
 
 // A bar on the text, captions, voiceover or music lane. Movable bars follow the pointer; trimmable ones have edges.
-function LaneBar({ lane, bar, pxPerSec, selected, disabled, project, title, targets, threshold, duck, onSelect, onProject }: BarProps) {
+function LaneBar({ lane, bar, pxPerSec, selected, disabled, project, title, targets, threshold, duck, wave, onSelect, onProject }: BarProps) {
   // The drag works from the bar and project as they were when it was grabbed, so the gesture never adds up on itself.
   const grab = useRef<{ mode: 'move' | 'in' | 'out'; x: number; start: EditProject; from: number; to: number; moved: boolean; targets: number[] } | null>(null)
   const begin = (mode: 'move' | 'in' | 'out') => (e: React.PointerEvent) => {
@@ -424,6 +554,11 @@ function LaneBar({ lane, bar, pxPerSec, selected, disabled, project, title, targ
       onKeyDown={(e) => (e.key === 'Enter' ? onSelect() : undefined)}
     >
       {bar.trimmable && !disabled && <span className="cv-ed-edge cv-ed-edge-in" role="separator" aria-label={t('editor.clip.trimIn')} onPointerDown={begin('in')} />}
+      {wave && (
+        <svg className="cv-ed-wave cv-ed-wave-music" viewBox={`0 0 ${wave.cols} 100`} preserveAspectRatio="none" aria-hidden="true">
+          <path d={wave.d} />
+        </svg>
+      )}
       {duck?.map(([a, b], i) => (
         <span key={i} className="cv-ed-duck" style={{ left: (a - bar.start) * pxPerSec, width: Math.max((b - a) * pxPerSec, 1) }} aria-hidden="true" />
       ))}

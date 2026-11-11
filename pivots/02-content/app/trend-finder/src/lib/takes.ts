@@ -22,6 +22,7 @@ export interface Take {
 export interface TakeAnalysis {
   status: 'queued' | 'running' | 'done' | 'failed'
   error: string | null
+  updatedAt?: number | null // changes with every run, so what was fetched for the take can be told apart from newer results
   summary?: { duration: number | null; words: number; speech: string | null; silences: number; cuts: number }
 }
 

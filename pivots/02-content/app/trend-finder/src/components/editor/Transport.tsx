@@ -29,6 +29,9 @@ interface Props {
   onZoom: (px: number) => void
   onSplit: () => void
   onDelete: () => void
+  marks: boolean // AI markers shown on the timeline
+  markCount: number // how many AI suggestions are on the timeline
+  onMarks: () => void
 }
 
 export function IconButton({ icon, label, pressed, disabled, onClick, className }: { icon: IconName; label: string; pressed?: boolean; disabled?: boolean; onClick: () => void; className?: string }) {
@@ -77,6 +80,10 @@ export function Transport(p: Props) {
         </span>
       </div>
       <div className="cv-ed-tp-group cv-ed-tp-end">
+        <button type="button" className="cv-ed-ib cv-ed-ib-text cv-ed-tp-marks" aria-pressed={p.marks} aria-label={`${t('editor.tp.marks')} (${t('editor.tp.marksCount', { n: p.markCount })})`} title={`${t('editor.tp.marks')}: ${t('editor.tp.marksCount', { n: p.markCount })}`} onClick={p.onMarks}>
+          <Icon name="sparkles" />
+          {p.markCount > 0 && <span className="cv-ed-badge" aria-hidden="true">{p.markCount}</span>}
+        </button>
         <IconButton icon="magnet" label={t('editor.tp.snap')} pressed={p.snap} onClick={p.onSnap} />
         <IconButton icon="safe" label={t('editor.tp.safe')} pressed={p.safe} onClick={p.onSafe} />
         <IconButton icon="fullscreen" label={t('editor.tp.fullscreen')} onClick={p.onFullscreen} />

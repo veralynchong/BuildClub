@@ -14,7 +14,7 @@ import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { useTakeAnalysis } from '../../lib/editor/useTakeAnalysis'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, clipLength, clipStatus, FPS, moveClip, newClipId, reelDurationInFrames, sourceKey, sourcesWithShots, splitAt, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import { addVoice, clipLength, clipStarts, clipStatus, FPS, moveClip, newClipId, reelDurationInFrames, sourceKey, sourcesWithShots, splitAt, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { EditProject, ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
@@ -36,7 +36,10 @@ import { captionMode, projectPages } from '../../lib/editor/captions'
 import { MAX_PX, MIN_PX, fitZoom, followScroll, laneBars, previewOf, removeBar, type LaneId } from '../../lib/editor/lanes'
 import { emptyHistory, lastAi, record, redo as redoStep, undo as undoStep, type History } from '../../lib/editor/history'
 import { useDuckRanges } from '../../lib/editor/useDuckRanges'
-import type { FirstCutEntry } from '../../lib/editor/aiApi'
+import { getKeeps, thumbUrl, type FirstCutEntry } from '../../lib/editor/aiApi'
+import { firstCutLine, itemLabel, nextClipId, PAD_DEFAULT, replaceWithRanges, takeName } from '../../lib/editor/aiEdit'
+import { clipMarks, groupPins, type Mark } from '../../lib/editor/marks'
+import { useMusicPeaks, useTimelineMedia } from '../../lib/editor/useTimelineMedia'
 import { VoiceTool } from './tools/VoiceTool'
 import { MusicTool, type MusicFile } from './tools/MusicTool'
 import { BrandTool } from './tools/BrandTool'
@@ -126,6 +129,8 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     return next
   }
   const tlScroll = useRef<HTMLDivElement>(null)
+  const [showMarks, setShowMarks] = useState(true) // AI markers on the video lane
+  const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set()) // markers dismissed with Keep (this session only)
 
   // Undo and redo: every change to the project is recorded, whichever tool made it. An AI change carries its name, so
   // the AI tab can offer "Undo last AI change" while it is still the last step.
@@ -282,6 +287,9 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const brand = useMemo(() => reelBrand(kit, clientId), [kit, clientId])
   const musicUrl = musicFile ? `${apiBase(ideaId)}/cut/music/file?v=${encodeURIComponent(`${musicFile.name}-${musicFile.size}`)}` : null
   const takesKey = allTakes.map((x) => `${x.id}:${x.analysis?.status ?? ''}`).join(',')
+  // Filmstrips, waveforms and clean-up suggestions of the takes on the timeline, fetched once per take and analysis run.
+  const tl = useTimelineMedia(planId, allTakes, (project?.clips ?? []).flatMap((c) => (c.source.kind === 'take' ? [c.source.id] : [])))
+  const musicPeaks = useMusicPeaks(musicUrl)
   const duck = useDuckRanges(planId, project, !!musicUrl && project?.music != null && project.music.duck !== false, takesKey)
   const inputProps = useMemo<ReelInput | null>(
     () => (project ? { ...reelInput({ project: previewOf(project, hidden, mutedLanes), urls, shots: filled, musicUrl, voice: voiceInput, brand, duck }), hideVideo: hidden.has('video') } : null),
@@ -470,6 +478,33 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     const el = tlScroll.current
     if (el) setPx(fitZoom(total, el.clientWidth - HEAD_PX - 24, MIN_PX, MAX_PX))
   }
+  // AI clean-up markers: each take's suggestions, cut down to what each clip shows.
+  const clipStartsAt = clipStarts(project)
+  const allMarks: Record<string, Mark[]> = Object.fromEntries(project.clips.map((c, i) => [c.id, c.source.kind === 'take' ? clipMarks(c, clipStartsAt[i], tl.items[c.source.id] ?? [], kept) : []]))
+  const markCount = Object.values(allMarks).reduce((n, list) => n + list.length, 0)
+  const pins = firstCut ? groupPins(firstCut.log.map((e) => ({ at: e.at, kind: e.kind, text: firstCutLine(e, takeName(allTakes, e.takeId, e.name)) }))) : []
+  // Remove one marker: the same cut the AI tab makes (keeps from the server, the clip split around them), as one undo step.
+  const removeMark = async (clipId: string, mark: Mark): Promise<string | null> => {
+    const clip = current()?.clips.find((c) => c.id === clipId)
+    if (!planId || !clip || locked) return t('editor.ai.err')
+    try {
+      const ask = (pad: number) => getKeeps(planId, clip.in, clip.out, [[mark.item.start, mark.item.end]], pad)
+      const same = (k: number[][]) => k.length === 1 && Math.abs(k[0][0] - clip.in) < 1e-3 && Math.abs(k[0][1] - clip.out) < 1e-3
+      // A short filler can be closed up by the usual air around a cut; then it is cut with one frame of air instead.
+      let keeps = await ask(PAD_DEFAULT)
+      if (same(keeps)) keeps = await ask(1)
+      const base = current()
+      const now = base?.clips.find((c) => c.id === clipId)
+      if (!base || !now || now.in !== clip.in || now.out !== clip.out) return t('editor.ai.err')
+      if (same(keeps)) return t('editor.mark.tooShort')
+      const next = replaceWithRanges(base, clipId, keeps, nextClipId)
+      if (next === base) return t('editor.mark.cant')
+      applyAi(next, t('editor.mark.removed', { label: itemLabel(mark.item), name: nameOf(clip) }))
+      return current() === next ? null : t('editor.ai.err')
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e)
+    }
+  }
   const canUndo = hist.current.past.length > 0
   const canRedo = hist.current.future.length > 0
 
@@ -648,6 +683,9 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
         onZoom={setPx}
         onSplit={split}
         onDelete={removeSelected}
+        marks={showMarks}
+        markCount={markCount}
+        onMarks={() => setShowMarks((v) => !v)}
       />
       <div className="cv-ed-bottom">
         {project.clips.length === 0 && (
@@ -690,6 +728,13 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
           onMute={(lane) => setMutedLanes((m) => flip(m, lane))}
           duck={project.music && project.music.duck !== false && duck.length ? duck : null}
           scrollRef={tlScroll}
+          looks={tl.looks}
+          thumbSrc={(takeId, n, version) => (planId ? thumbUrl(planId, takeId, n, version) : '')}
+          marks={showMarks ? allMarks : {}}
+          pins={showMarks ? pins : []}
+          onKeepMark={(m) => setKept((cur) => new Set(cur).add(m.key))}
+          onRemoveMark={removeMark}
+          musicPeaks={musicPeaks}
         />
         <p className="cv-ed-hint">{t('editor.keys2')}</p>
       </div>

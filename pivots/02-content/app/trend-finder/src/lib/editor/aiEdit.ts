@@ -3,7 +3,8 @@
 import { t, tp } from '../i18n.ts'
 import type { Clip, ClipSource, EditProject, SpeechCaption } from './types.ts'
 import { applyNewer, clipLength, clipStarts, FPS, MAX_TOTAL, MIN_CLIP, totalLength } from './timeline.ts'
-import type { FirstCut, FirstCutEntry, RankedTake } from './aiApi.ts'
+import type { CleanupItem, FirstCut, FirstCutEntry, RankedTake } from './aiApi.ts'
+import type { Take } from '../takes.ts'
 
 export const MAX_CLIPS = 100 // backend/editing.py MAX_CLIPS
 export const PAD_DEFAULT = 4
@@ -148,4 +149,22 @@ export function applyRewrites(p: EditProject, picks: { id: string; after: string
     return { ...e, text: after }
   })
   return changed ? { ...p, captions: { ...p.captions, speech: next } } : p
+}
+
+// A clean-up suggestion in the current language: "Silence 0.8s", "Filler word “um”", "Retake: “…”".
+export function itemLabel(it: CleanupItem): string {
+  const sec = round1(it.end - it.start)
+  if (it.type === 'silence') return t(it.where === 'start' ? 'editor.ai.clean.silence.start' : it.where === 'end' ? 'editor.ai.clean.silence.end' : 'editor.ai.clean.silence', { sec })
+  const text = (it.text ?? '').length > 40 ? `${(it.text ?? '').slice(0, 40)}…` : (it.text ?? '')
+  return t(it.type === 'filler' ? 'editor.ai.clean.filler' : 'editor.ai.clean.retake', { text })
+}
+
+// Why a clean-up suggestion is offered, in the current language.
+export const reasonOf = (it: CleanupItem): string => t(it.type === 'silence' ? 'editor.ai.clean.silenceWhy' : it.type === 'filler' ? 'editor.ai.clean.fillerWhy' : 'editor.ai.clean.retakeWhy')
+
+// "Take 2": the take's place among the takes of its shot, the way the shot list numbers them.
+export function takeName(takes: Take[], takeId: string | undefined, fallback: string | undefined): string {
+  const x = takes.find((v) => v.id === takeId)
+  const k = x ? takes.filter((v) => v.shotId === x.shotId).sort((a, b) => a.createdAt - b.createdAt).findIndex((v) => v.id === x.id) + 1 : 0
+  return k > 0 ? t('editor.cut.take', { k }) : (fallback ?? '')
 }
