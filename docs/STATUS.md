@@ -1,5 +1,54 @@
 # STATUS
 
+## 2026-11-05：接手後正式案例素材與流程契約查核
+
+本階段僅完成免費唯讀查核，不代表週四正式影片或最終整合驗收完成。Git pull 顯示 Already up to date；HEAD／origin 交付分支仍為8ee2459，遠端main仍為e442b3a，交付head尚非main祖先。原有三份文件修改及bin/__pycache__/保留，未commit／push／PR／merge。
+
+- 本工作區影音只有public/media/remake-tour.mp4及zero-spend工程成品；未找到正式案例有權真人原片／B-roll／配樂。pinned有tofu歷史搜尋資料及封面，但沒有找到原片再利用授權；sampleResearch及sample明示虛構，不能與快取拼稱真同案例拆解。
+- 原片frame→可見storyboard有契約缺口：backend/analyze.py:114–128擷取frame，src/lib/live.ts:328–339的applyBreakdown不帶原片frame對應；backend/storyboard.py:298–317另生成frameImage，無模型時為fake placeholder。正式展示須區分原片參考與改編畫面。
+- shotId→takes→Editor已有文字／素材對應契約（canvas/graph.ts:119–129、takes.py:48–94、editing.py:247–266／629–665），尚非本輪真UI驗收。editing.py:362–375字幕讀plan.line，不能直接宣稱語音逐字轉錄。新真拆解／腳本／圖片需預算，US$0下只能重用既有完成資料或明示手動編輯／有權素材。
+- Playwright browser_tabs實際可呼叫，只列出about:blank，未操作既有瀏覽器／服務。現有isolated-backend及freeform-e2e包含後端副本，前者還會重建／刪除資料，本輪未執行。server.py:68–75路徑綁程式目錄；原地程式＋自有持久DB/media的受限HTTP啟動器尚需實作及驗證，不改寫曾被阻擋的副本操作。
+- 下一步：Tommy提供正式參考URL／原片與有權素材路徑、shot順序及既有拆解／截圖；其後以同案例補真UI＋持久HTTP重啟和正式MP4。本輪沒有產品變更，依使用者指示不重跑已GREEN的full套件；僅核對來源、契約及文件diff，正式影片／HTTP／品質／彩排仍未驗。
+
+## 2026-11-05：今日完成事項與未完成清單
+
+結論：今天的工程整合、測試與 GitHub 分支交付已完成；週六 demo 的正式同案例全流程尚未完成。以下區分「程式完成」「有限範圍已驗」與「正式驗收未做」，不把 mock 通過說成真服務完成。
+
+### 今天完成了什麼
+
+| 項目 | 完成內容與證據 | 範圍限制 |
+| --- | --- | --- |
+| Demo 目標與三天安排 | 已統一為找熱門影片→shot list／storyboard→Canvas改編→AI或真人素材→剪輯匯出MP4；計畫已保存 | Instagram／TikTok手動發布貼連結，成效可明示示範數據；不是核心阻斷項 |
+| Canvas 功能收尾 | 模型能力、比例／解析度／張數、參考圖、批次總報價／原子預留、結果恢復、歷史選圖、節點尺寸與選單修正 | 生成驗收使用mock；真provider品質／速度／帳單未驗 |
+| UI bug 與主題 | Editor深色可讀性、搜尋失敗提示、Canvas列表白底及深淺色對應 | Canvas原工作樹有1440 UI證據，不能當作最終整合branch已重跑全UI |
+| 非Canvas主線修正 | Research選取sample計畫可保存／恢復，逐計畫savedInLive避免跨客戶混入；保留TikTok大小寫 | P1 #1有前端＋fake API reload證據，完整真後端UI仍待驗 |
+| 零支出測試 | 新增32項付費入口回歸，七項預算0、provider／network spy0、wallet無扣額 | 這是測試證據，不是已核對所有外部服務／帳戶帳單；付費批准仍US$0 |
+| 真MP4工程鏈 | 既有repo導覽素材→takes上傳／選片→edit保存→真Remotion匯出→下載／完整播放；新Python程序重開DB/media後hash一致 | 成品9.024秒、H264/AAC、1080×1920、30fps；是工程片，不是正式案例／真人Clean up驗收 |
+| 統一整合與覆核 | Canvas與demo成果整合至新工作區；27檔demo增量獨立唯讀ACCEPT、整合者接受 | 前置Canvas使用既有review與凍結hash；未將此次覆核冒稱全歷史重新審查 |
+| GitHub交付 | 新分支feat/demo-team-handoff已push至veralynchong/BuildClub；02c5f99、8ee2459，遠端head已核對一致 | 未開PR、未merge、未直接推main；隊友負責合併 |
+
+最後產品驗證（2026-11-05，8ee2459的產品來源）：`bash bin/verify.sh full` GREEN，1109 passed／2 skipped，frontend PASS；`bash bin/verify-zero-spend.sh` 32 passed；離線sandbox build／lint exit0。此後只修改紀錄，未重跑未改動的產品套件。原始測試紀錄與相對main的157檔完整清單在 `docs/test-log.md`。
+
+### 還有哪些沒做
+
+1. **正式案例素材**：尚未取得同案例、有使用權的真人英文原片／B-roll，或既有真AI素材、拆解與原片參考畫面。現有tofu快取搜尋和產品導覽工程片不能拼稱同一正式案例。
+2. **同案例端到端**：最終版本尚未完整實測找熱門影片→真實可用的拆解／shot list／storyboard→Canvas改編→素材接入→剪輯→正式MP4。快取hit／miss已驗，不能說即時找片／真AI分析已驗。
+3. **最終整合版UI與保存**：尚未重跑整合版的真前端＋真後端流程、HTTP服務重啟後內容及素材保留；既有Canvas原版本證據和in-process新程序重開證據仍保留，但兩者不能替代這項。
+4. **正式成品品質**：真人Clean up是否誤剪、語音字幕逐句對齊、配音／音樂音量、裁切與logo尚未按正式案例看完／聽完；實際HEVC／HDR需有原檔才測。工程片有橫片置中裁切限制。
+5. **真provider**：真圖片／影片／配音的品質、等待、費用，以及provider端帳單硬限制未驗。批准額US$0，不為補此項自行花費；可先用有權既有素材完成主線。
+6. **已知未解UI／流程問題**：Research展開後1473px／1440px橫向溢出仍可重現；送審狀態／重複入口等舊表項目需在最新版本重驗，不能全標已修。Magnific比較建議未列入本次新改版，連續錄影受工具能力限制。
+7. **測試策略剩餘項**：demo舊分支在七項預算0下整套verify的92個失敗未逐一分類；本整合版無網路sandbox全套GREEN與32項零預算回歸是兩種測試條件，不隱去歷史RED，也不等同真帳戶限制已驗。
+8. **合併與展示準備**：隊友尚需合併到main，合併後需在實際版本跑full／zero-spend；正式成品、實際展示電腦兩次完整彩排、正式流程錄屏與離線備援尚未驗收。現有短UI錄影／工程MP4不算正式demo錄屏。
+
+### 接下來依序做
+
+1. 隊友檢查並自行合併已推送分支；以實際合併後commit為下一輪驗收基準，不自行merge。
+2. Tommy提供固定案例與可使用素材路徑。素材未齊時可先核對同案例拆解／storyboard契約與待測步驟，不重做Canvas或新增付費呼叫。
+3. 在自己的持久、隔離、無憑證且零預算環境補真前後端主線與重啟測試；遇安全hook阻擋不繞過。
+4. 產出正式MP4，逐段檢查畫面、字幕、剪接與聲音，再完成實機兩次彩排及離線備援。
+
+本次日結紀錄只更新本機文件，尚未另外commit／push；GitHub產品交付仍為8ee2459。原工作區的dirty凍結來源、預覽及素材完整保留。
+
 ## 2026-11-05：交付隊友的統一分支（本輪最新）
 
 - 分支 `feat/demo-team-handoff`，目標 remote 為 `origin`（veralynchong/BuildClub）；使用者已明確授權 commit／push，main 合併由隊友執行。此處紀錄準備交付的本機快照，push 結果以 Git remote 核對為準。
