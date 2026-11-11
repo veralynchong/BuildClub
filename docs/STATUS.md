@@ -1,5 +1,32 @@
 # STATUS
 
+## 2026-11-12：剪輯器 AI 自動剪輯 Phase 0–4（draft PR #56）
+
+- 一行狀態：剪輯器的 AI 自動剪輯 Phase 0–4 都做完了，驗證全綠，已 push 到 `feat/editor-real-footage`，draft PR veralynchong/BuildClub#56 尚未合併。計畫在 `docs/ai-edit-plan.md`，研究報告在 `research/reports/AI 短影音自動剪輯調查.md`（Artifact https://claude.ai/artifact/G3B2ojehfKsu9o57rLD1aH）。
+- 範圍：只改剪輯器和它需要的後端。Canvas、規劃板、Plan 頁版面、AI 生成都沒動（使用者 2026-11-11 指示）。
+- Commits：
+  - 83596a6：Phase 0，在剪輯器裡上傳素材、HEVC/HDR 轉檔、Fit/Fill
+  - f76f2af：Phase 1，背景分析素材（whisper 逐字、silencedetect、scdet、loudnorm、縮圖）
+  - 912a45a：Phase 2，AI 建議（清剪、腳本對位、take 排名、從原聲產生字幕）
+  - ccd29bd：Phase 3，一鍵初剪（附剪輯理由）、音樂避讓、-14 LUFS、平台預設、安全區、EDL/OTIO
+  - 2999915：Phase 4，hook 評估、字幕改寫、貼文文案、把客戶留言轉成任務；用 Claude 便宜模型，沒有 key 時退回規則版
+- 最後驗證：2026-11-12，`bash bin/verify.sh full` GREEN（1220 passed、3 skipped，前端 unit 通過）；tsc、lint、build 都通過。每個 Phase 都在隔離的零花費後端 :8797 用 1440 寬瀏覽器走過一遍，截圖在 session scratchpad 的 phase0–4。
+- 已知問題：
+  - Canvas 自己存一份 takes 清單，所以從剪輯器上傳的素材，Canvas 要重新整理才看得到。
+  - AI 復原只有一層，按下去也會退掉之後的手動修改。
+  - 從原聲產生的字幕，時間是按字數比例分配的，不是每個字真正的發音時間。
+  - 安全區的百分比是估計值。
+  - EDL 只有剪輯點。
+  - 客戶留言是掛在 plan 的參考影片上，不是掛在成片上。
+  - 規則版的任務類型一律是 "other"。
+  - 所有語音測試都用 macOS `say` 合成，還沒用真人素材測過。
+  - Phase 4 從沒真的呼叫過 Claude：這台機器的 shell 沒有 ANTHROPIC_API_KEY，花費 US$0。
+- 下一步：
+  1. 和 Veralyn 一起看 PR #56 再決定要不要合併。
+  2. 用真人拍的素材（最好有澳洲口音）測字幕和清剪。
+  3. 有 key 時跑一次真的冒煙測試：`cd pivots/02-content/app/trend-finder && RUN_LIVE_LLM=1 backend/.venv/bin/python -m pytest backend/tests/test_editor_ai_live.py -s`（4 次 Haiku 呼叫，估計低於 US$0.01）。
+  4. 上線前確認 Remotion 授權：團隊超過 3 人就要買 Automators，每月 US$100 起。
+
 ## 2026-11-05：交付隊友的統一分支（本輪最新）
 
 - 分支 `feat/demo-team-handoff`，目標 remote 為 `origin`（veralynchong/BuildClub）；使用者已明確授權 commit／push，main 合併由隊友執行。此處紀錄準備交付的本機快照，push 結果以 Git remote 核對為準。
