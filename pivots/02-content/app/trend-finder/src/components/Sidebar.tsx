@@ -206,14 +206,12 @@ export function Sidebar(p: Props) {
               {/* Plans = the board of saved ideas + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
               <div className="side-sep" />
-              {item('channel', 'channel', t('shell.side.channel'))}
               {item('settings', 'brief', t('shell.side.brief'))}
             </>
           ) : (
             <>
               {/* All clients Home (the view is still called 'overview' inside the app) */}
               {item('overview', 'home', t('shell.side.home'))}
-              {item('channel', 'channel', t('shell.side.channel'))}
               <p className="side-hint">{t('shell.side.pickClient')}</p>
             </>
           )}
