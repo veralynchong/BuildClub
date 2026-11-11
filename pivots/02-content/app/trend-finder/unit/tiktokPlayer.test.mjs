@@ -55,3 +55,22 @@ test('only one preview is active; a failed one frees its slot and is remembered'
   assert.ok(n >= 3)
   off()
 })
+
+
+test('cached and live TikTok covers can arm the explicitly enabled remote hover player', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { default: ts } = await import('typescript')
+  const file = ts.createSourceFile('Thumb.tsx', readFileSync(new URL('../src/components/Thumb.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  function find(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(file) === 'id' && node.initializer?.getText(file).includes('preview &&')) return node.initializer
+    return ts.forEachChild(node, find)
+  }
+  const expression = find(file)
+  assert.ok(expression)
+  const idFor = new Function('preview', 'video', 'tiktokVideoId', `return (${expression.getText(file)})`)
+  const video = { live: true, platform: 'tiktok', url: 'https://www.tiktok.com/@a/video/7123456789012345678', thumbnail: '/demo-assets/search-results/tiktok-7123456789012345678.jpg' }
+  assert.equal(idFor(true, video, t.tiktokVideoId), '7123456789012345678')
+  assert.equal(idFor(true, { ...video, thumbnail: '/api/thumb/normal.jpg' }, t.tiktokVideoId), '7123456789012345678')
+  assert.equal(idFor(true, { ...video, thumbnail: undefined }, t.tiktokVideoId), '7123456789012345678')
+  assert.equal(idFor(false, { ...video, thumbnail: '/api/thumb/normal.jpg' }, t.tiktokVideoId), undefined)
+})

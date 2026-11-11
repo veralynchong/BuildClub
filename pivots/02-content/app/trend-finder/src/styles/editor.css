@@ -82,7 +82,7 @@
 .cv-ed-side > * { flex-shrink: 0; }
 .cv-ed-side { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--space-base); overflow: auto; padding-left: var(--space-sm); border-left: 1px solid var(--line); }
 .cv-ed-bottom { flex: 0 0 auto; display: flex; flex-direction: column; gap: var(--space-sm); max-height: 260px; overflow: auto; }
-.cv-ed-export-pop .cv-ed-export-video { max-width: 110px; }
+.cv-ed-export-pop .cv-ed-export-video { max-width: 240px; max-height: 45vh; object-fit: contain; } /* demo-day 7 Nov: the exported video big enough to watch */
 
 /* left column: the shots and their footage */
 .cv-ed-shots { display: flex; flex-direction: column; gap: var(--space-sm); }

@@ -41,6 +41,7 @@ Refund = Callable[[str, float], None]
 
 class ScriptRequest(BaseModel):
     force: bool = False  # also rewrite shots the user edited
+    expectedBasis: Optional[str] = None  # refuse an unsaved/stale client draft before generating
 
 
 class FrameRequest(BaseModel):
@@ -250,6 +251,14 @@ def make_router(load, media_dir: Callable[[], Path], budget: Budget,
         shots = shots_of(idea)
         if not shots:
             return error(409, "This plan has no shots to write for.")
+        if body and body.expectedBasis is not None:
+            try:
+                expected = json.loads(body.expectedBasis)
+            except ValueError:
+                return error(400, "Invalid script draft.")
+            current = [[re.sub(r"\s+", " ", value or "").strip() for value in (s.shot, s.line, s.text)] for s in shots]
+            if expected != current:
+                return error(409, "The shots changed. Wait for them to save, then write the script again.")
         targets = [n for n, s in enumerate(shots) if force or not s.edited]
         source, result = write(idea, shots, targets, SCRIPT_USD) if targets else ("demo", {})
         if source is None:

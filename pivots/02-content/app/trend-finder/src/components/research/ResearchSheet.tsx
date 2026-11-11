@@ -18,6 +18,7 @@ import type { ResearchScreenProps, RowPick } from './ResearchScreen'
 
 // What the pick control needs, worked out once in ResearchScreen (the same rules as the Cards view's button).
 export interface PickInfo {
+  referenceOnly?: boolean
   status: ResearchStatus
   isPicked: boolean
   // The plan is past Still planning: it changes on Plans.
@@ -119,7 +120,7 @@ export function ResearchSheet(p: Props) {
           {t(pk.isPicked ? 'research.sheet.picked' : 'research.sheet.pickThis')}
         </button>
         <span className="rs-s-badges">{kit.statusBadge(e, rowRole(e, g))}</span>
-        {pk.locked && <span className="rs-locked small muted">{t('research.sheet.lockedNote')}</span>}
+        {pk.locked && <span className="rs-locked small muted">{t(pk.referenceOnly ? 'research.referenceOnly' : 'research.sheet.lockedNote')}</span>}
       </>
     )
   }

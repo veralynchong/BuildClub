@@ -642,7 +642,7 @@ def render_project(db, media_dir: Path, idea_id: str, work: Path, out: Path, ste
             os.symlink(path, linked / name)
     job = work / "job.json"
     job.write_text(json.dumps({"input": reel, "mediaDir": str(linked), "out": str(out),
-                               "cacheDir": str(APP_DIR / ".remotion-bundle")}))
+                               "cacheDir": os.environ.get("REMOTION_CACHE_DIR", str(APP_DIR / ".remotion-bundle"))}))
     spawn_render([NODE, str(APP_DIR / "render" / "render-reel.mjs"), str(job)],
                  lambda p: step(0.05 + 0.9 * p, "Exporting"), RENDER_TIMEOUT_S, work.parent / "render.pid")
     if loudnorm_on(project):

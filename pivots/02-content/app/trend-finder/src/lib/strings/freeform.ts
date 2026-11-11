@@ -1,6 +1,15 @@
 import { getActiveLang } from '../i18n.ts'
 
 const words = {
+  arrangeShots: ['Arrange shots', '排列鏡頭'], versions: ['Other versions', '其他版本'], versionLabel: ['Version', '版本'],
+  demoPrompt: ['Demo prompt', '示範 Prompt'],
+  promptUsed: ['Prompt used for this version', '此版本使用的 Prompt'],
+  nextPrompt: ['Prompt for the next version', '下一個版本的 Prompt'],
+  promptChanged: ['Changed framing', '修改構圖描述'],
+  samplePrompt1: ['Sample prompt 1', '範例描述 1'],
+  samplePrompt2: ['Sample prompt 2', '範例描述 2'],
+  preparedFraming: ['Prepared framing variants from one existing AI clip · no live generation.', '同一段既有 AI 影片的預備構圖版本，無即時生成。'],
+  preparedReplay: ['Prepared material replay', '預備素材回放'],
   estimate: ['Estimate', '預估'],
   ratio: ['Ratio', '比例'], size: ['Size', '尺寸'], count: ['Count', '張數'], modelDefault: ['Model default', '模型預設'],
   refsUnsupported: ['This model cannot use the connected references. Remove their connections first.', '此模型不支援已連接的參考圖片，請先移除連線。'], tooManyRefs: ['Connected references exceed this model’s limit', '已連接的參考圖片超過模型上限'], startUnsupported: ['This model cannot use the connected start frame.', '此模型不支援已連接的起始畫面。'],
@@ -23,6 +32,7 @@ const words = {
   stale: ['Inputs changed · Run again', '輸入已變更・請重新執行'], ready: ['Ready', '就緒'], uploadHint: ['Image, video or audio', '圖片、影片或音訊'], choose: ['Choose file', '選擇檔案'],
   openEditor: ['Open editor', '開啟剪輯器'], clips: ['clips', '段影片'], voices: ['audio tracks', '條音軌'], composeHint: ['Connect video and audio outputs to compose your cut.', '連接影片與音訊輸出，組合你的作品。'],
   delete: ['Delete', '刪除'], duplicate: ['Duplicate', '複製'], connect: ['Connect to…', '連接至…'], settings: ['Settings', '設定'],
+  useInEdit: ['Use in Edit', '放入剪輯'],
   noSelection: ['Select a node to inspect its settings.', '選取節點以查看設定。'], noHistory: ['No generations yet. Your results will appear here.', '尚無生成紀錄，結果會顯示於此。'], version: ['Use this version', '使用此版本'],
   assistantHint: ['Select a prompt node. Preview a connected image and video plan, then apply it to this canvas.', '選取文字提示節點，預覽連接圖片與影片的計畫，再套用至此畫布。'], preview: ['Preview plan', '預覽計畫'], apply: ['Apply to canvas', '套用至畫布'], demo: ['Demo plan · no AI call', '示範計畫・未呼叫 AI'], source: ['Plan source', '計畫來源'], noAuto: ['Apply creates nodes only. Run each node when you are ready.', '套用僅新增節點。準備好後再逐一執行。'],
   assistantLegacyHint: ['Choose a shot from the approved plan. Preview its image and video settings, then apply them to that shot. The assistant uses the plan’s shot text.', '請選擇已核准計畫中的鏡頭，預覽圖片與影片設定後套用至該鏡頭。助手會使用計畫中的鏡頭文字。'], assistantLegacyApply: ['Apply updates this shot’s settings and adds missing nodes. Run each node when you are ready.', '套用會更新此鏡頭的設定並補上缺少的節點。準備好後再逐一執行。'], assistantShot: ['Plan shot', '計畫鏡頭'], assistantChooseShot: ['Choose a shot…', '選擇鏡頭…'],

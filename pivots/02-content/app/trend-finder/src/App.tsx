@@ -1,3 +1,5 @@
+import { presentPreparedVideo, presentPreparedResearch } from './lib/guided/presentation'
+import { instagramPlayback } from './lib/guided/instagramAssets'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgencySettings, ClientEvent, IdeaStatus, Role, SavedIdea } from './types'
 import { approverNote } from './lib/approverNote'
@@ -13,8 +15,6 @@ import { interpretMedia, matchesKeyword, parseQuery } from './lib/parseQuery'
 import type { Interpretation, MediaSource } from './lib/parseQuery'
 import { LikeThisCard } from './components/LikeThisCard'
 import { ReadingOverlay } from './components/ReadingOverlay'
-import { buildAnswer } from './lib/answer'
-import type { Answer } from './lib/answer'
 import { BreakdownPanel } from './components/BreakdownPanel'
 import { COHORT_PLATFORMS, cohortsByPattern, cohortsByVideo, fillBaseline } from './lib/evidence'
 import { PlanScreen } from './components/PlanScreen'
@@ -30,11 +30,18 @@ import { PreferencesScreen } from './components/PreferencesScreen'
 import { ChannelScreen } from './components/ChannelScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { LandingAltitude } from './components/landing/LandingAltitude'
+import { getGuidedRuntime, startGuidedDemo } from './lib/guided/runtime'
+import { readGuidedState, saveGuidedState, requestedGuidedState, matchesGuidedScreen, referenceSavedInitially } from './lib/guided/tour'
+import type { GuidedState, GuidedFocusRequest } from './lib/guided/contracts'
+import { canvasStepFor } from './lib/guided/canvasTour'
+import { GUIDED_IDS } from './lib/guided/contracts'
+import { DEFAULT_FILTERS } from './lib/resultFilters'
+import { GuidedTour } from './components/demo/GuidedTour'
+import type { CanvasGuideActions, CanvasGuideState } from './components/canvas/CanvasScreen'
 import type { Client, ContentType, Format, Platform, Shot, Video } from './types'
 import {
   analyzeVideo,
   applyBreakdown,
-  askAnswer,
   checkDemo,
   checkLive,
   checkNeeds,
@@ -133,7 +140,40 @@ function restoreTab(workspace: Workspace): View {
 
 const CanvasScreen = lazy(() => import('./components/canvas/CanvasScreen'))
 
+function matchesCanvasFocus(observed: CanvasGuideState, focus: GuidedFocusRequest): boolean {
+  return observed.demoAction === focus.demoAction && focus.nodeIds.every((id) => observed.focusedNodeIds?.includes(id)) &&
+    (focus.edgeIds ?? []).every((id) => observed.focusedEdgeIds?.includes(id)) && observed.focusedDock === (focus.dock ?? null)
+}
+
+
 export default function App() {
+  const [guidedRuntime] = useState(() => getGuidedRuntime())
+  const [guideState, setGuideState] = useState<GuidedState | null>(() => guidedRuntime ? readGuidedState(guidedRuntime.session) : null)
+  const [guideReferenceSaved, setGuideReferenceSaved] = useState(() => !guidedRuntime || referenceSavedInitially(guideState, guidedRuntime.local.getItem('guided-reference-saved.v1')))
+  useEffect(() => {
+    if (guidedRuntime && guideReferenceSaved) guidedRuntime.local.setItem('guided-reference-saved.v1', 'true')
+  }, [guidedRuntime, guideReferenceSaved])
+  const [guideTarget, setGuideTarget] = useState<GuidedState | null>(() => guideState?.active ? guideState : null)
+  const [guideError, setGuideError] = useState('')
+  const [guideResultIds, setGuideResultIds] = useState<readonly string[]>([])
+  const reportGuideResults = useCallback((ids: readonly string[]) => {
+    setGuideResultIds((previous) => previous.length === ids.length && previous.every((id, i) => id === ids[i]) ? previous : ids)
+  }, [])
+  const [guideNavigating, setGuideNavigating] = useState(false)
+  const [guideNavigationDone, setGuideNavigationDone] = useState<GuidedState | null>(null)
+  const [guideCanvas, setGuideCanvas] = useState<CanvasGuideState>({ resourceId: null, editing: false, exportOpen: false, ready: false, busy: false })
+  const guideCanvasActions = useRef<CanvasGuideActions | null>(null)
+  const guideFocusTarget = useRef<GuidedState | null>(null)
+  const registerGuideCanvas = useCallback((actions: CanvasGuideActions) => {
+    guideCanvasActions.current = actions
+    return () => {
+      if (guideCanvasActions.current === actions) {
+        guideCanvasActions.current = null
+        setGuideCanvas((current) => current.resourceId === actions.resourceId ? { ...current, ready: false } : current)
+      }
+    }
+  }, [])
+
   const [signedIn, setSignedIn] = useStored('trend-finder.signed-in', false)
   const [clients, setClients] = useStored<Client[]>('trend-finder.clients.v3', sampleClients)
   const [agency, setAgencyRaw] = useStored<AgencySettings>('remake.agency.v1', defaultAgency)
@@ -160,10 +200,11 @@ export default function App() {
     canvasLeaveGuard.current = guard
     return () => { if (canvasLeaveGuard.current === guard) canvasLeaveGuard.current = null }
   }, [])
-  const withCanvasLeave = useCallback((apply: () => void) => {
+  const withCanvasLeave = useCallback(async (apply: () => void): Promise<boolean> => {
     const guard = viewRef.current === 'canvas' ? canvasLeaveGuard.current : null
-    if (guard) void guard().then((ok) => { if (ok) apply() })
-    else apply()
+    if (guard && !await guard()) return false
+    apply()
+    return true
   }, [])
   const setView = useCallback((next: View) => {
     const apply = () => {
@@ -174,7 +215,7 @@ export default function App() {
     else apply()
   }, [withCanvasLeave])
   const [menuOpen, setMenuOpen] = useState(false)
-  const [query, setQuery] = useState<Query>(defaultQuery)
+  const [query, setQuery] = useState<Query>(() => guidedRuntime ? { ...defaultQuery, keyword: 'Tofu Recipe', platforms: ['instagram', 'tiktok'], days: 3650, maxLength: 0 } : defaultQuery)
   const [sort, setSort] = useState<Sort>('outlier')
   const [formatFilter, setFormatFilter] = useState<string | null>(null)
   const [openVideoId, setOpenVideoId] = useState<string | null>(null)
@@ -182,7 +223,7 @@ export default function App() {
   // Research opens with this row in view (from Find ideas' "Open in Research").
   const [researchFocus, setResearchFocus] = useState<string | null>(null)
   // `move`: the video is already saved; picking a video re-files it (the saved toast's Change).
-  const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void; move?: boolean } | null>(null)
+  const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void; move?: boolean; guided?: boolean } | null>(null)
   const [planIdeaId, setPlanIdeaId] = useState<string | null>(null)
   const [canvasFull, setCanvasFull] = useState(readFullscreen)
   const setFull = (on: boolean) => {
@@ -293,8 +334,6 @@ export default function App() {
   })
   const [liveResults, setLiveResults] = useState<Video[]>([])
   const [liveQuery, setLiveQuery] = useState('')
-  // The written answer to the latest live search; null while it is being written or if that failed.
-  const [liveAnswer, setLiveAnswer] = useState<Answer | null>(null)
   // The one search running in the background, and the client it belongs to.
   const [searching, setSearching] = useState<{ q: string; platforms: Platform[]; step?: string; clientId: string; startedAt: number } | null>(null)
   // What a search that finished while the person was elsewhere leaves behind (shown as a toast).
@@ -562,8 +601,8 @@ export default function App() {
   const updateClient = (patch: Partial<Client>) =>
     setClients((prev) => prev.map((c) => (c.id === client.id ? { ...c, ...patch } : c)))
   const videoById = useMemo(
-    () => new Map([...videos, ...liveStore.videos].map((v) => [v.id, v])),
-    [liveStore.videos],
+    () => new Map([...videos, ...liveStore.videos].map((v) => [v.id, guidedRuntime ? presentPreparedVideo(v) : v])),
+    [liveStore.videos, guidedRuntime],
   )
 
   // Every plan has a Research row, so the sheet always includes what the team is making. withPlanRows returns
@@ -662,7 +701,9 @@ export default function App() {
     setNotice(null)
     setSearching({ q, platforms, clientId: client.id, startedAt: Date.now() })
     try {
+      const started = Date.now()
       const res = await searchAll(q, platforms)
+      if (guidedRuntime) await new Promise((resolve) => window.setTimeout(resolve, Math.max(0, 1800 - (Date.now() - started))))
       // A newer search has started since; its results win.
       if (seq !== searchSeq.current) return
       // Every platform failed: nothing to show, so it is an error.
@@ -699,18 +740,9 @@ export default function App() {
       void typed.then(applyTypes)
       // The results screen takes over only if the person is on this client's search page; otherwise a toast offers them.
       const show = () => {
-        setLiveResults(res.videos)
+        setLiveResults(guidedRuntime ? res.videos.map(presentPreparedVideo) : res.videos)
         setLiveQuery(q)
         void typed.then(applyTypes)
-        // One answer per search, from the videos it found. A failure just means no answer block.
-        setLiveAnswer(null)
-        if (res.videos.length) {
-          askAnswer(text, res.videos)
-            .then((a) => {
-              if (seq === searchSeq.current) setLiveAnswer(a)
-            })
-            .catch(() => {})
-        }
         setInterp({
           ...parsed, text, keywords: [q], topics: like ? [{ formatId: like.formatId, word: 'this video' }] : [],
           audience: null, isQuestion: false, source: like?.source ?? null,
@@ -922,7 +954,6 @@ export default function App() {
     [results, keywordPool, live],
   )
 
-  const answer = useMemo(() => (live ? liveAnswer : buildAnswer(interp, results, trends)), [interp, results, trends, live, liveAnswer])
 
   // Record a search once its results are on screen: the videos it found, to say next time what's new.
   useEffect(() => {
@@ -948,7 +979,7 @@ export default function App() {
 
   const savedForClient = new Set(shownIdeas.filter((i) => i.clientId === client.id).map((i) => i.videoId))
   // This client's Research rows, and the videos they hold.
-  const myResearch = research.filter((e) => e.clientId === client.id)
+  const myResearch = research.filter((e) => e.clientId === client.id && (!guidedRuntime || guideReferenceSaved || e.videoId !== GUIDED_IDS.videoId)).map((row) => guidedRuntime ? presentPreparedResearch(row) : row)
   const inResearch = new Set(myResearch.map((e) => e.videoId))
   // Which of the client's videos (1 to 12) each Research video is filed under, for the Plans cards.
   const videoNoById = new Map<string, number>()
@@ -1062,6 +1093,7 @@ export default function App() {
   // Where a saved video sits in Research: short "Video 3" and full "Video 3 · Street taste test" (or Unsorted).
   // Null when it isn't saved.
   const savedIn = (videoId: string) => {
+    if (guidedRuntime && videoId === GUIDED_IDS.videoId && !guideReferenceSaved) return null
     const row = research.find((e) => e.clientId === client.id && e.videoId === videoId)
     if (!row) return null
     const slot = myVideos.find((s) => s.id === row.slotId)
@@ -1079,6 +1111,17 @@ export default function App() {
       return
     }
     setPendingSave({ videoId, onSaved })
+  }
+
+  const askGuideSave = () => setPendingSave({ videoId: GUIDED_IDS.videoId, guided: true })
+  const saveGuideReference = (slotId: string | null) => {
+    const existing = research.find(row => row.id === GUIDED_IDS.researchId) ?? research.find(row => row.clientId === GUIDED_IDS.clientId && row.videoId === GUIDED_IDS.videoId)
+    if (existing) setResearch(rows => rows.map(row => row.id === existing.id ? { ...row, slotId: slotId ?? undefined } : row))
+    else saveToResearch(GUIDED_IDS.videoId, slotId ?? undefined)
+    setGuideReferenceSaved(true)
+    setSavedNote({ videoId: GUIDED_IDS.videoId })
+    setOpenVideoId(null)
+    if (guideState) setGuideTarget({ ...guideState, stepId: 'research' })
   }
 
   // Takes a row off Research, but never one with a plan (the plan keeps its row).
@@ -1159,7 +1202,7 @@ export default function App() {
     if (planIdeaId) setView('board')
   }
 
-  // Sidebar "Video canvas": one plan's planning board, opened straight from the sidebar or the plan chooser.
+  // Open a plan's legacy planning board from its chooser.
   const openPlanBoard = (ideaId: string) => {
     const idea = ideas.find((i) => i.id === ideaId)
     if (!idea) return
@@ -1410,7 +1453,11 @@ export default function App() {
       return plans.length === 1 ? openPlanBoard(plans[0].id) : setView('boardPick')
     }
     if (v === 'canvas') {
-      // One approved plan opens its canvas straight away; otherwise pick one (or see why there is none).
+      const plans = boardPlans(shownIdeas, client.id)
+      if (plans.length === 1) {
+        if (view === 'canvas' && canvasContext?.resource.kind === 'legacy-plan' && canvasContext.resource.id === plans[0].id) return
+        return withCanvasLeave(() => openPlanCanvas(plans[0].id))
+      }
       return setView('canvasPick')
     }
     if (v === 'search' && lastSearch && shownSearch === `${client.id}|${lastSearch}`) return setView('results')
@@ -1433,8 +1480,151 @@ export default function App() {
   const resolving = useSearchResolve(loadingCard, !searching && !searchError && onSearchPage)
   const cardSearch = loadingCard ?? (resolving && resolving.card.clientId === client.id && onSearchPage ? resolving.card : null)
 
-  if (auth === 'checking') return null
   // Client accounts aren't live yet (see ClientPortal), so a saved client login goes back to the login screen.
+  const guideNavigate = useRef<(target: GuidedState) => Promise<boolean>>(async () => false)
+  guideNavigate.current = async (target) => {
+    const planId = GUIDED_IDS.plans[target.route ?? 'ai']
+    if (target.stepId === 'search') {
+      if (target === guideState && view === 'results' && query.keyword.trim().toLowerCase() === 'tofu recipe' && liveResults.some((video) => video.id === GUIDED_IDS.videoId)) return true
+      if (!await enterClient(GUIDED_IDS.clientId, 'search')) return false
+      setQuery((current) => ({ ...current, keyword: 'Tofu Recipe', platforms: ['instagram', 'tiktok'], days: 3650, maxLength: 0 }))
+      setSearchError(null)
+      return true
+    }
+    if (target.stepId === 'results') {
+      if (view === 'results' && query.keyword.trim().toLowerCase() === 'tofu recipe' && liveResults.some((video) => video.id === GUIDED_IDS.videoId)) {
+        setOpenVideoId(null)
+        return true
+      }
+      if (view !== 'search') {
+        if (!await enterClient(GUIDED_IDS.clientId, 'search')) return false
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+      }
+      if (!searching) {
+        setQuery((current) => ({ ...current, keyword: 'Tofu Recipe', platforms: ['instagram', 'tiktok'] }))
+        runSearch('Tofu Recipe', ['instagram', 'tiktok'])
+      }
+      return true
+    }
+    if (target.stepId === 'breakdown' && ['results', 'research'].includes(view)) {
+      if (openVideoId !== GUIDED_IDS.videoId) openVideoDrawer(GUIDED_IDS.videoId)
+      return true
+    }
+    if (['canvas', 'edit', 'result'].includes(target.stepId) && view === 'canvas' && canvasContext?.resource.id === planId) {
+      const actions = guideCanvasActions.current
+      if (!actions || actions.resourceId !== planId) return true
+      if (!await actions.show(target.stepId as 'canvas' | 'edit' | 'result')) return false
+      const step = canvasStepFor(target)
+      return step ? await actions.focus(step.focus) : true
+    }
+    if (!await enterClient(GUIDED_IDS.clientId, 'research')) return false
+    // Let the original screen and its leave guard unmount before opening the next resource.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+    if (target.stepId === 'breakdown') openVideoDrawer(GUIDED_IDS.videoId)
+    else if (target.stepId === 'script' || target.stepId === 'route') openPlan(planId)
+    else if (['canvas', 'edit', 'result'].includes(target.stepId)) {
+      if (!ideas.some((idea) => idea.id === planId)) return false
+      openPlanCanvas(planId)
+    }
+    return true
+  }
+  const guideReady = synced && auth !== 'checking' && !syncProblem
+  useEffect(() => {
+    if (!guideTarget || !guideReady) return
+    let cancelled = false
+    setGuideNavigationDone(null)
+    setGuideNavigating(true)
+    setGuideError('')
+    void guideNavigate.current(guideTarget).then((ok) => {
+      if (cancelled) return
+      setGuideNavigationDone(guideTarget)
+      setGuideNavigating(false)
+      if (!ok) { setGuideError('The original screen could not open. Please retry.'); setGuideTarget(null) }
+    }, () => {
+      if (!cancelled) { setGuideNavigating(false); setGuideError('The screen could not open. Your progress was kept.'); setGuideTarget(null) }
+    })
+    return () => { cancelled = true }
+  }, [guideTarget, guideReady])
+  useEffect(() => {
+    if (!guideTarget || guideNavigating || !guidedRuntime || guideNavigationDone !== guideTarget) return
+    const onCanvas = view === 'canvas'
+    if (['search', 'results'].includes(guideTarget.stepId) && searchError) {
+      setGuideError(searchError)
+      setGuideTarget(null)
+      return
+    }
+    if (onCanvas && guideCanvas.resourceId === canvasContext?.resource.id && guideCanvas.error) {
+      setGuideError(guideCanvas.error)
+      setGuideTarget(null)
+      return
+    }
+    // Canvas loads asynchronously; request the native editor only once its Board exists.
+    if (onCanvas && canvasContext?.resource.id === GUIDED_IDS.plans[guideTarget.route ?? 'ai'] && guideCanvasActions.current?.resourceId === canvasContext.resource.id &&
+      ((guideTarget.stepId === 'edit' && (!guideCanvas.editing || guideCanvas.exportOpen)) ||
+       (guideTarget.stepId === 'result' && (!guideCanvas.editing || !guideCanvas.exportOpen)))) {
+      void guideCanvasActions.current.show(guideTarget.stepId)
+      return
+    }
+    const targetCanvasStep = canvasStepFor(guideTarget)
+    if (onCanvas && targetCanvasStep && canvasContext?.resource.id === GUIDED_IDS.plans[guideTarget.route ?? 'ai'] && guideCanvasActions.current?.resourceId === canvasContext.resource.id && !matchesCanvasFocus(guideCanvas, targetCanvasStep.focus)) {
+      if (guideCanvas.busy || guideFocusTarget.current === guideTarget) return
+      const target = guideTarget
+      guideFocusTarget.current = target
+      void guideCanvasActions.current.focus(targetCanvasStep.focus).then((ok) => {
+        if (guideFocusTarget.current !== target) return
+        guideFocusTarget.current = null
+        if (!ok) {
+          setGuideError('The Canvas target could not be focused. Retry this step.')
+          setGuideTarget((current) => current === target ? null : current)
+        }
+      }, () => {
+        if (guideFocusTarget.current !== target) return
+        guideFocusTarget.current = null
+        setGuideError('The Canvas target could not be focused. Retry this step.')
+        setGuideTarget((current) => current === target ? null : current)
+      })
+      return
+    }
+    if (guideTarget === guideState && guideTarget.stepId === 'search' && view === 'results' && !searching && !searchError && query.keyword.trim().toLowerCase() === 'tofu recipe' && guideResultIds.includes(GUIDED_IDS.videoId)) {
+      setGuideTarget({ ...guideTarget, stepId: 'results' })
+      return
+    }
+    const observed = { view, workspace, searchQuery: query.keyword, resultVideoIds: guideResultIds, drawerVideoId: openVideoId, planId: planIdeaId,
+      canvasId: canvasContext?.resource.id ?? null, editing: guideCanvas.editing, exportOpen: guideCanvas.exportOpen,
+      ready: guideReady && !searchError && !cardSearch && (onCanvas ? guideCanvas.ready && guideCanvas.resourceId === canvasContext?.resource.id && guideCanvasActions.current?.resourceId === canvasContext?.resource.id : true), busy: !!cardSearch || (onCanvas && guideCanvas.busy) }
+    if (matchesGuidedScreen(guideTarget.stepId, guideTarget.route, observed)) {
+      setGuideState(guideTarget)
+      saveGuidedState(guidedRuntime.session, guideTarget)
+      setGuideTarget(null)
+    }
+  }, [guideTarget, guideNavigationDone, guideNavigating, guidedRuntime, view, workspace, openVideoId, planIdeaId, canvasContext, guideCanvas, guideReady, guideState, query.keyword, liveResults, guideResultIds, searchError, searching, cardSearch])
+  useEffect(() => {
+    if (guidedRuntime && guideState?.active && guideState.stepId === 'search' && !guideTarget && !searching && !searchError && view === 'results' && query.keyword.trim().toLowerCase() === 'tofu recipe' && guideResultIds.includes(GUIDED_IDS.videoId)) {
+      setGuideTarget({ ...guideState, stepId: 'results' })
+    }
+  }, [guidedRuntime, guideState, guideTarget, searching, searchError, view, query.keyword, liveResults, guideResultIds])
+  const activeCanvasStep = guideState ? canvasStepFor(guideState) : null
+  const canvasReplayReady = !!activeCanvasStep && (activeCanvasStep.minimumVersions ? (guideCanvas.replayCounts?.[activeCanvasStep.focus.nodeIds[0]] ?? 0) >= activeCanvasStep.minimumVersions : !!guideCanvas.replayedNodeIds?.includes(activeCanvasStep.focus.nodeIds[0]))
+  const canvasCanContinue = activeCanvasStep?.requireSelection ? !!guideCanvas.selectedOnTimelineNodeIds?.includes(activeCanvasStep.focus.nodeIds[0]) && (guideCanvas.replayCounts?.[activeCanvasStep.focus.nodeIds[0]] ?? 0) >= 2 : !activeCanvasStep?.generation || canvasReplayReady || !!guideState?.skippedCanvasSteps?.includes(activeCanvasStep.id)
+  const moveGuide = (direction: 'next' | 'previous', skip = false) => {
+    if (!guideState?.active || guideTarget || guideNavigating || (view === 'canvas' && guideCanvas.busy) || pendingSave) return
+    if (direction === 'next' && guideState.stepId === 'results') {
+      if (guideReferenceSaved) setGuideTarget({ ...guideState, stepId: 'research' })
+      else askGuideSave()
+      return
+    }
+    if (direction === 'next' && !canvasCanContinue && !skip) return
+    let next = direction === 'next' && guideState.stepId === 'route' ? { ...guideState, route: 'shoot' as const } : guideState
+    if (direction === 'next' && activeCanvasStep?.generation) {
+      const skipped = (guideState.skippedCanvasSteps ?? []).filter((id) => id !== activeCanvasStep.id)
+      if (skip && !canvasReplayReady) skipped.push(activeCanvasStep.id)
+      next = { ...guideState, skippedCanvasSteps: skipped }
+    }
+    setGuideTarget(requestedGuidedState(next, direction))
+  }
+
+  if (auth === 'checking') return null
+
   const gate = auth === 'signed-out' ? { kind: 'signed-out' as const } : { signedIn: auth === 'signed-in' || signedIn }
   if (nextView(gate, 'app') === 'login' || role === 'client') {
     // Landing and sign-in stay in English whatever the setting is.
@@ -1444,6 +1634,7 @@ export default function App() {
       <AppContext.Provider value={appContext}>
         {/* stream A: after login, staff land on the all-clients overview */}
         <LoginScreen
+          onGuidedDemo={() => startGuidedDemo()}
           real={auth === 'signed-out'}
           startAtLogin={auth === 'signed-out' && returnTo.current !== null}
           startOn={signedOut ? 'login' : 'landing'}
@@ -1468,10 +1659,17 @@ export default function App() {
     // Same as the signed-out landing: English whatever the setting is. Returning re-applies the user's language.
     setActiveLang('en')
     document.documentElement.lang = 'en'
-    const backToApp = () => setShowLanding(false)
+    const backToApp = () => {
+      if (guidedRuntime && guideState) {
+        const stopped = { ...guideState, active: false }
+        saveGuidedState(guidedRuntime.session, stopped)
+        setGuideState(stopped); setGuideTarget(null)
+      }
+      setShowLanding(false)
+    }
     return (
       <AppContext.Provider value={appContext}>
-        <LandingAltitude onLogIn={backToApp} onDemo={backToApp} />
+        <LandingAltitude onLogIn={backToApp} onDemo={backToApp} onGuidedDemo={() => startGuidedDemo()} />
       </AppContext.Provider>
     )
   }
@@ -1607,7 +1805,7 @@ export default function App() {
             />
           )}
 
-          {inClient && view === 'search' && (
+          {inClient && view === 'search' && !cardSearch && (
             <SearchScreen
               query={query}
               setQuery={setQuery}
@@ -1640,8 +1838,12 @@ export default function App() {
             />
           )}
 
-          {inClient && view === 'results' && (
+          {inClient && view === 'results' && !cardSearch && (
             <ResultsScreen
+              guidedSave={guidedRuntime ? { saved: guideReferenceSaved, onSave: askGuideSave } : undefined}
+              recommendedVideoId={guidedRuntime ? GUIDED_IDS.videoId : undefined}
+              initialFilters={guidedRuntime ? { ...DEFAULT_FILTERS, viewsMin: 0, followersMax: 0 } : undefined}
+              onVisibleResults={guidedRuntime ? reportGuideResults : undefined}
               error={searchError}
               failed={live ? searchFailed : []}
               empty={live ? searchEmpty : []}
@@ -1649,7 +1851,6 @@ export default function App() {
               query={query}
               setQuery={setQuery}
               interp={interp}
-              answer={answer}
               formats={formats}
               allVideos={videos}
               onSearch={runSearch}
@@ -1697,7 +1898,10 @@ export default function App() {
               ideaStatus={new Map(shownIdeas.filter((i) => i.clientId === client.id).map((i) => [i.videoId, i.status]))}
               inResearch={inResearch}
               onOpen={openVideoDrawer}
-              onToggleSave={toggleSave}
+              onToggleSave={(videoId) => {
+                if (guidedRuntime && videoId === GUIDED_IDS.videoId) askGuideSave()
+                else toggleSave(videoId)
+              }}
               onGoResearch={() => setView('research')}
               savedIn={savedIn}
               blockedFormatIds={blockedFormatIds}
@@ -1716,6 +1920,7 @@ export default function App() {
               statusOf={(e) => researchStatus(e, shownIdeas)}
               onUpdate={(id, patch) => setResearch((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))}
               onRemove={removeResearch}
+              canPick={guidedRuntime ? (entry) => entry.videoId === GUIDED_IDS.videoId : undefined}
               onPick={pickRow}
               planHasWork={(e) => {
                 const plan = planOf(e, ideas)
@@ -1826,6 +2031,8 @@ export default function App() {
               <CanvasScreen
                 context={canvasContext}
                 registerLeaveGuard={registerCanvasLeaveGuard}
+                registerGuide={guidedRuntime ? registerGuideCanvas : undefined}
+                onGuideState={guidedRuntime ? setGuideCanvas : undefined}
                 onShotsChange={(shots) => {
                   if (canvasContext.resource.kind !== 'legacy-plan') return
                   const id = canvasContext.resource.id
@@ -1843,6 +2050,9 @@ export default function App() {
 
           {inClient && view === 'plan' && planIdea && planVideo && planFormat && planClient && (
             <PlanScreen
+              live={live}
+              preparedScript={!!guidedRuntime && planVideo.id === GUIDED_IDS.videoId}
+              localPlayback={guidedRuntime ? planVideo.id === GUIDED_IDS.videoId ? '/demo-assets/source.mp4' : instagramPlayback(planVideo) : undefined}
               idea={planIdea}
               video={planVideo}
               format={planFormat}
@@ -1888,13 +2098,24 @@ export default function App() {
         </main>
       </div>
 
+      {guidedRuntime && guideState && !openVideoId && !pendingSave && <GuidedTour state={guideState} lang={lang} busy={!!cardSearch || !!guideTarget || guideNavigating || (view === 'canvas' && guideCanvas.busy)} error={guideError}
+        onNext={() => moveGuide('next')} onPrevious={() => moveGuide('previous')}
+        canContinue={canvasCanContinue} onSkip={() => moveGuide('next', true)}
+        onRoute={(route) => setGuideTarget({ ...guideState, stepId: 'canvas', route, canvasStep: 'shots', skippedCanvasSteps: [] })}
+        onReset={() => { void withCanvasLeave(() => guidedRuntime.reset()) }}
+        onExit={() => {
+          const stopped = { ...guideState, active: false }
+          saveGuidedState(guidedRuntime.session, stopped)
+          setGuideState(stopped); setGuideTarget(null); setGuideNavigating(false); setGuideError('')
+        }} />}
       {pendingSave && videoById.has(pendingSave.videoId) && (
         <SaveToVideo
           account={videoById.get(pendingSave.videoId)!.handle}
           slots={myVideos}
           onCancel={() => setPendingSave(null)}
           onPick={(slotId) => {
-            if (pendingSave.move) {
+            if (pendingSave.guided) saveGuideReference(slotId)
+            else if (pendingSave.move) {
               moveSaved(pendingSave.videoId, slotId)
               setSavedNote({ videoId: pendingSave.videoId })
             } else saveToResearch(pendingSave.videoId, slotId ?? undefined)
@@ -1906,6 +2127,7 @@ export default function App() {
 
       {openVideo && openFormat && (
         <BreakdownPanel
+          localPlayback={guidedRuntime ? openVideo.id === GUIDED_IDS.videoId ? '/demo-assets/source.mp4' : instagramPlayback(openVideo) : undefined}
           video={openVideo}
           format={openFormat}
           cohort={cohorts.get(openVideo.id)}
@@ -1914,7 +2136,7 @@ export default function App() {
           status={ideas.find((i) => i.clientId === client.id && i.videoId === openVideo.id)?.status} // stream B
           inResearch={inResearch.has(openVideo.id)}
           onClose={() => setOpenVideoId(null)}
-          onSave={() => toggleSave(openVideo.id)}
+          onSave={() => guidedRuntime && openVideo.id === GUIDED_IDS.videoId ? askGuideSave() : toggleSave(openVideo.id)}
           onPlan={() => planFromVideo(openVideo.id)}
           onGoResearch={
             view === 'research'

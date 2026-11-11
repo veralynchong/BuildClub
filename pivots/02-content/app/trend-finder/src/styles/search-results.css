@@ -483,3 +483,6 @@
 .numsrc-rows dd { margin: 0; }
 .numsrc-rows .is-changed strong { font-weight: 700; }
 .numsrc-rows > div:not(.is-changed) strong { font-weight: 400; }
+
+.thumb-unavailable { position:absolute; left:8px; right:8px; bottom:28px; padding:6px 8px; border-radius:6px; background:rgb(0 0 0 / 72%); color:#fff; font-size:11px; line-height:1.4; text-align:center; }
+.thumb-player { object-fit:cover; }

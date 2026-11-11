@@ -24,6 +24,8 @@ import { NumbersSource } from './NumbersSource'
 import { fetchedLine, formulaLine, limitLines, sourceLine, type Cohort } from '../lib/evidence'
 
 interface Props {
+  localPlayback?: string
+  unknownMetrics?: boolean
   video: Video
   format: Format
   // The accounts using this video's pattern in this search; the follow list reads the same rows.
@@ -53,7 +55,7 @@ const emotions: Emotion[] = ['curious', 'excited', 'craving', 'funny', 'angry_co
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAccounts, client, status, inResearch, onClose, onSave, onPlan, onGoResearch, onReanalyse, reanalysis }: Props) {
+export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, cohort, formatAccounts: sampleAccounts, client, status, inResearch, onClose, onSave, onPlan, onGoResearch, onReanalyse, reanalysis }: Props) {
   const manager = useManagerName()
   // Play the slide-out before App unmounts the panel (skipped under reduced motion).
   const [closing, setClosing] = useState(false)
@@ -119,7 +121,7 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
   const stats = [
     {
       label: video.platform === 'reddit' ? t('find.bd.upvotes') : t('find.bd.views'),
-      value: compact(shownViews),
+      value: unknownMetrics ? '—' : compact(shownViews),
       note:
         video.comments !== undefined
           ? t('find.tile.comments', { count: compact(video.comments) })
@@ -133,7 +135,7 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
       : [
           {
             label: t('find.bd.sharesSaves'),
-            value: `${shareSaveRate(video).toFixed(1)}`,
+            value: unknownMetrics ? '—' : `${shareSaveRate(video).toFixed(1)}`,
             unit: t('find.bd.per100'),
             note: video.saves === null ? t('find.bd.igHides') : t('find.bd.sharesSavesNote', { shares: compact(video.shares), saves: compact(video.saves) }),
           },
@@ -190,7 +192,7 @@ export function BreakdownPanel({ video, format, cohort, formatAccounts: sampleAc
 
         <div className="drawer-body">
           <div className="drawer-video">
-            <Thumb video={video} large />
+            {localPlayback ? <video src={localPlayback} controls playsInline preload="metadata" aria-label="Prepared reference video" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Thumb video={video} large />}
           </div>
 
           <section className="stats" aria-label={t('find.bd.numbers')}>

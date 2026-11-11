@@ -18,7 +18,7 @@ export type View =
   | 'plan'
   | 'canvas'
   | 'canvasPick'
-  // Sidebar "Video canvas" with more than one plan: pick the plan whose planning board to open.
+  // Pick a plan's legacy planning board.
   | 'boardPick'
   // The planning board for the open plan (components/board/ShotBoard.tsx).
   | 'board'
@@ -209,7 +209,7 @@ export function Sidebar(p: Props) {
               p.onLogo()
             }}
           >
-            <Logo height={22} />
+            <Logo height={p.compact ? 18 : 22} />
           </button>
         </div>
 
