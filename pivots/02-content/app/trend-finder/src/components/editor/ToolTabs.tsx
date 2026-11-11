@@ -1,8 +1,11 @@
 import { t } from '../../lib/i18n'
 import type { Key } from '../../lib/i18n'
 import { EDITOR_TABS as TOOLS, type Tool } from '../../lib/editor/steps'
+import { Icon, type IconName } from './icons'
 
 export type { Tool }
+
+const ICON: Record<Tool, IconName> = { clips: 'film', ai: 'sparkles', text: 'text', captions: 'captions', voice: 'mic', music: 'music', brand: 'brand' }
 
 const LABEL: Record<Tool, Key> = {
   clips: 'editor.tab.clips',
@@ -14,7 +17,7 @@ const LABEL: Record<Tool, Key> = {
   brand: 'editor.tab.brand',
 }
 
-// The editor's tabs on the right. A tab carries a tick once it was opened and its part is done (tabsDone). Arrow keys
+// The inspector's tabs on the right, each an icon over a short label. A tab carries a tick once it was opened and its part is done (tabsDone). Arrow keys
 // move between them.
 export function ToolTabs({ tool, onTool, done }: { tool: Tool; onTool: (tool: Tool) => void; done: Partial<Record<Tool, boolean>> }) {
   const move = (e: React.KeyboardEvent, i: number) => {
@@ -41,8 +44,9 @@ export function ToolTabs({ tool, onTool, done }: { tool: Tool; onTool: (tool: To
           onClick={() => onTool(id)}
           onKeyDown={(e) => move(e, i)}
         >
-          {done[id] && <span className="cv-ed-tab-tick" aria-hidden="true">✓</span>}
-          {t(LABEL[id])}
+          <Icon name={ICON[id]} />
+          <span className="cv-ed-tab-label">{t(LABEL[id])}</span>
+          {done[id] && <span className="cv-ed-tab-tick" aria-hidden="true"><Icon name="check" size={10} /></span>}
           {done[id] && <span className="sr-only"> ({t('editor.step.done')})</span>}
         </button>
       ))}

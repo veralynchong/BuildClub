@@ -248,14 +248,38 @@ export function voicePages(segs: VoiceSeg[], words: Record<string, Word[]>, tota
     .sort((a, b) => a.startMs - b.startMs)
 }
 
-// The caption lines made from speech: each one is a page of its own, its words sharing the line's time by width.
+const squash = (s: string) => s.trim().split(/\s+/).filter(Boolean).join(' ')
+
+// A line's words at their own times, while its text still reads as those words; null when it does not (it was edited by
+// hand, or made before word timing existed). A word is kept inside the line's time.
+function wordTimed(e: SpeechCaption, limit: number): Caption[] | null {
+  const words = e.words ?? []
+  if (words.length === 0 || squash(e.text) !== squash(words.map((w) => w.text).join(' '))) return null
+  const lo = ms(e.start)
+  const hi = Math.min(limit, ms(e.end))
+  const out: Caption[] = []
+  let last = ''
+  for (const w of words) {
+    const toks = tokens(w.text.trim())
+    if (toks.length === 0) continue
+    const lead = last !== '' && !isCjk(last) && !isCjk(toks[0][0]) && !NO_SPACE_BEFORE.test(toks[0]) ? ' ' : ''
+    toks[0] = lead + toks[0]
+    const a = Math.min(hi, Math.max(lo, ms(w.start)))
+    out.push(...spread(toks, a, Math.max(a, Math.min(hi, ms(w.end)))))
+    last = toks[toks.length - 1].trim().slice(-1)
+  }
+  return out.length > 0 ? out : null
+}
+
+// The caption lines made from speech: each one is a page of its own. Its words show at the times they were said when the
+// line carries them; otherwise they share the line's time by width.
 export function speechCaptions(entries: SpeechCaption[], total: number): Caption[] {
   const limit = ms(total)
   const out: Caption[] = []
   for (const e of entries) {
     const toks = tokens(e.text.trim())
     if (toks.length === 0 || ms(e.start) >= limit) continue
-    const caps = spread(toks, ms(e.start), Math.min(limit, ms(e.end)))
+    const caps = wordTimed(e, limit) ?? spread(toks, ms(e.start), Math.min(limit, ms(e.end)))
     caps[caps.length - 1].pageBreakAfter = true
     out.push(...caps)
   }

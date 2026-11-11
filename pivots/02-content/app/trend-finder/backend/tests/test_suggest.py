@@ -63,6 +63,13 @@ def test_timeline_captions_cut_a_word_that_runs_past_the_clip():
     assert got and got[0]["start"] == 0.2 and got[0]["end"] == 0.5
 
 
+def test_timeline_captions_carry_each_word_on_the_timeline_with_its_take_key():
+    clips = [{"source": {"kind": "take", "id": "t1"}, "in": 1.0, "out": 3.0}]
+    got = suggest.timeline_captions(clips, {"t1": [w("boil", 1.2, 1.5), w("um", 1.5, 1.8), w("water", 1.8, 2.4)]})
+    assert [(x["text"], x["start"], x["end"], x["key"]) for x in got[0]["words"]] == [
+        ("boil", 0.2, 0.5, "t1:1200"), ("water", 0.8, 1.4, "t1:1800")]  # the filler stays out, as in the text
+
+
 # ---- clean-up ----
 
 MESSY = ([w("First", 0.5, 0.8), w("boil", 0.8, 1.1), w("the", 1.1, 1.3), w("water.", 1.3, 1.8),

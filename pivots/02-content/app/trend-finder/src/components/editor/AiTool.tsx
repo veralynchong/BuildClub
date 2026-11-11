@@ -7,9 +7,9 @@ import { sourceKey, clipLength } from '../../lib/editor/timeline'
 import type { Clip, EditProject } from '../../lib/editor/types'
 import {
   getClipSuggestions, getFirstCut, getKeeps, getTakeRanking, NotReady,
-  type CleanupItem, type ClipSuggestions, type FirstCutEntry, type TakeRanking, type TimedLine,
+  type ClipSuggestions, type FirstCutEntry, type TakeRanking, type TimedLine,
 } from '../../lib/editor/aiApi'
-import { applyFirstCut, firstCutLine, MAX_CLIPS, nextClipId, PAD_DEFAULT, PAD_MAX, previewFrame, rankReason, replaceWithRanges, setClipRange, stamp, swapTake } from '../../lib/editor/aiEdit'
+import { applyFirstCut, firstCutLine, MAX_CLIPS, nextClipId, PAD_DEFAULT, PAD_MAX, previewFrame, rankReason, reasonOf, itemLabel, replaceWithRanges, setClipRange, stamp, swapTake, takeName } from '../../lib/editor/aiEdit'
 import { ErrorText } from '../ErrorText'
 import { clipLabel } from './clipName'
 import { CopyCard } from './CopyCard'
@@ -211,15 +211,6 @@ function ClipAi({ planId, project, clip, shots, gens, takes, durations, readOnly
   )
 }
 
-function itemLabel(it: CleanupItem): string {
-  const sec = round1(it.end - it.start)
-  if (it.type === 'silence') return t(it.where === 'start' ? 'editor.ai.clean.silence.start' : it.where === 'end' ? 'editor.ai.clean.silence.end' : 'editor.ai.clean.silence', { sec })
-  const text = (it.text ?? '').length > 40 ? `${(it.text ?? '').slice(0, 40)}…` : (it.text ?? '')
-  return t(it.type === 'filler' ? 'editor.ai.clean.filler' : 'editor.ai.clean.retake', { text })
-}
-
-const reasonOf = (it: CleanupItem): string => t(it.type === 'silence' ? 'editor.ai.clean.silenceWhy' : it.type === 'filler' ? 'editor.ai.clean.fillerWhy' : 'editor.ai.clean.retakeWhy')
-
 // The top three takes of the clip's shot, best first. Choosing one swaps the clip's take and keeps its place.
 function Ranking({ planId, clip, project, shots, gens, takes, durations, readOnly, onApply }: Pick<Props, 'project' | 'shots' | 'gens' | 'takes' | 'durations' | 'readOnly' | 'onApply'> & { planId: string; clip: Clip }) {
   const shotId = clip.source.shotId
@@ -282,13 +273,6 @@ function Ranking({ planId, clip, project, shots, gens, takes, durations, readOnl
   )
 }
 
-
-// "Take 2": the take's place among the takes of its shot, the way the shot list numbers them.
-function takeName(takes: Take[], takeId: string | undefined, fallback: string | undefined): string {
-  const x = takes.find((v) => v.id === takeId)
-  const k = x ? takes.filter((v) => v.shotId === x.shotId).sort((a, b) => a.createdAt - b.createdAt).findIndex((v) => v.id === x.id) + 1 : 0
-  return k > 0 ? t('editor.cut.take', { k }) : (fallback ?? '')
-}
 
 // One button makes the whole first cut; "Why these cuts" lists every decision, and each line jumps the player to it.
 function FirstCutCard({ planId, project, takes, readOnly, firstCut, onFirstCut, onApply, onSeek }: Props & { planId: string }) {

@@ -87,6 +87,31 @@ export async function getTakeRanking(planId: string, shotId: string): Promise<Ta
   return send(await fetch(`${base(planId)}/takes?shot=${encodeURIComponent(shotId)}`))
 }
 
+// What the timeline draws on a take's clips, from its stored analysis (backend/analysis.py). `peaks` is absent for takes
+// analysed before the waveform existed (retrying the analysis adds it) and null for footage without sound.
+export interface TakeMedia {
+  width: number | null
+  height: number | null
+  peaks: { rate: number; values: number[] } | null
+  filmstrip: { height: number; times: number[] } | null
+  speech: { status: Speech; words: { text: string; start: number; end: number }[] } // the transcript view's words
+}
+
+export async function getTakeMedia(planId: string, takeId: string): Promise<TakeMedia> {
+  const r = await fetch(`/api/ideas/${encodeURIComponent(planId)}/takes/${encodeURIComponent(takeId)}/analysis`)
+  type Raw = Partial<Omit<TakeMedia, 'speech'>> & { transcript?: { status?: string; words?: TakeMedia['speech']['words'] } }
+  const body = await send<{ status: string; results: Raw | null }>(r)
+  const x = body.results
+  if (body.status !== 'done' || !x) throw new NotReady(body.status, '')
+  const st = x.transcript?.status
+  const status: Speech = st === 'ok' || st === 'unavailable' ? st : 'none'
+  const speech = { status, words: status === 'ok' ? (x.transcript?.words ?? []) : [] }
+  return { width: x.width ?? null, height: x.height ?? null, peaks: x.peaks ?? null, filmstrip: x.filmstrip ?? null, speech }
+}
+
+export const thumbUrl = (planId: string, takeId: string, n: number, version: string): string =>
+  `/api/ideas/${encodeURIComponent(planId)}/takes/${encodeURIComponent(takeId)}/analysis/thumbs/${n}?v=${encodeURIComponent(version)}`
+
 // The parts of [from, to] that stay once `removals` are cut, with the padding added around each cut.
 export async function getKeeps(planId: string, from: number, to: number, removals: [number, number][], paddingFrames: number): Promise<number[][]> {
   const r = await fetch(`${base(planId)}/keeps`, {
