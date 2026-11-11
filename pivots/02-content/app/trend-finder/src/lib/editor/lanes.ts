@@ -174,9 +174,23 @@ export function removeBar(p: EditProject, lane: LaneId, id: string): EditProject
   return p
 }
 
-// ---- hide and mute (preview only) ----
-// The project the preview plays with some lanes hidden or muted. The saved project and the export never see this.
-export function previewOf(p: EditProject, hidden: ReadonlySet<LaneId>, muted: ReadonlySet<LaneId>): EditProject {
+// ---- hide and mute ----
+// The tracks switched off in the project's track headers, as sets.
+export function laneState(p: Pick<EditProject, 'lanes'>): { hidden: ReadonlySet<LaneId>; muted: ReadonlySet<LaneId> } {
+  return { hidden: new Set(p.lanes?.hidden ?? []), muted: new Set(p.lanes?.muted ?? []) }
+}
+
+// The project with one track's hide or mute switch flipped.
+export function toggleLane(p: EditProject, what: 'hidden' | 'muted', lane: LaneId): EditProject {
+  const cur = { hidden: p.lanes?.hidden ?? [], muted: p.lanes?.muted ?? [] }
+  const list = cur[what].includes(lane) ? cur[what].filter((l) => l !== lane) : [...cur[what], lane]
+  return { ...p, lanes: { ...cur, [what]: list } }
+}
+
+// The project as the reel plays it, preview and export alike: hidden text and caption tracks drop out and muted tracks
+// play silent. A hidden video track is drawn blank by the reel itself (its sound still plays unless it is muted too).
+export function playedProject(p: EditProject): EditProject {
+  const { hidden, muted } = laneState(p)
   if (hidden.size === 0 && muted.size === 0) return p
   let out = p
   if (hidden.has('text')) out = { ...out, texts: [] }

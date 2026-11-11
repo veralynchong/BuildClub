@@ -16,7 +16,7 @@ const PAD_PX = 16 // room after the last bar
 
 const LANE_NAME: Record<LaneId, Key> = { text: 'editor.lane.text', captions: 'editor.lane.captions', video: 'editor.lane.video', voice: 'editor.lane.voice', music: 'editor.lane.music' }
 const LANE_ICON = { text: 'text', captions: 'captions', video: 'film', voice: 'mic', music: 'music' } as const
-// Which lanes can be hidden in the preview (they draw something) and which muted (they make sound).
+// Which lanes can be hidden (they draw something) and which muted (they make sound).
 const CAN_HIDE: Record<LaneId, boolean> = { text: true, captions: true, video: true, voice: false, music: false }
 const CAN_MUTE: Record<LaneId, boolean> = { text: false, captions: false, video: true, voice: true, music: true }
 

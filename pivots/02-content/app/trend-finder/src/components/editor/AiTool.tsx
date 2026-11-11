@@ -28,7 +28,7 @@ interface Props {
   log: string[]
   captionLines: TimedLine[] // the captions the video shows now
   firstCut: { log: FirstCutEntry[] } | null // why the last auto first cut did what it did; null once undone
-  onFirstCut: (log: FirstCutEntry[], label: string) => void
+  onFirstCut: (log: FirstCutEntry[], label: string, clips: Clip[]) => void // clips: the timeline the cut made
   onSeek: (frame: number) => void // move the player there
   onApply: (next: EditProject, label: string) => void
   onUndo: () => void
@@ -296,7 +296,7 @@ function FirstCutCard({ planId, project, takes, readOnly, firstCut, onFirstCut, 
       if (next === base) return setNote(t('editor.ai.err'))
       const label = t('editor.cut.label', { clips: cut.clips.length, shots: cut.shotsUsed })
       onApply(next, label)
-      onFirstCut(cut.log, label)
+      onFirstCut(cut.log, label, next.clips)
       setNote(cut.captions.entries.length === 0 ? t('editor.cut.noCaptions') : t('editor.cut.done', { clips: cut.clips.length, shots: cut.shotsUsed, sec: round1(cut.seconds) }))
     } catch (e) {
       if (e instanceof NotReady) setNote(t('editor.cut.waiting'))

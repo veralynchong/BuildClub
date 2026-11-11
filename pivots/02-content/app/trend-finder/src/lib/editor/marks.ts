@@ -2,7 +2,7 @@
 // functions, so the unit tests can check them; Timeline only draws what these return.
 import type { Clip } from './types.ts'
 import type { CleanupItem } from './aiApi.ts'
-import { FPS } from './timeline.ts'
+import { FPS, sourceKey } from './timeline.ts'
 
 // The most air the clean-up keeps around a cut (suggest.py PAD_MAX). A suggestion cut off by a clip edge with no more
 // than this left showing is the air an applied cut left behind, so it is not offered again.
@@ -114,4 +114,39 @@ export function groupPins(entries: { at: number; text: string; kind: string }[])
     by.set(at, pin)
   }
   return [...by.values()].sort((a, b) => a.at - b.at)
+}
+
+// Where a first-cut line points, held as a moment of footage (the clip's source and a second of it) instead of a timeline
+// second, so its pin follows the clips when they are moved, trimmed or split later. Null when the cut made no clips.
+export type PinAnchor = { source: string; t: number } | null
+
+// The footage under timeline second `at` of `clips`; a moment at a join belongs to the clip that starts there, and one
+// past the end to the last clip's out point.
+export function anchorAt(clips: Pick<Clip, 'in' | 'out' | 'source'>[], at: number): PinAnchor {
+  let start = 0
+  for (const c of clips) {
+    const len = c.out - c.in
+    if (at < start + len - 1e-6) return { source: sourceKey(c.source), t: c.in + Math.max(0, at - start) }
+    start += len
+  }
+  const last = clips[clips.length - 1]
+  return last ? { source: sourceKey(last.source), t: last.out } : null
+}
+
+// The timeline second that shows an anchored moment now: inside the clip of that footage that holds it, or else at the
+// nearest edge of a clip of the same footage (the moment was trimmed or cut away). Null when no clip shows that footage.
+export function placeAnchor(clips: Pick<Clip, 'in' | 'out' | 'source'>[], a: PinAnchor): number | null {
+  if (!a) return null
+  let start = 0
+  let best: { at: number; off: number } | null = null
+  for (const c of clips) {
+    const len = c.out - c.in
+    if (sourceKey(c.source) === a.source) {
+      if (a.t >= c.in - 1e-6 && a.t <= c.out + 1e-6) return start + Math.min(len, Math.max(0, a.t - c.in))
+      const off = a.t < c.in ? c.in - a.t : a.t - c.out
+      if (!best || off < best.off) best = { at: a.t < c.in ? start : start + len, off }
+    }
+    start += len
+  }
+  return best ? best.at : null
 }

@@ -1,4 +1,8 @@
 // Shapes of the edit project. They match backend/editing.py (empty_project, check_project, list_sources).
+import type { LaneId } from './lanes.ts'
+
+// Tracks hidden (not drawn) or muted (not heard) from the timeline's track headers.
+export type LaneState = { hidden: LaneId[]; muted: LaneId[] }
 
 export type ClipSource = {
   kind: 'generation' | 'take'
@@ -84,6 +88,7 @@ export type EditProject = {
   logoCorner: LogoCorner
   export?: ExportSettings
   transcriptFixes?: Record<string, string> // words corrected in the transcript: a take word's key to the text shown instead
+  lanes?: LaneState // timeline tracks switched off; the preview and the export both leave them out
 }
 
 // One footage item from list_sources, without the backend-only `path`.
@@ -111,5 +116,4 @@ export type ReelInput = {
   voice: { id: string; url: string; words: Word[] | null }[]
   brand: { font: string; color: string | null; logoUrl: string | null }
   fontUrl: string
-  hideVideo?: boolean // the editor's preview with the video track hidden: the footage is not drawn (its sound still plays)
 }

@@ -89,6 +89,15 @@ def test_check_project_speech_words_and_transcript_fixes():
         assert editing.check_project({**good, "transcriptFixes": fixes}), fixes
 
 
+
+def test_check_project_lanes():
+    good = {**project(clip()), "lanes": {"hidden": ["captions", "video"], "muted": []}}
+    assert editing.check_project(good) is None
+    for lanes in ([], {"hidden": []}, {"hidden": ["sound"], "muted": []}, {"hidden": "video", "muted": []},
+                  {"hidden": [], "muted": [], "solo": []}):
+        assert editing.check_project({**good, "lanes": lanes}), lanes
+
+
 def text(**extra):
     return {"id": "x1", "text": "hello", "start": 0, "end": 1, "position": "bottom", "color": "white", **extra}
 
