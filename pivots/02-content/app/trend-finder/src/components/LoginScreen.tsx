@@ -47,7 +47,7 @@ function BaseLogin({ onSignIn }: { onSignIn: () => void }) {
           <span className="brand-mark" aria-hidden="true">
             ↗
           </span>
-          Trend Finder
+          Remake
         </div>
         <div className="login-copy">
           <h1>Find what's working for every client</h1>

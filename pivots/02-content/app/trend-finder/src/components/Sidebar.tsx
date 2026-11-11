@@ -144,7 +144,7 @@ export function Sidebar(p: Props) {
           <span className="brand-mark" aria-hidden="true">
             ↗
           </span>
-          Trend Finder
+          Remake
         </div>
 
         <ClientSwitcher clients={p.clients} workspace={p.workspace} setWorkspace={p.setWorkspace} />

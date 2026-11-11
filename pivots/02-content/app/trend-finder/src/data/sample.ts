@@ -1,4 +1,4 @@
-// SAMPLE DATA. Every account, number and caption below is made up to show how the app works.
+// SAMPLE DATA. TikTok rows use real accounts, covers, views, followers and medians (video demo); dates, shares and saves are made up.
 // Replace with real videos collected by hand (see README.md for the fields).
 
 import type { Client, Format, SavedIdea, Video } from '../types'
@@ -12,14 +12,14 @@ export const formats: Format[] = [
     audiences: ['students', 'young professionals', 'busy mums'],
     summary: 'Overhead pan shot, loud sizzle, no talking. Text hook promises speed.',
     why: {
-      hook: 'The first words on screen, "Crispy tofu in 5 min", tell people exactly what they will get, and fast.',
+      hook: 'The cover says exactly what you get, "crispy honey garlic tofu", with the finished dish front and centre.',
       first3s: 'Tofu hits hot oil straight away. The loud sizzle makes people stop and watch.',
       length: 'Only about 13 seconds, so many people watch it twice. The app treats that as a sign the video is good.',
       format: 'One camera filming from above. No face and no talking, so anyone can film it.',
       sound: 'Just the real cooking sound, turned up loud. No music.',
     },
     shotList: [
-      { time: '0–2s', shot: 'Top-down: tofu cubes drop into hot oil', text: 'Crispy tofu in 5 min' },
+      { time: '0–2s', shot: 'Top-down: tofu cubes drop into hot oil', text: 'Crispy honey garlic tofu' },
       { time: '2–6s', shot: 'Close-up: cubes turning golden, tongs flipping' },
       { time: '6–10s', shot: 'Sauce poured over, quick toss in the pan' },
       { time: '10–14s', shot: 'Plated, one piece pulled apart to show the crunch', text: 'Save this' },
@@ -149,26 +149,26 @@ const v = (
 // Instagram rows are kept for when we bring Instagram back; the app only uses TikTok for now.
 const allVideos: Video[] = [
   // Crispy ASMR: big on TikTok, barely on Instagram yet
-  v('t1', 'tiktok', '@smallkitchen.sample', 'Crispy tofu in 5 min', 2_400_000, 3_100, 9_000, 9, 13, 41_000, 120_000, 'crispy-asmr'),
-  v('t2', 'tiktok', '@weeknight.wok.sample', 'The crunch at the end', 980_000, 12_000, 20_000, 6, 14, 15_000, 48_000, 'crispy-asmr'),
-  v('t3', 'tiktok', '@plantplates.sample', 'Tofu that crunches like chips', 1_300_000, 45_000, 60_000, 4, 12, 22_000, 70_000, 'crispy-asmr'),
-  v('t4', 'tiktok', '@uni.eats.sample', 'Student budget crispy tofu', 610_000, 2_200, 4_000, 3, 15, 9_000, 30_000, 'crispy-asmr'),
-  v('t5', 'tiktok', '@sydney.cooks.sample', 'Air fryer? No. Pan.', 420_000, 8_500, 11_000, 2, 13, 5_200, 19_000, 'crispy-asmr'),
+  v('t1', 'tiktok', '@fitgreenmind', 'Slightly addicted to these', 11_900_000, 1_800_000, 22_950, 9, 13, 41_000, 120_000, 'crispy-asmr'),
+  v('t2', 'tiktok', '@spicedbyklara.sophie', 'Korean fried tofu', 202_000, 2_555, 1_373, 6, 14, 15_000, 48_000, 'crispy-asmr'),
+  v('t3', 'tiktok', '@newveganrecepies', 'Vegan orange tofu', 60_700, 1_362, 11_400, 4, 12, 22_000, 70_000, 'crispy-asmr'),
+  v('t4', 'tiktok', '@.therecipespot', 'Crispy honey garlic tofu', 465_200, 1_097, 408, 3, 15, 9_000, 30_000, 'crispy-asmr'),
+  v('t5', 'tiktok', '@asiamarketdublin', '8 easy dishes to make with tofu', 640_900, 5_337, 1_907, 2, 13, 5_200, 19_000, 'crispy-asmr'),
   v('i1', 'instagram', '@greenbowl.sample', 'Crispy tofu, no air fryer', 310_000, 6_400, 14_000, 2, 15, 6_100, null, 'crispy-asmr'),
 
   // Blind taste test: growing on both
-  v('t6', 'tiktok', '@streettaste.sample', 'Is this chicken?', 3_100_000, 88_000, 140_000, 12, 26, 60_000, 52_000, 'blind-taste-test'),
-  v('t7', 'tiktok', '@cbd.foodie.sample', 'Nobody guessed it', 740_000, 5_600, 12_000, 7, 24, 11_000, 9_000, 'blind-taste-test'),
-  v('t8', 'tiktok', '@askstrangers.sample', 'Guess the meat (it is not meat)', 520_000, 19_000, 30_000, 5, 29, 8_000, 6_500, 'blind-taste-test'),
+  v('t6', 'tiktok', '@superbenito3', 'Eating tofu, 6 ways', 18_100_000, 115_700, 349_950, 12, 26, 60_000, 52_000, 'blind-taste-test'),
+  v('t7', 'tiktok', '@superbenito3', 'Another tofu, 6 ways!!', 6_700_000, 115_700, 349_950, 7, 24, 11_000, 9_000, 'blind-taste-test'),
+  v('t8', 'tiktok', '@anainmunich', 'One of my favorite comfort meals lately', 119_900, 2_343, 3_610, 5, 29, 8_000, 6_500, 'blind-taste-test'),
   v('i2', 'instagram', '@sydneybites.sample', 'We fooled George St', 1_050_000, 2_900, 7_500, 6, 27, 18_000, null, 'blind-taste-test'),
   v('i3', 'instagram', '@meatless.mates.sample', 'Chicken or tofu?', 460_000, 15_000, 25_000, 4, 22, 7_400, null, 'blind-taste-test'),
   v('i4', 'instagram', '@eat.the.city.sample', 'Blind taste test at Central', 280_000, 41_000, 38_000, 3, 25, 3_100, null, 'blind-taste-test'),
 
   // 3-ingredient dessert: everywhere, older
-  v('t9', 'tiktok', '@sweetswap.sample', '3-ingredient chocolate mousse', 4_200_000, 210_000, 300_000, 34, 31, 70_000, 400_000, 'three-ingredient-dessert'),
-  v('t10', 'tiktok', '@lazy.dessert.sample', 'Protein pudding from tofu', 900_000, 33_000, 45_000, 28, 28, 12_000, 95_000, 'three-ingredient-dessert'),
-  v('t11', 'tiktok', '@bake.less.sample', 'No-bake tofu cheesecake', 650_000, 70_000, 80_000, 25, 33, 7_000, 60_000, 'three-ingredient-dessert'),
-  v('t12', 'tiktok', '@healthyish.sample', 'Dessert you would not guess', 300_000, 120_000, 90_000, 22, 30, 2_500, 21_000, 'three-ingredient-dessert'),
+  v('t9', 'tiktok', '@itshelenmelon', 'Korean silken tofu, a true 5-minute recipe', 2_200_000, 257_100, 14_150, 34, 31, 70_000, 400_000, 'three-ingredient-dessert'),
+  v('t10', 'tiktok', '@chinesefood0805', '5-minute tofu egg recipe', 1_000_000, 101_000, 17_500, 28, 28, 12_000, 95_000, 'three-ingredient-dessert'),
+  v('t11', 'tiktok', '@itsvegansis', 'Chickenless honey BBQ tofu tenders', 1_700_000, 474_100, 267_150, 25, 33, 7_000, 60_000, 'three-ingredient-dessert'),
+  v('t12', 'tiktok', '@_cookim_', 'Soy Beans Ep.2: Tofu', 14_600_000, 3_000_000, 43_250, 22, 30, 2_500, 21_000, 'three-ingredient-dessert'),
   v('i5', 'instagram', '@spoonful.sample', '3-ingredient mousse', 2_000_000, 160_000, 120_000, 30, 32, 40_000, null, 'three-ingredient-dessert'),
   v('i6', 'instagram', '@goodmood.food.sample', 'Silken tofu dessert', 720_000, 28_000, 30_000, 26, 29, 10_000, null, 'three-ingredient-dessert'),
   v('i7', 'instagram', '@mumsmeals.sample', 'Kids could not tell', 390_000, 9_800, 15_000, 21, 34, 6_200, null, 'three-ingredient-dessert'),
@@ -178,14 +178,37 @@ const allVideos: Video[] = [
   v('i9', 'instagram', '@aisle.guide.sample', "You're buying tofu wrong", 1_600_000, 4_300, 10_000, 8, 41, 30_000, null, 'buying-wrong'),
   v('i10', 'instagram', '@chef.explains.sample', 'Which tofu for which dish', 640_000, 22_000, 35_000, 5, 38, 12_000, null, 'buying-wrong'),
   v('i11', 'instagram', '@grocery.hacks.sample', 'Stop buying silken for stir-fry', 350_000, 11_000, 16_000, 3, 36, 5_000, null, 'buying-wrong'),
-  v('t13', 'tiktok', '@shopsmart.sample', 'Tofu types explained', 150_000, 60_000, 70_000, 2, 44, 1_800, 6_000, 'buying-wrong'),
+  v('t13', 'tiktok', '@fitgreenmind', 'Tofu 101: which tofu for what', 2_000_000, 1_800_000, 22_950, 2, 44, 1_800, 6_000, 'buying-wrong'),
 
   // Press hack: one-off
-  v('t14', 'tiktok', '@kitchen.tricks.sample', 'No tofu press? Do this', 380_000, 140_000, 160_000, 15, 15, 3_000, 22_000, 'press-hack'),
+  v('t14', 'tiktok', '@fitgreenmind', 'The easiest way to eat a block of tofu', 324_200, 1_800_000, 22_950, 15, 15, 3_000, 22_000, 'press-hack'),
   v('i12', 'instagram', '@tidy.kitchen.sample', 'Tofu press hack', 95_000, 31_000, 40_000, 11, 16, 900, null, 'press-hack'),
 ]
 
-export const videos = allVideos.filter((v) => v.platform === 'tiktok')
+// Video demo only: real TikTok covers and numbers from the pinned "tofu" search.
+const real: Record<string, string> = {
+  t1: '7214945726772595974',
+  t2: '7624084989985950998',
+  t3: '7635301657978440993',
+  t4: '7553235380036766994',
+  t5: '7670215908853402902',
+  t6: '7671729723533217038',
+  t7: '7674920740885630221',
+  t8: '7669097819600342305',
+  t9: '7528819470459014431',
+  t10: '7629936914358963487',
+  t11: '7672439031489170708',
+  t12: '7643846116865281288',
+  t13: '7600098462264200470',
+  t14: '7627202732696276257',
+}
+
+export const videos = allVideos
+  .filter((v) => v.platform === 'tiktok')
+  .map((v) => {
+    const id = real[v.id]
+    return id ? { ...v, thumbnail: `/real/${id}.jpg`, url: `https://www.tiktok.com/${v.handle}/video/${id}` } : v
+  })
 
 export const clients: Client[] = [
   {
