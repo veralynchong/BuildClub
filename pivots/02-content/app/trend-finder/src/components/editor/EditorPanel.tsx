@@ -417,6 +417,16 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const undo = () => step('undo')
   const redo = () => step('redo')
 
+  // Open zoomed to fit, so a short video uses the timeline's whole width and its caption bars have room. Once only:
+  // after that the zoom is the user's.
+  const fitted = useRef(false)
+  const openLength = project ? totalLength(project) : 0
+  useEffect(() => {
+    const el = tlScroll.current
+    if (fitted.current || openLength <= 0 || !el || el.clientWidth <= HEAD_PX) return
+    fitted.current = true
+    setPx(fitZoom(openLength, el.clientWidth - HEAD_PX - 24, MIN_PX, MAX_PX))
+  }, [openLength])
   if (loadError) return <ErrorText text={loadError} />
   if (!project || !inputProps) return <p className="muted">{t('editor.loading')}</p>
 
@@ -564,7 +574,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const canRedo = hist.current.future.length > 0
 
   return (
-    <div className="cv-ed cv-ed-full cv-ed-dark nokey">
+    <div className="cv-ed cv-ed-full cv-ed-pro nokey">
       <header className="cv-ed-top">
         <button type="button" className="cv-ed-ib" aria-label={t('editor.back')} title={t('editor.back')} onClick={onBack}>
           <Icon name="back" />

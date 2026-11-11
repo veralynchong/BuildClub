@@ -139,11 +139,12 @@ export function ShotClips({ shots, project, sources, error, gens, takes, planId,
   )
 }
 
-// A still of the footage's first frames, small and 9:16.
+// A still of the footage's first frames, small and 9:16. `loop` (never played) marks it as a still for speed-control
+// extensions, which otherwise put a "1.00" badge over it that spills onto the take's name and length.
 function Thumb({ url }: { url: string }) {
   return (
     <span className="cv-ed-thumb" aria-hidden="true">
-      {url ? <video src={`${url}#t=0.1`} preload="metadata" muted playsInline tabIndex={-1} /> : null}
+      {url ? <video src={`${url}#t=0.1`} preload="metadata" muted loop playsInline tabIndex={-1} /> : null}
     </span>
   )
 }

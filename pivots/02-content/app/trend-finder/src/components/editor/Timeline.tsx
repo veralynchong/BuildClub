@@ -304,7 +304,7 @@ export function Timeline(props: Props) {
                         selected={selection?.lane === lane && selection.id === b.id}
                         disabled={readOnly}
                         project={project}
-                        title={lane === 'captions' && captionLocked ? t('editor.lane.capLocked') : undefined}
+                        title={lane === 'captions' && captionLocked ? `${b.label}\n${t('editor.lane.capLocked')}` : undefined}
                         targets={() => targetsFor(b.id)}
                         threshold={threshold}
                         duck={lane === 'music' ? duck : null}
