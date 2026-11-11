@@ -301,7 +301,9 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const full = total > MAX_TOTAL - 0.2
   const settings = exportSettings(project)
   const platform = PLATFORMS[settings.preset]
-  const zoneWarnings = safeZoneWarnings(project, projectPages(project, lines, words), settings.preset)
+  const pages = projectPages(project, lines, words)
+  const pageLines = pages.map((pg) => ({ start: pg.startMs / 1000, end: (pg.startMs + pg.durationMs) / 1000, text: pg.text }))
+  const zoneWarnings = safeZoneWarnings(project, pages, settings.preset)
   const locked = readOnly || stale || !!edit.writing
   const fill = async () => setSkipped(await timeline.fill())
 
@@ -409,6 +411,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
                 readOnly={locked}
                 undo={aiUndo}
                 log={aiLog}
+                captionLines={pageLines}
                 firstCut={firstCut}
                 onFirstCut={(log, label) => setFirstCut({ log, label })}
                 onSeek={seek}

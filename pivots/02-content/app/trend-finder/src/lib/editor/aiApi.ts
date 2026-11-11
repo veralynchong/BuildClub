@@ -165,3 +165,96 @@ export async function getDuckRanges(planId: string, project: Pick<EditProject, '
 
 // The saved timeline as an EDL (Premiere, DaVinci Resolve) or OpenTimelineIO.
 export const edlUrl = (planId: string, format: 'edl' | 'otio' = 'edl'): string => `/api/ideas/${encodeURIComponent(planId)}/edit/edl?format=${format}`
+
+// ---- writing helpers (backend/editor_ai.py) ----
+
+// "ai" when Claude wrote it, "rules" when the plain checks did (no key, or the demo switch is on).
+export type AnswerSource = 'ai' | 'rules'
+
+export interface HookCheck {
+  source: AnswerSource
+  score: number // 1 to 5
+  verdict: string
+  fixes: string[]
+}
+
+export interface CaptionRewrite {
+  id: string
+  before: string
+  after: string
+}
+
+export interface PostCopy {
+  source: AnswerSource
+  preset: string
+  title: string // at most 60 characters
+  caption: string // at most 150
+  hashtags: string[] // 3 to 5, each starting with #
+}
+
+export type TaskType = 'swap_take' | 'trim' | 'caption' | 'music' | 'other'
+
+export interface ClientNote {
+  id: string
+  atSec: number | null // null: a note on the whole cut
+  text: string
+  author: string
+  source: 'staff' | 'review'
+}
+
+export interface NoteTask {
+  commentId: string
+  type: TaskType
+  target: string
+  action: string
+  done: boolean
+  source: AnswerSource
+}
+
+export interface ClientNotes {
+  shared: boolean // a cut was sent to the client's approver
+  cut: { status: 'waiting' | 'approved' | 'rejected'; sentAt: number; decidedAt: number | null } | null
+  notes: ClientNote[]
+  tasks: NoteTask[]
+}
+
+export interface TimedLine {
+  id?: string
+  start: number
+  end: number
+  text: string
+}
+
+const aiBase = (planId: string) => `/api/ideas/${encodeURIComponent(planId)}/edit/ai`
+
+const post = (url: string, body: unknown): Promise<Response> =>
+  fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+
+export async function checkHook(planId: string, captions: TimedLine[], texts: TimedLine[]): Promise<HookCheck> {
+  return send(await post(`${aiBase(planId)}/hook-check`, { captions, texts }))
+}
+
+export async function rewriteCaptions(planId: string, captions: SpeechCaption[]): Promise<{ source: AnswerSource; items: CaptionRewrite[] }> {
+  return send(await post(`${aiBase(planId)}/rewrite-captions`, { captions: captions.map(({ id, start, end, text }) => ({ id, start, end, text })) }))
+}
+
+export async function writePost(planId: string, preset: string): Promise<PostCopy> {
+  return send(await post(`${aiBase(planId)}/copy`, { preset }))
+}
+
+export async function getClientNotes(planId: string): Promise<ClientNotes> {
+  return send(await fetch(`${aiBase(planId)}/client-notes`))
+}
+
+export async function makeNoteTasks(planId: string): Promise<{ source: AnswerSource; tasks: NoteTask[] }> {
+  return send(await post(`${aiBase(planId)}/client-notes/tasks`, {}))
+}
+
+export async function setTaskDone(planId: string, commentId: string, done: boolean): Promise<NoteTask[]> {
+  const r = await fetch(`${aiBase(planId)}/client-notes/tasks/${encodeURIComponent(commentId)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ done }),
+  })
+  return (await send<{ tasks: NoteTask[] }>(r)).tasks
+}

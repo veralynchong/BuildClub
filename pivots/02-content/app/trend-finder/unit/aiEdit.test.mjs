@@ -104,3 +104,15 @@ test('stamp formats minutes and tenths', () => {
   assert.equal(stamp(4.25), '0:04.3')
   assert.equal(stamp(65.04), '1:05.0')
 })
+
+test('applyRewrites: only the picked speech lines change, and nothing picked returns the same project', async () => {
+  const { applyRewrites } = await import('../src/lib/editor/aiEdit.ts')
+  const speech = [{ id: 'sp1', start: 0, end: 1, text: 'so um the tofu' }, { id: 'sp2', start: 1, end: 2, text: 'is crispy' }]
+  const p = project([clip('c1', take('t1', 's1'), 0, 5)], { enabled: true, source: 'speech', speech })
+  const next = applyRewrites(p, [{ id: 'sp1', after: 'the tofu' }, { id: 'nope', after: 'x' }])
+  assert.deepEqual(next.captions.speech.map((e) => e.text), ['the tofu', 'is crispy'])
+  assert.equal(next.captions.source, 'speech')
+  assert.equal(applyRewrites(p, [{ id: 'nope', after: 'x' }]), p)
+  assert.equal(applyRewrites(p, [{ id: 'sp2', after: 'is crispy' }]), p)
+  assert.equal(applyRewrites(project([]), [{ id: 'sp1', after: 'x' }]).captions.speech, undefined)
+})

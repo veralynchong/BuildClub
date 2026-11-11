@@ -7,11 +7,13 @@ import { sourceKey, clipLength } from '../../lib/editor/timeline'
 import type { Clip, EditProject } from '../../lib/editor/types'
 import {
   getClipSuggestions, getFirstCut, getKeeps, getTakeRanking, NotReady,
-  type CleanupItem, type ClipSuggestions, type FirstCutEntry, type TakeRanking,
+  type CleanupItem, type ClipSuggestions, type FirstCutEntry, type TakeRanking, type TimedLine,
 } from '../../lib/editor/aiApi'
 import { applyFirstCut, firstCutLine, MAX_CLIPS, nextClipId, PAD_DEFAULT, PAD_MAX, previewFrame, rankReason, replaceWithRanges, setClipRange, stamp, swapTake } from '../../lib/editor/aiEdit'
 import { ErrorText } from '../ErrorText'
 import { clipLabel } from './clipName'
+import { CopyCard } from './CopyCard'
+import { ClientNotes } from './ClientNotes'
 
 interface Props {
   planId: string | null // the plan whose takes these are; null for a workspace
@@ -24,6 +26,7 @@ interface Props {
   readOnly: boolean
   undo: { label: string } | null
   log: string[]
+  captionLines: TimedLine[] // the captions the video shows now
   firstCut: { log: FirstCutEntry[] } | null // why the last auto first cut did what it did; null once undone
   onFirstCut: (log: FirstCutEntry[], label: string) => void
   onSeek: (frame: number) => void // move the player there
@@ -47,6 +50,8 @@ export function AiTool(props: Props) {
     <div className="cv-ed-tool cv-ed-ai">
       <p className="muted small">{t('editor.ai.intro')}</p>
       {planId && <FirstCutCard {...props} planId={planId} />}
+      {planId && <CopyCard planId={planId} project={props.project} captionLines={props.captionLines} readOnly={readOnly} onApply={props.onApply} />}
+      {planId && <ClientNotes planId={planId} readOnly={readOnly} onSeek={props.onSeek} />}
       {undo && (
         <div className="cv-ed-ai-undo">
           <button type="button" className="btn btn-ghost btn-sm" disabled={readOnly} onClick={onUndo}>{t('editor.ai.undo')}</button>

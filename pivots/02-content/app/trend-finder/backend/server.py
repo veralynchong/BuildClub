@@ -59,6 +59,7 @@ import workspaces
 import shotlist
 import storyboard
 import cleaning
+import editor_ai
 import suggest
 import finishing
 import takes
@@ -773,7 +774,7 @@ def db() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
     migrate_medians(conn)
-    for statement in workspaces.SCHEMA + auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + editing.SCHEMA + generations.SCHEMA + renders.SCHEMA + recheck.SCHEMA:
+    for statement in workspaces.SCHEMA + auth.SCHEMA + publishing.SCHEMA + takes.SCHEMA + canvas.SCHEMA + editing.SCHEMA + generations.SCHEMA + renders.SCHEMA + recheck.SCHEMA + editor_ai.SCHEMA:
         conn.execute(statement)
     auth.migrate(conn)
     publishing.migrate(conn)
@@ -986,6 +987,7 @@ app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
 app.include_router(workspaces.make_router(db, load))
 app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR, gen_router))
+app.include_router(editor_ai.make_router(db, load, storyboard_budget))
 app.include_router(suggest.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(finishing.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))

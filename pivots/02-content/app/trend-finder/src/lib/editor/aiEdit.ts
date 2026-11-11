@@ -134,3 +134,18 @@ export function firstCutLine(e: FirstCutEntry, take: string): string {
 }
 
 const round1 = (n: number): string => (Math.round(n * 10) / 10).toFixed(1)
+
+// Accepted caption rewrites: the speech lines with these ids get their new text. The same project comes back when none matches.
+export function applyRewrites(p: EditProject, picks: { id: string; after: string }[]): EditProject {
+  const speech = p.captions.speech
+  if (!speech) return p
+  const by = new Map(picks.map((x) => [x.id, x.after]))
+  let changed = false
+  const next = speech.map((e) => {
+    const after = by.get(e.id)
+    if (after === undefined || after === e.text) return e
+    changed = true
+    return { ...e, text: after }
+  })
+  return changed ? { ...p, captions: { ...p.captions, speech: next } } : p
+}
