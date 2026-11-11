@@ -1,5 +1,18 @@
 # STATUS
 
+## 2026-11-12：介面固定比例（option B，`feat/canvas-restore`）
+
+- 一行狀態：視窗縮放時字級、按鈕、padding、側欄與面板寬度都維持固定 px，只有中間區（主欄、畫布視窗、剪輯器預覽與時間軸）吸收多出或不足的空間；視窗窄於約 1280 時頁面橫向捲動，不再重排。已 push，未合併。
+- Commit：c4860e7（14 個 CSS 檔）。
+- 原本會隨視窗變的：`.main`、Plan、規劃板的左右 padding（3vw）；h1/h2 與多個標題的 `clamp(…vw…)`（1100 寬時變小）；Research 表格（容器 1000px 門檻，1280 寬是 4 欄、1440 是 5 欄）；Home 卡片格（960px 門檻，6 欄 vs 12 欄）；Brief／Add client／Approvals 的 1000–1100px 斷點；剪輯器時間軸在內容超出寬度時多出捲軸，高度 240→255。畫布（工具列、header、History）本來就固定，沒改。
+- 做法：`.shell` 加 `min-width: 1264px`（1280 減 16px 傳統捲軸）；vw 換成桌面 px 值；刪掉上述桌面斷點；Home/Research 容器門檻降到 900；Plan 底部操作列改用固定 264px 側欄寬；時間軸 `overflow-x: scroll` 永遠保留捲軸。
+- 最後驗證：2026-11-12，`bash bin/verify.sh full` GREEN（後端 1242 passed、3 skipped；前端 unit PASS）；tsc、eslint、build 通過。:8797（沒重啟，dist 同步到暫存目錄）在 Home、Research、Plans、Video canvas（含 History）、剪輯器以 1280x720、1440x900、1920x1080、1100x800 比對每個元素的 font-size/padding/gap/欄數：0 差異；剪輯器頂列 40、transport 40、時間軸 255、軌道 28/28/80/30/40、左欄 248、inspector 384、片段條 78px 在四種尺寸都相同，預覽維持 9:16 隨高度縮放。截圖與 measurements.json 在 session scratchpad 的 `fixed-scale/`。
+- 已知缺口：
+  - 窄於 861px 時舊的手機版斷點（側欄抽屜等）仍會觸發；1100 寬時 fixed 定位的元素（Plan 底部操作列、toast）跟著視窗而不是 1264 寬的頁面。
+  - Landing、Login、Portal、shared review 頁面不在 `.shell` 內，仍是原本的響應式。
+  - 剪輯器在 1100x800 會同時有橫向頁面捲軸，時間軸捲軸固定顯示（macOS 隱藏式捲軸看不到差別）。
+- 下一步：使用者在自己的瀏覽器拉視窗看過後決定是否合併。
+
 ## 2026-11-12：Canvas 接回剪輯器分支（`feat/canvas-restore`，疊在 `feat/editor-timeline`）
 
 - 一行狀態：側欄「Video canvas」（展開側欄與收合圖示列）重新打開自由畫布 CanvasScreen（經 canvas chooser；只有一個核准企劃時直接開），規劃板仍可從 Plan 頁進入；Channel 仍不在選單。freeform canvas WIP 與 demo-day 11/07 版本都已併入；已 push，draft PR base `feat/editor-timeline`，未合併。
