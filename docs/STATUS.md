@@ -1,5 +1,22 @@
 # STATUS
 
+## 2026-11-12：Beta 上線準備（`feat/beta-launch`，PR #59 draft，base `feat/canvas-restore`）
+
+- 一行狀態：Mac mini 上兩個 beta instance 已上線（daphne :8801、collage :8802，各自的 DB／media／預算），launchd 自動重啟，Cloudflare quick tunnel 對外，每天 03:00 備份；匯出修好，長搜尋碰到 tunnel 的 100 秒逾時改成等快取。計畫在 `docs/beta-launch-plan.md`，試用者文件草稿在 claude.ai Doc「Remake Beta — Tester Kit (draft)」。
+- Commits：849c843 計畫、4087b4f `BETA_TOTAL_USD` 跨天總上限、8de1042/c9e28b8/460824c/253e0dc `bin/beta-instance.sh`（install/update/status/backup/add-user）、最新一筆 search 逾時修正（TikTok 預設、錯誤文字不再叫人跑 npm run api）。
+- 最後驗證：2026-11-12，`bash bin/verify.sh full` GREEN（後端 1249 passed、3 skipped；前端 unit；beta instance script）；tsc、eslint、build 通過。live：兩個 tunnel 從外部回 200；kill 後端 launchd 幾秒內拉回；備份 `pragma integrity_check` ok；兩邊 API 匯出成功（daphne 17.5 秒、collage 3 秒，1080x1920，有音軌）。E2E（Playwright，經 tunnel）：登入、建立 client、搜尋、企劃、storyboard、上傳、剪輯 PASS；兩個 instance 資料互相看不到 PASS；登出、密碼錯誤 PASS；https 下 Secure cookie 正常。截圖在 session scratchpad 的 `beta-e2e/`。花費：daphne US$0.55、collage US$0.16。
+- 踩到的坑：
+  - launchd 啟動的程式讀 `~/Desktop` 底下的 venv 會被 macOS TCC 擋住，uvicorn 卡在啟動、log 是空的。預設 venv 改成 lunch worktree 的 `.venv`（之後可考慮做一個 `~/beta` 專用 venv）。
+  - 沒有任何帳號時，backend 不需要登入就能進。`install` 和 `status` 現在會印 WARNING。兩個 instance 都已經開了 `team+<name>@remake.test`。
+  - 匯出需要 `package-lock.json`（render-reel.mjs 用它算 bundle key），已經改成會複製。
+- 已知缺口：
+  - 搜尋逾時的修正只有 unit test，還沒用真的新搜尋（約 US$0.45）走過 tunnel。
+  - 畫布上付費模型的提示寫「Configure its account before running.」，試用者沒辦法照做；畫布歸剪輯 agent，這次沒改。
+  - Assistant「Preview plan」、「Write new ways to start」仍會花 Claude 的錢（每次約 US$0.01），有總上限擋著。
+  - 兩個 instance 裡留著 E2E 的測試資料（Daphne Only Bakery、Collage Club Only），寄出前要清空 state 重開。
+  - quick tunnel 的網址只要 cloudflared 重啟就會變；沒有測過 mini 真的重開機。
+- 下一步：使用者給試用者 email、決定要不要買網域；週末把剪輯 agent 的修正併進來（`beta-instance.sh update`），清掉測試資料、開正式帳號，週一寄出。
+
 ## 2026-11-12：介面固定比例（option B，`feat/canvas-restore`）
 
 - 一行狀態：視窗縮放時字級、按鈕、padding、側欄與面板寬度都維持固定 px，只有中間區（主欄、畫布視窗、剪輯器預覽與時間軸）吸收多出或不足的空間；視窗窄於約 1280 時頁面橫向捲動，不再重排。已 push，未合併。
