@@ -55,8 +55,12 @@ export type LogoCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-righ
 // Where the captions come from: the shots' lines (or the voiceover's words), or lines made from the speech in the takes.
 export type CaptionSource = 'lines' | 'speech'
 
-// One caption line made from speech, on the timeline (seconds). Its text can be edited.
-export type SpeechCaption = { id: string; start: number; end: number; text: string }
+// One word of a speech caption line, on the timeline (seconds). `key` names the take word it came from ("<take>:<ms>").
+export type CaptionWord = { text: string; start: number; end: number; key?: string }
+
+// One caption line made from speech, on the timeline (seconds). Its text can be edited. `words` (absent on lines made
+// before word timing existed) gives each word its own time while the text still reads the same as the words.
+export type SpeechCaption = { id: string; start: number; end: number; text: string; words?: CaptionWord[] }
 
 export type Captions = {
   enabled: boolean
@@ -79,6 +83,7 @@ export type EditProject = {
   logoSize: LogoSize // the backend fills these in for a project saved without them
   logoCorner: LogoCorner
   export?: ExportSettings
+  transcriptFixes?: Record<string, string> // words corrected in the transcript: a take word's key to the text shown instead
 }
 
 // One footage item from list_sources, without the backend-only `path`.

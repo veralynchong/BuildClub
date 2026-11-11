@@ -94,14 +94,19 @@ export interface TakeMedia {
   height: number | null
   peaks: { rate: number; values: number[] } | null
   filmstrip: { height: number; times: number[] } | null
+  speech: { status: Speech; words: { text: string; start: number; end: number }[] } // the transcript view's words
 }
 
 export async function getTakeMedia(planId: string, takeId: string): Promise<TakeMedia> {
   const r = await fetch(`/api/ideas/${encodeURIComponent(planId)}/takes/${encodeURIComponent(takeId)}/analysis`)
-  const body = await send<{ status: string; results: Partial<TakeMedia> | null }>(r)
+  type Raw = Partial<Omit<TakeMedia, 'speech'>> & { transcript?: { status?: string; words?: TakeMedia['speech']['words'] } }
+  const body = await send<{ status: string; results: Raw | null }>(r)
   const x = body.results
   if (body.status !== 'done' || !x) throw new NotReady(body.status, '')
-  return { width: x.width ?? null, height: x.height ?? null, peaks: x.peaks ?? null, filmstrip: x.filmstrip ?? null }
+  const st = x.transcript?.status
+  const status: Speech = st === 'ok' || st === 'unavailable' ? st : 'none'
+  const speech = { status, words: status === 'ok' ? (x.transcript?.words ?? []) : [] }
+  return { width: x.width ?? null, height: x.height ?? null, peaks: x.peaks ?? null, filmstrip: x.filmstrip ?? null, speech }
 }
 
 export const thumbUrl = (planId: string, takeId: string, n: number, version: string): string =>

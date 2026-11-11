@@ -14,7 +14,7 @@ import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { useTakeAnalysis } from '../../lib/editor/useTakeAnalysis'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, clipLength, clipStarts, clipStatus, FPS, moveClip, newClipId, reelDurationInFrames, sourceKey, sourcesWithShots, splitAt, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import { addVoice, clipLength, clipStarts, clipStatus, FPS, moveClip, newClipId, reelDurationInFrames, removeClip, sourceKey, sourcesWithShots, splitAt, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { EditProject, ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
@@ -49,6 +49,8 @@ import { Icon } from './icons'
 import { clipLabel } from './clipName'
 import { ErrorText } from '../ErrorText'
 import { ExportBar } from './ExportBar'
+import { Transcript } from './Transcript'
+import { selectionCuts, selectionLabel, setWordFix, transcriptGroups, type TakeSpeech } from '../../lib/editor/transcript'
 
 interface Props {
   ideaId: ResourceInput
@@ -131,6 +133,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const tlScroll = useRef<HTMLDivElement>(null)
   const [showMarks, setShowMarks] = useState(true) // AI markers on the video lane
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set()) // markers dismissed with Keep (this session only)
+  const [leftTab, setLeftTab] = useState<'shots' | 'transcript'>('shots')
 
   // Undo and redo: every change to the project is recorded, whichever tool made it. An AI change carries its name, so
   // the AI tab can offer "Undo last AI change" while it is still the last step.
@@ -505,6 +508,58 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
       return e instanceof Error ? e.message : String(e)
     }
   }
+  // The transcript: each take's words (fetched with its filmstrip), shown per clip through its trim.
+  const speech: Record<string, TakeSpeech> = Object.fromEntries(Object.entries(tl.looks).map(([id, look]) => [id, look.speech]))
+  const groups = transcriptGroups(project, speech, project.transcriptFixes)
+  const takeIdsOnTl = [...new Set(project.clips.flatMap((c) => (c.source.kind === 'take' ? [c.source.id] : [])))]
+  const takeNameOf = (id: string) => nameOf(project.clips.find((c) => c.source.id === id) as (typeof project.clips)[number])
+  const waitingFor = takeIdsOnTl.filter((id) => { const s = allTakes.find((x) => x.id === id)?.analysis?.status; return !speech[id] && s !== 'done' && s !== 'failed' })
+  const failedFor = takeIdsOnTl.filter((id) => allTakes.find((x) => x.id === id)?.analysis?.status === 'failed')
+  const trNotice = project.clips.length === 0 ? t('editor.tr.empty')
+    : waitingFor.length > 0 ? t('editor.tr.waiting', { names: waitingFor.map(takeNameOf).join(', ') })
+    : failedFor.length > 0 ? t('editor.tr.failed', { names: failedFor.map(takeNameOf).join(', ') })
+    : groups.some((g) => g.state === 'ok' || g.state === 'pending') ? null
+    : groups.some((g) => g.state === 'unavailable') ? t('editor.tr.unavailable') : t('editor.tr.noSpeech')
+  // Delete words or pauses: per clip, the same cut the AI clean-up makes (keeps from the server, the clip split around
+  // them); a clip whose every word goes is removed. All of it is one undo step.
+  const cutWords = async (a: number, b: number): Promise<string | null> => {
+    const start = current()
+    if (!planId || !start || locked) return t('editor.ai.err')
+    const cuts = selectionCuts(groups, a, b)
+    const label = selectionLabel(groups, a, b)
+    try {
+      const plans = await Promise.all(cuts.map(async (cut) => {
+        const clip = start.clips.find((c) => c.id === cut.clipId)
+        if (!clip) throw new Error(t('editor.tr.changed'))
+        if (cut.whole || clip.out - clip.in - (cut.to - cut.from) < 0.2) return { clip, keeps: [] as number[][] }
+        const same = (k: number[][]) => k.length === 1 && Math.abs(k[0][0] - clip.in) < 1e-3 && Math.abs(k[0][1] - clip.out) < 1e-3
+        let keeps = await getKeeps(planId, clip.in, clip.out, [[cut.from, cut.to]], PAD_DEFAULT)
+        if (same(keeps)) keeps = await getKeeps(planId, clip.in, clip.out, [[cut.from, cut.to]], 1)
+        return { clip, keeps: same(keeps) ? null : keeps }
+      }))
+      const base = current()
+      if (!base || plans.some((x) => { const now = base.clips.find((c) => c.id === x.clip.id); return !now || now.in !== x.clip.in || now.out !== x.clip.out })) return t('editor.tr.changed')
+      let next = base
+      for (const x of plans) {
+        if (x.keeps === null) continue
+        next = x.keeps.length === 0 ? removeClip(next, x.clip.id) : replaceWithRanges(next, x.clip.id, x.keeps, nextClipId)
+      }
+      if (next === base) return t(plans.every((x) => x.keeps === null) ? 'editor.mark.tooShort' : 'editor.mark.cant')
+      nextLabel.current = label.gap !== null ? t('editor.tr.deletedGap', { sec: (Math.round(label.gap * 10) / 10).toFixed(1) }) : t('editor.tr.deleted', { text: label.text })
+      update(next)
+      if (current() !== next) {
+        nextLabel.current = null
+        return t('editor.ai.err')
+      }
+      return null
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e)
+    }
+  }
+  const fixWord = (key: string, text: string, original: string) => {
+    const base = current()
+    if (base && !locked) update(setWordFix(base, key, text, original))
+  }
   const canUndo = hist.current.past.length > 0
   const canRedo = hist.current.future.length > 0
 
@@ -553,11 +608,28 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
       <div className="cv-ed-main">
         <aside className="cv-ed-left">
           <div className="cv-ed-ptabs" role="tablist" aria-label={t('editor.left.tabs')}>
-            <button type="button" role="tab" className="cv-ed-ptab" aria-selected="true" id="cv-ed-ltab-shots" aria-controls="cv-ed-lpanel-shots">{t('editor.shots.title')}</button>
+            <button type="button" role="tab" className="cv-ed-ptab" aria-selected={leftTab === 'shots'} id="cv-ed-ltab-shots" aria-controls="cv-ed-lpanel-shots" onClick={() => setLeftTab('shots')}>{t('editor.shots.title')}</button>
+            <button type="button" role="tab" className="cv-ed-ptab" aria-selected={leftTab === 'transcript'} id="cv-ed-ltab-transcript" aria-controls="cv-ed-lpanel-transcript" onClick={() => setLeftTab('transcript')}>{t('editor.tr.title')}</button>
           </div>
-          <div className="cv-ed-left-body" role="tabpanel" id="cv-ed-lpanel-shots" aria-labelledby="cv-ed-ltab-shots">
-            <ShotClips uploads={uploads} shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={allTakes} planId={planId} onTakes={setFreshTakes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
-          </div>
+          {leftTab === 'shots' ? (
+            <div className="cv-ed-left-body" role="tabpanel" id="cv-ed-lpanel-shots" aria-labelledby="cv-ed-ltab-shots">
+              <ShotClips uploads={uploads} shots={filled} project={project} sources={shotSources} error={sourceError} gens={gens} takes={allTakes} planId={planId} onTakes={setFreshTakes} full={full} locked={locked} timeline={timeline} selected={selected} onSelect={pick} />
+            </div>
+          ) : (
+            <div className="cv-ed-left-body" role="tabpanel" id="cv-ed-lpanel-transcript" aria-labelledby="cv-ed-ltab-transcript">
+              <Transcript
+                groups={groups}
+                notice={trNotice}
+                nameOf={(id) => { const c = project.clips.find((x) => x.id === id); return c ? nameOf(c) : '' }}
+                seconds={frame / FPS}
+                playing={playing}
+                readOnly={locked}
+                onSeek={(sec) => seek(Math.min(frames - 1, Math.ceil(sec * FPS - 1e-6)))}
+                onDelete={cutWords}
+                onFix={fixWord}
+              />
+            </div>
+          )}
         </aside>
         <div className="cv-ed-centre">
           <div className="cv-ed-player" ref={playerBox}>

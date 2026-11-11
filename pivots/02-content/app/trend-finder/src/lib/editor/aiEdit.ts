@@ -5,6 +5,7 @@ import type { Clip, ClipSource, EditProject, SpeechCaption } from './types.ts'
 import { applyNewer, clipLength, clipStarts, FPS, MAX_TOTAL, MIN_CLIP, totalLength } from './timeline.ts'
 import type { CleanupItem, FirstCut, FirstCutEntry, RankedTake } from './aiApi.ts'
 import type { Take } from '../takes.ts'
+import { fixCaptions } from './transcript.ts'
 
 export const MAX_CLIPS = 100 // backend/editing.py MAX_CLIPS
 export const PAD_DEFAULT = 4
@@ -20,8 +21,10 @@ export function speechKey(p: Pick<EditProject, 'clips'>): string {
   return `${p.clips.length}-${h.toString(36)}`
 }
 
+// New speech captions, with the words already corrected in the transcript.
 export function withSpeechCaptions(p: EditProject, entries: SpeechCaption[]): EditProject {
-  return { ...p, captions: { ...p.captions, enabled: true, source: 'speech', speech: entries, speechKey: speechKey(p) } }
+  const speech = p.transcriptFixes ? fixCaptions(entries, p.transcriptFixes) : entries
+  return { ...p, captions: { ...p.captions, enabled: true, source: 'speech', speech, speechKey: speechKey(p) } }
 }
 
 // The clip becomes one clip per kept range, in order, of the same take with its trim moved. The first keeps the id (so it
