@@ -1,5 +1,17 @@
 # STATUS
 
+## 2026-11-12：Canvas 接回剪輯器分支（`feat/canvas-restore`，疊在 `feat/editor-timeline`）
+
+- 一行狀態：側欄「Video canvas」（展開側欄與收合圖示列）重新打開自由畫布 CanvasScreen（經 canvas chooser；只有一個核准企劃時直接開），規劃板仍可從 Plan 頁進入；Channel 仍不在選單。freeform canvas WIP 與 demo-day 11/07 版本都已併入；已 push，draft PR base `feat/editor-timeline`，未合併。
+- Commits：d2bbc08（側欄指向 'canvas'）、e698bcd（cherry-pick 63f3dd5：canvas/後端/測試檔在本分支已完全相同（02c5f99、2c069a8 已帶入），所以是空 commit；ResultsScreen 與 editor.css 保留本分支；snapshot 裡的 bin/__pycache__ .pyc 沒帶）、f1b9eb5（merge `chore/demo-day-1107-snapshot`）。
+- 衝突處理：Sidebar/App 兩邊都已改成 'canvas'，保留本分支註解；EditorPanel/Timeline/editor.css 保留新剪輯器，只移植導覽需要的 `guideExport`/`onGuideState` 和較大的匯出預覽，demo-day 的片段「進場動畫」和時間軸縮圖沒移植；STATUS.md 重排讓 11/12 段落在最上面。後端照 demo-day 合併（guided_demo、analyze max_retries=0、REMOTION_CACHE_DIR）。
+- 最後驗證：2026-11-12，`bash bin/verify.sh full` GREEN（後端 1242 passed、3 skipped；前端 unit 802 pass）；tsc、eslint、build 通過。:8797 零花費後端（重啟並重新 seed 3 個 take＋音樂）1440x900：側欄 Video canvas → 自由畫布（工具列、Run all/Assistant/History/Review link、模型/比例/尺寸/數量控制、History 錢包面板）→ 新增 Editor & output 節點 → Open editor → 淺色剪輯器、Fill in shot order、Transcript。`?guided=tofu` 在 :8797 走到 Canvas 5/6 會出現「The screen could not open」，因為六鏡剪輯器要 guided 後端；改用 `bin/guided-demo.py --port 8996`（generationEnabled false）完整走完 1/7→7/7，進新剪輯器、本機匯出成片。沒有觸發任何付費生成。截圖在 session scratchpad 的 `canvas-restore/`。
+- 已知缺口：
+  - 一般 isolated backend 不提供 `/api/guided/sessions/*`，導覽的剪輯器步驟必須用 `bin/guided-demo.py` 開。
+  - 導覽六鏡在新剪輯器的影片條沒有縮圖條（新時間軸的縮圖來自 take 分析，prepared 素材沒有；demo-day 的縮圖做法沒移植）。
+  - docs/test-log.md 的 demo-day 段落合併後排在檔頭前面，沒整理。
+- 下一步：使用者看過畫布與導覽後決定是否合併到 `feat/editor-timeline`。
+
 ## 2026-11-12：剪輯器淺色版與一批介面修正（`feat/editor-timeline`）
 
 - 一行狀態：剪輯器預設改成淺色（App 切到深色時才用原本的深色）、側欄拿掉 Channel、修掉 Shots 列重疊和預覽左上角的「1.00」、字幕條多顯示字；已 push，未開 PR、未合併。
