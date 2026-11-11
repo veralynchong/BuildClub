@@ -92,7 +92,8 @@ def caption_chunks(words: list[dict]) -> list[dict]:
 
     def flush():
         if cur:
-            out.append({"start": cur[0]["start"], "end": cur[-1]["end"], "text": " ".join(w["text"].strip() for w in cur)})
+            out.append({"start": cur[0]["start"], "end": cur[-1]["end"], "text": " ".join(w["text"].strip() for w in cur),
+                        "words": list(cur)})
             cur.clear()
 
     for w in spoken:
@@ -106,9 +107,16 @@ def caption_chunks(words: list[dict]) -> list[dict]:
     return out
 
 
+def word_key(take_id: str, start: float) -> str:
+    """Names one word of a take, the way the editor's transcript names it ("<take>:<start in ms>")."""
+    return f"{take_id}:{int(round(start * 1000))}"
+
+
 def timeline_captions(clips: list[dict], words_by_take: dict[str, list[dict]]) -> list[dict]:
     """Caption entries on the timeline. `clips` are the timeline clips in order ({source: {kind, id}, in, out});
-    each take clip shows the words of its take that fall inside its in/out, moved to the clip's place."""
+    each take clip shows the words of its take that fall inside its in/out, moved to the clip's place. Each entry also
+    carries its words with their own times on the timeline and the key of the take word, so the captions follow the
+    real word timing and a word corrected in the transcript can find its caption."""
     out, at = [], 0.0
     for c in clips:
         length = c["out"] - c["in"]
@@ -118,7 +126,10 @@ def timeline_captions(clips: list[dict], words_by_take: dict[str, list[dict]]) -
                 start = at + max(0.0, ch["start"] - c["in"])
                 end = at + min(length, ch["end"] - c["in"])
                 if end - start > 0.05:
-                    out.append({"start": round(start, 3), "end": round(end, 3), "text": ch["text"]})
+                    words = [{"text": w["text"].strip(), "start": round(at + min(length, max(0.0, w["start"] - c["in"])), 3),
+                              "end": round(at + min(length, max(0.0, w["end"] - c["in"])), 3),
+                              "key": word_key(src.get("id"), w["start"])} for w in ch["words"]]
+                    out.append({"start": round(start, 3), "end": round(end, 3), "text": ch["text"], "words": words})
         at += length
     out = out[:MAX_CAPTIONS]
     return [{"id": f"sp{i + 1}", **e} for i, e in enumerate(out)]

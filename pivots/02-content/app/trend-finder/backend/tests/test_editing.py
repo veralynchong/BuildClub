@@ -77,6 +77,18 @@ def test_check_project_accepts_drift_and_empty():
     assert editing.check_project(project(clip(b=90.0), clip("c2", 0, 90.0))) is None
 
 
+def test_check_project_speech_words_and_transcript_fixes():
+    cap = {"id": "sp1", "start": 0.0, "end": 1.0, "text": "hi there",
+           "words": [{"text": "hi", "start": 0.0, "end": 0.4, "key": "t1:0"}, {"text": "there", "start": 0.4, "end": 1.0}]}
+    good = {**project(clip()), "captions": {"enabled": True, "source": "speech", "speech": [cap]}, "transcriptFixes": {"t1:0": "Hi"}}
+    assert editing.check_project(good) is None
+    for words in ("x", [{"text": "a"}], [{"text": 1, "start": 0, "end": 1}], [{"text": "a", "start": 1, "end": 0.5}],
+                  [{"text": "a", "start": 0, "end": 1}] * 41):
+        assert editing.check_project({**good, "captions": {**good["captions"], "speech": [{**cap, "words": words}]}}), words
+    for fixes in ([], {"k": 3}, {"": "a"}, {"k": "a" * 121}):
+        assert editing.check_project({**good, "transcriptFixes": fixes}), fixes
+
+
 def text(**extra):
     return {"id": "x1", "text": "hello", "start": 0, "end": 1, "position": "bottom", "color": "white", **extra}
 

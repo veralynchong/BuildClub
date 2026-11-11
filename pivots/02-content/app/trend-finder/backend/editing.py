@@ -39,6 +39,8 @@ STALE = "The edit changed somewhere else. Reload it."
 MAX_TOTAL_S, MAX_CLIPS, MAX_TEXTS, MAX_VOICE, MAX_TEXT_CHARS = 180, 100, 30, 20, 120
 MIN_CLIP_S = 0.2
 MAX_SPEECH_CAPTIONS = 400
+MAX_CAPTION_WORDS = 40  # words of one speech caption line (suggest.py makes at most 4)
+MAX_FIXES = 2000  # words corrected in the transcript
 EPS = 1e-6  # the client rounds to 1/30 s, so a 0.2 s clip can arrive as 0.1999999
 MAX_BYTES = 512 * 1024
 
@@ -189,6 +191,20 @@ def _check_captions(cap: dict) -> Optional[str]:
             return f"A speech caption can be at most {MAX_TEXT_CHARS} characters."
         if not _num(e.get("start")) or not _num(e.get("end")) or e["start"] < 0 or e["end"] <= e["start"]:
             return "A speech caption must start at 0 or later and end after it starts."
+        words = e.get("words")
+        if words is not None and not (isinstance(words, list) and len(words) <= MAX_CAPTION_WORDS and all(
+                isinstance(w, dict) and isinstance(w.get("text"), str) and len(w["text"]) <= MAX_TEXT_CHARS
+                and _num(w.get("start")) and _num(w.get("end")) and 0 <= w["start"] <= w["end"]
+                and (w.get("key") is None or (isinstance(w["key"], str) and len(w["key"]) <= 80)) for w in words)):
+            return "A speech caption's words need text and times."
+    return None
+
+
+def _check_fixes(fixes) -> Optional[str]:
+    """Words corrected in the transcript: a word's key ("<take>:<ms>") to the text shown instead."""
+    if not isinstance(fixes, dict) or len(fixes) > MAX_FIXES or not all(
+            isinstance(k, str) and 0 < len(k) <= 80 and isinstance(v, str) and len(v) <= MAX_TEXT_CHARS for k, v in fixes.items()):
+        return f"Transcript corrections must map a word to its text (at most {MAX_FIXES})."
     return None
 
 
@@ -222,6 +238,10 @@ def check_project(doc, voice_ids: Optional[set] = None) -> Optional[str]:
     problem = _check_captions(doc["captions"])
     if problem:
         return problem
+    if "transcriptFixes" in doc:
+        problem = _check_fixes(doc["transcriptFixes"])
+        if problem:
+            return problem
     music = doc.get("music")
     if music is not None and (not isinstance(music, dict) or not _num(music.get("volume"))
                               or not 0 <= music["volume"] <= 1):
