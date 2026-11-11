@@ -37,6 +37,7 @@ check "tunnel plist targets port 8801" grep -q 'http://localhost:8801' "$tmp/age
 check "editor renders from the instance copy" grep -q "<string>$b/app</string>" "$tmp/agents/com.remake.beta.daphne.plist"
 check "render script copied" test -f "$b/app/render/render-reel.mjs"
 check "remotion sources copied" test -f "$b/app/src/remotion/index.ts"
+check "package-lock copied (render bundle key)" test -f "$b/app/package-lock.json"
 
 $s install collage >/dev/null 2>&1
 check "collage budget is 8" grep -qx BETA_TOTAL_USD=8 "$tmp/beta/collage/app/.env"
@@ -60,7 +61,12 @@ check "backup keeps 7" test "$(ls "$b/backups" | wc -l | tr -d ' ')" = 7
 check "backup drops oldest" test ! -d "$b/backups/2026-11-01-0300"
 
 # status runs without a live server
-$s status >/dev/null 2>&1
+$s status >"$tmp/status.log" 2>&1
 check "status succeeds" test $? -eq 0
+check "install warns when there are no accounts" grep -q "WARNING: daphne has no accounts" "$tmp/install.log"
+check "status warns when there are no accounts" grep -q "WARNING: daphne has no accounts" "$tmp/status.log"
+sqlite3 "$b/state/data.db" "CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY); INSERT INTO users VALUES ('a@b.c')"
+$s status >"$tmp/status2.log" 2>&1
+check "no warning once an account exists" absent "WARNING: daphne" "$tmp/status2.log"
 
 [ "$fails" -eq 0 ] && echo "beta-instance tests: PASS" || { echo "beta-instance tests: $fails FAILED"; exit 1; }

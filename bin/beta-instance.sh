@@ -45,9 +45,10 @@ copy_app() {
   rsync -a --delete --exclude .venv --exclude 'data.db*' --exclude cache --exclude jobs --exclude __pycache__ \
     --exclude .env --exclude media "$TF/backend/" "$base/app/backend/"
   rsync -a --delete "$dist_src/" "$base/app/dist/"
-  # The video editor renders with Remotion from this same commit: render/, src/, public/ and package.json.
+  # The video editor renders with Remotion from this same commit: render/, src/, public/, package.json and
+  # package-lock.json (render-reel.mjs hashes it into the bundle key).
   for d in render src public; do rsync -a --delete "$TF/$d/" "$base/app/$d/"; done
-  cp "$TF/package.json" "$base/app/package.json"
+  cp "$TF/package.json" "$TF/package-lock.json" "$base/app/"
   [ ! -e "$TF/node_modules" ] || ln -sfn "$(cd "$TF/node_modules" && pwd -P)" "$base/app/node_modules"
   # The backend reads data.db and media/ next to server.py; keep them in state/ across updates.
   mkdir -p "$base/state/media"
@@ -125,6 +126,7 @@ do_install() {
   load_agent "$agents/$label.tunnel.plist" "$label.tunnel"
   load_agent "$agents/$label.backup.plist" "$label.backup"
   echo "installed $name: port $port, state $base/state"
+  open_warning
 }
 
 do_update() {
@@ -146,6 +148,13 @@ do_backup() {
   # Stamps sort by time, so everything after the newest 7 goes.
   ls -1 "$base/backups" | sort -r | tail -n +8 | while read -r old; do rm -r "$base/backups/$old"; done
   echo "backup:   $dest"
+}
+
+# With no accounts the backend lets anyone in, so an instance must get one before its link goes out.
+open_warning() {
+  local users
+  users="$(sqlite3 "$base/state/data.db" "SELECT count(*) FROM users" 2>/dev/null || echo 0)"
+  [ "${users:-0}" -gt 0 ] || echo "WARNING: $name has no accounts, so anyone with the link gets in. Run: add-user $name <email>"
 }
 
 do_status() {
@@ -173,6 +182,7 @@ print(f"today ${today:.2f}, total ${total:.2f}")
 PY
 )"
     echo "$n: pid ${pid:--}, port $port -> HTTP ${code:-000}, tunnel ${url:-none}, spend $spend"
+    open_warning
   done
 }
 
