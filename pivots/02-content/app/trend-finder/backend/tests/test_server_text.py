@@ -13,7 +13,7 @@ SERVER_TS = BACKEND.parent / "src" / "lib" / "strings" / "server.ts"
 
 # Modules whose errors and progress words reach the canvas, the editor or the plan's finished-cut area.
 # server.py is left out (mostly the search pages); its generation-wallet 429 sentences are listed by hand below.
-MODULES = ("canvas", "generations", "gen_providers", "editing", "brand", "takes", "renders", "cleaning", "cutting", "kit", "agent", "workspaces")
+MODULES = ("canvas", "generations", "gen_providers", "editing", "brand", "takes", "renders", "cleaning", "cutting", "kit", "agent", "workspaces", "suggest")
 
 # server.py sentences the canvas can receive that the ast rules cannot see.
 MANUAL = {

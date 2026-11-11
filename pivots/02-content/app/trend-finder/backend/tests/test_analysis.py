@@ -19,7 +19,7 @@ def setup(client):
 
 @pytest.fixture
 def fake_whisper(monkeypatch):
-    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work: FAKE_WORDS)
+    monkeypatch.setattr(cutting, "transcribe_words", lambda wav, work, prompt=None: FAKE_WORDS)
     monkeypatch.setattr(analysis.analyze, "WHISPER", __file__)  # only its existence is checked by callers
 
 
@@ -50,7 +50,7 @@ def test_analyse_finds_words_silence_loudness_and_thumbs(tmp_path, fake_whisper)
 
 @need_ffmpeg
 def test_whisper_missing_is_unavailable_not_failed(tmp_path, monkeypatch):
-    def gone(wav, work):
+    def gone(wav, work, prompt=None):
         raise cutting.CutError(cutting.NO_WHISPER)
     monkeypatch.setattr(cutting, "transcribe_words", gone)
     out = analysis.analyse(make_clip(tmp_path / "gap.mp4", GAP_CLIP), tmp_path / "film")

@@ -59,6 +59,7 @@ import workspaces
 import shotlist
 import storyboard
 import cleaning
+import suggest
 import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
 from compare import CompareJobs, compare_id_for
@@ -984,6 +985,7 @@ app.include_router(gen_router)
 app.include_router(canvas.make_router(db, load))
 app.include_router(workspaces.make_router(db, load))
 app.include_router(editing.make_router(db, load, lambda: MEDIA_DIR, gen_router))
+app.include_router(suggest.make_router(db, load, lambda: MEDIA_DIR))
 app.include_router(brand.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(kit.make_router(load, save, lambda: MEDIA_DIR))
 app.include_router(cut_review.make_router(db, load, lambda: MEDIA_DIR))

@@ -38,6 +38,7 @@ SCHEMA = (
 STALE = "The edit changed somewhere else. Reload it."
 MAX_TOTAL_S, MAX_CLIPS, MAX_TEXTS, MAX_VOICE, MAX_TEXT_CHARS = 180, 100, 30, 20, 120
 MIN_CLIP_S = 0.2
+MAX_SPEECH_CAPTIONS = 400
 EPS = 1e-6  # the client rounds to 1/30 s, so a 0.2 s clip can arrive as 0.1999999
 MAX_BYTES = 512 * 1024
 
@@ -162,6 +163,30 @@ def _check_voice(v, voice_ids: Optional[set]) -> Optional[str]:
     return None
 
 
+def _check_captions(cap: dict) -> Optional[str]:
+    """The optional "from speech" fields of the captions: where the captions come from, and the timed lines made
+    from the takes' speech (each is also editable text)."""
+    if cap.get("source", "lines") not in ("lines", "speech"):
+        return "The caption source must be lines or speech."
+    if "speechKey" in cap and not (isinstance(cap["speechKey"], str) and len(cap["speechKey"]) <= 64):
+        return "The caption speech key must be short text."
+    speech = cap.get("speech")
+    if speech is None:
+        return None
+    if not isinstance(speech, list) or len(speech) > MAX_SPEECH_CAPTIONS:
+        return f"At most {MAX_SPEECH_CAPTIONS} speech captions."
+    seen: set = set()
+    for e in speech:
+        if not isinstance(e, dict) or not _id(e.get("id")) or e["id"] in seen:
+            return "Every speech caption needs its own id."
+        seen.add(e["id"])
+        if not isinstance(e.get("text"), str) or len(e["text"]) > MAX_TEXT_CHARS:
+            return f"A speech caption can be at most {MAX_TEXT_CHARS} characters."
+        if not _num(e.get("start")) or not _num(e.get("end")) or e["start"] < 0 or e["end"] <= e["start"]:
+            return "A speech caption must start at 0 or later and end after it starts."
+    return None
+
+
 def check_project(doc, voice_ids: Optional[set] = None) -> Optional[str]:
     """One sentence about the first problem, or None. P3b fields are accepted when their type is right.
     With `voice_ids` (the ids in the plan's voice folder) every voiceover must point at one of them."""
@@ -189,6 +214,9 @@ def check_project(doc, voice_ids: Optional[set] = None) -> Optional[str]:
             return problem
     if not isinstance(doc.get("captions"), dict) or not isinstance(doc["captions"].get("enabled"), bool):
         return "Captions need an enabled flag."
+    problem = _check_captions(doc["captions"])
+    if problem:
+        return problem
     music = doc.get("music")
     if music is not None and (not isinstance(music, dict) or not _num(music.get("volume"))
                               or not 0 <= music["volume"] <= 1):

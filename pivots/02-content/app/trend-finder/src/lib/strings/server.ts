@@ -172,6 +172,12 @@ export const en = {
   "server.provider.reportedFailure": "The model reported a failure.",
   "server.provider.noStartFrame": "This model doesn't take a start frame.",
   "server.provider.noRefImages": "This model doesn't take reference images.",
+  "server.suggest.notReady": "The analysis of this video isn't ready yet. Try again in a moment.",
+  "server.suggest.failed": "This video couldn't be analysed, so there are no suggestions for it.",
+  "server.suggest.range": "Send a valid in and out for the clip.",
+  "server.suggest.removals": "Send the parts to remove as start and end times.",
+  "server.suggest.nothingLeft": "Nothing would be left of the clip.",
+  "server.suggest.clips": "Send the timeline clips to caption.",
 }
 
 export const zhHant: Record<keyof typeof en, string> = {
@@ -344,4 +350,10 @@ export const zhHant: Record<keyof typeof en, string> = {
   "server.provider.reportedFailure": "模型回報失敗。",
   "server.provider.noStartFrame": "這個模型不接受起始畫面。",
   "server.provider.noRefImages": "這個模型不接受參考圖。",
+  "server.suggest.notReady": "這支影片還在分析，請稍後再試。",
+  "server.suggest.failed": "這支影片無法分析，所以沒有建議。",
+  "server.suggest.range": "請傳入片段有效的起點和終點。",
+  "server.suggest.removals": "請以開始和結束時間傳入要刪除的段落。",
+  "server.suggest.nothingLeft": "這樣剪會一點都不剩。",
+  "server.suggest.clips": "請傳入要做字幕的時間軸片段。",
 }

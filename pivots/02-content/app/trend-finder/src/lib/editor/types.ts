@@ -47,13 +47,26 @@ export type VoiceSeg = {
 export type LogoSize = 'small' | 'medium' | 'large'
 export type LogoCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
+// Where the captions come from: the shots' lines (or the voiceover's words), or lines made from the speech in the takes.
+export type CaptionSource = 'lines' | 'speech'
+
+// One caption line made from speech, on the timeline (seconds). Its text can be edited.
+export type SpeechCaption = { id: string; start: number; end: number; text: string }
+
+export type Captions = {
+  enabled: boolean
+  source?: CaptionSource // absent means the shots' lines, or the voiceover when there is one
+  speech?: SpeechCaption[]
+  speechKey?: string // which clips the speech lines were made for, to tell when the timeline has changed since
+}
+
 export type EditProject = {
   fps: 30
   width: 1080
   height: 1920
   clips: Clip[]
   texts: TextItem[]
-  captions: { enabled: boolean }
+  captions: Captions
   music: MusicSetting | null
   voiceover: VoiceSeg[]
   primaries: Record<string, ClipSource>

@@ -2,7 +2,7 @@
 // Remotion bundle and the unit tests all use them.
 import { createTikTokStyleCaptions, type Caption, type TikTokPage, type TikTokToken } from '@remotion/captions'
 import { clipLength, clipStarts, totalLength } from './timeline.ts'
-import type { EditProject, VoiceSeg, Word } from './types.ts'
+import type { EditProject, SpeechCaption, VoiceSeg, Word } from './types.ts'
 
 export const COMBINE_MS = 1200
 // A page also ends once it holds about this many width units (about 7 Chinese characters), where @remotion/captions
@@ -248,16 +248,32 @@ export function voicePages(segs: VoiceSeg[], words: Record<string, Word[]>, tota
     .sort((a, b) => a.startMs - b.startMs)
 }
 
-export type CaptionMode = 'lines' | 'voice'
+// The caption lines made from speech: each one is a page of its own, its words sharing the line's time by width.
+export function speechCaptions(entries: SpeechCaption[], total: number): Caption[] {
+  const limit = ms(total)
+  const out: Caption[] = []
+  for (const e of entries) {
+    const toks = tokens(e.text.trim())
+    if (toks.length === 0 || ms(e.start) >= limit) continue
+    const caps = spread(toks, ms(e.start), Math.min(limit, ms(e.end)))
+    caps[caps.length - 1].pageBreakAfter = true
+    out.push(...caps)
+  }
+  return out.sort((a, b) => a.startMs - b.startMs)
+}
+
+export type CaptionMode = 'lines' | 'voice' | 'speech'
 
 // Any voiceover with word times switches the captions to the voice (spec 11.6); otherwise the shots' lines.
 export function captionMode(p: EditProject, words: Record<string, Word[]>): CaptionMode {
+  if (p.captions.source === 'speech') return 'speech'
   return p.voiceover.some((v) => (words[v.id]?.length ?? 0) > 0) ? 'voice' : 'lines'
 }
 
 // Everything the video shows as captions, in time order. Nothing when captions are off.
 export function projectPages(p: EditProject, lines: Record<string, string>, words: Record<string, Word[]>): TikTokPage[] {
   if (!p.captions.enabled) return []
+  if (captionMode(p, words) === 'speech') return captionPages(speechCaptions(p.captions.speech ?? [], totalLength(p)))
   if (captionMode(p, words) === 'voice') return voicePages(p.voiceover, words, totalLength(p))
   return captionPages(lineCaptions(p, lines))
 }

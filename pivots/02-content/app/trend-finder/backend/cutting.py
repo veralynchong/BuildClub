@@ -7,6 +7,7 @@ import shutil
 import string
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import analyze
 
@@ -276,14 +277,18 @@ def probe(path: Path) -> dict:
             "sample_rate": int(a["sample_rate"]) if a.get("sample_rate") else None}
 
 
-def transcribe_words(wav: Path, work: Path) -> list[Word]:
-    """Word timings from whisper.cpp. A missing tool or a failed run is an error, never an empty list."""
+def transcribe_words(wav: Path, work: Path, prompt: Optional[str] = None) -> list[Word]:
+    """Word timings from whisper.cpp. A missing tool or a failed run is an error, never an empty list.
+    `prompt` is text whisper takes as what came before: a line with "um" and "uh" in it makes it write the fillers
+    it would otherwise leave out."""
     if not (Path(analyze.WHISPER).is_file() and Path(analyze.MODEL).is_file()):
         raise CutError(NO_WHISPER)
     base = Path(work) / "words"
     base.with_suffix(".json").unlink(missing_ok=True)
     cmd = [analyze.WHISPER, "-m", str(analyze.MODEL), "-f", str(wav), "-l", "auto", "-ml", "1", "-sow",
            "-ojf", "-of", str(base), "-np"]
+    if prompt:
+        cmd += ["--prompt", prompt]
     r = run(cmd[:1] + ["-dtw", DTW_PRESET, "-nfa"] + cmd[1:], timeout=WHISPER_TIMEOUT)
     if r.returncode == 0 and not base.with_suffix(".json").is_file():
         log.warning("whisper-cli wrote no JSON with -dtw/-nfa (an older build?); running it again without -dtw, "

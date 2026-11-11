@@ -1,7 +1,7 @@
 import type { EditProject } from './types.ts'
 
 // The editor's tabs, in order (spec §7.2: the old step bar became these tabs).
-export const EDITOR_TABS = ['clips', 'text', 'captions', 'voice', 'music', 'brand'] as const
+export const EDITOR_TABS = ['clips', 'ai', 'text', 'captions', 'voice', 'music', 'brand'] as const
 export type Tool = (typeof EDITOR_TABS)[number]
 
 // What stepsDone reports. Export and Send are done from the export controls.
@@ -34,6 +34,7 @@ export function tabsDone(facts: StepFacts & { texts: number; voices: number; mus
   const steps = stepsDone(facts)
   const holds: Record<Tool, boolean> = {
     clips: steps.clips,
+    ai: false, // suggestions are offered, never a step to finish
     text: facts.texts > 0,
     captions: steps.captions,
     voice: facts.voices > 0,

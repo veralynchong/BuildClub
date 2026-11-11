@@ -154,3 +154,17 @@
 .cv-ed-analysis { display: inline-flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; font-size: var(--text-xs); color: var(--muted); }
 .cv-ed-analysis[data-status="done"] { color: var(--fg); }
 .cv-ed-analysis[data-status="failed"] { color: var(--no); }
+
+/* AI suggestions tab: script alignment, clean-up list, take ranking */
+.cv-ed-ai-card { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-sm); min-width: 0; }
+.cv-ed-ai-undo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }
+.cv-ed-ai-line { overflow-wrap: anywhere; }
+.cv-ed-ai-missing { color: var(--no); overflow-wrap: anywhere; }
+.cv-ed-ai-items, .cv-ed-ai-rank, .cv-ed-ai-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.cv-ed-ai-items li { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: var(--space-sm); font-size: var(--text-sm); }
+.cv-ed-ai-time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+.cv-ed-ai-label { min-width: 0; overflow-wrap: anywhere; }
+.cv-ed-ai-rank li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--space-sm); padding: var(--space-xs); border-radius: var(--radius-xs); }
+.cv-ed-ai-rank li[data-current] { background: var(--accent-soft); }
+.cv-ed-ai-rank-body { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.cv-ed-capsource label { display: inline-flex; align-items: center; gap: var(--space-2xs); }

@@ -30,6 +30,8 @@ SCENE_THRESHOLD = 10     # scdet score (0-100) a frame must pass to count as a c
 FILM_MAX = 12            # thumbnails per take
 FILM_HEIGHT = 120
 MAX_ERROR = 300
+# Whisper drops "um" and "uh" unless the text before the audio has them; the clean-up lists them for removal.
+FILLER_PROMPT = "Umm, uh, so, like, you know, I mean, erm."
 GENERIC = "Couldn't analyse this video."
 
 _NUM = r"(-?[\d.]+|-?inf)"
@@ -70,7 +72,7 @@ def transcript_of(path: Path, work: Path, total: float, silences: list[tuple[flo
     if cutting.is_silent(silences, total):  # whisper writes "Thank you." for silence
         return {"status": "none", "words": []}
     try:
-        words = cutting.transcribe_words(wav, work)
+        words = cutting.transcribe_words(wav, work, prompt=FILLER_PROMPT)
     except CutError as e:
         if str(e) == cutting.NO_WHISPER:
             return {"status": "unavailable", "reason": cutting.NO_WHISPER, "words": []}

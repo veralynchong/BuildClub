@@ -15,7 +15,7 @@ import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, ty
 import { useTakeAnalysis } from '../../lib/editor/useTakeAnalysis'
 import { fillShotIds } from '../../lib/storyboard'
 import { addVoice, clipLength, clipStatus, reelDurationInFrames, sourceKey, sourcesWithShots, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
-import type { ReelInput, VoiceSeg } from '../../lib/editor/types'
+import type { EditProject, ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
 import { stepsDone, tabsDone } from '../../lib/editor/steps'
@@ -28,6 +28,7 @@ import { useShotUpload } from '../../lib/editor/useShotUpload'
 import { ClipSettings } from './ClipSettings'
 import { TextTool } from './tools/TextTool'
 import { CaptionTool } from './tools/CaptionTool'
+import { AiTool } from './AiTool'
 import { VoiceTool } from './tools/VoiceTool'
 import { MusicTool, type MusicFile } from './tools/MusicTool'
 import { BrandTool } from './tools/BrandTool'
@@ -89,6 +90,9 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const ttsGoing = useRef(false) // a second click can never start (and charge) a second job
   const ttsAbort = useRef<AbortController | null>(null)
   const frameRef = useRef(0)
+  // AI changes: the edit as it was before the last one (one level of undo), and what the AI did this session.
+  const [aiUndo, setAiUndo] = useState<{ project: EditProject; label: string } | null>(null)
+  const [aiLog, setAiLog] = useState<string[]>([])
   const [voices, setVoices] = useState<Record<string, VoiceInfo>>({})
   const { clients } = useApp()
   const client = clients.find((c) => c.id === clientId)
@@ -264,6 +268,23 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     player.current?.seekTo(f)
     setFrame(f)
   }
+  const applyAi = (next: EditProject, label: string) => {
+    const before = current()
+    if (!before || next === before) return
+    setAiUndo({ project: before, label })
+    setAiLog((l) => [label, ...l].slice(0, 8))
+    update(next)
+  }
+  const undoAi = () => {
+    if (!aiUndo) return
+    update(aiUndo.project)
+    setAiLog((l) => [t('editor.ai.undone', { label: aiUndo.label }), ...l].slice(0, 8))
+    setAiUndo(null)
+  }
+  const preview = (f: number) => {
+    seek(f)
+    player.current?.play()
+  }
   const total = totalLength(project)
   const full = total > MAX_TOTAL - 0.2
   const locked = readOnly || stale || !!edit.writing
@@ -347,8 +368,25 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
                 onJump={onJumpToNode}
               />
             )}
+            {tool === 'ai' && (
+              <AiTool
+                planId={planId}
+                project={project}
+                clip={selClip}
+                shots={filled}
+                gens={gens}
+                takes={allTakes}
+                durations={Object.fromEntries((sources ?? []).map((s) => [s.key, s.duration]))}
+                readOnly={locked}
+                undo={aiUndo}
+                log={aiLog}
+                onApply={applyAi}
+                onUndo={undoAi}
+                onPreview={preview}
+              />
+            )}
             {tool === 'text' && <TextTool project={project} seconds={frame / 30} readOnly={locked} onProject={update} />}
-            {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} />}
+            {tool === 'captions' && <CaptionTool project={project} lines={lines} shotIds={filled.flatMap((s) => (s.id ? [s.id] : []))} words={words} readOnly={locked} onProject={update} planId={planId} onAi={applyAi} undo={aiUndo} onUndo={undoAi} />}
             {tool === 'voice' && (
               <VoiceTool
                 ideaId={ideaId}
