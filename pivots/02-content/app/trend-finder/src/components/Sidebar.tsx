@@ -247,14 +247,13 @@ export function Sidebar(p: Props) {
               {/* "Video canvas" (was "Canvas", 5 Nov 2026) opens the planning board, or a plan chooser when there are several. */}
               {item('board', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvas', 'canvasPick'].includes(p.view))}
               <div className="side-sep" />
-              {item('channel', 'channel', t('shell.side.channel'))}
+              {/* "Channel" was taken off the menu (12 Nov 2026); the 'channel' view and ChannelScreen stay in App.tsx. */}
               {item('settings', 'brief', t('shell.side.brief'))}
             </>
           ) : (
             <>
               {/* All clients Home (the view is still called 'overview' inside the app) */}
               {item('overview', 'home', t('shell.side.home'))}
-              {item('channel', 'channel', t('shell.side.channel'))}
               <p className="side-hint">{t('shell.side.pickClient')}</p>
             </>
           )}
