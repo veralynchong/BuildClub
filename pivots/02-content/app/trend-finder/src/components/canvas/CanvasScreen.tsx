@@ -347,10 +347,18 @@ function Board({ context, registerLeaveGuard, onShotsChange, initial, clientName
   }, true)
   const add = (kind: NodeKind, at?: { x: number; y: number }, from?: string) => {
     if (readOnly || stale || quote) return
+    let shotId = from ? session.doc().nodes.find((n) => n.id === from)?.shotId : undefined
+    if (resource.kind === 'legacy-plan' && kind === 'video') {
+      if (!from && selected.length === 1) shotId = session.doc().nodes.find((n) => n.id === selected[0])?.shotId
+      if (!shotId || !shots.some((s) => s.id === shotId) || !session.doc().nodes.some((n) => n.type === 'shot' && n.shotId === shotId && !n.data.removed)) {
+        setNote(ff('assistantChooseShot'))
+        return
+      }
+    }
     const rect = flowBox.current?.getBoundingClientRect()
     const preferred = screenToFlowPosition({ x: (rect?.left ?? 0) + (rect?.width ?? 900) / 2 - 160, y: (rect?.top ?? 0) + 160 })
     const center = toolbarPosition(session.doc().nodes.map((n) => ({ position: n.position, measured: getNode(n.id)?.measured })), preferred, at)
-    const next = createNode(session.doc(), kind, center, from ? session.doc().nodes.find((n) => n.id === from)?.shotId : undefined)
+    const next = createNode(session.doc(), kind, center, shotId)
     const n = kind === 'editor' ? next.nodes.find((n) => n.type === 'editor')! : next.nodes[next.nodes.length - 1]!
     change(next); setSelected([n.id]); setMenu(null)
     if (from) { const opt = compatibleKinds(next, from).find((o) => o.kind === kind); if (opt) void connect({ source: from, sourceHandle: 'out', target: n.id, targetHandle: opt.handle }) }
