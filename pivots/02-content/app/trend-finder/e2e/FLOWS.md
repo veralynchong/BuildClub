@@ -1,5 +1,14 @@
 # User flows
 
+## Guided tofu demo (2026-11-06, original website)
+
+- The original Try the demo keeps the free exploration flow. The separate Watch a guided demo creates `/?guided=tofu&guideSession=<UUID>` and opens the same App and original screens, with only a small corner controller.
+- Native journey: Research → BreakdownPanel with local source playback → Plan script → route selection → original 21-shot Canvas → original Editor → native export panel. Verify Previous/Next, route change, minimize, reload, reset and exit against the actual screen, not only the persisted counter.
+- Guided runtime scopes both browser stores by session and intercepts API calls with fixed prepared data. Preserve formal/sibling sentinels; any actual guided API or paid/provider network escape fails. Existing public font GETs are allowed; this is not an offline claim.
+- Sole browser QA uses owned 1440×900 contexts, recordings and a static SPA build on port8991 under `test-slot`; close every owned browser/server and release the lease. Port8990 belongs to another session. Never use the removed standalone runner or its old passing checks as acceptance evidence.
+- Current navigation evidence: `/tmp/buildclub-guided-demo/native-ui-round2/Native-ui-round2-report.md`. Both routes reached all seven native surfaces and reload/reset/exit passed; actual Editor source resolution still showed Footage deleted and disabled export. Run/Use/trim/ended/download hashes remain unverified.
+- Media are disclosed prepared source-derived/AI concepts; fresh all-AI advert is pending. Photographer concepts are not real filmed takes. Prepared cut must become stale after edits; unavailable re-rendering must remain explicit.
+
 <!-- The agent reads this file to know what to test. Keep each flow short and in plain language.
      Persona agents must NOT be given this file or the source code: only the persona block and the URL. -->
 <!-- Written 2026-11-03 for the node canvas P1–P4 (PRs #28–#32), mock models only.

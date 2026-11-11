@@ -20,6 +20,8 @@ import { newShotId } from '../lib/storyboard'
 import { t } from '../lib/i18n'
 
 interface Props {
+  localPlayback?: string
+  preparedScript?: boolean
   idea: SavedIdea
   video: Video
   format: Format
@@ -108,6 +110,10 @@ export function PlanScreen(p: Props) {
   // "Script written", for the plan it was written for, until the shot list changes.
   const [writtenFor, setWrittenFor] = useState<string | null>(null)
   const writeScriptNow = async () => {
+    if (p.preparedScript) {
+      requestAnimationFrame(() => document.getElementById('plan-script')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+      return
+    }
     setConfirmFor(null)
     setWriting(true)
     try {
@@ -148,7 +154,7 @@ export function PlanScreen(p: Props) {
             </div>
           </div>
           <div className="plan-stage-video">
-            <BestVideo key={video.id} video={video} control={playerControl} />
+            <BestVideo key={video.id} localPlayback={p.localPlayback} video={video} control={playerControl} />
           </div>
           {/* Under the video: the link to watch the original */}
           <div className="tile-body plan-ref-info">

@@ -35,6 +35,8 @@ interface LiveItem {
   upvotes?: number | null
   community?: string | null
   medianUpvotes?: number | null
+  // Prepared batches can retain each source's original cache timestamp.
+  sourceFetchedAt?: number
 }
 
 export interface LiveSearch {
@@ -94,7 +96,7 @@ function baselineOf(item: LiveItem): Baseline | undefined {
   return Object.values(b).some((x) => x !== null) ? b : undefined
 }
 
-function toVideo(item: LiveItem, query: string, platform: Platform, search: { fetchedAt?: number; cached: boolean }): Video {
+function toVideo(item: LiveItem, query: string, platform: Platform, search: { fetchedAt?: number; cached: boolean; prepared?: boolean }): Video {
   return {
     id: `${idPrefix[platform]}-${item.id}`,
     platform,
@@ -121,7 +123,7 @@ function toVideo(item: LiveItem, query: string, platform: Platform, search: { fe
     likes: item.likes,
     commentCount: item.comments,
     baseline: baselineOf(item),
-    fetchedAt: search.fetchedAt,
+    fetchedAt: search.prepared === true && Number.isSafeInteger(item.sourceFetchedAt) && item.sourceFetchedAt! > 0 && Number.isFinite(new Date(item.sourceFetchedAt!).getTime()) ? item.sourceFetchedAt : search.fetchedAt,
     fromCache: search.cached,
   }
 }
@@ -166,7 +168,7 @@ export async function searchLive(
   const videos: Video[] = []
   const formats: Format[] = []
   for (const item of body.videos as LiveItem[]) {
-    const v = toVideo(item, query, platform, { fetchedAt: body.fetchedAt, cached: Boolean(body.cached) })
+    const v = toVideo(item, query, platform, { fetchedAt: body.fetchedAt, cached: Boolean(body.cached), prepared: body.prepared === true })
     videos.push(v)
     formats.push(toFormat(item, v))
   }

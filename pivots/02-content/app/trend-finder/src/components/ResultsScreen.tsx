@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { TopicResults } from './publish/TopicResults'
 import { useCountUp } from '../lib/motion'
 import { resultsShortcuts, useResultsShortcuts } from '../lib/useShortcuts'
@@ -35,6 +35,9 @@ export type Chip =
   | { kind: 'source' }
 
 interface Props {
+  initialFilters?: ResultFilters
+  recommendedVideoId?: string
+  onVisibleResults?: (ids: readonly string[]) => void
   error: string | null
   query: Query
   setQuery: (q: Query) => void
@@ -93,14 +96,21 @@ interface Props {
 }
 
 export function ResultsScreen(p: Props) {
+  const { onVisibleResults } = p
   const manager = useManagerName()
   // The default filters still apply; their tags were taken off this page.
-  const [filters] = useState<ResultFilters>(DEFAULT_FILTERS)
+  const [filters] = useState<ResultFilters>(p.initialFilters ?? DEFAULT_FILTERS)
   const byFormat = p.formatFilter ? p.results.filter((v) => v.formatId === p.formatFilter) : p.results
-  const filtered = applyFilters(byFormat, filters)
   // New since the last run first (keeping the chosen order within each part).
   const isNew = (v: Video) => p.newIds.has(v.id)
-  const shown = p.newIds.size ? [...filtered.filter(isNew), ...filtered.filter((v) => !isNew(v))] : filtered
+  const shown = useMemo(() => {
+    const selected = p.formatFilter ? p.results.filter((video) => video.formatId === p.formatFilter) : p.results
+    const filtered = applyFilters(selected, filters)
+    const ordered = p.newIds.size ? [...filtered.filter((video) => p.newIds.has(video.id)), ...filtered.filter((video) => !p.newIds.has(video.id))] : filtered
+    const recommended = ordered.find((video) => video.id === p.recommendedVideoId)
+    return recommended ? [recommended, ...ordered.filter((video) => video.id !== recommended.id)] : ordered
+  }, [p.formatFilter, p.results, p.newIds, p.recommendedVideoId, filters])
+  useEffect(() => onVisibleResults?.(shown.map((video) => video.id)), [onVisibleResults, shown])
   const newCount = p.results.filter(isNew).length
   const activeTrend = p.trends.find((tr) => tr.format.id === p.formatFilter)
   const [draft, setDraft] = useState(p.interp.text)
@@ -124,7 +134,7 @@ export function ResultsScreen(p: Props) {
     return s !== 'waiting' && s !== 'approved' && !p.blockedFormatIds.has(v.formatId)
   })
   const proven = open.filter((v) => ['early', 'rising'].includes(trendOf(v)?.stage ?? ''))
-  const best = proven[0] ?? open[0] ?? ranked[0]
+  const best = shown.find((video) => video.id === p.recommendedVideoId) ?? proven[0] ?? open[0] ?? ranked[0]
   const bestStatus = best ? p.ideaStatus.get(best.id) : undefined
   const platformCounts = (['tiktok', 'instagram', 'youtube', 'reddit', 'x'] as Platform[])
     .map((pl) => {

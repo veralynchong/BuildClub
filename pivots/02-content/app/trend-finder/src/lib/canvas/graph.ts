@@ -3,6 +3,7 @@ import { t, type Key } from '../i18n.ts'
 import type { Kit, Shot } from '../../types.ts'
 import { kitRefs, type GenRef } from './kit.ts'
 import { shotNodeOf, slotInFrame } from './frames.ts'
+import { variantPosition } from './shotLayout.ts'
 import type { Budget, CanvasDoc, CanvasNode, GenModel, Generation, NodeData, NodeKind } from './types.ts'
 
 // Every node reachable by following lines forward; not the node itself.
@@ -216,7 +217,8 @@ function newId(doc: CanvasDoc, kind: NodeKind): string {
 export function addNode(doc: CanvasDoc, kind: NodeKind, at: { x: number; y: number }, shotId?: string, sizes?: Map<string, { w: number; h: number }>): CanvasDoc {
   const shotNode = shotId ? shotNodeOf(doc, shotId) : null
   if (kind === 'footage' && !shotNode) throw new Error('A footage node needs a shot.')
-  const position = shotNode ? slotInFrame(doc, shotNode, sizes) : { x: Math.round(at.x), y: Math.round(at.y) }
+  const measured = sizes && new Map([...sizes].map(([id, s]) => [id, { width: s.w, height: s.h }]))
+  const position = shotNode ? doc.layout === 'shots-horizontal' ? variantPosition(doc, kind, shotId!, measured) : slotInFrame(doc, shotNode, sizes) : { x: Math.round(at.x), y: Math.round(at.y) }
   const node: CanvasNode = { id: newId(doc, kind), type: kind, ...(shotNode ? { shotId } : {}), position, data: startData(kind) }
   return { ...doc, nodes: [...doc.nodes, node] }
 }
