@@ -96,9 +96,11 @@ def main():
             ("backend tests", [str(PYTHON), "-m", "pytest", "-q", "-p", "no:cacheprovider",
                                "--basetemp", str(temp / "pytest"), str(APP / "backend/tests")]),
             ("frontend unit tests", [shutil.which("node"), "--test", str(APP / "unit/")]),
+            ("beta instance script", ["/bin/bash", str(ROOT / "bin/test_beta_instance.sh")]),
         ]
         for name, command in steps:
-            result = run_step(prefix + command, temp, env)
+            # The beta script test must read the generated .env, which the sandbox hides; it never touches the network.
+            result = run_step(command if name == "beta instance script" else prefix + command, temp, env)
             print(f"{'PASS' if result.returncode == 0 else 'FAIL'}  {name}", flush=True)
             if not result.returncode and name in ("backend tests", "frontend unit tests"):
                 print("\n".join(result.stdout.splitlines()[-4:]), flush=True)
