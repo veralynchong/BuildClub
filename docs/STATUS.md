@@ -1,5 +1,19 @@
 # STATUS
 
+## 2026-11-12：分鏡格 Storyboard grid（`feat/storyboard-grid`，疊在 `feat/canvas-restore`）
+
+- 一行狀態：側欄「Storyboard（分鏡）」打開每個企劃的鏡頭格（每列 3/4/6、Action/Line/Camera 顯示開關）、Refine 浮窗（prompt、size/angle/movement/lens/gear/length）、Regenerate、版本箭頭、Shot list 分頁（含 Print）、「Canvas (advanced)」和「Next: edit video →」。Task 1-7 完成；未 push、未開 PR（等最終 review）。
+- 最後驗證：2026-11-12，`bash bin/verify.sh` GREEN；:8797 零花費後端（mock 圖片模型）桌面 1440x900 跑 E1-E10：E1、E2、E4、E5、E6（mock）、E7、E8、E9、E10 PASS；E3 三項 PASS、「Plan 頁顯示鏡頭」一項不成立（見已知問題）。詳細在 `docs/test-log.md`。
+- 付費 smoke（Seedream 4.5 重生一格，約 US$0.04）：**沒跑，花費 US$0.00**。隔離後端預算全為 0；真 fal 要用 `bin/real-fal-backend.sh`，它會讀 `.env`，本次規則禁止碰 `.env`（hook 也擋）。所以「預算數字下降」未驗。
+- 已知問題：
+  - E3：Plan 頁（唯讀鏡頭列）只顯示 shot 名稱，不顯示 lens；lens 有存進計畫的 shot（`/api/ideas` 回 `lens: "50mm"`），只是 Plan 頁沒有地方顯示。計畫文件 E3 的驗收寫「Plan page shows the lens」與現況不符，需決定要補顯示或改驗收。
+  - E5：prompt 在輸入框失焦（或按 Close）才存；輸入後立刻重新整理（游標還在框內）會丟掉文字。
+  - 重新整理會回到 Plans（沒有路由），要再從側欄點 Storyboard；每列數會保留，Show 開關重設為全開。
+  - 只有一個核准計畫時打開 Storyboard 會直接進格，但頁面仍有「← Back to canvases」，點了會到 chooser。
+  - E9：過期分頁存檔會收到 409（主控台一條 Failed to load resource），UI 合併後保留兩邊文字，無崩潰。
+  - E8：剪輯器打開的是每鏡「已選用的 take」時間軸，不顯示分鏡圖。
+- 下一步：controller 做最終 review、push、開 draft PR（base `feat/canvas-restore`）；決定 E3 的 Plan 頁顯示；有需要時用 `bin/real-fal-backend.sh` 在使用者自己的終端機跑一次付費 smoke 確認預算下降。
+
 ## 2026-11-12：初剪圖釘跟著剪輯、軌道隱藏／靜音套用到匯出（`feat/canvas-restore`）
 
 - 一行狀態：兩個剪輯器已知問題修好，已 push（14b7371、fc8cf15），未合併。

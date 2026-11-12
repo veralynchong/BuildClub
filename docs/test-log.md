@@ -1,3 +1,22 @@
+## 2026-11-12：分鏡格 E2E（`feat/storyboard-grid`，HEAD 99ce68c 的 build）
+
+- 環境：`npm run build` 後 `bin/isolated-backend.sh 8797 --user test@example.com:pw-for-e2e --state ~/.local/state/buildclub-test-8797`（MOCK_GEN_DELAY_S=3，預算全 0，mock-image 免費），Playwright 1440x900，一個核准計畫 idea1（3 鏡），E4 暫時加一個 `saved` 計畫後已移除。證據截圖在 `/Volumes/Huang T7/playwright-mcp/storyboard-grid/`。
+
+| # | 結果 | 證據 |
+| --- | --- | --- |
+| E1 | PASS | 一個核准計畫，點側欄 Storyboard 直接進格；`.sg-grid` 4 欄、3 張卡、編號 1/2/3、長度 1s/2s/3s 與計畫相同。`E1-grid.png` |
+| E2 | PASS | 每列 3 → 3 欄、6 → 6 欄；Line、Camera 開關會隱藏對應文字；重新整理後（回到 Plans，再點 Storyboard）每列仍是 6，Show 開關重設為全開。`E2-row3.png`、`E2-row6-toggles.png`、`E2-after-reload.png` |
+| E3 | FAIL（只差一項） | lens 選 85mm：卡片 camera 標籤 85mm、popover prompt 自動加 "Camera: 85mm lens"、`generations` 仍 0（沒有新生成列）；有 frame 後改 50mm 出現「Changed · not regenerated」、generations 仍 2。計畫資料 `/api/ideas` shot 有 `lens: "50mm"`。但 Plan 頁（唯讀 shot 列）不顯示 lens，只顯示 shot 名稱，所以「Plan page shows the lens」無法觀察。`E3-refine-open.png`、`E3-after-lens.png`、`E3-changed-tag.png`、`E3-plan-page.png` |
+| E4 | PASS | chooser 選 `saved` 計畫：顯示「Approve the plan to make frames.」；所有 Refine 與 Regenerate 按鈕 disabled（popover 打不開）。`E4-chooser.png`、`E4-unapproved.png` |
+| E5 | PASS | 輸入 own prompt 後按 Close，重新整理再開：文字保留、顯示「Reset to automatic」；按下後回到自動 prompt，節點 `prompt` 為空。註：在輸入框內直接重新整理（未失焦）會丟掉文字，因為失焦才存。`E5-own-after-reload.png`、`E5-reset.png` |
+| E6 | PASS（mock）；預算下降未驗 | 按 Regenerate：卡片顯示 Generating…，約 3 秒後出現新 frame，版本 v1/1；再按一次 v2/2；‹ 切到 v1/2，重新整理後仍是 v1/2（節點 `selected` 指向第一個）。Mock 模型 US$0，所以預算數字沒變，無法驗「drops」。`E6-generating.png`、`E6-done.png`、`E6-v1-selected.png` |
+| E7 | PASS | Shot list 分頁 10 欄（縮圖、#、Action、Line、Size、Angle、Movement、Lens、Gear、Length），值與卡片相同（shot 1 lens 50mm、長度 1s/2s/3s）；清單的 Add take 上傳 ai-s1.mp4 成功（takes 3→4，測完用 API 刪除）；print 媒體模擬只剩表格。`E7-shotlist.png`、`E7-upload.png`、`E7-print-preview.png` |
+| E8 | PASS | Canvas (advanced) 開在這個計畫（3 個 Shot 節點、圖像節點 1/2）；Back 回到 Storyboard；Next: edit video 開剪輯器，3 鏡 take 都在時間軸。剪輯器用的是已選用 take，不顯示分鏡圖。`E8-canvas.png`、`E8-editor.png` |
+| E9 | PASS | 兩個分頁：A 改鏡 3 的 prompt，B（過期版本）改鏡 1；B 存檔收到 409，畫面重載後兩邊文字都在（鏡 1 為 B、鏡 3 為 A），伺服器狀態相同，無崩潰。`E9-tabB.png` |
+| E10 | PASS | 沒有 JS 例外。console 只有：登入前的兩條 401（landing）、E9 的一條 409 Failed to load resource（預期的衝突回應）、剪輯器的 Remotion license 警告。 |
+
+- 付費 smoke：沒跑，花費 US$0.00（預算開始與結束皆 0，所有生成都是免費 mock 模型）。真 fal 的唯一入口 `bin/real-fal-backend.sh` 會讀 `.env`，本次規則禁止，hook 也擋 `.env` 的存取檢查，所以不繞過。要補這項，請使用者在自己的終端機跑 `bash bin/real-fal-backend.sh 8797 --user test@example.com:pw-for-e2e`，Seedream 4.5 重生一格（約 US$0.04）並看預算數字。
+
 ## 2026-11-07：Plan a shoot直接進Canvas，移除重複Next（本機未提交）
 
 - 使用者要求4/7 Plan a shoot步驟不再顯示Next；已隱藏該步Next，Plan a shoot按鈕直接要求canvas/shoot/shots，不需第二次點擊。說明文案同步改為點Plan a shoot進入，Previous與其餘步驟Next保留。
