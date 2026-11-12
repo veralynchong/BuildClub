@@ -2058,6 +2058,7 @@ export default function App() {
               formatById={formatById}
               onPick={openStoryboard}
               onWorkspace={openWorkspace}
+              copy={{ title: t('shell.storyboardPick.title'), intro: t('shell.storyboardPick.intro') }}
             />
           )}
 
@@ -2099,7 +2100,10 @@ export default function App() {
                   setIdeas((prev) => prev.map((idea) => idea.id === id ? { ...idea, shots } : idea))
                   setCanvasContext((ctx) => ctx?.resource.id === id ? { ...ctx, shots } : ctx)
                 }}
-                onBack={() => setView('canvasPick')}
+                onBack={() => {
+                  // Opened from the storyboard: Back returns to that plan's storyboard.
+                  if (planFrom === 'storyboard') { setCanvasEditor(false); setView('storyboard') } else setView('canvasPick')
+                }}
                 openEditor={canvasEditor}
                 clientName={clients.find((c) => c.id === canvasContext.clientId)?.name ?? client.name}
                 fullscreen={canvasFull}
