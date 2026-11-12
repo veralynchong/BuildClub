@@ -12,7 +12,8 @@
   - 返回鍵已改為「返回企劃列表」（cf23d46），點了到 chooser。
   - E9：過期分頁存檔會收到 409（主控台一條 Failed to load resource），UI 合併後保留兩邊文字，無崩潰。
   - E8：剪輯器打開的是每鏡「已選用的 take」時間軸，不顯示分鏡圖。
-- 最終修正未在瀏覽器重跑（只有 unit 836 pass、verify GREEN）。
+- 2026-11-12 追加（b6f7d1f、c5e0b17）：分鏡選擇頁拿掉「建立 workspace」表單（`CanvasPick` 加 `hideCreate`，Canvas 選擇頁保留）。點測時發現並修好：在剪輯器點側欄 Storyboard 沒反應或跑到節點畫布、剪輯器回畫布後 ‹ 要點兩次才回分鏡格。原因是側欄和畫布 Back 已經跑過離開 guard，又經 `setView` 再跑一次，剪輯器開著時第二次會失敗；改成直接 `setViewRaw`（同 `enterClient` 寫法）。:8797 零花費後端 1440x900：無建立表單、Canvas 選擇頁仍有、prompt 0.8 秒自動存、連點 Regenerate 只多 1 版（1 個 POST /gen）、N1-N7 導覽都一次到位、無 JS 錯誤。verify GREEN（1246 passed）。
+- 小發現（沒修）：畫布 Editor & output 節點的「Open editor ↗」按鈕初始位置在頂列後面（y=-7），要先平移畫布才點得到。
 - 下一步：等 Veralyn review draft PR（不自己合併）；決定 E3 的 Plan 頁顯示；有需要時用 `bin/real-fal-backend.sh` 在使用者自己的終端機跑一次付費 smoke 確認預算下降。
 
 ## 2026-11-12：初剪圖釘跟著剪輯、軌道隱藏／靜音套用到匯出（`feat/canvas-restore`）

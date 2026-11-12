@@ -1,3 +1,10 @@
+## 2026-11-12：分鏡選擇頁去掉建立表單、剪輯器→分鏡導覽修正（`feat/storyboard-grid`，c5e0b17 的 build）
+
+- 環境：`isolated-backend.sh 8797`（state `~/.local/state/buildclub-test-8797`，mock 圖片模型，US$0），Playwright 1440x900，子代理點測。截圖 `/Volumes/Huang T7/playwright-mcp/sb-check-*`、`sb-nav*-*`。
+- PASS：分鏡選擇頁沒有 `form.fc-new-workspace`、Canvas 選擇頁有；Refine prompt 打字 3 秒不失焦後重新整理仍在；連點 Regenerate 只新增 1 版（只有 1 個 POST /api/ideas/idea1/gen）；剪輯器→側欄 Storyboard、Next: edit video→Back to canvas→‹、Canvas (advanced)→‹、畫布 Open editor→Back→‹ 都一次回到分鏡格；剪輯器→側欄 Plans 正常；console 只有 Remotion 授權警告。
+- 修前：剪輯器點側欄 Storyboard 跑到節點畫布（第二版變成沒反應）、剪輯器回畫布後 ‹ 要點兩次。
+- 付費 smoke（Seedream 4.5）：仍未跑，等使用者開 `bin/real-fal-backend.sh 8798`。
+
 ## 2026-11-12：分鏡格 E2E（`feat/storyboard-grid`，HEAD 99ce68c 的 build）
 
 - 環境：`npm run build` 後 `bin/isolated-backend.sh 8797 --user test@example.com:pw-for-e2e --state ~/.local/state/buildclub-test-8797`（MOCK_GEN_DELAY_S=3，預算全 0，mock-image 免費），Playwright 1440x900，一個核准計畫 idea1（3 鏡），E4 暫時加一個 `saved` 計畫後已移除。證據截圖在 `/Volumes/Huang T7/playwright-mcp/storyboard-grid/`。
