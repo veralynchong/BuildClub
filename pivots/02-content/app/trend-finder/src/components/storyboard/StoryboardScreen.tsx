@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CanvasContext } from '../../lib/canvas/resource'
 import type { Budget, CanvasState, GenModel } from '../../lib/canvas/types'
 import { getBudget, getCanvas, getModels } from '../../lib/canvas/api'
@@ -75,12 +75,19 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
 
   const actions = useGridActions({ resource, state, setState, shots: context.shots, onShotsChange, setBudget })
   const cells = useMemo(() => (state ? gridCells(state.doc, context.shots, state.generations) : []), [state, context.shots])
-  const closeRefine = useCallback(() => setRefine(null), [])
+  const refineAt = useRef<number | null>(null)
+  refineAt.current = refine?.index ?? null
+  // Closing returns focus to the card's Refine button, except for a click elsewhere (that click moves focus itself).
+  const closeRefine = useCallback((returnFocus = true) => {
+    const at = refineAt.current
+    setRefine(null)
+    if (returnFocus && at !== null) requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-refine="${at}"]`)?.focus())
+  }, [])
 
   if (!state) {
     return (
       <section className="sg-loading">
-        <button className="btn btn-ghost btn-sm" onClick={onBack}>← {ff('back')}</button>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>← {t('grid.back')}</button>
         {error
           ? <div role="alert">{error} <button className="btn btn-ghost btn-sm" onClick={() => setAttempt((a) => a + 1)}>{ff('reload')}</button></div>
           : <p>{t('canvas.loading')}</p>}
@@ -114,7 +121,7 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
   return (
     <section className="sg">
       <header className="sg-top">
-        <button className="btn btn-ghost btn-sm" onClick={onBack}>← {ff('back')}</button>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>← {t('grid.back')}</button>
         <h1>{context.title}</h1>
         <div className="sg-bar">
           {left !== null && <span className="sg-budget">{t('grid.budget', { usd: left.toFixed(2) })}</span>}
@@ -156,6 +163,7 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
               showLine={show.line}
               showCamera={show.camera}
               price={priceFor(cell)}
+              busy={actions.busy(cell.nodeId)}
               onSelect={() => setSelected(cell.index)}
               onRefine={(anchor) => { setSelected(cell.index); setRefine({ index: cell.index, anchor }) }}
               onRegenerate={() => regenerate(cell)}
@@ -178,10 +186,11 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
           anchor={refine.anchor}
           readOnly={readOnly}
           price={priceFor(refining)}
+          busy={actions.busy(refining.nodeId)}
           modelNote={modelNote(refining)}
           onPrompt={(p) => { if (refining.nodeId) void actions.prompt(refining.nodeId, p) }}
           onFields={(patch) => onShotsChange(patchShot(context.shots, refining.index, patch))}
-          onRegenerate={(prompt) => { regenerate({ ...refining, prompt }); closeRefine() }}
+          onRegenerate={(prompt, own) => { regenerate({ ...refining, prompt, auto: !own }); closeRefine() }}
           onClose={closeRefine}
         />
       )}

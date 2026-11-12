@@ -2,7 +2,7 @@ import type { Shot } from '../types'
 import { StaleCanvas, type StartGenBody } from './canvas/api.ts'
 import { genFinished, genRequest, genStarted } from './canvas/graph.ts'
 import type { CanvasDoc, GenModel, Generation } from './canvas/types.ts'
-import { setPrompt, type GridCell } from './shotGrid.ts'
+import { patchNode as patchGraphNode, setPrompt, type GridCell } from './shotGrid.ts'
 
 // Everything the storyboard grid needs from the server, injected so tests use a fake.
 export interface GridIO {
@@ -20,13 +20,14 @@ export interface DocState {
   version: number
 }
 
-function patchNode(doc: CanvasDoc, nodeId: string, fn: (data: CanvasDoc['nodes'][number]['data']) => CanvasDoc['nodes'][number]['data']): CanvasDoc {
-  return { ...doc, nodes: doc.nodes.map((n) => (n.id === nodeId ? { ...n, data: fn(n.data) } : n)) }
+// Edits one node's data (the shared patchNode in shotGrid.ts edits the whole node).
+function patchData(doc: CanvasDoc, nodeId: string, fn: (data: CanvasDoc['nodes'][number]['data']) => CanvasDoc['nodes'][number]['data']): CanvasDoc {
+  return patchGraphNode(doc, nodeId, (n) => ({ ...n, data: fn(n.data) }))
 }
 
 // Applies an edit and saves it. When someone saved the canvas first, reloads once and applies the same edit to the
 // fresh copy (returning its generations); a second conflict is thrown.
-async function putEdit(io: GridIO, state: DocState, edit: (doc: CanvasDoc) => CanvasDoc): Promise<Saved> {
+export async function putEdit(io: GridIO, state: DocState, edit: (doc: CanvasDoc) => CanvasDoc): Promise<Saved> {
   try {
     const doc = edit(state.doc)
     return { doc, version: await io.put(state.version, doc) }
@@ -51,7 +52,7 @@ export function savePrompt(io: GridIO, state: DocState, nodeId: string, prompt: 
 // have no quote, so they are not checked.
 export async function regenerate(
   io: GridIO, state: DocState, cell: GridCell, shots: Shot[], gens: Generation[], model: GenModel, agreedUsd: number,
-): Promise<Saved & ({ gen: Generation; priceChanged?: undefined } | { gen?: undefined; priceChanged: number })> {
+): Promise<Saved & ({ gen: Generation; priceChanged?: undefined; saveError?: string } | { gen?: undefined; priceChanged: number })> {
   if (!cell.nodeId) throw new Error('This shot has no frame to regenerate.')
   const nodeId = cell.nodeId
   let cur: Saved = state
@@ -59,7 +60,7 @@ export async function regenerate(
   const track = (s: Saved) => { cur = s; reloaded = s.generations ?? reloaded }
   const body: StartGenBody = { nodeId, model: model.id, prompt: cell.prompt, references: genRequest(state.doc, nodeId, shots, gens).references, aspectRatio: '9:16', confirm: true }
   if (io.quote) {
-    track(await putEdit(io, state, (doc) => patchNode(setPrompt(doc, nodeId, cell.prompt), nodeId, (d) => ({ ...d, model: model.id }))))
+    track(await putEdit(io, state, (doc) => patchData(cell.auto ? doc : setPrompt(doc, nodeId, cell.prompt), nodeId, (d) => ({ ...d, model: model.id }))))
     const q = await io.quote(nodeId, cur.version)
     if (q.total !== undefined && q.total > agreedUsd + 0.005) return { ...cur, generations: reloaded, priceChanged: q.total }
     body.inputStamp = q.inputStamp
@@ -67,11 +68,16 @@ export async function regenerate(
   }
   body.canvasVersion = cur.version
   const gen = await io.start(body)
-  track(await putEdit(io, cur, (doc) => patchNode(doc, nodeId, (d) => genStarted(d, model.id, gen.id))))
+  try {
+    track(await putEdit(io, cur, (doc) => patchData(doc, nodeId, (d) => genStarted(d, model.id, gen.id))))
+  } catch (e) {
+    // The job is already paid for and running: hand it back so it is shown and followed even though it is not saved.
+    return { ...cur, generations: reloaded, gen, saveError: e instanceof Error ? e.message : String(e) }
+  }
   return { ...cur, generations: reloaded, gen }
 }
 
 // A job the frame waited for ended: a done one becomes the shown version, a failed one leaves the old one.
 export function finish(state: Pick<DocState, 'doc'>, nodeId: string, gen: Generation): CanvasDoc {
-  return patchNode(state.doc, nodeId, (d) => genFinished(d, gen))
+  return patchData(state.doc, nodeId, (d) => genFinished(d, gen))
 }

@@ -23,8 +23,8 @@ export function ShotListTable({ rows, ideaId, status, shots }: Props) {
       <table className="sg-table" aria-label={t('grid.list.label')}>
         <thead>
           <tr>
-            <th />
-            <th>#</th>
+            <th scope="col"><span className="sr-only">{t('grid.colThumb')}</span></th>
+            <th scope="col"><span className="sr-only">{t('grid.colNum')}</span><span aria-hidden="true">#</span></th>
             {HEADS.map((k) => <th key={k}>{t(k === 'action' || k === 'line' ? `grid.show.${k}` : `grid.col.${k}`)}</th>)}
           </tr>
         </thead>

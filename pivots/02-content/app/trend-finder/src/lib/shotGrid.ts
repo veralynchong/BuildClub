@@ -19,11 +19,14 @@ export interface GridCell {
 
 const words = (v: string): string => v.replace(/_/g, ' ').toLowerCase()
 
+// Every prompt the grid writes starts with this, so a frame made elsewhere (the canvas) can be told apart.
+const FRAME_MARK = 'Vertical 9:16 video frame'
+
 export function framePrompt(shot: Shot): string {
   const camera = [shot.framing, shot.angle, shot.movement].filter((x): x is NonNullable<typeof x> => !!x).map(words)
   if (shot.lens) camera.push(`${shot.lens} lens`)
   return [
-    'Vertical 9:16 video frame, photographic, natural light.',
+    `${FRAME_MARK}, photographic, natural light.`,
     `${shot.shot}.`,
     camera.length ? `Camera: ${camera.join(', ')}.` : '',
     'No text, no captions.',
@@ -55,13 +58,14 @@ export function gridCells(doc: CanvasDoc, shots: Shot[], gens: Generation[]): Gr
       failed: node ? failedGen(node.id, gens) : null,
       prompt,
       auto,
-      changed: shown !== null && (shown.inputs.prompt ?? '') !== prompt,
+      // Only a prompt the grid could have written is compared: the user's own text, or an automatic one it built.
+      changed: shown !== null && (!auto || (shown.inputs.prompt ?? '').startsWith(FRAME_MARK)) && (shown.inputs.prompt ?? '') !== prompt,
     })
   })
   return cells
 }
 
-function patchNode(doc: CanvasDoc, nodeId: string, fn: (n: CanvasNode) => CanvasNode): CanvasDoc {
+export function patchNode(doc: CanvasDoc, nodeId: string, fn: (n: CanvasNode) => CanvasNode): CanvasDoc {
   return { ...doc, nodes: doc.nodes.map((n) => (n.id === nodeId ? fn(n) : n)) }
 }
 

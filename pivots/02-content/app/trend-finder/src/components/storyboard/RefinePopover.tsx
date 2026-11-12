@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Shot } from '../../types'
 import { framePrompt, type GridCell } from '../../lib/shotGrid'
 import { ANGLES, FRAMINGS, GEARS, LENSES, MOVEMENTS, angleLabel, framingLabel, gearLabel, movementLabel } from '../../lib/shots'
@@ -14,9 +14,12 @@ interface Props {
   modelNote: string
   onPrompt: (prompt: string | null) => void
   onFields: (patch: Patch) => void
-  onRegenerate: (prompt: string) => void
-  onClose: () => void
+  busy: boolean // a regenerate for this frame is already on its way
+  onRegenerate: (prompt: string, own: boolean) => void
+  onClose: (returnFocus?: boolean) => void
 }
+
+const SAVE_DELAY_MS = 800
 
 function Select<T extends string>({ label, value, options, name, onChange, disabled }: {
   label: string; value: T | undefined; options: readonly T[]; name: (v: T) => string; onChange: (v: T | undefined) => void; disabled: boolean
@@ -31,7 +34,7 @@ function Select<T extends string>({ label, value, options, name, onChange, disab
   )
 }
 
-export function RefinePopover({ cell, anchor, readOnly, price, modelNote, onPrompt, onFields, onRegenerate, onClose }: Props) {
+export function RefinePopover({ cell, anchor, readOnly, price, modelNote, busy, onPrompt, onFields, onRegenerate, onClose }: Props) {
   const { shot } = cell
   const [draft, setDraft] = useState<string | null>(null) // null: untouched, the card's prompt is shown
   const [time, setTime] = useState(shot.time)
@@ -40,19 +43,45 @@ export function RefinePopover({ cell, anchor, readOnly, price, modelNote, onProm
   const effective = text.trim() ? text : framePrompt(shot)
   const own = draft !== null ? !!draft.trim() : !cell.auto
 
+  // The typed text is saved ~800 ms after the last keystroke, when the popover closes and when the page is left.
+  // `sent` is the text last handed to onPrompt (or the card's own prompt), so already saved text is never saved again.
+  const latest = useRef<string | null>(null)
+  const sent = useRef(cell.prompt)
+  const save = useRef(onPrompt)
+  save.current = onPrompt
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const flush = useCallback(() => {
+    clearTimeout(timer.current)
+    const d = latest.current
+    if (d === null || d === sent.current) return
+    sent.current = d
+    save.current(d.trim() ? d : null)
+  }, [])
+
   useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(true) }
+    const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) onClose(false) }
     document.addEventListener('keydown', key)
+    document.addEventListener('mousedown', away)
+    window.addEventListener('pagehide', flush)
     box.current?.querySelector('textarea')?.focus()
-    return () => document.removeEventListener('keydown', key)
-  }, [onClose])
+    return () => {
+      document.removeEventListener('keydown', key)
+      document.removeEventListener('mousedown', away)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, [onClose, flush])
+  useEffect(() => flush, [flush])
+
+  const type = (v: string) => {
+    setDraft(v)
+    latest.current = v
+    clearTimeout(timer.current)
+    timer.current = setTimeout(flush, SAVE_DELAY_MS)
+  }
 
   const left = Math.max(16, Math.min(window.innerWidth - 336, anchor.right + 12 > window.innerWidth - 336 ? anchor.left - 332 : anchor.right + 12))
   const top = Math.max(16, Math.min(window.innerHeight - 460, anchor.top))
-  const saveDraft = () => {
-    if (draft === null || draft === cell.prompt) return
-    onPrompt(draft.trim() ? draft : null)
-  }
   const commitTime = () => {
     const v = time.trim()
     if (!v) setTime(shot.time)
@@ -63,7 +92,7 @@ export function RefinePopover({ cell, anchor, readOnly, price, modelNote, onProm
     <div className="sg-pop" ref={box} role="dialog" aria-label={t('grid.refine.title', { n: cell.index + 1 })} style={{ left, top }}>
       <div className="sg-pop-head">
         <b>{t('grid.refine.title', { n: cell.index + 1 })}</b>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>{t('grid.close')}</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onClose(true)}>{t('grid.close')}</button>
       </div>
       <label>{t('grid.prompt')}
         <textarea
@@ -71,12 +100,12 @@ export function RefinePopover({ cell, anchor, readOnly, price, modelNote, onProm
           className={own ? '' : 'sg-auto'}
           value={text}
           readOnly={readOnly}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={saveDraft}
+          onChange={(e) => type(e.target.value)}
+          onBlur={flush}
         />
       </label>
       {own
-        ? <button type="button" className="sg-link" disabled={readOnly} onClick={() => { setDraft(null); onPrompt(null) }}>{t('grid.promptReset')}</button>
+        ? <button type="button" className="sg-link" disabled={readOnly} onClick={() => { clearTimeout(timer.current); latest.current = null; sent.current = ''; setDraft(null); onPrompt(null) }}>{t('grid.promptReset')}</button>
         : <span className="sg-muted">{t('grid.promptAuto')}</span>}
       <div className="sg-pop-grid">
         <Select label={t('grid.f.size')} value={shot.framing} options={FRAMINGS} name={framingLabel} disabled={readOnly} onChange={(v) => onFields({ framing: v })} />
@@ -91,9 +120,9 @@ export function RefinePopover({ cell, anchor, readOnly, price, modelNote, onProm
       <button
         type="button"
         className="btn btn-primary btn-sm"
-        disabled={readOnly || !cell.nodeId || !!cell.pending || !price}
+        disabled={readOnly || !cell.nodeId || !!cell.pending || busy || !price}
         title={price ? undefined : t('grid.noModel')}
-        onClick={() => onRegenerate(effective)}
+        onClick={() => { flush(); onRegenerate(effective, own) }}
       >{price ? t('grid.regenerateFrame', { price }) : t('grid.regenerateOff')}</button>
       {modelNote && <span className="sg-muted">{modelNote}</span>}
       <span className="sg-muted">{t('grid.noAuto')}</span>

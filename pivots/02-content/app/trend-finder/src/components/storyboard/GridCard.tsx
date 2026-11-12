@@ -10,13 +10,14 @@ export interface GridCardProps {
   showLine: boolean
   showCamera: boolean
   price: string
+  busy: boolean
   onSelect: () => void
   onRefine: (anchor: DOMRect) => void
   onRegenerate: () => void
   onStep: (dir: -1 | 1) => void
 }
 
-export function GridCard({ cell, selected, readOnly, showAction, showLine, showCamera, price, onSelect, onRefine, onRegenerate, onStep }: GridCardProps) {
+export function GridCard({ cell, selected, readOnly, showAction, showLine, showCamera, price, busy, onSelect, onRefine, onRegenerate, onStep }: GridCardProps) {
   const { shot, index, versions, shown, pending, failed, changed } = cell
   const done = versions.filter((v) => v.status === 'done')
   const at = shown ? done.findIndex((v) => v.id === shown.id) + 1 : 0
@@ -31,8 +32,8 @@ export function GridCard({ cell, selected, readOnly, showAction, showLine, showC
           : failed ? <span className="sg-status sg-warn">{failed.error || t('grid.failed')}</span>
           : changed ? <span className="sg-status sg-warn">{t('grid.changed')}</span> : null}
         <div className="sg-hover">
-          <button type="button" disabled={readOnly || !cell.nodeId} onClick={(e) => { e.stopPropagation(); onRefine(e.currentTarget.closest('.sg-frame')!.getBoundingClientRect()) }}>{t('grid.refine')}</button>
-          <button type="button" disabled={readOnly || !cell.nodeId || !!pending || !price} title={price ? undefined : t('grid.noModel')} onClick={(e) => { e.stopPropagation(); onRegenerate() }}>{price ? t('grid.regenerate', { price }) : t('grid.regenerateOff')}</button>
+          <button type="button" data-refine={index} disabled={readOnly || !cell.nodeId} onClick={(e) => { e.stopPropagation(); onRefine(e.currentTarget.closest('.sg-frame')!.getBoundingClientRect()) }}>{t('grid.refine')}</button>
+          <button type="button" disabled={readOnly || !cell.nodeId || !!pending || busy || !price} title={price ? undefined : t('grid.noModel')} onClick={(e) => { e.stopPropagation(); onRegenerate() }}>{price ? t('grid.regenerate', { price }) : t('grid.regenerateOff')}</button>
         </div>
       </div>
       <div className="sg-ver">

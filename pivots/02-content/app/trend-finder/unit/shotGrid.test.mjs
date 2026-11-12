@@ -89,3 +89,14 @@ test('patchShot and cameraTag', () => {
   assert.equal(cameraTag(full), [framingLabel('close_up'), angleLabel('eye_level'), movementLabel('push_in'), '35mm'].join(' · '))
   assert.equal(cameraTag(bare), '')
 })
+
+test('a frame made outside the grid is not flagged changed; a grid-made one is', () => {
+  const doc = { nodes: [node('sh2', 'shot', 's2'), node('f2', 'storyboard', 's2')], edges: [] }
+  const canvasMade = gridCells(doc, [bare], [gen('g1', 'f2', 'done', 1, 'A loaf')])
+  assert.equal(canvasMade[0].auto, true)
+  assert.equal(canvasMade[0].changed, false)
+  const gridMade = gridCells(doc, [bare], [gen('g1', 'f2', 'done', 1, framePrompt(bare))])
+  assert.equal(gridMade[0].changed, false)
+  const edited = gridCells(doc, [{ ...bare, lens: '85mm' }], [gen('g1', 'f2', 'done', 1, framePrompt(bare))])
+  assert.equal(edited[0].changed, true)
+})

@@ -88,7 +88,7 @@ test('workspace regenerate saves the prompt, quotes, then confirms with the stam
     quote: async (nodeId, v) => { log.push(['quote', nodeId, v]); return { inputStamp: 'in1', quoteStamp: 'q1' } },
     start: async (body) => { log.push(['start', body]); return gen('g2', 'queued') },
   })
-  const cell = { ...gridCells(doc(), shots, [])[0], prompt: 'edited prompt' }
+  const cell = { ...gridCells(doc(), shots, [])[0], prompt: 'edited prompt', auto: false }
   const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04)
   assert.deepEqual(log.map((l) => l[0]), ['put', 'quote', 'start', 'put'])
   assert.deepEqual(log[0].slice(1), [3, 'edited prompt', undefined])
@@ -154,4 +154,30 @@ test('a quote at or within half a cent of the agreed price starts', async () => 
   const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04)
   assert.equal(out.gen.id, 'g2')
   assert.equal(calls.start.length, 1)
+})
+
+test('regenerate still returns the started job when recording it fails', async () => {
+  let n = 0
+  const { io, calls } = fakeIO({ put: async (v, d) => { calls.put.push({ v, d }); if (n++ >= 0) throw stale(); return v + 1 } })
+  const cell = gridCells(doc(), shots, [])[0]
+  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04)
+  assert.equal(out.gen.id, 'g2')
+  assert.ok(out.saveError)
+  assert.equal(out.version, 3)
+})
+
+test('workspace regenerate does not save an automatic prompt as the frame own prompt', async () => {
+  const puts = []
+  const { io } = fakeIO({
+    put: async (v, d) => { puts.push(d.nodes[1].data.prompt); return v + 1 },
+    quote: async () => ({ inputStamp: 'a', quoteStamp: 'b' }),
+  })
+  const cell = gridCells(doc(), shots, [])[0]
+  assert.equal(cell.auto, true)
+  await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04)
+  assert.equal(puts[0], undefined)
+  const own = { ...cell, auto: false, prompt: 'typed' }
+  puts.length = 0
+  await regenerate(io, { doc: doc(), version: 3 }, own, shots, [], model, 0.04)
+  assert.equal(puts[0], 'typed')
 })

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { CanvasState, GenModel, Generation } from '../../lib/canvas/types'
 import type { ResourceRef } from '../../lib/canvas/resource'
-import { generationItems, getBudget, getCanvas, pollGen, putCanvas, quoteNode, startGen, StaleCanvas } from '../../lib/canvas/api'
+import { pendingGen } from '../../lib/canvas/graph'
+import { generationItems, getBudget, getCanvas, pollGen, putCanvas, quoteNode, startGen } from '../../lib/canvas/api'
 import { applyLegacyFrames } from '../../lib/canvas/legacy'
-import { finish, regenerate, savePrompt, type GridIO } from '../../lib/shotGridActions'
+import { finish, putEdit, regenerate, savePrompt, type GridIO } from '../../lib/shotGridActions'
 import { chooseVersion, stepVersion, type GridCell } from '../../lib/shotGrid'
 import type { Budget } from '../../lib/canvas/types'
 import type { Shot } from '../../types'
@@ -30,6 +31,13 @@ export function useGridActions({ resource, state, setState, shots, onShotsChange
   shotsRef.current = shots
   const chain = useRef<Promise<unknown>>(Promise.resolve())
   const polled = useRef(new Set<string>())
+  // Frames with a regenerate queued or running: stops a double click from starting (and charging) a second job.
+  const [inFlight, setInFlight] = useState<ReadonlySet<string>>(new Set())
+  const flying = useRef(new Set<string>())
+  const mark = (nodeId: string, on: boolean) => {
+    if (on) flying.current.add(nodeId); else flying.current.delete(nodeId)
+    setInFlight(new Set(flying.current))
+  }
   const abort = useRef<AbortController>(new AbortController())
 
   useEffect(() => {
@@ -64,18 +72,9 @@ export function useGridActions({ resource, state, setState, shots, onShotsChange
   const settle = (nodeId: string, end: Generation) => serial(async () => {
     const cur = live.current
     if (!cur) return
-    let doc = finish(cur, nodeId, end)
-    let version: number
-    let fresh: Generation[] | undefined
-    try {
-      version = await putCanvas(resource, cur.version, doc)
-    } catch (e) {
-      if (!(e instanceof StaleCanvas)) throw e
-      const again = await getCanvas(resource)
-      fresh = again.generations
-      doc = finish(again, nodeId, end)
-      version = await putCanvas(resource, again.version, doc)
-    }
+    const saved = await putEdit(io, cur, (doc) => finish({ doc }, nodeId, end))
+    const { doc, version } = saved
+    const fresh = saved.generations
     const gens = upsert(fresh ?? live.current?.generations ?? [], end)
     apply(doc, version, gens)
     if (resource.kind === 'legacy-plan') {
@@ -115,21 +114,27 @@ export function useGridActions({ resource, state, setState, shots, onShotsChange
       const q = nodeId ? quoted[nodeId] : undefined
       return q && q.model === model.id ? q.usd : undefined
     },
-    regenerate: (cell: GridCell, model: GenModel, agreedUsd: number) => serial(async () => {
-      const cur = live.current
-      if (!cur || !cell.nodeId) return
+    busy: (nodeId: string | null): boolean => !!nodeId && inFlight.has(nodeId),
+    regenerate: (cell: GridCell, model: GenModel, agreedUsd: number) => {
       const nodeId = cell.nodeId
-      const out = await regenerate(io, cur, cell, shotsRef.current, cur.generations, model, agreedUsd)
-      if (out.priceChanged !== undefined) {
-        apply(out.doc, out.version, out.generations ?? cur.generations)
-        setQuoted((q) => ({ ...q, [nodeId]: { model: model.id, usd: out.priceChanged } }))
-        setNote(t('grid.priceChanged'))
-        return
-      }
-      setQuoted((q) => Object.fromEntries(Object.entries(q).filter(([k]) => k !== nodeId)))
-      apply(out.doc, out.version, upsert(out.generations ?? cur.generations, out.gen))
-      follow(out.gen)
-    }),
+      if (!nodeId || flying.current.has(nodeId)) return Promise.resolve()
+      mark(nodeId, true)
+      return serial(async () => {
+        const cur = live.current
+        if (!cur || pendingGen(nodeId, cur.generations)) return
+        const out = await regenerate(io, cur, cell, shotsRef.current, cur.generations, model, agreedUsd)
+        if (out.priceChanged !== undefined) {
+          apply(out.doc, out.version, out.generations ?? cur.generations)
+          setQuoted((q) => ({ ...q, [nodeId]: { model: model.id, usd: out.priceChanged } }))
+          setNote(t('grid.priceChanged'))
+          return
+        }
+        setQuoted((q) => Object.fromEntries(Object.entries(q).filter(([k]) => k !== nodeId)))
+        apply(out.doc, out.version, upsert(out.generations ?? cur.generations, out.gen))
+        if (out.saveError) setNote(out.saveError)
+        follow(out.gen)
+      }).finally(() => mark(nodeId, false))
+    },
     step: (cell: GridCell, dir: -1 | 1) => {
       const to = stepVersion(cell, dir)
       if (!to || !cell.nodeId) return
@@ -137,10 +142,10 @@ export function useGridActions({ resource, state, setState, shots, onShotsChange
       return serial(async () => {
         const cur = live.current
         if (!cur) return
-        const doc = chooseVersion(cur.doc, nodeId, to)
-        apply(doc, await putCanvas(resource, cur.version, doc))
+        const saved = await putEdit(io, cur, (doc) => chooseVersion(doc, nodeId, to))
+        apply(saved.doc, saved.version, saved.generations)
         if (resource.kind === 'legacy-plan') {
-          const next = applyLegacyFrames(doc, shotsRef.current, cur.generations)
+          const next = applyLegacyFrames(saved.doc, shotsRef.current, saved.generations ?? cur.generations)
           if (next !== shotsRef.current) onShotsChange(next)
         }
       })
