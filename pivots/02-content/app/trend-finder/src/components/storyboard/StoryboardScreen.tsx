@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CanvasContext } from '../../lib/canvas/resource'
 import type { Budget, CanvasState, GenModel } from '../../lib/canvas/types'
 import { getBudget, getCanvas, getModels } from '../../lib/canvas/api'
-import { budgetLeft, priceLabel } from '../../lib/canvas/graph'
-import { cameraTag, gridCells, type GridCell } from '../../lib/shotGrid'
+import { budgetLeft, priceLabel, priceOf } from '../../lib/canvas/graph'
+import { cameraTag, gridCells, patchShot, type GridCell } from '../../lib/shotGrid'
 import type { Shot } from '../../types'
 import { ff } from '../../lib/strings/freeform'
 import { t } from '../../lib/i18n'
 import { GridCard } from './GridCard'
+import { RefinePopover } from './RefinePopover'
+import { useGridActions } from './useGridActions'
 import '../../styles/storyboard-grid.css'
 
 interface Props {
@@ -45,7 +47,7 @@ function modelFor(models: GenModel[], savedId: string | undefined): GenModel | u
   return images.find((m) => m.id === savedId && m.available) ?? images.find((m) => m.available)
 }
 
-export default function StoryboardScreen({ context, onOpenCanvas, onOpenEditor, onBack }: Props) {
+export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas, onOpenEditor, onBack }: Props) {
   const [state, setState] = useState<CanvasState | null>(null)
   const [models, setModels] = useState<GenModel[]>([])
   const [budget, setBudget] = useState<Budget | null>(null)
@@ -55,6 +57,7 @@ export default function StoryboardScreen({ context, onOpenCanvas, onOpenEditor, 
   const [cols, setCols] = useState<Cols>(readCols)
   const [show, setShow] = useState({ action: true, line: true, camera: true })
   const [selected, setSelected] = useState<number | null>(null)
+  const [refine, setRefine] = useState<{ index: number; anchor: DOMRect } | null>(null)
   const { resource, readOnly } = context
 
   useEffect(() => {
@@ -69,7 +72,9 @@ export default function StoryboardScreen({ context, onOpenCanvas, onOpenEditor, 
     return () => { cancelled = true }
   }, [resource, attempt])
 
+  const actions = useGridActions({ resource, state, setState, shots: context.shots, onShotsChange, setBudget })
   const cells = useMemo(() => (state ? gridCells(state.doc, context.shots, state.generations) : []), [state, context.shots])
+  const closeRefine = useCallback(() => setRefine(null), [])
 
   if (!state) {
     return (
@@ -83,14 +88,25 @@ export default function StoryboardScreen({ context, onOpenCanvas, onOpenEditor, 
   }
 
   const left = budgetLeft(budget, 'image')
-  const priceOf = (cell: GridCell): string => {
-    const node = state.doc.nodes.find((n) => n.id === cell.nodeId)
-    const model = modelFor(models, node?.data.model)
+  const modelOf = (cell: GridCell): GenModel | undefined => modelFor(models, state.doc.nodes.find((n) => n.id === cell.nodeId)?.data.model)
+  const priceFor = (cell: GridCell): string => {
+    const model = modelOf(cell)
     return model ? priceLabel(model, undefined) : ''
   }
+  const images = models.filter((m) => m.kind === 'image' && m.available)
+  const refining = refine ? cells.find((c) => c.index === refine.index) : undefined
+  const modelNote = (cell: GridCell): string => {
+    const model = modelOf(cell)
+    if (!model) return ''
+    const usd = images.map((m) => priceOf(m, undefined))
+    const lo = Math.min(...usd), hi = Math.max(...usd)
+    return t('grid.model', { name: model.label, range: lo === hi ? `US$${lo.toFixed(2)}` : `US$${lo.toFixed(2)}–${hi.toFixed(2)}` })
+  }
+  const regenerate = (cell: GridCell) => {
+    const model = modelOf(cell)
+    if (model) void actions.regenerate(cell, model)
+  }
   const toggle = (k: keyof typeof show) => setShow((v) => ({ ...v, [k]: !v[k] }))
-  // Task 4 wires these to the generation queue.
-  const noop = () => {}
 
   return (
     <section className="sg">
@@ -104,6 +120,7 @@ export default function StoryboardScreen({ context, onOpenCanvas, onOpenEditor, 
         </div>
       </header>
       {readOnly && <p className="sg-notice" role="status">{t('grid.readOnly')}</p>}
+      {actions.note && <p className="sg-note" role="alert">{actions.note} <button className="btn btn-ghost btn-sm" onClick={actions.clearNote}>{t('grid.close')}</button></p>}
       <div className="sg-tools">
         <div className="sg-seg" role="tablist">
           {(['board', 'list'] as const).map((k) => (
@@ -135,11 +152,11 @@ export default function StoryboardScreen({ context, onOpenCanvas, onOpenEditor, 
               showAction={show.action}
               showLine={show.line}
               showCamera={show.camera}
-              price={priceOf(cell)}
+              price={priceFor(cell)}
               onSelect={() => setSelected(cell.index)}
-              onRefine={noop}
-              onRegenerate={noop}
-              onStep={noop}
+              onRefine={(anchor) => { setSelected(cell.index); setRefine({ index: cell.index, anchor }) }}
+              onRegenerate={() => regenerate(cell)}
+              onStep={(dir) => void actions.step(cell, dir)}
             />
           ))}
         </div>
@@ -161,6 +178,20 @@ export default function StoryboardScreen({ context, onOpenCanvas, onOpenEditor, 
             </tbody>
           </table>
         </div>
+      )}
+      {refining && refine && (
+        <RefinePopover
+          key={refining.shot.id ?? refining.index}
+          cell={refining}
+          anchor={refine.anchor}
+          readOnly={readOnly}
+          price={priceFor(refining)}
+          modelNote={modelNote(refining)}
+          onPrompt={(p) => { if (refining.nodeId) void actions.prompt(refining.nodeId, p) }}
+          onFields={(patch) => onShotsChange(patchShot(context.shots, refining.index, patch))}
+          onRegenerate={(prompt) => { regenerate({ ...refining, prompt }); closeRefine() }}
+          onClose={closeRefine}
+        />
       )}
     </section>
   )

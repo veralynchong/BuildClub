@@ -11,7 +11,7 @@ export interface GridCardProps {
   showCamera: boolean
   price: string
   onSelect: () => void
-  onRefine: () => void
+  onRefine: (anchor: DOMRect) => void
   onRegenerate: () => void
   onStep: (dir: -1 | 1) => void
 }
@@ -28,11 +28,11 @@ export function GridCard({ cell, selected, readOnly, showAction, showLine, showC
         <span className="sg-badge sg-n">{index + 1}</span>
         <span className="sg-badge sg-t">{shot.time}</span>
         {pending ? <span className="sg-status">{t('grid.generating')}</span>
-          : failed?.error ? <span className="sg-status sg-warn">{failed.error}</span>
+          : failed ? <span className="sg-status sg-warn">{failed.error || t('grid.failed')}</span>
           : changed ? <span className="sg-status sg-warn">{t('grid.changed')}</span> : null}
         <div className="sg-hover">
-          <button type="button" disabled={readOnly || !cell.nodeId} onClick={(e) => { e.stopPropagation(); onRefine() }}>{t('grid.refine')}</button>
-          <button type="button" disabled={readOnly || !cell.nodeId || !!pending} onClick={(e) => { e.stopPropagation(); onRegenerate() }}>{t('grid.regenerate', { price })}</button>
+          <button type="button" disabled={readOnly || !cell.nodeId} onClick={(e) => { e.stopPropagation(); onRefine(e.currentTarget.closest('.sg-frame')!.getBoundingClientRect()) }}>{t('grid.refine')}</button>
+          <button type="button" disabled={readOnly || !cell.nodeId || !!pending || !price} title={price ? undefined : t('grid.noModel')} onClick={(e) => { e.stopPropagation(); onRegenerate() }}>{price ? t('grid.regenerate', { price }) : t('grid.regenerateOff')}</button>
         </div>
       </div>
       <div className="sg-ver">
