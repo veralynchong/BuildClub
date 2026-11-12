@@ -14,6 +14,7 @@ interface Props {
   onPick: (ideaId: string) => void
   onWorkspace: (workspace: Workspace) => void
   copy?: { title: string; intro: string } // the heading and line above the picker (the storyboard chooser has its own)
+  hideCreate?: boolean // the storyboard chooser picks a plan; it does not create workspaces
 }
 export function CanvasPick(p: Props) {
   const clientRef = useRef(p.clientId)
@@ -37,7 +38,7 @@ export function CanvasPick(p: Props) {
     catch (e) { if (clientRef.current === clientId) { setError(e instanceof Error ? e.message : String(e)); setBusy(false) } }
   }
   return <section className="fc-picker"><header><span>{p.clientName}</span><h1>{p.copy?.title ?? ff('spaces')}</h1><p>{p.copy?.intro ?? ff('intro')}</p></header>
-    <form className="fc-new-workspace" onSubmit={(e) => { e.preventDefault(); void create() }}><label htmlFor="canvas-name">{ff('name')}</label><div><input id="canvas-name" placeholder={ff('title')} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} /><button className="fc-primary" disabled={busy}>＋ {ff('create')}</button></div></form>
+    {!p.hideCreate && <form className="fc-new-workspace" onSubmit={(e) => { e.preventDefault(); void create() }}><label htmlFor="canvas-name">{ff('name')}</label><div><input id="canvas-name" placeholder={ff('title')} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} /><button className="fc-primary" disabled={busy}>＋ {ff('create')}</button></div></form>}
     {error && <p role="alert">{error} <button onClick={() => setAttempt((a) => a + 1)}>{ff('reload')}</button></p>}
     <div className="fc-workspace-grid">{scopedWorkspaces(spaces, p.clientId).map((w) => <button className="fc-workspace" key={w.id} onClick={() => { if (w.clientId === clientRef.current) p.onWorkspace(w) }}><div>✧</div><strong>{w.title}</strong><small>{new Date(w.updatedAt * (w.updatedAt < 1e12 ? 1000 : 1)).toLocaleDateString()}</small></button>)}</div>
     {p.plans.length > 0 && <><h2>{ff('existing')}</h2><div className="fc-workspace-grid">{p.plans.map((idea) => { const v = p.videoById.get(idea.videoId); return <button className="fc-workspace is-legacy" key={idea.id} onClick={() => p.onPick(idea.id)}><div>▦</div><strong>{v ? planName(v, p.formatById.get(v.formatId)) : idea.id}</strong><small>{idea.status}</small></button> })}</div></>}
