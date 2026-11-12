@@ -59,6 +59,8 @@ export interface Video {
 export type Framing = 'wide' | 'medium' | 'close_up' | 'extreme_close_up' | 'overhead' | 'pov'
 export type Angle = 'eye_level' | 'high' | 'low' | 'top_down'
 export type Movement = 'static' | 'pan' | 'tilt' | 'push_in' | 'handheld' | 'tracking'
+export type Lens = '16mm' | '24mm' | '35mm' | '50mm' | '85mm' | '100mm'
+export type Gear = 'tripod' | 'gimbal' | 'handheld' | 'slider'
 
 export interface Shot {
   id?: string
@@ -69,6 +71,8 @@ export interface Shot {
   framing?: Framing
   angle?: Angle
   movement?: Movement
+  lens?: Lens
+  gear?: Gear
   tip?: string
   // Script and storyboard (set once the shot is written and drawn; old plans have neither).
   line?: string

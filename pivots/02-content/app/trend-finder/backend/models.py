@@ -111,6 +111,8 @@ class Client(BaseModel):
 Framing = Literal["wide", "medium", "close_up", "extreme_close_up", "overhead", "pov"]
 Angle = Literal["eye_level", "high", "low", "top_down"]
 Movement = Literal["static", "pan", "tilt", "push_in", "handheld", "tracking"]
+Lens = Literal["16mm", "24mm", "35mm", "50mm", "85mm", "100mm"]
+Gear = Literal["tripod", "gimbal", "handheld", "slider"]
 
 
 class Footage(BaseModel):
@@ -149,6 +151,8 @@ class Shot(BaseModel):
     framing: Optional[Framing] = None
     angle: Optional[Angle] = None
     movement: Optional[Movement] = None
+    lens: Optional[Lens] = None
+    gear: Optional[Gear] = None
     tip: Optional[str] = Field(default=None, max_length=300)
     # Per-shot script and storyboard (all optional, so plans saved before they existed still load).
     # line: what is said; options: up to 3 other lines; edited: the user changed the line, so a
