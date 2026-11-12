@@ -37,11 +37,12 @@ function Select<T extends string>({ label, value, options, name, onChange, disab
 export function RefinePopover({ cell, anchor, readOnly, price, modelNote, busy, onPrompt, onFields, onRegenerate, onClose }: Props) {
   const { shot } = cell
   const [draft, setDraft] = useState<string | null>(null) // null: untouched, the card's prompt is shown
+  const [reset, setReset] = useState(false) // just reset to automatic: the old own prompt must not count until the save lands
   const [time, setTime] = useState(shot.time)
   const box = useRef<HTMLDivElement>(null)
   const text = draft ?? cell.prompt
   const effective = text.trim() ? text : framePrompt(shot)
-  const own = draft !== null ? !!draft.trim() : !cell.auto
+  const own = reset ? false : draft !== null ? !!draft.trim() : !cell.auto
 
   // The typed text is saved ~800 ms after the last keystroke, when the popover closes and when the page is left.
   // `sent` is the text last handed to onPrompt (or the card's own prompt), so already saved text is never saved again.
@@ -75,6 +76,7 @@ export function RefinePopover({ cell, anchor, readOnly, price, modelNote, busy, 
 
   const type = (v: string) => {
     setDraft(v)
+    setReset(false)
     latest.current = v
     clearTimeout(timer.current)
     timer.current = setTimeout(flush, SAVE_DELAY_MS)
@@ -105,7 +107,7 @@ export function RefinePopover({ cell, anchor, readOnly, price, modelNote, busy, 
         />
       </label>
       {own
-        ? <button type="button" className="sg-link" disabled={readOnly} onClick={() => { clearTimeout(timer.current); latest.current = null; sent.current = ''; setDraft(null); onPrompt(null) }}>{t('grid.promptReset')}</button>
+        ? <button type="button" className="sg-link" disabled={readOnly} onClick={() => { clearTimeout(timer.current); latest.current = null; sent.current = ''; setReset(true); setDraft(framePrompt(shot)); onPrompt(null) }}>{t('grid.promptReset')}</button>
         : <span className="sg-muted">{t('grid.promptAuto')}</span>}
       <div className="sg-pop-grid">
         <Select label={t('grid.f.size')} value={shot.framing} options={FRAMINGS} name={framingLabel} disabled={readOnly} onChange={(v) => onFields({ framing: v })} />

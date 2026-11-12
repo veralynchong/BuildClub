@@ -100,3 +100,14 @@ test('a frame made outside the grid is not flagged changed; a grid-made one is',
   const edited = gridCells(doc, [{ ...bare, lens: '85mm' }], [gen('g1', 'f2', 'done', 1, framePrompt(bare))])
   assert.equal(edited[0].changed, true)
 })
+
+test('cellOfNode rebuilds the cell from the doc as saved now', async () => {
+  const { cellOfNode } = await import('../src/lib/shotGrid.ts')
+  const before = { nodes: [node('sh2', 'shot', 's2'), node('f2', 'storyboard', 's2')], edges: [] }
+  const after = setPrompt(before, 'f2', 'typed just now')
+  assert.equal(cellOfNode(before, [bare], [], 'f2').auto, true)
+  const c = cellOfNode(after, [bare], [], 'f2')
+  assert.equal(c.prompt, 'typed just now')
+  assert.equal(c.auto, false)
+  assert.equal(cellOfNode(after, [bare], [], 'nope'), undefined)
+})

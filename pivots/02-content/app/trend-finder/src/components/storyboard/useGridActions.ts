@@ -5,7 +5,7 @@ import { pendingGen } from '../../lib/canvas/graph'
 import { generationItems, getBudget, getCanvas, pollGen, putCanvas, quoteNode, startGen } from '../../lib/canvas/api'
 import { applyLegacyFrames } from '../../lib/canvas/legacy'
 import { finish, putEdit, regenerate, savePrompt, type GridIO } from '../../lib/shotGridActions'
-import { chooseVersion, stepVersion, type GridCell } from '../../lib/shotGrid'
+import { cellOfNode, chooseVersion, stepVersion, type GridCell } from '../../lib/shotGrid'
 import type { Budget } from '../../lib/canvas/types'
 import type { Shot } from '../../types'
 import { t } from '../../lib/i18n'
@@ -115,14 +115,17 @@ export function useGridActions({ resource, state, setState, shots, onShotsChange
       return q && q.model === model.id ? q.usd : undefined
     },
     busy: (nodeId: string | null): boolean => !!nodeId && inFlight.has(nodeId),
-    regenerate: (cell: GridCell, model: GenModel, agreedUsd: number) => {
+    // `fromPopover`: the cell carries the prompt the popover shows. Otherwise the prompt is rebuilt from the saved doc once
+    // the writes queued before this click (an autosave from a popover that just closed) have run.
+    regenerate: (cell: GridCell, model: GenModel, agreedUsd: number, fromPopover = false) => {
       const nodeId = cell.nodeId
       if (!nodeId || flying.current.has(nodeId)) return Promise.resolve()
       mark(nodeId, true)
       return serial(async () => {
         const cur = live.current
         if (!cur || pendingGen(nodeId, cur.generations)) return
-        const out = await regenerate(io, cur, cell, shotsRef.current, cur.generations, model, agreedUsd)
+        const use = fromPopover ? cell : cellOfNode(cur.doc, shotsRef.current, cur.generations, nodeId) ?? cell
+        const out = await regenerate(io, cur, use, shotsRef.current, cur.generations, model, agreedUsd)
         if (out.priceChanged !== undefined) {
           apply(out.doc, out.version, out.generations ?? cur.generations)
           setQuoted((q) => ({ ...q, [nodeId]: { model: model.id, usd: out.priceChanged } }))

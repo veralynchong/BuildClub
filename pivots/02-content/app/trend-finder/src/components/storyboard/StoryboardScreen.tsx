@@ -112,9 +112,9 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
     const lo = Math.min(...usd), hi = Math.max(...usd)
     return t('grid.model', { name: model.label, range: lo === hi ? `US$${lo.toFixed(2)}` : `US$${lo.toFixed(2)}–${hi.toFixed(2)}` })
   }
-  const regenerate = (cell: GridCell) => {
+  const regenerate = (cell: GridCell, fromPopover = false) => {
     const model = modelOf(cell)
-    if (model) void actions.regenerate(cell, model, actions.quotedUsd(cell.nodeId, model) ?? priceOf(model, undefined))
+    if (model) void actions.regenerate(cell, model, actions.quotedUsd(cell.nodeId, model) ?? priceOf(model, undefined), fromPopover)
   }
   const toggle = (k: keyof typeof show) => setShow((v) => ({ ...v, [k]: !v[k] }))
 
@@ -190,7 +190,7 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
           modelNote={modelNote(refining)}
           onPrompt={(p) => { if (refining.nodeId) void actions.prompt(refining.nodeId, p) }}
           onFields={(patch) => onShotsChange(patchShot(context.shots, refining.index, patch))}
-          onRegenerate={(prompt, own) => { regenerate({ ...refining, prompt, auto: !own }); closeRefine() }}
+          onRegenerate={(prompt, own) => { regenerate({ ...refining, prompt, auto: !own }, true); closeRefine() }}
           onClose={closeRefine}
         />
       )}

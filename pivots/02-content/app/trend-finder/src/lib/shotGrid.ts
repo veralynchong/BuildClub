@@ -65,6 +65,11 @@ export function gridCells(doc: CanvasDoc, shots: Shot[], gens: Generation[]): Gr
   return cells
 }
 
+// The cell of one frame node as the given doc has it now (e.g. after a queued prompt save landed).
+export function cellOfNode(doc: CanvasDoc, shots: Shot[], gens: Generation[], nodeId: string): GridCell | undefined {
+  return gridCells(doc, shots, gens).find((c) => c.nodeId === nodeId)
+}
+
 export function patchNode(doc: CanvasDoc, nodeId: string, fn: (n: CanvasNode) => CanvasNode): CanvasDoc {
   return { ...doc, nodes: doc.nodes.map((n) => (n.id === nodeId ? fn(n) : n)) }
 }
