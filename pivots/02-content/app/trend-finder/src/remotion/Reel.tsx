@@ -2,6 +2,7 @@ import { useMemo, type CSSProperties } from 'react'
 import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, staticFile } from 'remotion'
 import { pageEnd, projectPages } from '../lib/editor/captions.ts'
 import { musicVolume } from '../lib/editor/duck.ts'
+import { playedProject } from '../lib/editor/lanes.ts'
 import { clipFrames, reelDurationInFrames, sourceKey, toFrames } from '../lib/editor/timeline.ts'
 import type { LogoCorner, LogoSize, ReelInput, TextItem } from '../lib/editor/types.ts'
 import { useReelFont } from './font.ts'
@@ -39,7 +40,10 @@ function textLook(color: TextItem['color'], brand: string | null): { fill: strin
 }
 
 export function Reel(props: ReelInput) {
-  const { project, urls, fontUrl, brand, musicUrl, lines, voice, duck, hideVideo } = props
+  const { urls, fontUrl, brand, musicUrl, lines, voice, duck } = props
+  // Tracks switched off in the editor's track headers stay off in the preview and the export.
+  const project = useMemo(() => playedProject(props.project), [props.project])
+  const hideVideo = props.project.lanes?.hidden.includes('video') ?? false
   useReelFont(fontUrl || staticFile(BUNDLED_FONT))
   const spans = clipFrames(project)
   const total = reelDurationInFrames(project)

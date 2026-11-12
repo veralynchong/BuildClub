@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fitZoom, followScroll, laneBars, previewOf, removeBar, setBarTime, snapMove, snapTargets, snapThreshold, snapTime, tickStep, timecode } from '../src/lib/editor/lanes.ts'
+import { fitZoom, followScroll, laneBars, laneState, playedProject, removeBar, toggleLane, setBarTime, snapMove, snapTargets, snapThreshold, snapTime, tickStep, timecode } from '../src/lib/editor/lanes.ts'
 import { HISTORY_LIMIT, MERGE_MS, emptyHistory, lastAi, record, redo, undo } from '../src/lib/editor/history.ts'
 
 const take = (id) => ({ kind: 'take', id })
@@ -143,14 +143,15 @@ test('history: keeps at most HISTORY_LIMIT steps', () => {
   assert.equal(h.past.length, HISTORY_LIMIT)
 })
 
-test('previewOf: hidden and muted lanes change only the copy the preview plays', () => {
+test('playedProject: hidden and muted tracks in the project change only the copy the reel plays', () => {
   const p = project({
     texts: [{ id: 't1', text: 'x', start: 1, end: 3, position: 'bottom', color: 'white' }],
     voiceover: [{ id: 'v1', source: 'tts', start: 0, volume: 1, edits: {} }],
     music: { volume: 0.8 },
   })
-  assert.equal(previewOf(p, new Set(), new Set()), p)
-  const v = previewOf(p, new Set(['text', 'captions']), new Set(['video', 'voice', 'music']))
+  assert.equal(playedProject(p), p)
+  const switched = { ...p, lanes: { hidden: ['text', 'captions'], muted: ['video', 'voice', 'music'] } }
+  const v = playedProject(switched)
   assert.equal(v.texts.length, 0)
   assert.equal(v.captions.enabled, false)
   assert.ok(v.clips.every((c) => c.muted))
@@ -158,4 +159,15 @@ test('previewOf: hidden and muted lanes change only the copy the preview plays',
   assert.equal(v.music.volume, 0)
   assert.equal(p.texts.length, 1, 'the saved project is not changed')
   assert.equal(p.music.volume, 0.8)
+})
+
+test('toggleLane: flips one switch and keeps the other list', () => {
+  let p = project()
+  p = toggleLane(p, 'hidden', 'captions')
+  p = toggleLane(p, 'muted', 'music')
+  assert.deepEqual(p.lanes, { hidden: ['captions'], muted: ['music'] })
+  p = toggleLane(p, 'hidden', 'captions')
+  assert.deepEqual(p.lanes, { hidden: [], muted: ['music'] })
+  assert.deepEqual([...laneState(p).muted], ['music'])
+  assert.equal(laneState(project()).hidden.size, 0)
 })

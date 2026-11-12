@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { clipMarks, filmTiles, groupPins, LEFTOVER, peaksFromSamples, peaksSpan, waveformPath } from '../src/lib/editor/marks.ts'
+import { anchorAt, clipMarks, filmTiles, groupPins, LEFTOVER, peaksFromSamples, peaksSpan, placeAnchor, waveformPath } from '../src/lib/editor/marks.ts'
 
 const clip = (inn, out) => ({ in: inn, out, source: { kind: 'take', id: 'tk' } })
 const item = (id, start, end, type = 'silence') => ({ id, type, start, end, label: id, reason: '' })
@@ -64,4 +64,28 @@ test('filmTiles: tiles cover the clip and pick the thumbnail nearest each tile',
 test('groupPins: lines about the same moment share a pin; a cut marks it', () => {
   const pins = groupPins([{ at: 0, text: 'picked', kind: 'pick' }, { at: 0.01, text: 'trimmed', kind: 'trim' }, { at: 3.2, text: 'cut um', kind: 'cut' }])
   assert.deepEqual(pins, [{ at: 0, lines: ['picked', 'trimmed'], cut: false }, { at: 3.2, lines: ['cut um'], cut: true }])
+})
+
+test('pin anchors: a first-cut moment follows its footage when clips move, get trimmed or split', () => {
+  const c = (id, inn, out) => ({ in: inn, out, source: { kind: 'take', id } })
+  const cut = [c('a', 1, 5), c('b', 2, 6)] // a shows 0-4 s of the timeline, b 4-8 s
+  const inB = anchorAt(cut, 5) // 1 s into b, its take second 3
+  const join = anchorAt(cut, 4) // the join belongs to b
+  assert.deepEqual(inB, { source: 'take:b', t: 3 })
+  assert.deepEqual(join, { source: 'take:b', t: 2 })
+  assert.deepEqual(anchorAt(cut, 9), { source: 'take:b', t: 6 })
+  assert.equal(anchorAt([], 1), null)
+  // nothing changed: the same second
+  near(placeAnchor(cut, inB), 5)
+  // b moved first: b now starts at 0
+  near(placeAnchor([c('b', 2, 6), c('a', 1, 5)], inB), 1)
+  // a trimmed by 1.5 s: b starts at 2.5
+  near(placeAnchor([c('a', 2.5, 5), c('b', 2, 6)], inB), 3.5)
+  // b split at its take second 4: the moment stays in the first half
+  near(placeAnchor([c('a', 1, 5), c('b', 2, 4), c('b', 4, 6)], inB), 5)
+  // b's start trimmed past the moment: the pin sits on b's new start
+  near(placeAnchor([c('a', 1, 5), c('b', 3.5, 6)], join), 4)
+  // b removed: no pin
+  assert.equal(placeAnchor([c('a', 1, 5)], inB), null)
+  assert.equal(placeAnchor(cut, null), null)
 })

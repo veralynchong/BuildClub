@@ -208,6 +208,15 @@ def _check_fixes(fixes) -> Optional[str]:
     return None
 
 
+LANES = ("text", "captions", "video", "voice", "music")
+
+
+def _lanes_ok(lanes) -> bool:
+    """The tracks switched off in the editor's track headers (the reel leaves them out of the export too)."""
+    return isinstance(lanes, dict) and set(lanes) == {"hidden", "muted"} and all(
+        isinstance(v, list) and len(v) <= len(LANES) and all(x in LANES for x in v) for v in lanes.values())
+
+
 def check_project(doc, voice_ids: Optional[set] = None) -> Optional[str]:
     """One sentence about the first problem, or None. P3b fields are accepted when their type is right.
     With `voice_ids` (the ids in the plan's voice folder) every voiceover must point at one of them."""
@@ -242,6 +251,8 @@ def check_project(doc, voice_ids: Optional[set] = None) -> Optional[str]:
         problem = _check_fixes(doc["transcriptFixes"])
         if problem:
             return problem
+    if "lanes" in doc and not _lanes_ok(doc["lanes"]):
+        return "Track switches must list hidden and muted tracks."
     music = doc.get("music")
     if music is not None and (not isinstance(music, dict) or not _num(music.get("volume"))
                               or not 0 <= music["volume"] <= 1):

@@ -30,11 +30,20 @@ export function Transcript({ groups, notice, nameOf, seconds, playing, readOnly,
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const drag = useRef(false) // the button is down on a word
-  const moved = useRef(false) // ... and the pointer went on to another one, so the click that ends it does not seek
+  const moved = useRef(false) // ... and the pointer went on to another one, so letting go does not seek
+  // The word the button went down on. Letting go seeks to it wherever the pointer is then: the first press shows the
+  // selection bar above the list, which pushes the words down, so the release often lands off the word and no click fires.
+  const pressed = useRef<TItem | null>(null)
+  const seekTo = useRef(onSeek)
+  useEffect(() => { seekTo.current = onSeek })
   const cur = itemAt(groups, seconds)
 
   useEffect(() => {
-    const up = () => { drag.current = false }
+    const up = (e: globalThis.PointerEvent) => {
+      if (drag.current && !moved.current && pressed.current && !e.shiftKey) seekTo.current(pressed.current.from)
+      drag.current = false
+      pressed.current = null
+    }
     document.addEventListener('pointerup', up)
     return () => document.removeEventListener('pointerup', up)
   }, [])
@@ -57,7 +66,7 @@ export function Transcript({ groups, notice, nameOf, seconds, playing, readOnly,
     if (err) setError(err)
     else setSel(null)
   }
-  const down = (k: number, e: PointerEvent) => {
+  const down = (k: number, x: TItem, e: PointerEvent) => {
     if (e.button !== 0 || editing) return
     box.current?.focus({ preventScroll: true })
     setError('')
@@ -65,15 +74,12 @@ export function Transcript({ groups, notice, nameOf, seconds, playing, readOnly,
     else setSel({ sig, a: k, b: k })
     drag.current = true
     moved.current = false
+    pressed.current = x
   }
   const enter = (k: number) => {
     if (!drag.current || !sel) return
     moved.current = true
     setSel({ ...sel, sig, b: k })
-  }
-  const click = (x: TItem, e: { shiftKey: boolean }) => {
-    if (e.shiftKey || moved.current) return
-    onSeek(x.from)
   }
   const onKey = (e: KeyboardEvent) => {
     if (editing) return
@@ -117,9 +123,8 @@ export function Transcript({ groups, notice, nameOf, seconds, playing, readOnly,
                     'data-key': x.key,
                     'data-cur': x.key === cur || undefined,
                     'data-sel': (range && k >= range.lo && k <= range.hi) || undefined,
-                    onPointerDown: (e: PointerEvent) => down(k, e),
+                    onPointerDown: (e: PointerEvent) => down(k, x, e),
                     onPointerEnter: () => enter(k),
-                    onClick: (e: { shiftKey: boolean }) => click(x, e),
                   }
                   if (x.kind === 'gap') {
                     return (
