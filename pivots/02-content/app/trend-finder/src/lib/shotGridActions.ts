@@ -9,7 +9,7 @@ export interface GridIO {
   put(version: number, doc: CanvasDoc): Promise<number>
   reload(): Promise<{ doc: CanvasDoc; version: number; generations: Generation[] }>
   start(body: StartGenBody): Promise<Generation>
-  quote?(nodeId: string, version: number): Promise<{ inputStamp?: string; quoteStamp?: string }> // workspace ideas only
+  quote?(nodeId: string, version: number): Promise<{ total?: number; inputStamp?: string; quoteStamp?: string }> // workspace ideas only
 }
 
 // A saved doc; `generations` is set when a conflict made us reload.
@@ -46,9 +46,12 @@ export function savePrompt(io: GridIO, state: DocState, nodeId: string, prompt: 
 // Starts one image job for the frame and records it on the node. Nothing is started when the prompt cannot be saved
 // and nothing more is saved when the job cannot start. A workspace reads prompt and model from the saved canvas and
 // wants a quote first, so with `io.quote` the prompt and model are saved, quoted, then confirmed with the stamps.
+// `agreedUsd` is the price the user saw. A workspace quote above it (the node has a size or count option) stops before
+// starting and returns `priceChanged` with the quoted total, so the caller can show it and ask again. Legacy ideas
+// have no quote, so they are not checked.
 export async function regenerate(
-  io: GridIO, state: DocState, cell: GridCell, shots: Shot[], gens: Generation[], model: GenModel,
-): Promise<Saved & { gen: Generation }> {
+  io: GridIO, state: DocState, cell: GridCell, shots: Shot[], gens: Generation[], model: GenModel, agreedUsd: number,
+): Promise<Saved & ({ gen: Generation; priceChanged?: undefined } | { gen?: undefined; priceChanged: number })> {
   if (!cell.nodeId) throw new Error('This shot has no frame to regenerate.')
   const nodeId = cell.nodeId
   let cur: Saved = state
@@ -58,6 +61,7 @@ export async function regenerate(
   if (io.quote) {
     track(await putEdit(io, state, (doc) => patchNode(setPrompt(doc, nodeId, cell.prompt), nodeId, (d) => ({ ...d, model: model.id }))))
     const q = await io.quote(nodeId, cur.version)
+    if (q.total !== undefined && q.total > agreedUsd + 0.005) return { ...cur, generations: reloaded, priceChanged: q.total }
     body.inputStamp = q.inputStamp
     body.quoteStamp = q.quoteStamp
   }

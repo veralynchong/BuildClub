@@ -91,7 +91,9 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
   const modelOf = (cell: GridCell): GenModel | undefined => modelFor(models, state.doc.nodes.find((n) => n.id === cell.nodeId)?.data.model)
   const priceFor = (cell: GridCell): string => {
     const model = modelOf(cell)
-    return model ? priceLabel(model, undefined) : ''
+    if (!model) return ''
+    const quoted = actions.quotedUsd(cell.nodeId, model)
+    return quoted === undefined ? priceLabel(model, undefined) : t('canvas.gen.cost', { usd: quoted.toFixed(2) })
   }
   const images = models.filter((m) => m.kind === 'image' && m.available)
   const refining = refine ? cells.find((c) => c.index === refine.index) : undefined
@@ -104,7 +106,7 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
   }
   const regenerate = (cell: GridCell) => {
     const model = modelOf(cell)
-    if (model) void actions.regenerate(cell, model)
+    if (model) void actions.regenerate(cell, model, actions.quotedUsd(cell.nodeId, model) ?? priceOf(model, undefined))
   }
   const toggle = (k: keyof typeof show) => setShow((v) => ({ ...v, [k]: !v[k] }))
 

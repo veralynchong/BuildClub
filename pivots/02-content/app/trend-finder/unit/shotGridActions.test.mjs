@@ -50,7 +50,7 @@ test('savePrompt rejects on a second StaleCanvas', async () => {
 test('regenerate starts one job and saves awaiting', async () => {
   const { io, calls } = fakeIO()
   const cell = gridCells(doc(), shots, [])[0]
-  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model)
+  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04)
   const body = calls.start[0]
   assert.equal(body.prompt, cell.prompt)
   assert.equal(body.aspectRatio, '9:16')
@@ -67,7 +67,7 @@ test('regenerate starts one job and saves awaiting', async () => {
 test('regenerate saves nothing when start fails', async () => {
   const { io, calls } = fakeIO({ start: async () => { throw new Error('Budget used up') } })
   const cell = gridCells(doc(), shots, [])[0]
-  await assert.rejects(regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model), /Budget used up/)
+  await assert.rejects(regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04), /Budget used up/)
   assert.equal(calls.put.length, 0)
 })
 
@@ -89,7 +89,7 @@ test('workspace regenerate saves the prompt, quotes, then confirms with the stam
     start: async (body) => { log.push(['start', body]); return gen('g2', 'queued') },
   })
   const cell = { ...gridCells(doc(), shots, [])[0], prompt: 'edited prompt' }
-  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model)
+  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04)
   assert.deepEqual(log.map((l) => l[0]), ['put', 'quote', 'start', 'put'])
   assert.deepEqual(log[0].slice(1), [3, 'edited prompt', undefined])
   assert.deepEqual(log[1].slice(1), ['f1', 4])
@@ -107,7 +107,7 @@ test('workspace regenerate saves the prompt, quotes, then confirms with the stam
 test('workspace regenerate saves nothing after the quote when start fails', async () => {
   const { io, calls } = fakeIO({ quote: async () => ({ inputStamp: 'a', quoteStamp: 'b' }), start: async () => { throw new Error('Budget used up') } })
   const cell = gridCells(doc(), shots, [])[0]
-  await assert.rejects(regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model), /Budget used up/)
+  await assert.rejects(regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04), /Budget used up/)
   assert.equal(calls.put.length, 1) // only the prompt save
 })
 
@@ -115,7 +115,7 @@ test('regenerate re-saves awaiting on a fresh doc when the canvas went stale aft
   let n = 0
   const { io, calls } = fakeIO({ put: async (v, d) => { calls.put.push({ v, d }); if (n++ === 0) throw stale(); return v + 1 } })
   const cell = gridCells(doc(), shots, [])[0]
-  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model)
+  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04)
   assert.equal(calls.start.length, 1)
   assert.equal(calls.reload, 1)
   assert.equal(out.version, 10)
@@ -129,4 +129,29 @@ test('savePrompt returns the reloaded generations after a stale save', async () 
   const { io, calls } = fakeIO({ put: async (v, d) => { calls.put.push({ v, d }); if (n++ === 0) throw stale(); return v + 1 } })
   const out = await savePrompt(io, { doc: doc(), version: 3 }, 'f1', 'mine')
   assert.deepEqual(out.generations, [])
+})
+
+test('workspace regenerate stops when the quote is above the agreed price, then goes on once agreed', async () => {
+  const log = []
+  const { io } = fakeIO({
+    quote: async () => ({ total: 0.08, inputStamp: 'a', quoteStamp: 'b' }),
+    start: async (body) => { log.push(body); return gen('g2', 'queued') },
+  })
+  const cell = gridCells(doc(), shots, [])[0]
+  const first = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04)
+  assert.equal(first.priceChanged, 0.08)
+  assert.equal(first.gen, undefined)
+  assert.equal(log.length, 0)
+  const second = await regenerate(io, { doc: first.doc, version: first.version }, cell, shots, [], model, 0.08)
+  assert.equal(second.priceChanged, undefined)
+  assert.equal(second.gen.id, 'g2')
+  assert.equal(log.length, 1)
+})
+
+test('a quote at or within half a cent of the agreed price starts', async () => {
+  const { io, calls } = fakeIO({ quote: async () => ({ total: 0.044, inputStamp: 'a', quoteStamp: 'b' }) })
+  const cell = gridCells(doc(), shots, [])[0]
+  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model, 0.04)
+  assert.equal(out.gen.id, 'g2')
+  assert.equal(calls.start.length, 1)
 })

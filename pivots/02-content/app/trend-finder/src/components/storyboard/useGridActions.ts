@@ -7,6 +7,7 @@ import { finish, regenerate, savePrompt, type GridIO } from '../../lib/shotGridA
 import { chooseVersion, stepVersion, type GridCell } from '../../lib/shotGrid'
 import type { Budget } from '../../lib/canvas/types'
 import type { Shot } from '../../types'
+import { t } from '../../lib/i18n'
 
 interface Args {
   resource: ResourceRef
@@ -21,6 +22,8 @@ interface Args {
 // last one left; one poll follows each running job and stops when the screen closes.
 export function useGridActions({ resource, state, setState, shots, onShotsChange, setBudget }: Args) {
   const [note, setNote] = useState('')
+  // A quote above the price shown, per frame node and model; the next press agrees to it.
+  const [quoted, setQuoted] = useState<Record<string, { model: string; usd: number }>>({})
   const live = useRef(state)
   live.current = state
   const shotsRef = useRef(shots)
@@ -108,10 +111,22 @@ export function useGridActions({ resource, state, setState, shots, onShotsChange
       const out = await savePrompt(io, cur, nodeId, prompt)
       apply(out.doc, out.version, out.generations)
     }),
-    regenerate: (cell: GridCell, model: GenModel) => serial(async () => {
+    quotedUsd: (nodeId: string | null, model: GenModel): number | undefined => {
+      const q = nodeId ? quoted[nodeId] : undefined
+      return q && q.model === model.id ? q.usd : undefined
+    },
+    regenerate: (cell: GridCell, model: GenModel, agreedUsd: number) => serial(async () => {
       const cur = live.current
-      if (!cur) return
-      const out = await regenerate(io, cur, cell, shotsRef.current, cur.generations, model)
+      if (!cur || !cell.nodeId) return
+      const nodeId = cell.nodeId
+      const out = await regenerate(io, cur, cell, shotsRef.current, cur.generations, model, agreedUsd)
+      if (out.priceChanged !== undefined) {
+        apply(out.doc, out.version, out.generations ?? cur.generations)
+        setQuoted((q) => ({ ...q, [nodeId]: { model: model.id, usd: out.priceChanged } }))
+        setNote(t('grid.priceChanged'))
+        return
+      }
+      setQuoted((q) => Object.fromEntries(Object.entries(q).filter(([k]) => k !== nodeId)))
       apply(out.doc, out.version, upsert(out.generations ?? cur.generations, out.gen))
       follow(out.gen)
     }),
