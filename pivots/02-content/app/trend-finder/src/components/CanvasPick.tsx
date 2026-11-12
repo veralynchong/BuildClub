@@ -13,6 +13,7 @@ interface Props {
   formatById: Map<string, Format>
   onPick: (ideaId: string) => void
   onWorkspace: (workspace: Workspace) => void
+  copy?: { title: string; intro: string } // the heading and line above the picker (the storyboard chooser has its own)
 }
 export function CanvasPick(p: Props) {
   const clientRef = useRef(p.clientId)
@@ -35,7 +36,7 @@ export function CanvasPick(p: Props) {
     try { const workspace = (await createWorkspace(clientId, title.trim() || ff('title'))).workspace; if (clientRef.current === clientId) p.onWorkspace(workspace) }
     catch (e) { if (clientRef.current === clientId) { setError(e instanceof Error ? e.message : String(e)); setBusy(false) } }
   }
-  return <section className="fc-picker"><header><span>{p.clientName}</span><h1>{ff('spaces')}</h1><p>{ff('intro')}</p></header>
+  return <section className="fc-picker"><header><span>{p.clientName}</span><h1>{p.copy?.title ?? ff('spaces')}</h1><p>{p.copy?.intro ?? ff('intro')}</p></header>
     <form className="fc-new-workspace" onSubmit={(e) => { e.preventDefault(); void create() }}><label htmlFor="canvas-name">{ff('name')}</label><div><input id="canvas-name" placeholder={ff('title')} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} /><button className="fc-primary" disabled={busy}>＋ {ff('create')}</button></div></form>
     {error && <p role="alert">{error} <button onClick={() => setAttempt((a) => a + 1)}>{ff('reload')}</button></p>}
     <div className="fc-workspace-grid">{scopedWorkspaces(spaces, p.clientId).map((w) => <button className="fc-workspace" key={w.id} onClick={() => { if (w.clientId === clientRef.current) p.onWorkspace(w) }}><div>✧</div><strong>{w.title}</strong><small>{new Date(w.updatedAt * (w.updatedAt < 1e12 ? 1000 : 1)).toLocaleDateString()}</small></button>)}</div>

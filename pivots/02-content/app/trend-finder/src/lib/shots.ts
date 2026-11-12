@@ -1,9 +1,11 @@
-import type { Angle, Framing, Movement, Shot } from '../types'
+import type { Angle, Framing, Gear, Lens, Movement, Shot } from '../types'
 import { t } from './i18n.ts'
 
 export const FRAMINGS: Framing[] = ['wide', 'medium', 'close_up', 'extreme_close_up', 'overhead', 'pov']
 export const ANGLES: Angle[] = ['eye_level', 'high', 'low', 'top_down']
 export const MOVEMENTS: Movement[] = ['static', 'pan', 'tilt', 'push_in', 'handheld', 'tracking']
+export const LENSES: Lens[] = ['16mm', '24mm', '35mm', '50mm', '85mm', '100mm']
+export const GEARS: Gear[] = ['tripod', 'gimbal', 'handheld', 'slider']
 
 // Same limit as backend/shotlist.py.
 export const MAX_SCRIPT = 6000
@@ -11,6 +13,7 @@ export const MAX_SCRIPT = 6000
 export const framingLabel = (v: Framing): string => t(`shots.framing.${v}`)
 export const angleLabel = (v: Angle): string => t(`shots.angle.${v}`)
 export const movementLabel = (v: Movement): string => t(`shots.movement.${v}`)
+export const gearLabel = (v: Gear): string => t(`shots.gear.${v}`)
 
 // The camera words a shot has, in the order framing, angle, movement. Empty for shots without any.
 export function cameraLabels(s: Pick<Shot, 'framing' | 'angle' | 'movement'>): string[] {

@@ -8,6 +8,10 @@ export const approvedPlans = (ideas: SavedIdea[], clientId: string): SavedIdea[]
 export const boardPlans = (ideas: SavedIdea[], clientId: string): SavedIdea[] =>
   ideas.filter((i) => i.clientId === clientId).sort((a, b) => a.dueDate.localeCompare(b.dueDate))
 
+// The sidebar's Storyboard: one plan opens straight away, otherwise the chooser.
+export const storyboardTarget = (plans: SavedIdea[]): { open: string } | 'pick' =>
+  plans.length === 1 ? { open: plans[0].id } : 'pick'
+
 // How far a plan is on the canvas picker: its shots, and those that already have a storyboard frame.
 export const planProgress = (idea: SavedIdea, shotList: Shot[]): { shots: number; ready: number } => {
   const shots = idea.shots ?? shotList

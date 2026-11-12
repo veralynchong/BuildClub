@@ -30,8 +30,13 @@ test('a retained workspace context never bypasses plan or board validation', () 
   }
 })
 
+test('a storyboard without its plan redirects to Plans', () => {
+  assert.equal(hasMissingLegacyPlan('storyboard', { kind: 'legacy-plan', id: 'p' }, false), true)
+  assert.equal(hasMissingLegacyPlan('storyboard', { kind: 'legacy-plan', id: 'p' }, true), false)
+})
+
 test('non-plan screens remain usable without a plan', () => {
-  for (const view of ['canvasPick', 'shortlist', 'home', 'search', 'overview', 'review']) {
+  for (const view of ['canvasPick', 'storyboardPick', 'shortlist', 'home', 'search', 'overview', 'review']) {
     assert.equal(hasMissingLegacyPlan(view, undefined, false), false)
   }
 })
