@@ -34,6 +34,9 @@ export function Transcript({ groups, notice, nameOf, seconds, playing, readOnly,
   // The word the button went down on. Letting go seeks to it wherever the pointer is then: the first press shows the
   // selection bar above the list, which pushes the words down, so the release often lands off the word and no click fires.
   const pressed = useRef<TItem | null>(null)
+  // Where the button went down. The bar showing up also moves a word under a still pointer, and the browser reports
+  // that as entering it; only a pointer that really moved turns the press into a drag.
+  const start = useRef({ x: 0, y: 0 })
   const seekTo = useRef(onSeek)
   useEffect(() => { seekTo.current = onSeek })
   const cur = itemAt(groups, seconds)
@@ -75,9 +78,11 @@ export function Transcript({ groups, notice, nameOf, seconds, playing, readOnly,
     drag.current = true
     moved.current = false
     pressed.current = x
+    start.current = { x: e.clientX, y: e.clientY }
   }
-  const enter = (k: number) => {
+  const enter = (k: number, e: PointerEvent) => {
     if (!drag.current || !sel) return
+    if (Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) < 4) return
     moved.current = true
     setSel({ ...sel, sig, b: k })
   }
@@ -124,7 +129,7 @@ export function Transcript({ groups, notice, nameOf, seconds, playing, readOnly,
                     'data-cur': x.key === cur || undefined,
                     'data-sel': (range && k >= range.lo && k <= range.hi) || undefined,
                     onPointerDown: (e: PointerEvent) => down(k, x, e),
-                    onPointerEnter: () => enter(k),
+                    onPointerEnter: (e: PointerEvent) => enter(k, e),
                   }
                   if (x.kind === 'gap') {
                     return (
