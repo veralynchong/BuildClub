@@ -1199,8 +1199,9 @@ export default function App() {
     setPlanFrom(view)
     setPlanIdeaId(ideaId)
     setCanvasContext({ resource: { kind: 'legacy-plan', id: idea.id }, clientId: idea.clientId, title: v ? planName(v, formatById.get(v.formatId)) : idea.id, readOnly: idea.status !== 'approved', shots: idea.shots ?? fillShotIds(formatShots) })
-    setCanvasEditor(false)
-    setView('storyboard')
+    // Not setView: the sidebar already ran the canvas leave guard, and a second run fails while the editor is open.
+    // The editor flag flips with the view, so an open canvas never remounts as the node canvas first.
+    withScreenTransition(() => { setCanvasEditor(false); setViewRaw('storyboard') })
   }
 
   // The Plans board's "Make the video": the plan's canvas, with the editor already open.
@@ -2059,6 +2060,7 @@ export default function App() {
               onPick={openStoryboard}
               onWorkspace={openWorkspace}
               copy={{ title: t('shell.storyboardPick.title'), intro: t('shell.storyboardPick.intro') }}
+              hideCreate
             />
           )}
 
@@ -2102,7 +2104,9 @@ export default function App() {
                 }}
                 onBack={() => {
                   // Opened from the storyboard: Back returns to that plan's storyboard.
-                  if (planFrom === 'storyboard') { setCanvasEditor(false); setView('storyboard') } else setView('canvasPick')
+                  // The canvas already ran its leave guard; flipping the editor flag through setView would remount it first.
+                  if (planFrom === 'storyboard') withScreenTransition(() => { setCanvasEditor(false); setViewRaw('storyboard') })
+                  else setView('canvasPick')
                 }}
                 openEditor={canvasEditor}
                 clientName={clients.find((c) => c.id === canvasContext.clientId)?.name ?? client.name}
