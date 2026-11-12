@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { CanvasState, GenModel, Generation } from '../../lib/canvas/types'
 import type { ResourceRef } from '../../lib/canvas/resource'
-import { generationItems, getBudget, getCanvas, pollGen, putCanvas, startGen, StaleCanvas } from '../../lib/canvas/api'
+import { generationItems, getBudget, getCanvas, pollGen, putCanvas, quoteNode, startGen, StaleCanvas } from '../../lib/canvas/api'
 import { applyLegacyFrames } from '../../lib/canvas/legacy'
 import { finish, regenerate, savePrompt, type GridIO } from '../../lib/shotGridActions'
 import { chooseVersion, stepVersion, type GridCell } from '../../lib/shotGrid'
@@ -39,6 +39,7 @@ export function useGridActions({ resource, state, setState, shots, onShotsChange
     put: (version, doc) => putCanvas(resource, version, doc),
     reload: () => getCanvas(resource),
     start: async (body) => generationItems(await startGen(resource, body))[0],
+    ...(resource.kind === 'workspace' ? { quote: (nodeId: string, version: number) => quoteNode(resource, nodeId, version) } : {}),
   }
 
   // Runs one write after the ones before it; a failure becomes the note and never breaks the chain.
@@ -62,15 +63,17 @@ export function useGridActions({ resource, state, setState, shots, onShotsChange
     if (!cur) return
     let doc = finish(cur, nodeId, end)
     let version: number
+    let fresh: Generation[] | undefined
     try {
       version = await putCanvas(resource, cur.version, doc)
     } catch (e) {
       if (!(e instanceof StaleCanvas)) throw e
-      const fresh = await getCanvas(resource)
-      doc = finish(fresh, nodeId, end)
-      version = await putCanvas(resource, fresh.version, doc)
+      const again = await getCanvas(resource)
+      fresh = again.generations
+      doc = finish(again, nodeId, end)
+      version = await putCanvas(resource, again.version, doc)
     }
-    const gens = upsert(live.current?.generations ?? [], end)
+    const gens = upsert(fresh ?? live.current?.generations ?? [], end)
     apply(doc, version, gens)
     if (resource.kind === 'legacy-plan') {
       const next = applyLegacyFrames(doc, shotsRef.current, gens)
@@ -103,13 +106,13 @@ export function useGridActions({ resource, state, setState, shots, onShotsChange
       const cur = live.current
       if (!cur) return
       const out = await savePrompt(io, cur, nodeId, prompt)
-      apply(out.doc, out.version)
+      apply(out.doc, out.version, out.generations)
     }),
     regenerate: (cell: GridCell, model: GenModel) => serial(async () => {
       const cur = live.current
       if (!cur) return
       const out = await regenerate(io, cur, cell, shotsRef.current, cur.generations, model)
-      apply(out.doc, out.version, upsert(cur.generations, out.gen))
+      apply(out.doc, out.version, upsert(out.generations ?? cur.generations, out.gen))
       follow(out.gen)
     }),
     step: (cell: GridCell, dir: -1 | 1) => {

@@ -80,3 +80,53 @@ test('finish selects a done version and keeps the old one on failure', () => {
   assert.equal(bad.nodes[0].data.selected, 'g1')
   assert.equal(bad.nodes[0].data.awaiting, undefined)
 })
+
+test('workspace regenerate saves the prompt, quotes, then confirms with the stamps', async () => {
+  const log = []
+  const { io } = fakeIO({
+    put: async (v, d) => { log.push(['put', v, d.nodes[1].data.prompt, d.nodes[1].data.awaiting]); return v + 1 },
+    quote: async (nodeId, v) => { log.push(['quote', nodeId, v]); return { inputStamp: 'in1', quoteStamp: 'q1' } },
+    start: async (body) => { log.push(['start', body]); return gen('g2', 'queued') },
+  })
+  const cell = { ...gridCells(doc(), shots, [])[0], prompt: 'edited prompt' }
+  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model)
+  assert.deepEqual(log.map((l) => l[0]), ['put', 'quote', 'start', 'put'])
+  assert.deepEqual(log[0].slice(1), [3, 'edited prompt', undefined])
+  assert.deepEqual(log[1].slice(1), ['f1', 4])
+  const body = log[2][1]
+  assert.equal(body.confirm, true)
+  assert.equal(body.inputStamp, 'in1')
+  assert.equal(body.quoteStamp, 'q1')
+  assert.equal(body.canvasVersion, 4)
+  assert.equal(body.prompt, 'edited prompt')
+  assert.equal(log[3][3], 'g2')
+  assert.equal(log[3][1], 4)
+  assert.equal(out.version, 5)
+})
+
+test('workspace regenerate saves nothing after the quote when start fails', async () => {
+  const { io, calls } = fakeIO({ quote: async () => ({ inputStamp: 'a', quoteStamp: 'b' }), start: async () => { throw new Error('Budget used up') } })
+  const cell = gridCells(doc(), shots, [])[0]
+  await assert.rejects(regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model), /Budget used up/)
+  assert.equal(calls.put.length, 1) // only the prompt save
+})
+
+test('regenerate re-saves awaiting on a fresh doc when the canvas went stale after start', async () => {
+  let n = 0
+  const { io, calls } = fakeIO({ put: async (v, d) => { calls.put.push({ v, d }); if (n++ === 0) throw stale(); return v + 1 } })
+  const cell = gridCells(doc(), shots, [])[0]
+  const out = await regenerate(io, { doc: doc(), version: 3 }, cell, shots, [], model)
+  assert.equal(calls.start.length, 1)
+  assert.equal(calls.reload, 1)
+  assert.equal(out.version, 10)
+  assert.equal(out.doc.nodes.find((x) => x.id === 'f1').data.awaiting, 'g2')
+  assert.ok(out.doc.nodes.some((x) => x.id === 'extra'))
+  assert.deepEqual(out.generations, [])
+})
+
+test('savePrompt returns the reloaded generations after a stale save', async () => {
+  let n = 0
+  const { io, calls } = fakeIO({ put: async (v, d) => { calls.put.push({ v, d }); if (n++ === 0) throw stale(); return v + 1 } })
+  const out = await savePrompt(io, { doc: doc(), version: 3 }, 'f1', 'mine')
+  assert.deepEqual(out.generations, [])
+})

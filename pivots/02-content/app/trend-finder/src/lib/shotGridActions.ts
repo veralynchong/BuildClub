@@ -9,7 +9,11 @@ export interface GridIO {
   put(version: number, doc: CanvasDoc): Promise<number>
   reload(): Promise<{ doc: CanvasDoc; version: number; generations: Generation[] }>
   start(body: StartGenBody): Promise<Generation>
+  quote?(nodeId: string, version: number): Promise<{ inputStamp?: string; quoteStamp?: string }> // workspace ideas only
 }
+
+// A saved doc; `generations` is set when a conflict made us reload.
+export type Saved = DocState & { generations?: Generation[] }
 
 export interface DocState {
   doc: CanvasDoc
@@ -20,30 +24,47 @@ function patchNode(doc: CanvasDoc, nodeId: string, fn: (data: CanvasDoc['nodes']
   return { ...doc, nodes: doc.nodes.map((n) => (n.id === nodeId ? { ...n, data: fn(n.data) } : n)) }
 }
 
-// Saves the frame's own prompt (null clears it). When someone saved the canvas first, reloads once and applies the
-// same prompt to the fresh copy; a second conflict is thrown.
-export async function savePrompt(io: GridIO, state: DocState, nodeId: string, prompt: string | null): Promise<DocState> {
+// Applies an edit and saves it. When someone saved the canvas first, reloads once and applies the same edit to the
+// fresh copy (returning its generations); a second conflict is thrown.
+async function putEdit(io: GridIO, state: DocState, edit: (doc: CanvasDoc) => CanvasDoc): Promise<Saved> {
   try {
-    const doc = setPrompt(state.doc, nodeId, prompt)
+    const doc = edit(state.doc)
     return { doc, version: await io.put(state.version, doc) }
   } catch (e) {
     if (!(e instanceof StaleCanvas)) throw e
   }
   const fresh = await io.reload()
-  const doc = setPrompt(fresh.doc, nodeId, prompt)
-  return { doc, version: await io.put(fresh.version, doc) }
+  const doc = edit(fresh.doc)
+  return { doc, version: await io.put(fresh.version, doc), generations: fresh.generations }
 }
 
-// Starts one image job for the frame and records it on the node. Nothing is saved when the job cannot start.
+// Saves the frame's own prompt (null clears it).
+export function savePrompt(io: GridIO, state: DocState, nodeId: string, prompt: string | null): Promise<Saved> {
+  return putEdit(io, state, (doc) => setPrompt(doc, nodeId, prompt))
+}
+
+// Starts one image job for the frame and records it on the node. Nothing is started when the prompt cannot be saved
+// and nothing more is saved when the job cannot start. A workspace reads prompt and model from the saved canvas and
+// wants a quote first, so with `io.quote` the prompt and model are saved, quoted, then confirmed with the stamps.
 export async function regenerate(
   io: GridIO, state: DocState, cell: GridCell, shots: Shot[], gens: Generation[], model: GenModel,
-): Promise<DocState & { gen: Generation }> {
+): Promise<Saved & { gen: Generation }> {
   if (!cell.nodeId) throw new Error('This shot has no frame to regenerate.')
   const nodeId = cell.nodeId
-  const { references } = genRequest(state.doc, nodeId, shots, gens)
-  const gen = await io.start({ nodeId, model: model.id, prompt: cell.prompt, references, aspectRatio: '9:16', canvasVersion: state.version, confirm: true })
-  const doc = patchNode(state.doc, nodeId, (d) => genStarted(d, model.id, gen.id))
-  return { doc, version: await io.put(state.version, doc), gen }
+  let cur: Saved = state
+  let reloaded: Generation[] | undefined
+  const track = (s: Saved) => { cur = s; reloaded = s.generations ?? reloaded }
+  const body: StartGenBody = { nodeId, model: model.id, prompt: cell.prompt, references: genRequest(state.doc, nodeId, shots, gens).references, aspectRatio: '9:16', confirm: true }
+  if (io.quote) {
+    track(await putEdit(io, state, (doc) => patchNode(setPrompt(doc, nodeId, cell.prompt), nodeId, (d) => ({ ...d, model: model.id }))))
+    const q = await io.quote(nodeId, cur.version)
+    body.inputStamp = q.inputStamp
+    body.quoteStamp = q.quoteStamp
+  }
+  body.canvasVersion = cur.version
+  const gen = await io.start(body)
+  track(await putEdit(io, cur, (doc) => patchNode(doc, nodeId, (d) => genStarted(d, model.id, gen.id))))
+  return { ...cur, generations: reloaded, gen }
 }
 
 // A job the frame waited for ended: a done one becomes the shown version, a failed one leaves the old one.
