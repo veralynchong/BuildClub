@@ -1,7 +1,7 @@
 import type { Shot } from '../types'
 import type { CanvasDoc, CanvasNode, Generation } from './canvas/types.ts'
 import { failedGen, pendingGen, selectedGen, versionsOf } from './canvas/graph.ts'
-import { angleLabel, framingLabel, movementLabel } from './shots.ts'
+import { angleLabel, framingLabel, gearLabel, movementLabel } from './shots.ts'
 
 // One card of the storyboard grid: a shot, its frame node (if any) and that frame's versions.
 export interface GridCell {
@@ -97,4 +97,35 @@ export function cameraTag(shot: Shot): string {
     shot.movement && movementLabel(shot.movement),
     shot.lens,
   ].filter(Boolean).join(' · ')
+}
+
+export interface ShotListRow {
+  n: number
+  thumb: string | null
+  action: string
+  line: string
+  size: string
+  angle: string
+  movement: string
+  lens: string
+  gear: string
+  time: string
+}
+
+const DASH = '—'
+
+// One printable row per visible shot, numbered 1..n (removed shots are already left out of the cells).
+export function shotListRows(cells: GridCell[]): ShotListRow[] {
+  return cells.map(({ shot, shown }, i) => ({
+    n: i + 1,
+    thumb: shown?.url ?? null,
+    action: shot.shot,
+    line: shot.line || DASH,
+    size: shot.framing ? framingLabel(shot.framing) : DASH,
+    angle: shot.angle ? angleLabel(shot.angle) : DASH,
+    movement: shot.movement ? movementLabel(shot.movement) : DASH,
+    lens: shot.lens || DASH,
+    gear: shot.gear ? gearLabel(shot.gear) : DASH,
+    time: shot.time || DASH,
+  }))
 }

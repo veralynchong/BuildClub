@@ -56,3 +56,14 @@
 .sg-link { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--blue); font-size: 12.5px; cursor: pointer; text-decoration: underline; }
 .sg-link:disabled { opacity: 0.5; cursor: not-allowed; }
 .sg-note { margin: 0; padding: 10px 22px; background: var(--mustard); color: var(--on-mustard); font-size: 13px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+
+.sg-listbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.sg-takes { margin-top: 28px; }
+.sg-takes h2 { font-size: 15px; margin: 0 0 10px; }
+
+@media print {
+  .sidebar, .mobile-bar, .sg-top, .sg-tools, .sg-notice, .sg-note, .sg-listbar, .sg-takes, .sg-pop { display: none !important; }
+  .sg-listwrap { overflow: visible; padding: 0; }
+  .sg-table { min-width: 0; font-size: 11px; }
+  .sg-table tr { break-inside: avoid; }
+}

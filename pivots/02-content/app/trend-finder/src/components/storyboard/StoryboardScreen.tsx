@@ -3,11 +3,12 @@ import type { CanvasContext } from '../../lib/canvas/resource'
 import type { Budget, CanvasState, GenModel } from '../../lib/canvas/types'
 import { getBudget, getCanvas, getModels } from '../../lib/canvas/api'
 import { budgetLeft, priceLabel, priceOf } from '../../lib/canvas/graph'
-import { cameraTag, gridCells, patchShot, type GridCell } from '../../lib/shotGrid'
+import { gridCells, patchShot, shotListRows, type GridCell } from '../../lib/shotGrid'
 import type { Shot } from '../../types'
 import { ff } from '../../lib/strings/freeform'
 import { t } from '../../lib/i18n'
 import { GridCard } from './GridCard'
+import { ShotListTable } from './ShotListTable'
 import { RefinePopover } from './RefinePopover'
 import { useGridActions } from './useGridActions'
 import '../../styles/storyboard-grid.css'
@@ -144,7 +145,7 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
         <span className="sg-muted">{t('grid.shots', { n: cells.length })}</span>
       </div>
       {tab === 'board' ? (
-        <div className="sg-grid" style={{ ['--n' as string]: cols }}>
+        <div className="sg-grid" role="tabpanel" style={{ ['--n' as string]: cols }}>
           {cells.map((cell) => (
             <GridCard
               key={cell.shot.id ?? cell.index}
@@ -163,23 +164,12 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
           ))}
         </div>
       ) : (
-        <div className="sg-listwrap">
-          <table className="sg-table">
-            <thead><tr><th /><th>#</th><th>{t('grid.show.action')}</th><th>{t('grid.show.line')}</th><th>{t('grid.show.camera')}</th><th>{t('grid.col.seconds')}</th></tr></thead>
-            <tbody>
-              {cells.map((c) => (
-                <tr key={c.shot.id ?? c.index}>
-                  <td><div className="sg-thumb">{c.shown?.url && <img src={c.shown.url} alt="" loading="lazy" />}</div></td>
-                  <td className="sg-mono">{c.index + 1}</td>
-                  <td>{c.shot.shot}</td>
-                  <td>{c.shot.line ?? <span className="sg-muted">{t('grid.noLine')}</span>}</td>
-                  <td>{cameraTag(c.shot)}</td>
-                  <td className="sg-mono">{c.shot.time}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ShotListTable
+          rows={shotListRows(cells)}
+          ideaId={resource.kind === 'legacy-plan' ? resource.id : null}
+          status={readOnly ? 'saved' : 'approved'}
+          shots={context.shots}
+        />
       )}
       {refining && refine && (
         <RefinePopover
