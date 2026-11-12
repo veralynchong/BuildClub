@@ -15,6 +15,9 @@
   - Assistant「Preview plan」、「Write new ways to start」仍會花 Claude 的錢（每次約 US$0.01），有總上限擋著。
   - 兩個 instance 裡留著 E2E 的測試資料（Daphne Only Bakery、Collage Club Only），寄出前要清空 state 重開。
   - quick tunnel 的網址只要 cloudflared 重啟就會變；沒有測過 mini 真的重開機。
+- 2026-11-12 追加：合入 `feat/canvas-restore` 最新剪輯器修正（a49f0a1），`verify.sh full` GREEN（1250 passed、3 skipped），build 後 `beta-instance.sh update daphne` 和 `collage` 完成，兩個 tunnel 外部回 200。經 tunnel 的瀏覽器 E2E（daphne）：Video edit 開剪輯器、3 段素材、修剪、隱藏／靜音切換、匯出（約 15 秒）、下載 PASS，ffprobe 1080x1920、有音軌、16.6 秒。付費搜尋一次（TikTok，花 US$0.46，daphne 累計 US$1.01）：`/api/search` 在約 116 秒回 200，超過 tunnel 100 秒仍正常出 30 筆結果，逾時修正有效。
+- 新發現：文字稿裡換行後的第一個字（例如 "perfect"、"boil"）第一次點不跳播放頭，反而選取一整段（12、13 個字）；行中間的字正常。Playwright 每次重現，真人滑鼠還沒確認。
+- 決定（使用者 2026-11-12）：Beta 畫布上的 AI 生成節點保留，按了會被預算擋；mini 重開機測試先不做。
 - 下一步：使用者給試用者 email、決定要不要買網域；週末把剪輯 agent 的修正併進來（`beta-instance.sh update`），清掉測試資料、開正式帳號，週一寄出。
 
 ## 2026-11-12：初剪圖釘跟著剪輯、軌道隱藏／靜音套用到匯出（`feat/canvas-restore`）
