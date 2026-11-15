@@ -39,6 +39,7 @@ import { DEFAULT_FILTERS } from './lib/resultFilters'
 import { GuidedTour } from './components/demo/GuidedTour'
 import type { CanvasGuideActions, CanvasGuideState } from './components/canvas/CanvasScreen'
 import type { Client, ContentType, Format, Platform, Shot, Video } from './types'
+import { adoptBreakdownShots } from './lib/hooks'
 import {
   analyzeVideo,
   applyBreakdown,
@@ -992,9 +993,16 @@ export default function App() {
   // Saving or planning a real video asks the API for its AI breakdown (about a minute the first time).
   // It replaces the placeholder shot list and "why it works".
   const analyzing = useRef(new Set<string>())
+  // Plans of this video that were started before the breakdown (only a picked hook) take its shots.
+  const adoptShots = (videoId: string, shotList: Shot[]) =>
+    setIdeas((prev) => prev.map((i) => {
+      const next = i.videoId === videoId ? adoptBreakdownShots(i.shots, shotList) : null
+      return next ? { ...i, shots: next } : i
+    }))
   const breakDown = (videoId: string) => {
     const v = videoById.get(videoId)
     const f = v && formatById.get(v.formatId)
+    if (f?.shotList.length && ideas.some((i) => i.videoId === videoId && adoptBreakdownShots(i.shots, f.shotList))) adoptShots(videoId, f.shotList)
     if (!v?.live || !v.url || !f || f.shotList.length || analyzing.current.has(videoId)) return
     analyzing.current.add(videoId)
     const patchFormat = (update: (x: Format) => Format) =>
@@ -1003,6 +1011,7 @@ export default function App() {
     analyzeVideo(v.url, (step) => say(t('shell.breakdown.progress', { step: step || t('shell.breakdown.waiting') })))
       .then((b) => {
         patchFormat((x) => applyBreakdown(x, b))
+        adoptShots(videoId, b.shotList)
         // Ideas saved before the breakdown still carry the placeholder editor notes.
         setIdeas((prev) => prev.map((i) => (i.videoId === videoId && i.notes === f.editorNotes ? { ...i, notes: b.editorNotes } : i)))
       })
