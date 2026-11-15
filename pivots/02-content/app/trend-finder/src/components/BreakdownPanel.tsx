@@ -42,6 +42,8 @@ interface Props {
   onSave: () => void
   // Opens the video's plan.
   onPlan: () => void
+  // Makes this video's plan and opens it (the same action as "Plan shots" on a saved idea).
+  onPlanNow: () => void
   // Goes to the Research tab (left out when the drawer is open on Research itself).
   onGoResearch?: () => void
   // Run the AI breakdown again (live videos whose saved breakdown lacks newer fields).
@@ -55,7 +57,7 @@ const emotions: Emotion[] = ['curious', 'excited', 'craving', 'funny', 'angry_co
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, cohort, formatAccounts: sampleAccounts, client, status, inResearch, onClose, onSave, onPlan, onGoResearch, onReanalyse, reanalysis }: Props) {
+export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, cohort, formatAccounts: sampleAccounts, client, status, inResearch, onClose, onSave, onPlan, onPlanNow, onGoResearch, onReanalyse, reanalysis }: Props) {
   const manager = useManagerName()
   // Play the slide-out before App unmounts the panel (skipped under reduced motion).
   const [closing, setClosing] = useState(false)
@@ -360,7 +362,7 @@ export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, c
 
         <footer className="drawer-foot">
           {!status && !inResearch && (
-            <button className="btn btn-primary" onClick={onSave}>
+            <button className="btn btn-ghost" onClick={onSave}>
               {t('find.saveFor', { client: client.name })}
             </button>
           )}
@@ -370,11 +372,16 @@ export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, c
                 {t('find.savedMark')}
               </button>
               {onGoResearch && (
-                <button className="btn btn-primary" onClick={onGoResearch}>
+                <button className="btn btn-ghost" onClick={onGoResearch}>
                   {t('find.openResearch')}
                 </button>
               )}
             </>
+          )}
+          {!status && (
+            <button className="btn btn-primary" onClick={onPlanNow}>
+              {t('plan.common.planVideo')}
+            </button>
           )}
           {status && (
             <button className="btn btn-primary" onClick={onPlan}>

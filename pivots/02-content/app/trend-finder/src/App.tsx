@@ -2238,6 +2238,7 @@ export default function App() {
           onClose={() => setOpenVideoId(null)}
           onSave={() => guidedRuntime && openVideo.id === GUIDED_IDS.videoId ? askGuideSave() : toggleSave(openVideo.id)}
           onPlan={() => planFromVideo(openVideo.id)}
+          onPlanNow={() => planNow(openVideo.id)}
           onGoResearch={
             view === 'research'
               ? undefined
