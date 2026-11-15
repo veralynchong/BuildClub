@@ -1,3 +1,12 @@
+## 2026-11-15（16:00）：已知問題第一批修正，兩站已部署
+
+- 169e8ec 封面 404：`beta-instance.sh update` 的 rsync `--delete` 每次都清掉 `backend/covers/`，改成排除 covers（測試 `update keeps saved covers`）。之前已被清掉的封面要重新搜尋才會回來。
+- 7f918cd 分鏡格生圖顯示「Generating… 45s」，30 秒後加「Images can take up to 2 minutes.」。
+- 466fb1a 供應商拒絕訊息加上「Try removing brand names or people's names from the prompt, then regenerate.」（暫時性錯誤也會顯示同一句）。
+- e2037a3 新分鏡節點預設 frame model（Seedream），Canvas 舊 mock 節點不再顯示 Retired model。
+- 67e5269 Fill in shot order 的跳過清單收成一行（「9 shots have no take yet: 5–13」）。
+- 驗證：`verify.sh full` GREEN（1258 passed、3 skipped），tsc、eslint、build 通過；部署前兩站沒有使用中、先 backup（`backups/2026-11-15-1600`），部署後 local 401（要登入）、tunnel 200。第 1、3 項只有測試，live 尚未看到；第 2 項瀏覽器沒看到（本機沒有企劃）。
+
 ## 2026-11-15：Beta 完整流程測試 B — Daphne 站真實跑兩輪（共約 US$0.83）
 
 - 第一輪（約 US$0.59：Apify 搜尋 0.45、Claude 分析 0.10、Seedream 1 張 0.04）：新搜尋「croissant」30 支 → 選 11 秒 POV 影片 → 企劃只有 1 格空白範本「Watch this: POV…」。分析其實成功（library 有正確 1 鏡 shotList；影片本身是一個長鏡頭）。匯出 1080x1920、有音軌、4.1 秒。截圖 `/Volumes/Huang T7/playwright-mcp/plan-b/`。
