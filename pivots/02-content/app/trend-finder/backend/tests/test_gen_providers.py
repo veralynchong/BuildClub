@@ -526,3 +526,7 @@ def test_openrouter_selected_options_one_request(monkeypatch):
     body = http.calls[0]['body']
     assert body['n'] == 1 and body['resolution'] == '4K' and body['aspect_ratio'] == '1:1'
     assert body['provider'] == {'allow_fallbacks': False}
+
+
+def test_refused_message_tells_the_user_what_to_try():
+    assert "brand names or people's names" in gp.REFUSED and "regenerate" in gp.REFUSED
