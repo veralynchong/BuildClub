@@ -4,11 +4,7 @@ import {
   clientFit,
   compact,
   hasDate,
-  byFollowers,
-  hasScore,
-  scoreBase,
-  usualMultiple,
-  outlierScore,
+  headline,
   scoreLine,
   platformName,
   shareSaveRate,
@@ -110,9 +106,9 @@ export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, c
     return () => window.clearTimeout(timer)
   }, [closing, onClose])
 
-  const score = outlierScore(video)
+  const head = headline(video)
   // Count up once when the panel opens (final value straight away under reduced motion).
-  const shownScore = useCountUp(score)
+  const shownScore = useCountUp(head?.multiple ?? 0)
   const shownViews = useCountUp(video.views)
   const fit = clientFit(format, client)
   const formatAccounts = video.live ? (cohort?.accounts ?? 1) : sampleAccounts
@@ -198,21 +194,16 @@ export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, c
           </div>
 
           <section className="stats" aria-label={t('find.bd.numbers')}>
-            {hasScore(video) ? (
+            {head ? (
               <div className="stat-card stat-score">
-                <span className="stat-label">{byFollowers(video) ? t('find.bd.vsFollowers') : t('find.bd.vsUsual')}</span>
+                <span className="stat-label">{head.kind === 'followers' ? t('find.bd.vsFollowers') : t('find.bd.vsUsual')}</span>
                 <div className="stat-score-row">
                   <span className="stat-big">{timesNumber(shownScore)}×</span>
                 </div>
                 <span className="stat-note">{beatUsual(video)}</span>
                 <span className="stat-compare">
-                  {compact(scoreBase(video))} → <strong>{compact(shownViews)}</strong>
+                  {compact(head.base)} → <strong>{compact(shownViews)}</strong>
                 </span>
-                {byFollowers(video) && usualMultiple(video) !== null && (
-                  <span className="stat-note small muted">
-                    {t('find.bd.usualMultiple', { x: timesNumber(usualMultiple(video) as number) })}
-                  </span>
-                )}
               </div>
             ) : (
               <div className="stat-card stat-score">

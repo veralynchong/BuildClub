@@ -6,7 +6,7 @@ import type { Format, IdeaStatus, Platform, Video } from '../types'
 import type { Query, Sort } from '../state'
 import type { FormatTrend } from '../lib/metrics'
 import type { Interpretation } from '../lib/parseQuery'
-import { byFollowers, compact, scoreBase, groupFailures, hasScore, outlierScore, platformName, tierOf } from '../lib/metrics'
+import { compact, groupFailures, hasScore, headline, outlierScore, platformName, tierOf } from '../lib/metrics'
 import { beatUsual, platformsText } from './find/words'
 import { t, tp } from '../lib/i18n'
 import { VideoTile } from './VideoTile'
@@ -396,9 +396,10 @@ function ShortcutsHint({ open, setOpen }: { open: boolean; setOpen: (open: boole
 // Usual → this video for the Best to copy card. The big number counts up and the bar grows in
 // when the card first appears (or a new video takes the spot), not on every render.
 function BestCompare({ video }: { video: Video }) {
-  const usual = scoreBase(video)
+  const h = headline(video)
+  const usual = h?.base ?? 0
   const tier = tierOf(outlierScore(video))
-  const followers = byFollowers(video)
+  const followers = h?.kind === 'followers'
   const shownViews = useCountUp(video.views)
   // How big the usual is next to this video, as a share of the bar (kept visible even when tiny).
   const usualShare = Math.min(Math.max(usual / Math.max(video.views, 1), 0.02), 1)

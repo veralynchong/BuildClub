@@ -1,7 +1,7 @@
 import type { ContentType, Platform, Video } from '../../types'
 import type { Key } from '../../lib/i18n'
 import type { FormatTrend } from '../../lib/metrics'
-import { byFollowers, compact, outlierScore, platformName } from '../../lib/metrics'
+import { compact, headline, platformName } from '../../lib/metrics'
 import { t, tp } from '../../lib/i18n'
 import { dateLocale, formatDay } from '../../lib/dates'
 
@@ -27,12 +27,13 @@ export const timesNumber = (n: number) => (n >= 10 ? Math.round(n).toLocaleStrin
 // How far a video beat the account's usual views (or its follower count when we don't know the usual).
 // "62 times more views than this account usually gets".
 export function beatUsual(v: Video): string {
-  const score = outlierScore(v)
-  const followers = byFollowers(v)
-  if (score < 1.5) return followers ? t('find.beat.followersAbout') : t('find.beat.usualAbout')
+  const h = headline(v)
+  if (!h) return t('find.beat.usualAbout')
+  const followers = h.kind === 'followers'
+  if (h.multiple < 1.5) return followers ? t('find.beat.followersAbout') : t('find.beat.usualAbout')
   return followers
-    ? t('find.beat.followersTimes', { x: timesNumber(score) })
-    : t('find.beat.usualTimes', { x: timesNumber(score) })
+    ? t('find.beat.followersTimes', { x: timesNumber(h.multiple) })
+    : t('find.beat.usualTimes', { x: timesNumber(h.multiple) })
 }
 
 // The same idea for a group of videos (an average score), e.g. for a sound many accounts used.

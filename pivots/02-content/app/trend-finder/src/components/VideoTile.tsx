@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Video } from '../types'
-import { byFollowers, compact, platformName, scoreBase } from '../lib/metrics'
+import { compact, headline, platformName } from '../lib/metrics'
 import { t } from '../lib/i18n'
 import { Thumb } from './Thumb'
 
@@ -25,9 +25,10 @@ export function VideoTile({ video, onOpen, onToggleSave, inResearch, followersLo
   // The button pops only when it's clicked, not when a tile shows up already saved.
   const [pop, setPop] = useState(false)
   const saved = Boolean(inResearch)
-  const followers = byFollowers(video)
-  // No followers (Reddit, some live Instagram results): fall back to the account's usual views, as Best to copy does.
-  const base = followers ? video.followers : scoreBase(video)
+  // The same base as the Best to copy card and the breakdown: the account's usual views, else followers.
+  const head = headline(video)
+  const followers = head?.kind === 'followers'
+  const base = head?.base ?? 0
   const fromNum = followersLoading && !followers ? '…' : base > 0 ? compact(base) : '–'
   const fromCap = followers || followersLoading ? t('find.res.cmpFollowers') : t('find.res.cmpUsual')
   return (
