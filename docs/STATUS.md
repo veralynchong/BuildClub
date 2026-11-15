@@ -7,10 +7,10 @@
 - 最後驗證：2026-11-15，`bash bin/verify.sh full` GREEN（1256 passed、3 skipped）；tsc、eslint、vite build 通過；兩站 local 和 tunnel 回 200。詳細在 `docs/test-log.md`。
 - 今天花費：Daphne 約 US$1.0（A 0.16、B 0.83）。Daphne 今天圖片預算剩 US$1.56。
 - 已知問題：見 test-log 最新兩段（封面 404、生圖沒進度、供應商拒絕訊息、Retired model、Hook/CTA/EDL/LUFS 術語、登入頁 agency 文字等）。
+- 15:18 收尾：兩站備份後，舊 state 整包移到 `~/beta/<name>/state-pretest-2026-11-15`（沒刪），換成空的資料庫；開了 `daphne@remake.test`、`collage@remake.test`（使用者選用假帳號名稱，不用真 email），密碼在 `~/beta/tester-accounts.txt`（mode 600）。兩個帳號經 tunnel 登入 200，每站 1 個帳號，預算計數歸零。Tester Kit 已填網址、帳號，並改正「AI 圖片已開」。
 - 下一步：
-  1. 使用者給 Daphne、Collage 的 email。
-  2. 兩站 backup → 清掉測試資料（Daphne Only Bakery、Collage Club Only 等 E2E client、take、匯出）→ 刪 `claude-e2e@remake.test` → `bash bin/beta-instance.sh add-user <name> <email>` 開正式帳號。
-  3. 更新 claude.ai Doc「Remake Beta — Tester Kit (draft)」的網址，寄出前再確認 tunnel 網址沒變。
+  1. 使用者私訊密碼、寄出訊息；寄出前確認兩個 tunnel 網址還開得起來。
+  2. Google Form 和回饋截止日（Tester Kit 的 {FORM}、{DATE}）。
   4. 和 Veralyn 確認 PR #56→#57→#58→#59、#60 的合併順序（未合併）。
 
 ## 2026-11-15：Beta 修復並合入分鏡格（`feat/beta-launch`）
