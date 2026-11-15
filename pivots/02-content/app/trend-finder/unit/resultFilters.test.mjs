@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  DEFAULT_FILTERS, applyFilters, followersPending, activeFilters, clearFilter, relaxHint, lengthBandOf, isDefaultFilter,
+  DEFAULT_FILTERS, applyFilters, followersPending, activeFilters, clearFilter, relaxHint, lengthBandOf, isDefaultFilter, SHOW_ALL_FILTERS,
 } from '../src/lib/resultFilters.ts'
 
 const vid = (o = {}) => ({ id: 'v', platform: 'tiktok', views: 2_000_000, followers: 100_000, daysAgo: 5, lengthSec: 30, ...o })
@@ -89,4 +89,11 @@ test('relax hint: under 3 results offers 500K+, then clearing; nothing when enou
   assert.deepEqual(relaxHint(0, { ...DEFAULT_FILTERS, viewsMin: 500_000, within: 7 }), { kind: 'clear' })
   assert.equal(relaxHint(3, DEFAULT_FILTERS), null)
   assert.equal(relaxHint(0, any), null)
+})
+
+test('SHOW_ALL_FILTERS keeps every video the default filters hide', () => {
+  const vids = [vid({ id: 'a', followers: 10_000 }), vid({ id: 'small', views: 1_000 }), vid({ id: 'big', followers: 5_000_000 }), vid({ id: 'r', platform: 'reddit', followers: 0 })]
+  assert.deepEqual(applyFilters(vids, DEFAULT_FILTERS).map((v) => v.id), ['a', 'r'])
+  assert.deepEqual(applyFilters(vids, SHOW_ALL_FILTERS).map((v) => v.id), ['a', 'small', 'big', 'r'])
+  assert.deepEqual(activeFilters(SHOW_ALL_FILTERS), [])
 })

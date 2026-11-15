@@ -19,7 +19,7 @@ import { SearchBox } from './SearchBox'
 import type { PulseInfo } from './ClientChips'
 import type { ChipGroup } from '../lib/clientChips'
 import { useManagerName } from '../lib/appContext'
-import { DEFAULT_FILTERS, applyFilters, followersPending, type ResultFilters } from '../lib/resultFilters'
+import { DEFAULT_FILTERS, SHOW_ALL_FILTERS, applyFilters, followersPending, type ResultFilters } from '../lib/resultFilters'
 import type { SavedRow, TypeAheadItem } from '../lib/findDesk'
 import { DeskBlock } from './find/DeskBlock'
 import { dayWord } from './find/words'
@@ -98,7 +98,7 @@ export function ResultsScreen(p: Props) {
   const { onVisibleResults } = p
   const manager = useManagerName()
   // The default filters still apply; their tags were taken off this page.
-  const [filters] = useState<ResultFilters>(p.initialFilters ?? DEFAULT_FILTERS)
+  const [filters, setFilters] = useState<ResultFilters>(p.initialFilters ?? DEFAULT_FILTERS)
   const byFormat = p.formatFilter ? p.results.filter((v) => v.formatId === p.formatFilter) : p.results
   // New since the last run first (keeping the chosen order within each part).
   const isNew = (v: Video) => p.newIds.has(v.id)
@@ -233,6 +233,11 @@ export function ResultsScreen(p: Props) {
             {t('find.res.endStop')}
             {shown.length < byFormat.length && (
               <span className="fd-showing">{t('find.desk.showing', { shown: shown.length, total: byFormat.length })}</span>
+            )}
+            {shown.length < byFormat.length && (
+              <button type="button" className="link-btn fd-showall" onClick={() => setFilters(SHOW_ALL_FILTERS)}>
+                {t('find.desk.showAll', { total: byFormat.length })}
+              </button>
             )}
             {newCount > 0 && p.newSince !== undefined && (
               <span className="fd-newtag">{t('find.desk.recent.newSince', { n: newCount, day: dayWord(p.newSince) })}</span>

@@ -165,6 +165,7 @@
 /* ---------- Results ---------- */
 :root[data-ui="altitude"] .fd-results { padding-bottom: 8px; }
 :root[data-ui="altitude"] .fd-showing { margin-left: var(--space-sm); color: var(--muted); }
+:root[data-ui="altitude"] .fd-showall { margin-left: var(--space-sm); }
 :root[data-ui="altitude"] .summary .fd-newtag { margin-left: var(--space-sm); vertical-align: 1px; }
 /* Filter chips: "default" says which ones were on from the start */
 :root[data-ui="altitude"] .fd-results .q-chip.fd-fchip { background: var(--blue-soft); border-color: transparent; color: var(--label); font-weight: 500; }
