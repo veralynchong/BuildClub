@@ -460,7 +460,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const pages = projectPages(project, lines, words)
   const pageLines = pages.map((pg) => ({ start: pg.startMs / 1000, end: (pg.startMs + pg.durationMs) / 1000, text: pg.text }))
   const zoneWarnings = safeZoneWarnings(project, pages, settings.preset)
-  const fill = async () => setSkipped(await timeline.fill())
+  const fill = async () => setSkipped(await timeline.fill(allTakes))
 
   const steps = stepsDone({ project, clientHasLogo: !!kit?.logo, cut })
   const done = tabsDone(

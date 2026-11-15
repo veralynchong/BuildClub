@@ -14,7 +14,9 @@ export interface TimelineActions {
   useForShot: (src: ClipSource) => Promise<boolean>
   isInTimeline: (src: ClipSource) => boolean
   applyNewer: (clipId: string, src: ClipSource) => Promise<void>
-  fill: () => Promise<string[]> // fills an empty timeline in shot order; resolves to the ids of the skipped shots
+  // Fills an empty timeline in shot order; resolves to the ids of the skipped shots. `takes` replaces the canvas's list:
+  // footage uploaded in Video edit is only in the editor's own list.
+  fill: (takes?: Take[]) => Promise<string[]>
   statusOf: (clip: Clip) => ClipStatus // an ignored "newer" counts as ok
   ignore: (clip: Clip, src: ClipSource) => void // forgotten when the canvas is left
 }
@@ -99,8 +101,9 @@ export function useTimelineActions(inputs: Inputs): TimelineActions {
     [infoFor],
   )
 
-  const fill = useCallback(async () => {
-    const { edit, shots, doc, gens, takes, sources } = ref.current
+  const fill = useCallback(async (override?: Take[]) => {
+    const { edit, shots, doc, gens, takes: canvasTakes, sources } = ref.current
+    const takes = override ?? canvasTakes
     if (!edit.current() || ref.current.readOnly) return []
     let list: SourceInfo[] = sources.sources ?? []
     try {
