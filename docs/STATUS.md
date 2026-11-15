@@ -1,5 +1,14 @@
 # STATUS
 
+## 2026-11-15：Beta 修復並合入分鏡格（`feat/beta-launch`）
+
+- 一行狀態：Orca 今天把所有 BuildClub worktree 刪了（不是搬到 T7），兩個 Beta backend 因為用 `lunch` worktree 的 venv 和 node_modules 而 500。已改成 `~/beta/.venv`（Python）和 `~/beta/deps/node_modules`（npm ci），不再依賴任何 worktree；合入 `origin/feat/storyboard-grid`（a9526d8），兩站已 update。
+- Commits：a9526d8 merge storyboard-grid（只有本檔衝突，兩段都留）、95fb042 `beta-instance.sh` 預設 venv 改 `/Users/tommy/beta/.venv`、`copy.test.mjs` 用 `fileURLToPath`（路徑有空格會壞）。
+- 最後驗證：2026-11-15，`bash bin/verify.sh full` GREEN（後端 1253 passed、3 skipped；前端 unit；beta instance script）；tsc、eslint、vite build 通過。部署前兩站各備份一次（`backups/2026-11-15-1158`）。經 tunnel 瀏覽器（daphne，1440x900，US$0）：Storyboard 格、每列 3/6、Show 開關、Refine 浮窗、Shot list、Canvas (advanced) 一鍵返回、Next: edit video → 再一鍵回格 PASS；只有一個企劃時側欄直接進格，選擇頁沒點到（程式碼確認 `hideCreate` 已部署）。
+- 網址（quick tunnel，未重啟）：daphne https://wonderful-parker-abilities-seconds.trycloudflare.com、collage https://encouraging-flexible-memories-vary.trycloudflare.com。
+- 以後 worktree 的 `backend/.venv` 和 `node_modules` 用 symlink 接到 `~/beta/.venv`、`~/beta/deps/node_modules`。
+- 已知缺口：匯出在換 node_modules 後還沒重測；付費 Seedream 重生一格仍沒驗；3 張一列時卡片只佔約 2/3 寬。
+
 ## 2026-11-12：Beta 上線準備（`feat/beta-launch`，PR #59 draft，base `feat/canvas-restore`）
 
 - 一行狀態：Mac mini 上兩個 beta instance 已上線（daphne :8801、collage :8802，各自的 DB／media／預算），launchd 自動重啟，Cloudflare quick tunnel 對外，每天 03:00 備份；匯出修好，長搜尋碰到 tunnel 的 100 秒逾時改成等快取。計畫在 `docs/beta-launch-plan.md`，試用者文件草稿在 claude.ai Doc「Remake Beta — Tester Kit (draft)」。
