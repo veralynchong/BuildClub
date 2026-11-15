@@ -3,7 +3,7 @@ import type { CanvasContext } from '../../lib/canvas/resource'
 import type { Budget, CanvasState, GenModel } from '../../lib/canvas/types'
 import { getBudget, getCanvas, getModels } from '../../lib/canvas/api'
 import { budgetLeft, priceLabel, priceOf } from '../../lib/canvas/graph'
-import { gridCells, patchShot, shotListRows, type GridCell } from '../../lib/shotGrid'
+import { gridCells, gridGate, patchShot, shotListRows, type GridCell } from '../../lib/shotGrid'
 import type { Shot } from '../../types'
 import { ff } from '../../lib/strings/freeform'
 import { t } from '../../lib/i18n'
@@ -18,6 +18,8 @@ interface Props {
   onShotsChange: (shots: Shot[]) => void
   onOpenCanvas: () => void
   onOpenEditor: () => void
+  // Moves the plan to approved; absent when this person cannot approve.
+  onApprove?: () => void
   onBack: () => void
 }
 
@@ -48,7 +50,7 @@ function modelFor(models: GenModel[], savedId: string | undefined): GenModel | u
   return images.find((m) => m.id === savedId && m.available) ?? images.find((m) => m.available)
 }
 
-export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas, onOpenEditor, onBack }: Props) {
+export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas, onOpenEditor, onApprove, onBack }: Props) {
   const [state, setState] = useState<CanvasState | null>(null)
   const [models, setModels] = useState<GenModel[]>([])
   const [budget, setBudget] = useState<Budget | null>(null)
@@ -60,6 +62,7 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
   const [selected, setSelected] = useState<number | null>(null)
   const [refine, setRefine] = useState<{ index: number; anchor: DOMRect } | null>(null)
   const { resource, readOnly } = context
+  const gate = gridGate(readOnly, !!onApprove)
 
   useEffect(() => {
     let cancelled = false
@@ -126,10 +129,15 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
         <div className="sg-bar">
           {left !== null && <span className="sg-budget">{t('grid.budget', { usd: left.toFixed(2) })}</span>}
           <button className="btn btn-ghost btn-sm" onClick={onOpenCanvas}>{t('grid.canvas')}</button>
-          <button className="btn btn-primary btn-sm" onClick={onOpenEditor}>{t('grid.next')}</button>
+          <button className="btn btn-primary btn-sm" disabled={!gate.next} onClick={onOpenEditor}>{t('grid.next')}</button>
         </div>
       </header>
-      {readOnly && <p className="sg-notice" role="status">{t('grid.readOnly')}</p>}
+      {gate.notice && (
+        <p className="sg-notice" role="status">
+          {t('grid.readOnly')}
+          {gate.approve && <button className="btn btn-primary btn-sm" onClick={onApprove}>{t('grid.approve')}</button>}
+        </p>
+      )}
       {actions.note && <p className="sg-note" role="alert">{actions.note} <button className="btn btn-ghost btn-sm" onClick={actions.clearNote}>{t('grid.close')}</button></p>}
       <div className="sg-tools">
         <div className="sg-seg" role="tablist">

@@ -12,3 +12,9 @@ test('every grid.* key has English and Traditional Chinese text', () => {
     assert.ok(areas.grid.zhHant[key]?.trim(), `zh ${key}`)
   }
 })
+
+test('the grid and the Video edit picker tell the user where to approve', async () => {
+  const { areas } = await import('../src/lib/i18n.ts')
+  assert.ok(areas.grid.en['grid.approve']?.trim() && areas.grid.zhHant['grid.approve']?.trim())
+  assert.match(areas.shell.en['shell.editPick.empty'], /Storyboard/)
+})

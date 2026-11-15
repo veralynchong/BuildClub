@@ -2128,6 +2128,12 @@ export default function App() {
                 }}
                 onOpenCanvas={() => openPlanCanvas(canvasContext.resource.id)}
                 onOpenEditor={() => makeVideo(canvasContext.resource.id)}
+                // The same approval the board's Approve uses (decide); the grid then unlocks without reopening.
+                onApprove={role === 'manager' ? () => {
+                  const id = canvasContext.resource.id
+                  decide(id, { kind: 'approved' })
+                  setCanvasContext((ctx) => ctx?.resource.id === id ? { ...ctx, readOnly: false } : ctx)
+                } : undefined}
                 onBack={() => setView('storyboardPick')}
               />
             </Suspense>

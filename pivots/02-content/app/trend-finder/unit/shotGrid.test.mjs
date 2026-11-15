@@ -111,3 +111,10 @@ test('cellOfNode rebuilds the cell from the doc as saved now', async () => {
   assert.equal(c.auto, false)
   assert.equal(cellOfNode(after, [bare], [], 'nope'), undefined)
 })
+
+test('gridGate: an unapproved plan offers Approve plan and holds back Next; an approved one needs neither', async () => {
+  const { gridGate } = await import('../src/lib/shotGrid.ts')
+  assert.deepEqual(gridGate(true, true), { notice: true, approve: true, next: false })
+  assert.deepEqual(gridGate(true, false), { notice: true, approve: false, next: false })
+  assert.deepEqual(gridGate(false, true), { notice: false, approve: false, next: true })
+})

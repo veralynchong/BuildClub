@@ -138,3 +138,9 @@ export function shotListRows(cells: GridCell[]): ShotListRow[] {
     time: shot.time || DASH,
   }))
 }
+
+// What the storyboard grid offers while the plan is (not) approved. Only someone who can approve gets the button;
+// the editor rejects an unapproved plan, so Next waits for the approval.
+export function gridGate(readOnly: boolean, canApprove: boolean): { notice: boolean; approve: boolean; next: boolean } {
+  return { notice: readOnly, approve: readOnly && canApprove, next: !readOnly }
+}

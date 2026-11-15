@@ -7,7 +7,7 @@
 .sg-budget, .sg-mono { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
 .sg-budget { color: var(--muted); }
 .sg-muted { color: var(--muted); font-size: 12.5px; }
-.sg-notice { margin: 0; padding: 10px 22px; background: var(--rising-soft); color: var(--rising); font-size: 13px; }
+.sg-notice { display: flex; align-items: center; gap: 12px; margin: 0; padding: 10px 22px; background: var(--rising-soft); color: var(--rising); font-size: 13px; }
 .sg-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 22px; border-bottom: 1px solid var(--line); }
 .sg-seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 2px; background: var(--surface); }
 .sg-seg button { border: 0; background: none; border-radius: var(--radius-pill); padding: 3px 11px; cursor: pointer; color: var(--muted); font-size: 12.5px; font-weight: 500; }
