@@ -289,6 +289,19 @@ export function fillByShotOrder(
   return { project: out, skipped }
 }
 
+// Shot numbers as runs for a short note: [1, 3, 4, 7] -> "1, 3–4, 7".
+export function shotRanges(nums: number[]): string {
+  const sorted = [...nums].sort((a, b) => a - b)
+  const runs: string[] = []
+  for (let i = 0; i < sorted.length; ) {
+    let j = i
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++
+    runs.push(j > i ? `${sorted[i]}–${sorted[j]}` : `${sorted[i]}`)
+    i = j + 1
+  }
+  return runs.join(', ')
+}
+
 export type ClipStatus = { state: 'ok' } | { state: 'newer'; source: ClipSource } | { state: 'missing' }
 
 export function clipStatus(clip: Clip, doc: CanvasDoc, gens: Generation[], takes: Take[]): ClipStatus {

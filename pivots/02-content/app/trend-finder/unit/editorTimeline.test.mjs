@@ -171,3 +171,11 @@ test('toggleLane: flips one switch and keeps the other list', () => {
   assert.deepEqual([...laneState(p).muted], ['music'])
   assert.equal(laneState(project()).hidden.size, 0)
 })
+
+test('shotRanges folds shot numbers into runs for the one-line skipped note', async () => {
+  const { shotRanges } = await import('../src/lib/editor/timeline.ts')
+  assert.equal(shotRanges([5, 6, 7, 8, 9, 10, 11, 12, 13]), '5–13')
+  assert.equal(shotRanges([1, 3, 4, 7]), '1, 3–4, 7')
+  assert.equal(shotRanges([9, 2, 3]), '2–3, 9')
+  assert.equal(shotRanges([4]), '4')
+})

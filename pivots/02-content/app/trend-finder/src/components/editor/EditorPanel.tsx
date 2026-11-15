@@ -14,7 +14,7 @@ import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { useTakeAnalysis } from '../../lib/editor/useTakeAnalysis'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, clipLength, clipStarts, clipStatus, FPS, moveClip, newClipId, reelDurationInFrames, removeClip, sourceKey, sourcesWithShots, splitAt, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import { addVoice, clipLength, clipStarts, clipStatus, FPS, moveClip, newClipId, reelDurationInFrames, removeClip, sourceKey, sourcesWithShots, shotRanges, splitAt, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { EditProject, ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
@@ -787,16 +787,14 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
             </button>}
           </div>
         )}
-        {skipped.length > 0 && (
-          <ul className="cv-ed-skipped" role="status">
-            {skipped
-              .map((id) => ({ id, n: shots.findIndex((s) => s.id === id) + 1 }))
-              .filter((x) => x.n > 0)
-              .map(({ id, n }) => (
-                <li key={id}>{t('editor.fill.skipped', { n })}</li>
-              ))}
-          </ul>
-        )}
+        {skipped.length > 0 && (() => {
+          const nums = skipped.map((id) => shots.findIndex((s) => s.id === id) + 1).filter((n) => n > 0)
+          return nums.length > 0 && (
+            <ul className="cv-ed-skipped" role="status">
+              <li>{nums.length === 1 ? t('editor.fill.skipped', { n: nums[0] }) : t('editor.fill.skippedMany', { count: nums.length, range: shotRanges(nums) })}</li>
+            </ul>
+          )
+        })()}
         <Timeline
           project={project}
           lanes={lanes}
