@@ -20,11 +20,10 @@ for d in app/backend app/dist state backups logs; do check "dir $d" test -d "$b/
 check "server.py copied" test -f "$b/app/backend/server.py"
 check "jobs not copied" test ! -e "$b/app/backend/jobs"
 conf="$b/app/.env"
-for line in BETA_TOTAL_USD=12 DAILY_GEN_IMAGE_USD=0 DAILY_GEN_VIDEO_USD=0 DAILY_GEN_VOICE_USD=0 REMOTION_PORT=8811 \
-  ANTHROPIC_API_KEY=fake-a APIFY_TOKEN=fake-b APIFY_TIKTOK_ACTOR=x; do
+for line in BETA_TOTAL_USD=12 DAILY_GEN_IMAGE_USD=2 DAILY_GEN_VIDEO_USD=0 DAILY_GEN_VOICE_USD=0 REMOTION_PORT=8811 \
+  FRAME_IMAGE_MODEL=seedream-4.5 ANTHROPIC_API_KEY=fake-a APIFY_TOKEN=fake-b APIFY_TIKTOK_ACTOR=x FAL_KEY=fake-fal; do
   check "config has $line" grep -qx "$line" "$conf"
 done
-check "no FAL_KEY" absent '^FAL_KEY' "$conf"
 check "no GEMINI_API_KEY" absent '^GEMINI_API_KEY' "$conf"
 check "no ELEVENLABS" absent '^ELEVENLABS' "$conf"
 check "config mode is 600" test "$(stat -f %Lp "$conf")" = 600
@@ -50,6 +49,16 @@ check "install foo exits 2" test "$rc" -eq 2
 echo keep >"$b/state/marker"; $s update daphne >/dev/null 2>&1
 check "update keeps state" test -f "$b/state/marker"
 check "update keeps config" grep -qx BETA_TOTAL_USD=12 "$conf"
+# update rewrites the config, so a template change reaches instances that are already installed
+sed -i '' '/^DAILY_GEN_IMAGE_USD=/d' "$conf"; $s update daphne >/dev/null 2>&1
+check "update restores config lines" grep -qx DAILY_GEN_IMAGE_USD=2 "$conf"
+check "update keeps config mode 600" test "$(stat -f %Lp "$conf")" = 600
+
+# a source without FAL_KEY still installs, and writes no empty FAL_KEY line
+grep -v '^FAL_KEY=' "$src" >"$tmp/source-nofal"
+BETA_SOURCE_ENV="$tmp/source-nofal" $s update daphne >/dev/null 2>&1
+check "update without FAL_KEY succeeds" test $? -eq 0
+check "no FAL_KEY line without a source key" absent '^FAL_KEY' "$conf"
 
 # backup: readable copy, newest 7 kept
 sqlite3 "$b/state/data.db" "CREATE TABLE t (x); INSERT INTO t VALUES (42);"

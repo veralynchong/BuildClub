@@ -61,9 +61,10 @@ write_env() {
   local out="$base/app/.env"
   : >"$out"; chmod 600 "$out"
   sed -e "s/@BETA_TOTAL_USD@/$total_usd/" -e "s/@REMOTION_PORT@/$remotion_port/" bin/beta/instance.env.template >>"$out"
-  # Only these keys are copied, by name. FAL_KEY, GEMINI_API_KEY, ELEVENLABS_* and the rest never are.
+  # Only these keys are copied, by name. FAL_KEY is for storyboard images (Seedream); GEMINI_API_KEY,
+  # ELEVENLABS_* and the rest never are.
   [ -f "$source_env" ] || { echo "error: source keys file not found (set BETA_SOURCE_ENV)" >&2; exit 1; }
-  grep -E '^(ANTHROPIC_API_KEY|APIFY_TOKEN|APIFY_[A-Z0-9_]*_ACTOR)=' "$source_env" >>"$out" || true
+  grep -E '^(ANTHROPIC_API_KEY|APIFY_TOKEN|APIFY_[A-Z0-9_]*_ACTOR|FAL_KEY)=' "$source_env" >>"$out" || true
   echo "config:   $out (mode 600)"
 }
 
@@ -135,6 +136,7 @@ do_update() {
   [ -d "$base/app" ] || { echo "error: $name is not installed" >&2; exit 1; }
   [ -d "$dist_src" ] || { echo "error: $dist_src is missing; run 'npm run build' in $TF first" >&2; exit 1; }
   copy_app
+  write_env  # config comes from the template and the source keys, so a template change reaches this instance
   lc kickstart -k "gui/$uid_/$label"
   echo "updated $name"
 }
