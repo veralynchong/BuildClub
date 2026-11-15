@@ -1,3 +1,11 @@
+## 2026-11-15：Beta 完整流程測試 A（本機，US$0）
+
+- 環境：`isolated-backend.sh 8797`（demo 資料取自 Daphne 的 1 份 breakdown，mock 圖片，預算全 0），Playwright 1440x900，子代理點測。素材：ffmpeg 產生 6 段（4 直 2 橫，3–6 秒，有音軌）。截圖 `scratchpad/e2e-local/`、`/Volumes/Huang T7/playwright-mcp/persona/`。
+- E2E 五步：搜尋 PASS（只能用 cache）；分析新影片 BLOCKED（本機關 Claude，429，屬測試環境限制），改用 sample reference 建 4 鏡企劃；分鏡改角度／焦段／prompt、mock 重生、版本箭頭 PASS；Shot list「Add take」每格上傳（含橫式）PASS；Fill in shot order + Make the first cut + 匯出 PASS，ffprobe 1080x1920、有音軌、18.0 秒；重新整理後分鏡、編輯、take、時間軸都在 PASS。
+- AI 試用者（咖啡店老闆 Mia，不給步驟）：有做出 22 秒影片，但三處完全卡住：①企劃沒核准時分鏡格不能生圖、「Next: edit video →」進到只寫 "Only an approved plan can be cut." 的頁面；②board 抽屜的上傳只存在本機，剪輯器看不到；③因為②，「Fill in shot order」每格都跳過。
+- 修正（58eaca7、6cb91f6、7764bde）：分鏡格加「Approve plan」按鈕（沿用 `decide`，後端檢查不動），未核准時 Next 停用；board 的上傳改成指向 Shot list「Add take」；③確認是②造成的，補 unit test。修後 :8798 點測：Approve → 可重生 → Next 進到剪輯器，4 格 take 依序上時間軸。`verify.sh full` GREEN（1253 passed、3 skipped），tsc、eslint、vite build 通過。
+- 沒修（記成已知問題）：Hook／CTA／EDL／LUFS 等詞試用者看不懂；登入頁寫「agency 幫你設定的帳號」、Client 選項 Coming soon；同畫面觀看倍數兩個數字不一致（273× vs 2,214 倍）；搜尋顯示「Showing 1 of 30」；分鏡格每格 badge 顯示 BODY 與 Shot list 縮圖欄空白（mock 圖時，待真圖確認）；非 manager 角色看不到 Approve 按鈕。
+
 ## 2026-11-12：分鏡選擇頁去掉建立表單、剪輯器→分鏡導覽修正（`feat/storyboard-grid`，c5e0b17 的 build）
 
 - 環境：`isolated-backend.sh 8797`（state `~/.local/state/buildclub-test-8797`，mock 圖片模型，US$0），Playwright 1440x900，子代理點測。截圖 `/Volumes/Huang T7/playwright-mcp/sb-check-*`、`sb-nav*-*`。
