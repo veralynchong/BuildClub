@@ -46,7 +46,8 @@ $s install foo >/dev/null 2>&1; rc=$?
 check "install foo exits 2" test "$rc" -eq 2
 
 # update keeps state and config
-echo keep >"$b/state/marker"; $s update daphne >/dev/null 2>&1
+echo keep >"$b/state/marker"; mkdir -p "$b/app/backend/covers"; echo img >"$b/app/backend/covers/tiktok-1.jpg"; $s update daphne >/dev/null 2>&1
+check "update keeps saved covers (cached searches point at them)" test -f "$b/app/backend/covers/tiktok-1.jpg"
 check "update keeps state" test -f "$b/state/marker"
 check "update keeps config" grep -qx BETA_TOTAL_USD=12 "$conf"
 # update rewrites the config, so a template change reaches instances that are already installed

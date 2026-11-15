@@ -42,8 +42,9 @@ lc() { [ "${BETA_NO_LAUNCHCTL:-}" = 1 ] || launchctl "$@"; }
 
 copy_app() {
   mkdir -p "$base/app/backend"
-  # data.db and media are symlinks into state/, so they are excluded here and never deleted.
-  rsync -a --delete --exclude .venv --exclude 'data.db*' --exclude cache --exclude jobs --exclude __pycache__ \
+  # data.db and media are symlinks into state/, so they are excluded here and never deleted. cache/ and covers/ stay too:
+  # cached searches point at /api/cover/*.jpg and the original CDN links have expired.
+  rsync -a --delete --exclude .venv --exclude 'data.db*' --exclude cache --exclude covers --exclude jobs --exclude __pycache__ \
     --exclude .env --exclude media "$TF/backend/" "$base/app/backend/"
   rsync -a --delete "$dist_src/" "$base/app/dist/"
   # The video editor renders with Remotion from this same commit: render/, src/, public/, package.json and
