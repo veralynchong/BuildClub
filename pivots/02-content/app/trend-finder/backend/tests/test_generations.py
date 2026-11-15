@@ -1394,3 +1394,27 @@ def test_semantic_hash_options_excludes_batch_metadata():
     {'resolutions': ['1K'], 'price': {'usd': 0.1, 'byResolutionUsd': {'1K': -1}}}])
 def test_catalogue_rejects_inconsistent_image_capabilities(bad):
     assert generations.validate_models([{'id': 'test', 'kind': 'image', 'provider': 'mock', 'aspects': ['9:16'], **bad}])
+
+
+def test_frame_model_hides_mock_images_from_menu(gen, monkeypatch):
+    monkeypatch.setenv("FAL_KEY", "x")
+    monkeypatch.setenv("FRAME_IMAGE_MODEL", "seedream-4.5")
+    got = gen.get("/api/gen/models").json()["models"]
+    ids = [m["id"] for m in got]
+    assert "mock-image" not in ids and "mock-video" in ids  # only mock images are placeholders for a frame
+    assert [m["id"] for m in got if m["kind"] == "image"][0] == "seedream-4.5"  # the frame model leads the pick list
+
+
+def test_frame_model_rejects_mock_image_request(gen, monkeypatch):
+    monkeypatch.setenv("FAL_KEY", "x")
+    monkeypatch.setenv("FRAME_IMAGE_MODEL", "seedream-4.5")
+    r = post(gen, model="mock-image")
+    assert r.status_code == 422 and r.json()["error"] == "This model isn't set up yet."
+
+
+def test_mock_image_stays_without_usable_frame_model(gen, monkeypatch):
+    monkeypatch.delenv("FAL_KEY", raising=False)
+    for env in ("", "seedream-4.5", "nope"):  # unset, no key, unknown
+        monkeypatch.setenv("FRAME_IMAGE_MODEL", env)
+        assert "mock-image" in [m["id"] for m in gen.get("/api/gen/models").json()["models"]]
+        assert post(gen, model="mock-image").status_code == 201

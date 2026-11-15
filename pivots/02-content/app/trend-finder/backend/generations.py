@@ -89,16 +89,33 @@ def load_models() -> list[dict]:
     return json.loads(MODELS_FILE.read_text())["models"]
 
 
+def frame_model_id() -> str:
+    """The id FRAME_IMAGE_MODEL names when it is an image model whose provider is set up, else ''. When set, mock
+    image models are no longer offered, so nobody gets placeholder frames."""
+    wanted = os.environ.get("FRAME_IMAGE_MODEL", "").strip()
+    found = next((m for m in load_models() if m["id"] == wanted), None) if wanted else None
+    if found is None or found.get("kind") != "image" or found.get("retired") or found.get("provider") == "mock":
+        return ""
+    return wanted if is_available(found) else ""
+
+
 def is_available(model: dict) -> bool:
     provider = model.get("provider")
+    if provider == "mock" and model.get("kind") == "image" and os.environ.get("FRAME_IMAGE_MODEL", "").strip() \
+            and frame_model_id():
+        return False
     if provider == "elevenlabs" and not gen_providers.ElevenLabsAdapter.voice_id(model):
         return False  # the voice comes from the model entry or ELEVENLABS_VOICE_ID
     return provider == "mock" or bool(os.environ.get(KEY_ENV.get(provider, ""), ""))
 
 
 def menu_models() -> list[dict]:
-    """The models a new generation can pick: retired ones removed, `available` set from the provider's key."""
-    return [{**m, "available": is_available(m)} for m in load_models() if not m.get("retired")]
+    """The models a new generation can pick: retired ones removed, `available` set from the provider's key. With a usable
+    FRAME_IMAGE_MODEL the mock image models are left out and the frame model comes first among the images."""
+    pinned = frame_model_id()
+    out = [{**m, "available": is_available(m)} for m in load_models()
+           if not m.get("retired") and not (pinned and m.get("provider") == "mock" and m.get("kind") == "image")]
+    return sorted(out, key=lambda m: m["id"] != pinned)  # stable: the frame model first, the rest in file order
 
 
 def validate_models(models: list[dict]) -> list[str]:
