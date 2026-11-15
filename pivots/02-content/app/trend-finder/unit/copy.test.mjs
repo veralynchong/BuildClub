@@ -2,11 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { setActiveLang } from '../src/lib/i18n.ts'
 import { serverText } from '../src/lib/serverText.ts'
 
-const root = new URL('..', import.meta.url).pathname
+const root = fileURLToPath(new URL('..', import.meta.url))
 
 function tsxFiles(dir) {
   return readdirSync(dir).flatMap((name) => {

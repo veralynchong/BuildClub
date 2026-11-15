@@ -17,7 +17,8 @@ home="${BETA_HOME:-$HOME/beta}"
 agents="${BETA_LAUNCHAGENTS:-$HOME/Library/LaunchAgents}"
 source_env="${BETA_SOURCE_ENV:-/Users/tommy/Desktop/BuildClub/$TF/.env}"
 # Not under ~/Desktop: macOS privacy protection blocks a launchd job from reading it, and uvicorn hangs at start.
-venv="${TF_VENV:-/Users/tommy/orca/workspaces/BuildClub/lunch/$TF/backend/.venv}"
+# Not in a worktree either: removing the worktree takes the venv down with it.
+venv="${TF_VENV:-/Users/tommy/beta/.venv}"
 dist_src="${BETA_DIST:-$TF/dist}"
 cloudflared="${CLOUDFLARED:-/opt/homebrew/bin/cloudflared}"
 script="$(pwd)/bin/beta-instance.sh"
