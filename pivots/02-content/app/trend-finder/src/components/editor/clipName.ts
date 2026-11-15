@@ -1,5 +1,5 @@
 import type { Shot } from '../../types.ts'
-import type { ClipSource } from '../../lib/editor/types.ts'
+import type { Clip, ClipSource } from '../../lib/editor/types.ts'
 import type { Generation } from '../../lib/canvas/types.ts'
 import type { Take } from '../../lib/takes.ts'
 import { t } from '../../lib/i18n.ts'
@@ -17,4 +17,12 @@ export function clipLabel(src: ClipSource, shots: Shot[], gens: Generation[], ta
   }
   const k = takes.filter((x) => x.shotId === src.shotId).sort((a, b) => a.createdAt - b.createdAt).findIndex((x) => x.id === src.id) + 1
   return k > 0 ? t('editor.clip.shotTake', { n: i + 1, k }) : t('editor.clip.shot', { n: i + 1 })
+}
+
+// Silence removal (and Split) leave several clips from one source; a lone one keeps its plain name, the pieces get
+// "Shot 1 · Take 1 · part 2" in timeline order so they don't read as a duplicated shot.
+export function clipPartLabel(clip: Clip, clips: Clip[], shots: Shot[], gens: Generation[], takes: Take[]): string {
+  const name = clipLabel(clip.source, shots, gens, takes)
+  const same = clips.filter((c) => c.source.kind === clip.source.kind && c.source.id === clip.source.id)
+  return same.length > 1 ? t('editor.clip.part', { name, p: same.findIndex((c) => c.id === clip.id) + 1 }) : name
 }

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { placeShotClip, oneClipPerShot, sourcesWithShots, timelineSummary, isOnTimeline, shotOnTimeline, splitAt, applyNewer } from '../src/lib/editor/timeline.ts'
-import { clipLabel } from '../src/components/editor/clipName.ts'
+import { clipLabel, clipPartLabel } from '../src/components/editor/clipName.ts'
 import { timelineFlow, isVirtual, TIMELINE_NODE_ID } from '../src/lib/canvas/timelineNode.ts'
 import { toFlow, fromFlow } from '../src/lib/canvas/flow.ts'
 import { previewInput, reelInput, FONT_URL } from '../src/lib/editor/preview.ts'
@@ -67,6 +67,17 @@ test('clipLabel names shot and version or take', () => {
   assert.equal(clipLabel(g1, shots, gens, takes), 'Shot 1 · v2')
   assert.equal(clipLabel(src('take', 't2', 's2'), shots, gens, takes), 'Shot 2 · Take 2')
   assert.equal(clipLabel(src('generation', 'gx'), shots, gens, takes), 'Clip')
+})
+
+test('clipPartLabel numbers the pieces silence removal cut one take into', () => {
+  const shots = [{ id: 's1' }, { id: 's2' }]
+  const takes = [{ id: 't1', shotId: 's1', createdAt: 1 }, { id: 't2', shotId: 's2', createdAt: 2 }]
+  const t1 = src('take', 't1', 's1')
+  const t2 = src('take', 't2', 's2')
+  const clips = [clip('c1', t1, 4.6), clip('c2', t1, 3), clip('c3', t2, 3)]
+  assert.equal(clipPartLabel(clips[0], clips, shots, [], takes), 'Shot 1 · Take 1 · part 1')
+  assert.equal(clipPartLabel(clips[1], clips, shots, [], takes), 'Shot 1 · Take 1 · part 2')
+  assert.equal(clipPartLabel(clips[2], clips, shots, [], takes), 'Shot 2 · Take 1') // a whole take keeps its plain name
 })
 
 test('isOnTimeline matches kind and id; shotOnTimeline matches the shot', () => {

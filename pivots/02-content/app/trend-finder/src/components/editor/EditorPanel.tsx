@@ -46,7 +46,7 @@ import { BrandTool } from './tools/BrandTool'
 import { HEAD_PX, Timeline, type Selection } from './Timeline'
 import { Transport } from './Transport'
 import { Icon } from './icons'
-import { clipLabel } from './clipName'
+import { clipPartLabel } from './clipName'
 import { ErrorText } from '../ErrorText'
 import { ExportBar } from './ExportBar'
 import { Transcript } from './Transcript'
@@ -467,7 +467,7 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
     { project, clientHasLogo: !!kit?.logo, cut, texts: project.texts.length, voices: project.voiceover.length, music: !!musicFile && project.music !== null },
     visited,
   )
-  const nameOf = (c: (typeof project.clips)[number]) => clipLabel(c.source, filled, gens, allTakes)
+  const nameOf = (c: (typeof project.clips)[number]) => clipPartLabel(c, project.clips, filled, gens, allTakes)
   const nodeOf = (c: (typeof project.clips)[number]) => clipNode(doc, c.source)
   const selClip = project.clips.find((c) => c.id === selected) ?? null
   // Picking a bar on the timeline opens the inspector tab that edits it.
