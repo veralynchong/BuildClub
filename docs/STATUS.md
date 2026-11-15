@@ -1,5 +1,18 @@
 # STATUS
 
+## 2026-11-15（下午）：Beta 完整流程測試 A+B 完成，可給試用者
+
+- 一行狀態：分鏡圖片生成已開（Seedream 4.5，每站每天 US$2），Daphne 站真實走完五步兩次：搜尋 → AI shot list → 分鏡生圖 → 上傳 take → AI 剪輯匯出 1080x1920。過程修了 6 個擋流程 bug，兩站都已部署最新版（14:15）。
+- Commits（`feat/beta-launch`，都已 push，沒合併）：874bb71 開圖片生成、58eaca7 分鏡格 Approve plan、6cb91f6 board 上傳改指向 Add take、2b95cb8／79aa2a2 Beta 不提供 mock 圖片模型，分鏡格自動用 Seedream、6a560ca 企劃補上 AI shot list、2d544d1 Fill in shot order 看得到 Video edit 上傳的 take、5a5920b 搜尋結果「Show all N」。
+- 最後驗證：2026-11-15，`bash bin/verify.sh full` GREEN（1256 passed、3 skipped）；tsc、eslint、vite build 通過；兩站 local 和 tunnel 回 200。詳細在 `docs/test-log.md`。
+- 今天花費：Daphne 約 US$1.0（A 0.16、B 0.83）。Daphne 今天圖片預算剩 US$1.56。
+- 已知問題：見 test-log 最新兩段（封面 404、生圖沒進度、供應商拒絕訊息、Retired model、Hook/CTA/EDL/LUFS 術語、登入頁 agency 文字等）。
+- 下一步：
+  1. 使用者給 Daphne、Collage 的 email。
+  2. 兩站 backup → 清掉測試資料（Daphne Only Bakery、Collage Club Only 等 E2E client、take、匯出）→ 刪 `claude-e2e@remake.test` → `bash bin/beta-instance.sh add-user <name> <email>` 開正式帳號。
+  3. 更新 claude.ai Doc「Remake Beta — Tester Kit (draft)」的網址，寄出前再確認 tunnel 網址沒變。
+  4. 和 Veralyn 確認 PR #56→#57→#58→#59、#60 的合併順序（未合併）。
+
 ## 2026-11-15：Beta 修復並合入分鏡格（`feat/beta-launch`）
 
 - 一行狀態：Orca 今天把所有 BuildClub worktree 刪了（不是搬到 T7），兩個 Beta backend 因為用 `lunch` worktree 的 venv 和 node_modules 而 500。已改成 `~/beta/.venv`（Python）和 `~/beta/deps/node_modules`（npm ci），不再依賴任何 worktree；合入 `origin/feat/storyboard-grid`（a9526d8），兩站已 update。

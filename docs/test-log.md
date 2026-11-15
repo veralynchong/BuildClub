@@ -1,3 +1,13 @@
+## 2026-11-15：Beta 完整流程測試 B — Daphne 站真實跑兩輪（共約 US$0.83）
+
+- 第一輪（約 US$0.59：Apify 搜尋 0.45、Claude 分析 0.10、Seedream 1 張 0.04）：新搜尋「croissant」30 支 → 選 11 秒 POV 影片 → 企劃只有 1 格空白範本「Watch this: POV…」。分析其實成功（library 有正確 1 鏡 shotList；影片本身是一個長鏡頭）。匯出 1080x1920、有音軌、4.1 秒。截圖 `/Volumes/Huang T7/playwright-mcp/plan-b/`。
+- 找到並修好三個擋流程 bug：
+  - 6a560ca：分析還沒完成就按 Plan video／選 hook，`pickHook` 先寫一格空白 shot，之後分析回來不會補進企劃。改成分析回來（或打開企劃時）若企劃只有空白範本，就換成 AI shot list，保留選的 hook 台詞。
+  - 2d544d1：Video edit 裡上傳的 take，Fill in shot order 看不到（只讀畫布的 takes），報「Shot 1 has no video, skipped」。改成用 EditorPanel 的 `allTakes`。
+  - 5a5920b：搜尋結果的預設篩選（100 萬觀看、粉絲 5 萬以下）沒有標籤也關不掉，croissant 30 支只顯示 1 支。加「Show all N」連結（使用者 2026-11-15 選這個做法），預設篩選不變。
+- 第二輪（約 US$0.24，沒有新搜尋）：Show all 後 30 支都在 PASS；選「CROISSANT DOS SONHOS」（46 秒）→ 企劃 13 個 AI shot（有 framing、lens），沒有空白範本 PASS（分析在打開企劃前已完成，所以「先建企劃再等分析」的時序在 live 沒測到，unit test 和本機有測）；分鏡格 13 格都顯示「Regenerate ≈ US$0.04」，試 10 張成功 6 張，4 張被供應商拒絕（可能是 Magnum 等品牌字），失敗的有退款，預算 US$1.80 → 1.56；Add take 2 格 + Video edit 上傳 2 格，Fill in shot order 4 格都放上 PASS；匯出 ffprobe 1080x1920、有音軌、18.0 秒；重新整理後都在 PASS。截圖 `/Volumes/Huang T7/playwright-mcp/plan-b3/`。
+- 沒修（已知問題）：封面圖 `/api/cover/tiktok-*.jpg` 回 404（縮圖空白）；第一張圖超過 90 秒沒有進度提示；供應商拒絕時只寫「The model provider didn't accept this request」，沒說可以改 prompt；沒 take 的格子在 Fill 時列一長串 skipped；Storyboard 的 Shot list 分頁只有表格，Add take 在企劃頁下方，不好找；Find ideas 選片後沒有 Plan video 按鈕，要經 Research → Send to plan；Canvas (advanced) 舊 mock 節點顯示「Retired model」。
+
 ## 2026-11-15：Beta 完整流程測試 A — Daphne 站真實驗收（Seedream 4.5，US$0.16）
 
 - 環境：Daphne beta（:8801，tunnel），臨時帳號 `claude-e2e@remake.test`，Playwright 1440x900，子代理點測。截圖 `/Volumes/Huang T7/playwright-mcp/daphne-accept/`。
