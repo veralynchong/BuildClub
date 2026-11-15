@@ -3,7 +3,7 @@
 export const en = {
   'compare.eyebrow': 'Find ideas',
   'compare.title': 'Compare videos',
-  'compare.intro': 'Paste 2 to 5 viral videos that work. We break each one down and show what they share: the format, the order of beats, the length and the hook.',
+  'compare.intro': 'Paste 2 to 5 viral videos that work. We break each one down and show what they share: the format, the order of beats, the length and the opening.',
   'compare.links': 'Video links',
   'compare.linksHint': 'TikTok, Instagram, YouTube Shorts, Reddit video or X. One per line.',
   'compare.placeholder': 'https://www.tiktok.com/@name/video/…',
@@ -29,7 +29,7 @@ export const en = {
   'compare.format': 'What they all are',
   'compare.structure': 'Shared structure',
   'compare.length': 'Typical length',
-  'compare.hook': 'Hook pattern',
+  'compare.hook': 'Opening pattern',
   'compare.emotion': 'Feeling it triggers',
   'compare.copy': 'What to copy',
   'compare.differs': 'Where they differ',
