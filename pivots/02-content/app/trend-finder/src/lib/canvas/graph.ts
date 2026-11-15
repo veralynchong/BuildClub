@@ -286,8 +286,11 @@ export function priceLabel(m: Pick<GenModel, 'price' | 'durations'>, seconds: nu
 export function genView(node: CanvasNode, models: GenModel[], budget: Budget | null, need: Key | null) {
   const kind: 'image' | 'video' = node.type === 'video' ? 'video' : 'image'
   const options = models.filter((m) => m.kind === kind)
-  const retired = isRetired(models, kind, node.data.model)
-  const model = retired ? undefined : (options.find((m) => m.id === node.data.model) ?? options[0])
+  // A mock image model is hidden from the menu once a real frame model is set; a node saved with one is not "retired", it moves to the first usable image model.
+  const offMenuMock = kind === 'image' && !!node.data.model?.startsWith('mock-') && !options.some((m) => m.id === node.data.model)
+  const fallback = offMenuMock ? options.find((m) => m.available) : undefined
+  const retired = isRetired(models, kind, node.data.model) && !fallback
+  const model = retired ? undefined : (fallback ?? options.find((m) => m.id === node.data.model) ?? options[0])
   const seconds = model?.durations?.includes(node.data.duration ?? -1) ? node.data.duration : model?.durations?.[0]
   const usd = model ? priceOf(model, seconds) : 0
   return { kind, options, retired, model, seconds, usd, left: budgetLeft(budget, kind), canGenerate: !!model && model.available && !retired && need === null }
