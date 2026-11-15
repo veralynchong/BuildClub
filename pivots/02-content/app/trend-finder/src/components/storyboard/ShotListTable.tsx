@@ -2,6 +2,9 @@ import type { IdeaStatus, Shot } from '../../types'
 import type { ShotListRow } from '../../lib/shotGrid'
 import { t } from '../../lib/i18n'
 import { ShotChecklist } from '../ShotChecklist'
+import { TakeAddButton } from '../TakeAddButton'
+import { useTakes } from '../useTakes'
+import { canEdit, takeCountLabel, takesByShot } from '../../lib/takes'
 
 interface Props {
   rows: ShotListRow[]
@@ -15,6 +18,9 @@ const HEADS = ['action', 'line', 'size', 'angle', 'movement', 'lens', 'gear', 'l
 
 // The camera operator's printable shot list, with the takes checklist below it.
 export function ShotListTable({ rows, ideaId, status, shots }: Props) {
+  const state = useTakes(ideaId)
+  const grouped = takesByShot(state.takes ?? [], shots.length)
+  const editable = !!ideaId && canEdit(status)
   return (
     <div className="sg-listwrap" role="tabpanel">
       <div className="sg-listbar">
@@ -26,6 +32,7 @@ export function ShotListTable({ rows, ideaId, status, shots }: Props) {
             <th scope="col"><span className="sr-only">{t('grid.colThumb')}</span></th>
             <th scope="col"><span className="sr-only">{t('grid.colNum')}</span><span aria-hidden="true">#</span></th>
             {HEADS.map((k) => <th key={k}>{t(k === 'action' || k === 'line' ? `grid.show.${k}` : `grid.col.${k}`)}</th>)}
+            {ideaId && <th scope="col">{t('grid.list.takes')}</th>}
           </tr>
         </thead>
         <tbody>
@@ -41,6 +48,13 @@ export function ShotListTable({ rows, ideaId, status, shots }: Props) {
               <td>{r.lens}</td>
               <td>{r.gear}</td>
               <td className="sg-mono">{r.time}</td>
+              {ideaId && (
+                <td className="sg-takecell">
+                  <span className="muted small">{takeCountLabel(grouped[r.shotIndex] ?? [])}</span>
+                  {editable && <TakeAddButton busy={state.busy.has(r.shotIndex)} onFile={(file) => void state.upload(r.shotIndex, file)} />}
+                  {state.errors[r.shotIndex] && <p className="error" role="alert">{state.errors[r.shotIndex]}</p>}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -48,7 +62,7 @@ export function ShotListTable({ rows, ideaId, status, shots }: Props) {
       {ideaId && (
         <section className="sg-takes">
           <h2>{t('grid.list.takes')}</h2>
-          <ShotChecklist ideaId={ideaId} status={status} shots={shots} />
+          <ShotChecklist ideaId={ideaId} status={status} shots={shots} state={state} />
         </section>
       )}
     </div>

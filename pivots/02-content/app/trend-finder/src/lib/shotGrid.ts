@@ -110,6 +110,7 @@ export function cameraTag(shot: Shot): string {
 
 export interface ShotListRow {
   n: number
+  shotIndex: number // the shot's place in the plan, which stays put when earlier shots are removed
   thumb: string | null
   action: string
   line: string
@@ -125,8 +126,9 @@ const DASH = '—'
 
 // One printable row per visible shot, numbered 1..n (removed shots are already left out of the cells).
 export function shotListRows(cells: GridCell[]): ShotListRow[] {
-  return cells.map(({ shot, shown }, i) => ({
+  return cells.map(({ shot, shown, index }, i) => ({
     n: i + 1,
+    shotIndex: index,
     thumb: shown?.url ?? null,
     action: shot.shot,
     line: shot.line || DASH,

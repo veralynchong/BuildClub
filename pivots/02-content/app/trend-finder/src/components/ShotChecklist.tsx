@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { IdeaStatus, Shot } from '../types'
-import type { Take } from '../lib/takes'
 import { t } from '../lib/i18n'
 import { CameraTags } from './CameraTags'
-import { canEdit, checkFile, checklistProgress, chooseTake, deleteTake, formatSize, listTakes, takesByShot, uploadTake } from '../lib/takes'
+import { canEdit, checklistProgress, chooseTake, deleteTake, formatSize, takesByShot } from '../lib/takes'
+import { TakeAddButton } from './TakeAddButton'
+import { useTakes, type TakesState } from './useTakes'
 
 interface Props {
   ideaId: string
@@ -11,26 +12,15 @@ interface Props {
   shots: Shot[]
   // Called whenever the loaded takes change: how many shots have a chosen take.
   onProgress?: (done: number) => void
+  // Takes already loaded by a parent that shows them too (the Storyboard shot list); otherwise this loads its own.
+  state?: TakesState
 }
 
 // Per-shot filming checklist: upload real takes for each shot, watch them, pick the one to use.
-export function ShotChecklist({ ideaId, status, shots, onProgress }: Props) {
-  const [takes, setTakes] = useState<Take[] | null>(null)
-  const [loadError, setLoadError] = useState(false)
-  // Shots with an upload still running; several shots can upload at once.
-  const [busy, setBusy] = useState<ReadonlySet<number>>(new Set())
-  const [errors, setErrors] = useState<Record<number, string>>({})
+export function ShotChecklist({ ideaId, status, shots, onProgress, state }: Props) {
+  const own = useTakes(state ? null : ideaId)
+  const { takes, loadError, busy, errors, run, upload } = state ?? own
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-
-  useEffect(() => {
-    let live = true
-    listTakes(ideaId)
-      .then((t) => live && setTakes(t))
-      .catch(() => live && setLoadError(true))
-    return () => {
-      live = false
-    }
-  }, [ideaId])
 
   const shotCount = shots.length
   useEffect(() => {
@@ -39,43 +29,6 @@ export function ShotChecklist({ ideaId, status, shots, onProgress }: Props) {
 
   const editable = canEdit(status)
   if (!editable && (!takes || takes.length === 0) && !loadError) return null
-
-  const setError = (shot: number, text?: string) =>
-    setErrors((e) => {
-      const next = { ...e }
-      if (text) next[shot] = text
-      else delete next[shot]
-      return next
-    })
-
-  const run = async (shot: number, action: () => Promise<Take[]>) => {
-    setError(shot)
-    try {
-      setTakes(await action())
-    } catch (e) {
-      setError(shot, (e as Error).message)
-    }
-  }
-
-  const upload = async (shot: number, file: File) => {
-    const problem = checkFile(file)
-    if (problem) return setError(shot, problem)
-    setError(shot)
-    setBusy((b) => new Set(b).add(shot))
-    try {
-      const added = await uploadTake(ideaId, shot, file)
-      // Add to the list as it is now: choices and deletes made during a long upload must not be undone.
-      setTakes((prev) => [...(prev ?? []), added])
-    } catch (e) {
-      setError(shot, (e as Error).message)
-    } finally {
-      setBusy((b) => {
-        const next = new Set(b)
-        next.delete(shot)
-        return next
-      })
-    }
-  }
 
   const { done, total } = checklistProgress(shots.length, takes ?? [])
   const grouped = takesByShot(takes ?? [], shots.length)
@@ -156,20 +109,7 @@ export function ShotChecklist({ ideaId, status, shots, onProgress }: Props) {
                 </ul>
               )}
               {editable && (
-                <label className={`btn btn-ghost btn-sm take-add${busy.has(i) ? ' is-busy' : ''}`} aria-disabled={busy.has(i)}>
-                  {busy.has(i) ? t('plan.takes.uploading') : t('plan.takes.add')}
-                  <input
-                    type="file"
-                    hidden
-                    accept="video/mp4,video/quicktime,.mp4,.mov"
-                    disabled={busy.has(i)}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      e.target.value = ''
-                      if (file) void upload(i, file)
-                    }}
-                  />
-                </label>
+                <TakeAddButton busy={busy.has(i)} onFile={(file) => void upload(i, file)} />
               )}
               {errors[i] && (
                 <p className="error" role="alert">

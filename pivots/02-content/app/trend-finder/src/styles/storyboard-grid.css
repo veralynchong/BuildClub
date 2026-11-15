@@ -68,3 +68,6 @@
   .sg-table { min-width: 0; font-size: 11px; }
   .sg-table tr { break-inside: avoid; }
 }
+.sg-takecell { white-space: nowrap; }
+.sg-takecell .take-add { margin-left: 8px; }
+.sg-takecell .error { white-space: normal; margin: 4px 0 0; }
