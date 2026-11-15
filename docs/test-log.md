@@ -1,3 +1,9 @@
+## 2026-11-15（17:02）：已知問題第三批，兩站已部署
+
+- b04062a 去除靜音把 shot 1 切兩段：是設計上的行為（`backend/suggest.py` `first_cut` 會切掉 take 中間 ≥ 0.6 秒的停頓；那段 take 中間停了 1.77 秒），沒改門檻。問題是兩段都叫「Shot 1 · Take 1」看起來像重複，改成「Shot 1 · Take 1 · part 2」。
+- 73cb26f 企劃卡、企劃頁的比較基準改用結果頁同一個 `headline()`（平常觀看數優先）；evidence chip 22.9× 改成和面板一樣顯示 23×。
+- 驗證：`verify.sh full` GREEN（1259 passed、3 skipped）；tsc、eslint、build 通過。瀏覽器沒點（只有 unit test）。部署前兩站沒有使用中、先 backup（`backups/2026-11-15-1702`），部署後 tunnel 200。
+
 ## 2026-11-15（16:24）：已知問題第二批修正，兩站已部署
 
 - 09ce592 介面術語換白話：Hook → Opening、Body → Middle、CTA → Call to action、Payoff → result、EDL → edit list、LUFS 拿掉單位只留數字（資料 enum 和 AI prompt 不動；首頁行銷文案仍寫 Hook）。
