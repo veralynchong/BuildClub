@@ -25,6 +25,11 @@ export function headline(v: Video): Headline | null {
   if (usual !== null) return { kind: 'usual', base: v.medianViews as number, multiple: usual }
   return { kind: byFollowers(v) ? 'followers' : 'usual', base: scoreBase(v), multiple: outlierScore(v) }
 }
+// The "usual (or followers) → views" pair a card shows: the headline's base and whether it is followers.
+export const compareOf = (v: Video) => {
+  const h = headline(v)
+  return { base: h?.base ?? 0, followers: h?.kind === 'followers' }
+}
 // Reddit shows no views, so its posts are compared by upvotes (stored in `views`).
 export const viewsWord = (v: Video) => (v.platform === 'reddit' ? t('home.metrics.upvotes') : t('home.metrics.views'))
 // Live Instagram results have neither the account's usual views nor its followers, and some accounts report 0

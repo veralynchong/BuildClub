@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Client, Format, SavedIdea, Shot, Video } from '../types'
 import { useApp, useManagerName } from '../lib/appContext'
-import { byFollowers, compact, scoreBase, platformName } from '../lib/metrics'
+import { compareOf, compact, platformName } from '../lib/metrics'
 import { dueLabel } from '../lib/dates'
 import type { Decision } from '../lib/memory'
 import { BestVideo } from './BestVideo'
@@ -43,6 +43,7 @@ interface Props {
 
 export function PlanScreen(p: Props) {
   const { idea, video, format, client, onChange, onBack, onFindMore, onGoApprovals, onDecide, onOpenCanvas } = p
+  const cmp = compareOf(video)
   // The person who approves plans, from the agency settings. Only a signed-in manager decides here;
   // a team member's plan is decided by the manager (in the app or on the review link).
   const APPROVER = useManagerName()
@@ -161,10 +162,10 @@ export function PlanScreen(p: Props) {
               <h2 className="plan-stage-title">{video.hook}</h2>
               <span className="plan-stage-handle">{video.handle}</span>
               <span className="best-compare tile-cmp plan-stage-cmp">
-                <span className="cmp-num cmp-from">{scoreBase(video) > 0 ? compact(scoreBase(video)) : '–'}</span>
+                <span className="cmp-num cmp-from">{cmp.base > 0 ? compact(cmp.base) : '–'}</span>
                 <span className="cmp-arrow" aria-hidden="true">→</span>
                 <span className="cmp-num cmp-to">{compact(video.views)}</span>
-                <span className="cmp-cap">{byFollowers(video) ? t('find.res.cmpFollowers') : t('find.res.cmpUsual')}</span>
+                <span className="cmp-cap">{cmp.followers ? t('find.res.cmpFollowers') : t('find.res.cmpUsual')}</span>
                 <span />
                 <span className="cmp-cap">{t('find.tile.cmpViews')}</span>
               </span>

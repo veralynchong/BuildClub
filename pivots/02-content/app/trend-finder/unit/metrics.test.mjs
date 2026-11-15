@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { byFollowers, hasScore, headline, outlierScore, scoreLine, usualMultiple } from '../src/lib/metrics.ts'
+import { byFollowers, compareOf, hasScore, headline, outlierScore, scoreLine, usualMultiple } from '../src/lib/metrics.ts'
 import { readFileSync } from 'node:fs'
 
 const vid = (o = {}) => ({
@@ -61,4 +61,15 @@ test('the Best to copy card, its numbers and the breakdown panel all read the sa
   // The second "N times the account's usual views" line next to a followers number is gone.
   assert.doesNotMatch(src('components/BreakdownPanel.tsx'), /usualMultiple/)
   assert.match(src('components/VideoTile.tsx'), /headline\(video\)/)
+})
+
+test('compareOf gives the plan screens the same base and label as the results screen', () => {
+  const both = vid({ views: 273_000, followers: 123, medianViews: 1000 })
+  assert.deepEqual(compareOf(both), { base: 1000, followers: false }) // usual views, although followers are known
+  const followersOnly = vid({ views: 10000, followers: 1000, medianViews: undefined })
+  assert.deepEqual(compareOf(followersOnly), { base: 1000, followers: true })
+  assert.deepEqual(compareOf(vid({ followers: 0, medianViews: undefined })), { base: 0, followers: false })
+  const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8')
+  assert.match(src('components/plans/PlanCard.tsx'), /compareOf\(v\)/)
+  assert.match(src('components/PlanScreen.tsx'), /compareOf\(video\)/)
 })

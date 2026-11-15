@@ -109,16 +109,16 @@ test('plainLine matches the copy table', () => {
   const v = vid({ views: 144270, medianViews: 6300 })
   assert.equal(
     e.plainLine(v, { rows: [], accounts: 4, hits: 3, counted: 4 }),
-    "22.9× this account's median (baseline: 6 videos); 4 accounts use this pattern, 3 also hit 2× or more",
+    "23× this account's median (baseline: 6 videos); 4 accounts use this pattern, 3 also hit 2× or more",
   )
-  assert.equal(e.plainLine(v), "22.9× this account's median (baseline: 6 videos)")
+  assert.equal(e.plainLine(v), "23× this account's median (baseline: 6 videos)")
   const f = vid({ views: 77000, followers: 1000, medianViews: null, baseline: base({ denominator: 'followers', medianN: null }) })
   assert.equal(e.plainLine(f), 'Rough: 77× views ÷ followers')
 })
 
 test('formulaLine shows N and the date range, or says the details are missing', () => {
   const v = vid({ views: 144270, medianViews: 6300 })
-  assert.equal(e.formulaLine(v), '144k views ÷ 6.3k median (6 videos, 2026-10-02 to 2026-10-24) = 22.9×')
+  assert.equal(e.formulaLine(v), '144k views ÷ 6.3k median (6 videos, 2026-10-02 to 2026-10-24) = 23×')
   const old = vid({ views: 144270, medianViews: 6300, baseline: null })
   assert.match(e.formulaLine(old), /Baseline details not recorded/)
   assert.ok(!e.formulaLine(old).includes('NaN'))
