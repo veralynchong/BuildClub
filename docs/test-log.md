@@ -1,3 +1,11 @@
+## 2026-11-15：Beta 完整流程測試 A — Daphne 站真實驗收（Seedream 4.5，US$0.16）
+
+- 環境：Daphne beta（:8801，tunnel），臨時帳號 `claude-e2e@remake.test`，Playwright 1440x900，子代理點測。截圖 `/Volumes/Huang T7/playwright-mcp/daphne-accept/`。
+- 五步 PASS：沿用企劃「Ranking The Best Sourdough Bread Wins」（Daphne Only Bakery）；Seedream 生 4 張，今日圖片預算 US$2.00 → 1.84（記帳正確）；Shot list 第 3–8 格上傳 6 段 take；新 first cut、匯出 1080x1920、有音軌、35.8 秒；登出後 API 回 401。Shot list 縮圖在真圖時正常，BODY 只在佔位圖出現。
+- 擋流程 bug（已修，2b95cb8、79aa2a2）：分鏡格 Refine／Regenerate 預設 Mock 模型、沒有換模型的地方，要進 Canvas (advanced) 一格一格改。修法：`FRAME_IMAGE_MODEL` 可用時，選單不列 mock 圖片模型、POST /gen 拒收 mock-image（422）；分鏡格自動用第一個可用圖片模型（Seedream）。本機（變數未設）mock 照常。部署後 Daphne `/api/gen/models` 第一個是 `seedream-4.5`（US$0.04），沒有 `mock-image`。
+- 沒修（已知問題）：舊 mock 節點在 Canvas (advanced) 顯示不可用，第一次在分鏡格重生後才換成 Seedream；瀏覽器自動填入把錯的密碼帶進登入框；靜音移除把 shot 1 切成兩段；一張封面圖 404。
+- 測試資料（4 張圖、6 段 take、first cut、匯出）留在 Daphne 站，Task 6 清。
+
 ## 2026-11-15：Beta 完整流程測試 A（本機，US$0）
 
 - 環境：`isolated-backend.sh 8797`（demo 資料取自 Daphne 的 1 份 breakdown，mock 圖片，預算全 0），Playwright 1440x900，子代理點測。素材：ffmpeg 產生 6 段（4 直 2 橫，3–6 秒，有音軌）。截圖 `scratchpad/e2e-local/`、`/Volumes/Huang T7/playwright-mcp/persona/`。
