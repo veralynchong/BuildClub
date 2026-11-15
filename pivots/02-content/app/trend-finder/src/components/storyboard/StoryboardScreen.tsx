@@ -3,7 +3,7 @@ import type { CanvasContext } from '../../lib/canvas/resource'
 import type { Budget, CanvasState, GenModel } from '../../lib/canvas/types'
 import { getBudget, getCanvas, getModels } from '../../lib/canvas/api'
 import { budgetLeft, priceLabel, priceOf } from '../../lib/canvas/graph'
-import { gridCells, gridGate, patchShot, shotListRows, type GridCell } from '../../lib/shotGrid'
+import { gridCells, gridGate, modelFor, patchShot, shotListRows, type GridCell } from '../../lib/shotGrid'
 import type { Shot } from '../../types'
 import { ff } from '../../lib/strings/freeform'
 import { t } from '../../lib/i18n'
@@ -42,12 +42,6 @@ function saveCols(n: Cols): void {
   } catch {
     /* blocked storage: the choice just won't persist */
   }
-}
-
-// The image model a frame would be made with: the node's saved one, else the first usable image model.
-function modelFor(models: GenModel[], savedId: string | undefined): GenModel | undefined {
-  const images = models.filter((m) => m.kind === 'image')
-  return images.find((m) => m.id === savedId && m.available) ?? images.find((m) => m.available)
 }
 
 export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas, onOpenEditor, onApprove, onBack }: Props) {

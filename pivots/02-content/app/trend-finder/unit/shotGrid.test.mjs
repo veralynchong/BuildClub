@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { framePrompt, frameNodeOf, gridCells, setPrompt, chooseVersion, stepVersion, patchShot, cameraTag } from '../src/lib/shotGrid.ts'
+import { framePrompt, frameNodeOf, gridCells, setPrompt, chooseVersion, stepVersion, patchShot, cameraTag, modelFor } from '../src/lib/shotGrid.ts'
 import { framingLabel, angleLabel, movementLabel } from '../src/lib/shots.ts'
 
 const full = { id: 's1', time: '0:00', shot: 'Hands fold dough', framing: 'close_up', angle: 'eye_level', movement: 'push_in', lens: '35mm' }
@@ -117,4 +117,19 @@ test('gridGate: an unapproved plan offers Approve plan and holds back Next; an a
   assert.deepEqual(gridGate(true, true), { notice: true, approve: true, next: false })
   assert.deepEqual(gridGate(true, false), { notice: true, approve: false, next: false })
   assert.deepEqual(gridGate(false, true), { notice: false, approve: false, next: true })
+})
+
+const img = (id, available = true) => ({ id, kind: 'image', available })
+
+test('modelFor keeps the saved model when it is on the menu', () => {
+  assert.equal(modelFor([img('seedream-4.5'), img('other')], 'other').id, 'other')
+})
+
+test('modelFor leaves a saved mock model for the first available image model (mock is off the menu on beta)', () => {
+  assert.equal(modelFor([img('seedream-4.5'), img('other')], 'mock-image').id, 'seedream-4.5')
+  assert.equal(modelFor([img('seedream-4.5')], undefined).id, 'seedream-4.5')
+})
+
+test('modelFor skips unavailable and non-image models', () => {
+  assert.equal(modelFor([img('a', false), { id: 'v', kind: 'video', available: true }], 'a'), undefined)
 })

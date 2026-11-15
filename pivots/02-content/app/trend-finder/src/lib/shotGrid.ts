@@ -1,5 +1,5 @@
 import type { Shot } from '../types'
-import type { CanvasDoc, CanvasNode, Generation } from './canvas/types.ts'
+import type { CanvasDoc, CanvasNode, GenModel, Generation } from './canvas/types.ts'
 import { failedGen, pendingGen, selectedGen, versionsOf } from './canvas/graph.ts'
 import { angleLabel, framingLabel, gearLabel, movementLabel } from './shots.ts'
 
@@ -143,4 +143,11 @@ export function shotListRows(cells: GridCell[]): ShotListRow[] {
 // the editor rejects an unapproved plan, so Next waits for the approval.
 export function gridGate(readOnly: boolean, canApprove: boolean): { notice: boolean; approve: boolean; next: boolean } {
   return { notice: readOnly, approve: readOnly && canApprove, next: !readOnly }
+}
+
+// The image model a frame would be made with: the node's saved one while it is on the menu, else the first usable
+// image model. A node saved with a mock model therefore moves to the frame model where mock is off the menu.
+export function modelFor(models: GenModel[], savedId: string | undefined): GenModel | undefined {
+  const images = models.filter((m) => m.kind === 'image')
+  return images.find((m) => m.id === savedId && m.available) ?? images.find((m) => m.available)
 }
