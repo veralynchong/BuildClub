@@ -1,3 +1,12 @@
+## 2026-11-15（16:24）：已知問題第二批修正，兩站已部署
+
+- 09ce592 介面術語換白話：Hook → Opening、Body → Middle、CTA → Call to action、Payoff → result、EDL → edit list、LUFS 拿掉單位只留數字（資料 enum 和 AI prompt 不動；首頁行銷文案仍寫 Hook）。
+- 368bf2f 分鏡格 Shot list 分頁每列加「Add take」和 take 數（與企劃頁共用 `useTakes`／`TakeAddButton`）。
+- 2ad673b Find ideas 選片後的面板加「Plan video」，直接開企劃（沿用 `planNow`）。
+- 4adb342 登入頁改成「Sign in with the account we sent you.」，拿掉 Client 選項。
+- 05b9215 結果頁同一支影片只顯示一個倍數（優先用「× 平常觀看數」，沒有才用粉絲數）。PlanCard／PlanScreen 仍用粉絲數為基準（未改）。
+- 驗證：`verify.sh full` GREEN（後端 1258 passed、3 skipped；前端 unit 867）；tsc、eslint、build 通過。本機 :8798 瀏覽器四項都看過（截圖 `/Volumes/Huang T7/playwright-mcp/batch2/`）。部署前兩站沒有使用中、先 backup（`backups/2026-11-15-1624`），部署後兩站 bundle 有新登入文字、tunnel 200。
+
 ## 2026-11-15（16:00）：已知問題第一批修正，兩站已部署
 
 - 169e8ec 封面 404：`beta-instance.sh update` 的 rsync `--delete` 每次都清掉 `backend/covers/`，改成排除 covers（測試 `update keeps saved covers`）。之前已被清掉的封面要重新搜尋才會回來。
