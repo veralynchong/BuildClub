@@ -20,6 +20,22 @@
 - 決定（使用者 2026-11-12）：Beta 畫布上的 AI 生成節點保留，按了會被預算擋；mini 重開機測試先不做。
 - 下一步：使用者給試用者 email、決定要不要買網域；週末把剪輯 agent 的修正併進來（`beta-instance.sh update`），清掉測試資料、開正式帳號，週一寄出。
 
+## 2026-11-12：分鏡格 Storyboard grid（`feat/storyboard-grid`，疊在 `feat/canvas-restore`）
+
+- 一行狀態：側欄「Storyboard（分鏡）」打開每個企劃的鏡頭格（每列 3/4/6、Action/Line/Camera 顯示開關）、Refine 浮窗（prompt、size/angle/movement/lens/gear/length）、Regenerate、版本箭頭、Shot list 分頁（含 Print）、「Canvas (advanced)」和「Next: edit video →」。Task 1-7 完成，最終 review（opus）後一波修正（f0040e8）：防連點重複扣款、prompt 打字 0.8 秒自動存、畫布產的圖不再誤標「已改」、返回改為「返回企劃列表」、換版本遇 409 會重載重試、Regenerate 一律用最新存的 prompt。已 push，draft PR 見下一步。
+- 最後驗證：2026-11-12，`bash bin/verify.sh` GREEN；:8797 零花費後端（mock 圖片模型）桌面 1440x900 跑 E1-E10：E1、E2、E4、E5、E6（mock）、E7、E8、E9、E10 PASS；E3 三項 PASS、「Plan 頁顯示鏡頭」一項不成立（見已知問題）。詳細在 `docs/test-log.md`。
+- 付費 smoke（Seedream 4.5 重生一格，約 US$0.04）：**沒跑，花費 US$0.00**。隔離後端預算全為 0；真 fal 要用 `bin/real-fal-backend.sh`，它會讀 `.env`，本次規則禁止碰 `.env`（hook 也擋）。所以「預算數字下降」未驗。
+- 已知問題：
+  - E3：Plan 頁（唯讀鏡頭列）只顯示 shot 名稱，不顯示 lens；lens 有存進計畫的 shot（`/api/ideas` 回 `lens: "50mm"`），只是 Plan 頁沒有地方顯示。計畫文件 E3 的驗收寫「Plan page shows the lens」與現況不符，需決定要補顯示或改驗收。
+  - E5（已修 cf23d46）：prompt 改成打字後約 0.8 秒、關閉浮窗、離開頁面時存；離開頁面那次是盡力而為。
+  - 重新整理會回到 Plans（沒有路由），要再從側欄點 Storyboard；每列數會保留，Show 開關重設為全開。
+  - 返回鍵已改為「返回企劃列表」（cf23d46），點了到 chooser。
+  - E9：過期分頁存檔會收到 409（主控台一條 Failed to load resource），UI 合併後保留兩邊文字，無崩潰。
+  - E8：剪輯器打開的是每鏡「已選用的 take」時間軸，不顯示分鏡圖。
+- 2026-11-12 追加（b6f7d1f、c5e0b17）：分鏡選擇頁拿掉「建立 workspace」表單（`CanvasPick` 加 `hideCreate`，Canvas 選擇頁保留）。點測時發現並修好：在剪輯器點側欄 Storyboard 沒反應或跑到節點畫布、剪輯器回畫布後 ‹ 要點兩次才回分鏡格。原因是側欄和畫布 Back 已經跑過離開 guard，又經 `setView` 再跑一次，剪輯器開著時第二次會失敗；改成直接 `setViewRaw`（同 `enterClient` 寫法）。:8797 零花費後端 1440x900：無建立表單、Canvas 選擇頁仍有、prompt 0.8 秒自動存、連點 Regenerate 只多 1 版（1 個 POST /gen）、N1-N7 導覽都一次到位、無 JS 錯誤。verify GREEN（1246 passed）。
+- 小發現（沒修）：畫布 Editor & output 節點的「Open editor ↗」按鈕初始位置在頂列後面（y=-7），要先平移畫布才點得到。
+- 下一步：等 Veralyn review draft PR（不自己合併）；決定 E3 的 Plan 頁顯示；有需要時用 `bin/real-fal-backend.sh` 在使用者自己的終端機跑一次付費 smoke 確認預算下降。
+
 ## 2026-11-12：初剪圖釘跟著剪輯、軌道隱藏／靜音套用到匯出（`feat/canvas-restore`）
 
 - 一行狀態：兩個剪輯器已知問題修好，已 push（14b7371、fc8cf15），未合併。
