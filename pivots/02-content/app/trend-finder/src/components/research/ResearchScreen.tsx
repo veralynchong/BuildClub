@@ -15,14 +15,10 @@ import type { PickInfo, SheetKit } from './ResearchSheet'
 import type { NewVideo } from './NewSlotForm'
 import {
   DEFAULT_SORT,
-  downloadCsv,
-  fileSlug,
-  isoDate,
   matches,
   sortRows,
-  toCsv,
 } from './sheet'
-import type { Sort, SortKey } from './sheet'
+import type { Sort } from './sheet'
 import { UNSORTED, groupRows, rowRole } from './slots'
 import type { Group, RowRole } from './slots'
 
@@ -91,27 +87,12 @@ const statusKey: Record<ResearchStatus, Key> = {
 }
 const statusText = (s: ResearchStatus) => t(statusKey[s])
 
-interface Column {
-  key: SortKey
-  label: Key
-}
 const PLATFORM_ORDER = ['tiktok', 'instagram', 'youtube']
 const platformRank = (p: string) => {
   const i = PLATFORM_ORDER.indexOf(p)
   return i === -1 ? PLATFORM_ORDER.length : i
 }
 
-// The sheet's columns: the CSV's columns, and what the Sort dropdown offers.
-const COLUMNS: Column[] = [
-  { key: 'account', label: 'research.col.account' },
-  { key: 'platform', label: 'research.col.platform' },
-  { key: 'followers', label: 'research.col.followers' },
-  { key: 'views', label: 'research.col.views' },
-  { key: 'keywords', label: 'research.col.keywords' },
-  { key: 'hook', label: 'research.col.hook' },
-  { key: 'notes', label: 'research.col.notes' },
-  { key: 'status', label: 'research.col.status' },
-]
 
 const count = (n: number) => (n > 0 ? compact(n) : '—')
 
@@ -136,7 +117,7 @@ const VIEW_KEY = 'remake.research.view'
 function readView(): View {
   try {
     const v = globalThis.localStorage?.getItem(VIEW_KEY)
-    return v === 'cards' || v === 'video' ? v : 'sheet'
+    return v === 'video' ? v : 'sheet'
   } catch {
     return 'sheet'
   }
@@ -211,7 +192,12 @@ export function ResearchScreen(p: ResearchScreenProps) {
 
   // The index: every video, then Unsorted when it has references. While searching, every video stays listed
   // (with its match count); the one shown moves to the first with matches unless chosen during this search.
-  const indexGroups = groups.filter((g) => g.slot || g.total > 0)
+  // Keep three seeded example videos; newly created videos remain available.
+  const indexGroups = groups.filter((g) => {
+    if (g.id === UNSORTED) return false
+    if (g.slot && /^(evergreen|myst)-slot-\d+$/.test(g.slot.id) && g.slot.number > 3) return false
+    return g.slot || g.total > 0
+  })
   let current = indexGroups.find((g) => g.id === selected?.id) ?? indexGroups[0]
   if (filtered && current && current.rows.length === 0 && selected?.q !== filterKey)
     current = indexGroups.find((g) => g.rows.length > 0) ?? current
@@ -276,36 +262,6 @@ export function ResearchScreen(p: ResearchScreenProps) {
     requestAnimationFrame(() => slotBtn.current?.focus())
   }
   const toggleSlotForm = () => (addingSlot ? closeSlotForm() : setAddingSlot(true))
-
-  const exportCsv = () => {
-    const head = [
-      t('research.col.slot'),
-      t('research.col.slotTopic'),
-      ...COLUMNS.map((c) => t(c.label)),
-      t('research.col.link'),
-      t('research.col.logged'),
-    ]
-    // Slots in number order, then Unsorted (no slot number); inside each, the sheet's current sort.
-    const body = groups.flatMap((g) =>
-      g.rows.map((e) => {
-        return [
-          g.slot ? g.slot.number : '',
-          g.slot ? g.slot.topic : '',
-          e.account,
-          platformName[e.platform],
-          e.followers,
-          e.views,
-          e.keywords.join(', '),
-          e.hook,
-          e.notes,
-          statusText(statusOf(e)),
-          e.url ?? '',
-          isoDate(e.loggedAt),
-        ]
-      }),
-    )
-    downloadCsv(`${fileSlug(p.client.name, p.client.id)}-research-${isoDate(Date.now())}.csv`, toCsv([head, ...body]))
-  }
 
   // "11 Nov" from "2026-11-11", in the page's language.
   const shortDate = (iso: string) => {
@@ -425,7 +381,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
       <span className="rs-pick-wrap">
         <button
           type="button"
-          className={`btn btn-sm rs-pick-btn${isPicked ? ' is-picked' : ''}`}
+          className={`btn btn-primary btn-sm rs-pick-btn${isPicked ? ' is-picked' : ''}`}
           aria-pressed={isPicked}
           aria-label={t(isPicked ? 'research.pick.unpickAria' : 'research.pick.pickAria', { account: e.account })}
           disabled={locked || (!isPicked && otherLocked)}
@@ -668,6 +624,40 @@ export function ResearchScreen(p: ResearchScreenProps) {
 
   return (
     <section className={`client research${view !== 'cards' ? ' is-sheet' : ''}`}>
+      <header className="rs-hero">
+        <div className="rs-page-title">
+          <h1>{t('research.title')}</h1>
+        </div>
+        {!noEntries && (
+          <div className="rs-toolbar" role="search">
+            <label className="field rs-search">
+              <span className="field-label">{t('research.search.label')}</span>
+              <span className="rs-search-box">
+                {searchIcon}
+                <input
+                  id={`${id}-search`}
+                  type="search"
+                  placeholder={t('research.search.placeholder')}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </span>
+            </label>
+          </div>
+        )}
+        <div className="rs-actions-centred">
+        <div className="rs-head-actions">
+          <button
+            ref={slotBtn}
+            type="button"
+            className="btn btn-ghost"
+            aria-expanded={addingSlot}
+            aria-controls={addingSlot ? `${id}-slot` : undefined}
+            onClick={toggleSlotForm}
+          >
+            <span aria-hidden="true">+</span> {t('research.newSlot')}
+          </button>
+        </div>
       {/* Sheet or Video (founder, 4 Nov 2026): the same videos as table rows or as a shelf of covers. */}
       {/* Always shown, so it's easy to find (founder, 4 Nov 2026); from Cards it jumps to that layout. */}
       {!empty && (
@@ -690,51 +680,6 @@ export function ResearchScreen(p: ResearchScreenProps) {
           </button>
         </div>
       )}
-      <header className="rs-hero">
-        <h1>{t('research.title')}</h1>
-        {!noEntries && (
-          <div className="rs-toolbar" role="search">
-            <label className="field rs-search">
-              <span className="field-label">{t('research.search.label')}</span>
-              <span className="rs-search-box">
-                {searchIcon}
-                <input
-                  id={`${id}-search`}
-                  type="search"
-                  placeholder={t('research.search.placeholder')}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </span>
-            </label>
-          </div>
-        )}
-        <div className="rs-head-actions">
-          <button
-            ref={slotBtn}
-            type="button"
-            className="btn btn-ghost"
-            aria-expanded={addingSlot}
-            aria-controls={addingSlot ? `${id}-slot` : undefined}
-            onClick={toggleSlotForm}
-          >
-            <span aria-hidden="true">+</span> {t('research.newSlot')}
-          </button>
-          <button
-            ref={addBtn}
-            type="button"
-            className="btn btn-primary"
-            aria-expanded={!!adding && !adding.slotId}
-            aria-controls={adding && !adding.slotId ? `${id}-add` : undefined}
-            onClick={() => (adding && !adding.slotId ? closeAdd() : setAdding({}))}
-          >
-            {t('research.add')}
-          </button>
-          {!noEntries && (
-            <button type="button" className="btn btn-ghost" onClick={exportCsv} disabled={!rows.length}>
-              {t('research.export')}
-            </button>
-          )}
         </div>
       </header>
 
@@ -931,29 +876,7 @@ export function ResearchScreen(p: ResearchScreenProps) {
         </div>
       )}
 
-      {!empty && (
-        <div className="rs-viewswitch-wrap">
-          <div className="rs-viewswitch" role="group" aria-label={t('research.view.aria')}>
-            <span className="rs-viewswitch-k" aria-hidden="true">
-              {t('research.view.label')}
-            </span>
-            <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>
-              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="7" height="18" rx="2" />
-                <rect x="14" y="3" width="7" height="8" rx="2" />
-                <rect x="14" y="14" width="7" height="7" rx="2" />
-              </svg>
-              {t('research.view.cards')}
-            </button>
-            <button type="button" aria-pressed={view !== 'cards'} onClick={() => view === 'cards' && setView('sheet')}>
-              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M3 5h18M3 12h18M3 19h18" />
-              </svg>
-              {t('research.view.sheet')}
-            </button>
-          </div>
-        </div>
-      )}
+
     </section>
   )
 }

@@ -22,6 +22,9 @@ export type View =
   | 'boardPick'
   // The planning board for the open plan (components/board/ShotBoard.tsx).
   | 'board'
+  // Sidebar "Video edit": the canvas with its editor open. Never the shown view itself; App turns it into
+  // the canvas (or the plan chooser) with the editor flag set.
+  | 'edit'
   | 'settings'
   | 'preferences'
   | 'channel'
@@ -33,6 +36,7 @@ const paths: Record<string, string> = {
   saved: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z',
   approvals: 'M20 6 9 17l-5-5',
   canvas: 'M4 4h16v16H4zM8 9h4v4H8zM15 8h2M15 12h2M8 17h8',
+  edit: 'M3 6h18v12H3zM3 10h18M3 14h18M7.5 6v12M16.5 6v12',
   plans: 'M8 4h11v16H8zM5 4v16M11 8h5M11 12h5M11 16h3',
   research: 'M4 5h16v14H4zM4 10h16M4 14.5h16M10 10v9',
   settings: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4',
@@ -50,6 +54,16 @@ function Icon({ name }: { name: keyof typeof paths }) {
       <path d={paths[name]} />
     </svg>
   )
+}
+
+// Supplied client logos, with an illustrative mark for clients without an upload.
+function ClientMark({ name }: { name: string }) {
+  const logo = /evergreen/i.test(name) ? 'evergreen' : /nightclub|myst/i.test(name) ? 'myst' : null
+  if (logo) return <img className={`client-brand-logo client-brand-logo-${logo}`} src={`/client-logos/${logo}.png`} alt="" />
+  const kind = /nightclub|myst/i.test(name) ? 'night' : /florist|bloom/i.test(name) ? 'flower' : 'leaf'
+  return <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    {kind === 'leaf' ? <><path d="M18 4C7 3 3 9 6 15c5 6 13 1 12-11Z" /><path d="m6 18 9-10M10 13l-1-4" /></> : kind === 'night' ? <path d="m12 3 8 9-8 9-8-9Zm0 5-4 4 4 4 4-4Z" /> : <><path d="M12 9c-7-10-11 1-3 3-10 7 1 11 3 3 7 10 11-1 3-3 10-7-1-11-3-3Z" /><circle cx="12" cy="12" r="2" /></>}
+  </svg>
 }
 
 const initials = (name: string) =>
@@ -78,6 +92,8 @@ interface Props {
   onClose: () => void
   live: boolean
   compact?: boolean // icons only (the canvas view): each item keeps its label as title and aria-label
+  // True while the canvas is open with its editor showing: "Video edit" is the active item, not "Video canvas".
+  editing?: boolean
 }
 
 function ClientSwitcher({ clients, workspace, setWorkspace, onAddClient, compact }: Pick<Props, 'clients' | 'workspace' | 'setWorkspace' | 'onAddClient' | 'compact'>) {
@@ -107,38 +123,30 @@ function ClientSwitcher({ clients, workspace, setWorkspace, onAddClient, compact
   return (
     <div className="switcher" ref={ref}>
       <button className="switcher-btn" aria-haspopup="menu" aria-expanded={open} title={compact ? name : undefined} aria-label={compact ? name : undefined} onClick={() => setOpen((o) => !o)}>
-        <span className={`avatar ${current ? '' : 'avatar-agency'}`}>{current ? initials(current.name) : '▦'}</span>
+        <span className={`avatar ${current ? '' : 'avatar-agency'}`}>{current ? <ClientMark name={current.name} /> : <Icon name="overview" />}</span>
         <span className="switcher-text">
           <span className="switcher-label">{current ? t('shell.side.client') : agency.agencyName}</span>
           <strong>{name}</strong>
         </span>
         <span className="switcher-caret" aria-hidden="true">
-          ▾
+          {open ? '⌃' : '⌄'}
         </span>
       </button>
       {open && (
         <div className="switcher-menu" role="menu">
-          <button role="menuitem" className={`switcher-item ${workspace === 'all' ? 'on' : ''}`} onClick={() => choose('all')}>
-            <span className="avatar avatar-agency">▦</span>
-            <span>
-              <strong>{t('shell.side.allClients')}</strong>
-              <span className="small muted">{t('shell.side.allClientsHint')}</span>
-            </span>
-          </button>
-          <div className="switcher-sep" />
           <span className="switcher-head">{t('shell.side.clients')}</span>
-          {clients.map((c) => (
+          {clients.filter((c) => !/bondi\s+bloom\s+florist/i.test(c.name)).map((c) => (
             <button
               key={c.id}
               role="menuitem"
-              className={`switcher-item ${workspace === c.id ? 'on' : ''}`}
+              className={`switcher-item switcher-client ${workspace === c.id ? 'on' : ''}`}
               onClick={() => choose(c.id)}
             >
-              <span className="avatar">{initials(c.name)}</span>
+              <span className="avatar"><ClientMark name={c.name} /></span>
               <span>
                 <strong>{c.name}</strong>
-                <span className="small muted">{t('shell.side.sells', { niche: c.niche })}</span>
               </span>
+              {workspace === c.id && <span className="switcher-check" aria-hidden="true">✓</span>}
             </button>
           ))}
           <div className="switcher-sep" />
@@ -153,7 +161,6 @@ function ClientSwitcher({ clients, workspace, setWorkspace, onAddClient, compact
             <span className="avatar avatar-add">+</span>
             <span>
               <strong>{t('shell.side.addClient')}</strong>
-              <span className="small muted">{t('shell.side.addClientHint')}</span>
             </span>
           </button>
         </div>
@@ -231,7 +238,10 @@ export function Sidebar(p: Props) {
         <nav className="side-nav">
           {inClient ? (
             <>
+              {/* Founder sketch (15 Nov 2026): Home on its own, then the three working screens, then the two video screens. */}
               {item('home', 'home', t('shell.side.home'))}
+              <div className="side-sep" />
+              <span className="side-section-heading">Ideation &amp; Planning</span>
               {item(
                 'search',
                 'search',
@@ -241,33 +251,29 @@ export function Sidebar(p: Props) {
                 searching && searching.clientId === p.workspace ? <SearchTicker q={searching.q} startedAt={searching.startedAt} /> : null,
               )}
               {/* Research = the sheet of saved reference videos; plans are made from it */}
-              {item('research', 'research', t('shell.side.research'), p.counts.research)}
+              {item('research', 'research', t('shell.side.research'))}
               {/* Plans = the board of plans + review (batch mode) + one plan */}
-              {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
-              {/* "Video canvas" (was "Canvas", 5 Nov 2026) opens the planning board, or a plan chooser when there are several. */}
-              {item('board', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvas', 'canvasPick'].includes(p.view))}
+              {item('shortlist', 'plans', t('shell.side.plans'), undefined, ['shortlist', 'review', 'plan'].includes(p.view))}
               <div className="side-sep" />
-              {item('channel', 'channel', t('shell.side.channel'))}
-              {item('settings', 'brief', t('shell.side.brief'))}
+              <span className="side-section-heading">Video Editing</span>
+              {/* "Video canvas" (was "Canvas", 5 Nov 2026) opens the planning board, or a plan chooser when there are several. */}
+              {item('board', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvas', 'canvasPick'].includes(p.view) && !p.editing)}
+              {/* "Video edit" (15 Nov 2026): the approved plan's canvas with the editor open. */}
+              {item('edit', 'edit', t('shell.side.edit'), undefined, ['canvas', 'canvasPick'].includes(p.view) && !!p.editing)}
+              {/* Channel and Brief came off the menu (15 Nov 2026); the screens themselves are kept. */}
             </>
           ) : (
             <>
               {/* All clients Home (the view is still called 'overview' inside the app) */}
               {item('overview', 'home', t('shell.side.home'))}
-              {item('channel', 'channel', t('shell.side.channel'))}
               <p className="side-hint">{t('shell.side.pickClient')}</p>
             </>
           )}
         </nav>
 
         <div className="side-foot">
-          {/* "How we calculate this" and the "Sample data" pill were taken off the menu (4 Nov 2026); live data still says so. */}
-          {p.live && (
-            <span className="live-pill" title={t('shell.side.liveTip')}>
-              {t('shell.side.live')}
-            </span>
-          )}
-          {item('preferences', 'settings', t('shell.side.settings'))}
+          {/* "How we calculate this" and the "Sample data" pill came off the menu on 4 Nov 2026; the "Live data" pill
+              and the Settings link on 15 Nov 2026. Only the signed-in person and Sign out stay. */}
           <div className="side-user">
             <span className="avatar avatar-user">{initials(userName) || '?'}</span>
             <span className="side-user-text">

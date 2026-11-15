@@ -96,17 +96,17 @@ Three families, each with one job. All from Google Fonts.
 
 | Role | Font | Size (desktop → phone) | Notes |
 | --- | --- | --- | --- |
-| Hero headline | Newsreader 400 | 72px → 40px | line-height 1.02, tracking -0.02em. **One word italic** (in `sky` on navy, `blue` on white) |
-| Section headline | Newsreader 400 | 48px → 32px | balanced wrapping |
-| Card heading | Newsreader 400 | 24px | problem cards, close-ups |
-| Cell / step title | Newsreader 400 | 18px | feature cells |
-| Lede | Inter 400 | 18 / 28px | `ink-muted` or `on-navy-muted` |
-| Body | Inter 400 | 16 / 24px | |
-| Buttons | Inter 500 | 15px (14px small) | |
+| Hero headline | Fraunces 400 | 72px → 40px | line-height 1.02, tracking -0.02em. **One word italic** (in `sky` on navy, `blue` on white) |
+| Section headline | Fraunces 400 | 48px → 32px | balanced wrapping |
+| Card heading | Fraunces 400 | 24px | problem cards, close-ups |
+| Cell / step title | Fraunces 400 | 18px | feature cells |
+| Lede | Manrope 400 | 18 / 28px | `ink-muted` or `on-navy-muted` |
+| Body | Manrope 400 | 16 / 24px | |
+| Buttons | Manrope 500 | 15px (14px small) | |
 | Section label | Geist Mono 500 | 12px, caps, +0.06em | numbered in page order: `02. How it works`. `label` on white, `sky` on navy |
 | Data | Geist Mono 400 | 13px, tabular | scores, counts, `STEP [03]` |
 
-Font link: `https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap`
+Font link: `https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Manrope:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap` (15 Nov 2026: Fraunces + Manrope replace Newsreader + Inter, option 3 in https://claude.ai/artifact/8y47BWxhB3Tdpb6arzBwSt)
 
 Writing rules (from the flow doc): grade 5–7 reading level, one idea per sentence, no "AI" in the headline, and the button always says **Try the demo**.
 
@@ -198,6 +198,7 @@ Section details carried over from the earlier spec:
 ## Change log
 
 - **30 Oct 2026, v2.1.** Added saturated mustard (`#F2B705`) as a second accent beside violet, for winners and the "New" pill.
+- **15 Nov 2026, type.** Headings Newsreader → Fraunces, reading text Inter → Manrope, Geist Mono unchanged. Token swap only (`--font-serif`, `--font-sans` in theme-remake.css; `--font-display`, `--font-sans` in landing-remake.css). Options compared: https://claude.ai/artifact/8y47BWxhB3Tdpb6arzBwSt
 - **30 Oct 2026, whole app.** Login screen and every app screen moved onto the design system (`theme-remake.css`): navy search hero with dots instead of the sky, Newsreader headings, mono labels, blue main buttons, mustard breakout badges, navy video stand-ins. The rotating headline and bobbing icons were removed (nothing loops).
 - **30 Oct 2026, v2.1 build.** Landing page rebuilt to this spec: navy hero and final panels with dots, grid behind How it works, night bands for the comparison and stance, mustard on the winning pick and the "New" pill. The tour video placeholder is light so it does not sit navy-on-navy under the hero. On phones the comparison table fits the screen and drops the ticks.
 - **30 Oct 2026, v2.** Switched from ivory + evergreen to Classic + Night Shift (navy, blue, sky; Newsreader, Inter, Geist Mono). Added the page-rhythm rules for dots and grid. Research and the ten options: https://claude.ai/artifact/TBDzgQgCWHGmypcNCV9fyR

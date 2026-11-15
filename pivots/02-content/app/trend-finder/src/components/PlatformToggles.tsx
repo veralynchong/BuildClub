@@ -1,6 +1,5 @@
 import { useId } from 'react'
 import type { Platform } from '../types'
-import { platformsText } from './find/words'
 import { t } from '../lib/i18n'
 
 export const tiktokPath =
@@ -118,9 +117,7 @@ export function PlatformToggles({ selected, onChange }: Props) {
           </button>
         )
       })}
-      <span className="platforms-note">
-        {t('find.platforms.note', { list: platformsText(order.filter((p) => selected.includes(p))) })}
-      </span>
+      {/* 15 Nov 2026, founder: the "{list} · each platform is a separate search" note is removed. */}
     </div>
   )
 }

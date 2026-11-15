@@ -60,8 +60,8 @@ import { useSearchResolve } from './lib/useSearchResolve'
 import { LiveLoading } from './components/LiveLoading'
 import { SearchToast, type SearchNotice } from './components/SearchToast'
 import { SavedToast } from './components/find/SavedStrip'
-import { SEARCH_RUNS_KEY, cleanRuns, recentSearches, recordSearch, runFor, savedByVideo, typeAhead } from './lib/findDesk'
-import type { RecentRow, SearchRun } from './lib/findDesk'
+import { SEARCH_RUNS_KEY, cleanRuns, recordSearch, runFor, savedByVideo, typeAhead } from './lib/findDesk'
+import type { SearchRun } from './lib/findDesk'
 import { suggest } from './lib/suggest'
 import { withScreenTransition } from './lib/motion'
 import { htmlLang, readLang, setActiveLang, t, writeLang } from './lib/i18n'
@@ -196,6 +196,8 @@ export default function App() {
     setView('canvas')
   }
   const [canvasEditor, setCanvasEditor] = useState(false) // the canvas opens with the editor showing
+  // Sidebar "Video edit" (15 Nov 2026): the plan chooser was opened to edit, so the picked plan's canvas opens with the editor.
+  const [editPick, setEditPick] = useState(false)
   // The screen a plan was opened from, so Back returns there.
   const [planFrom, setPlanFrom] = useState<View>('results')
   // The stage a Home pipeline chip asked Plans to scroll to.
@@ -1134,14 +1136,14 @@ export default function App() {
     setView('canvas')
   }
 
-  // The plan's canvas with the editor closed, as the sidebar's Canvas opens it.
+  // The plan's canvas as the sidebar opens it: editor closed from "Video canvas", open from "Video edit".
   const openPlanCanvas = (ideaId: string) => {
     const idea = ideas.find((i) => i.id === ideaId)
     const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
     if (!idea) return
     setPlanFrom(view)
     setPlanIdeaId(ideaId)
-    openCanvas(idea, idea.shots ?? format?.shotList ?? [], false)
+    openCanvas(idea, idea.shots ?? format?.shotList ?? [], editPick)
   }
 
   // The Plans board's "Make the video": the plan's canvas, with the editor already open.
@@ -1303,8 +1305,8 @@ export default function App() {
   const planClient = planIdea && clients.find((c) => c.id === planIdea.clientId)
   const mine = shownIdeas.filter((i) => i.clientId === client.id)
 
-  // Find ideas' desk: recent searches, what's saved by video, and what the results screen marks as new.
-  const recentRows: RecentRow[] = recentSearches(searchRuns, client.id, inResearch)
+  // Find ideas' desk: what's saved by video, and what the results screen marks as new. (The Recent searches
+  // list came off the Find ideas page for every client, 15 Nov 2026; the runs are still recorded.)
   const savedRows = savedByVideo(myVideos, myResearch, ideas)
   const shownRun = view === 'results' ? runFor(searchRuns, client.id, lastSearch) : undefined
   const savedRow = savedNote ? myResearch.find((e) => e.videoId === savedNote.videoId) : undefined
@@ -1336,10 +1338,6 @@ export default function App() {
       ],
     })
   }
-  const openRecent = (row: RecentRow) => {
-    setQuery((q) => ({ ...q, keyword: row.run.text }))
-    runSearch(row.run.text, row.run.platforms)
-  }
   const blockedFormatIds = new Set(
     [...formatById.values()].filter((f) => f.needs.some((n) => client.cannot.includes(n))).map((f) => f.id),
   )
@@ -1352,6 +1350,7 @@ export default function App() {
     plan: t('shell.back.plan'),
     canvas: t('shell.back.canvas'),
     canvasPick: t('shell.back.canvas'),
+    edit: t('shell.back.canvas'),
     boardPick: t('shell.back.boardPick'),
     board: t('board.backLabel'),
     settings: t('shell.back.settings'),
@@ -1406,11 +1405,18 @@ export default function App() {
     // "Video canvas" (5 Nov 2026): the planning board. One plan opens straight away; more than one, pick a plan.
     // The 'canvas' branch below (approved plans' CanvasScreen) is no longer on the sidebar but is kept.
     if (v === 'board') {
+      setEditPick(false)
       const plans = boardPlans(shownIdeas, client.id)
       return plans.length === 1 ? openPlanBoard(plans[0].id) : setView('boardPick')
     }
     if (v === 'canvas') {
       // One approved plan opens its canvas straight away; otherwise pick one (or see why there is none).
+      setEditPick(false)
+      return setView('canvasPick')
+    }
+    if (v === 'edit') {
+      // "Video edit": pick an approved plan, whose canvas then opens with the editor showing.
+      setEditPick(true)
       return setView('canvasPick')
     }
     if (v === 'search' && lastSearch && shownSearch === `${client.id}|${lastSearch}`) return setView('results')
@@ -1517,6 +1523,7 @@ export default function App() {
         onClose={() => setMenuOpen(false)}
         live={live}
         compact={view === 'canvas'}
+        editing={view === 'canvas' ? canvasEditor : editPick}
       />
 
       <div className="shell-main">
@@ -1630,8 +1637,6 @@ export default function App() {
               target={client.monthlyTarget}
               lastSearch={lastSearch}
               onBackToResults={backToResults}
-              recent={recentRows}
-              onOpenRecent={openRecent}
               saved={savedRows}
               coverOf={(id) => videoById.get(id)?.thumbnail}
               onOpenResearch={() => setView('research')}

@@ -3,13 +3,15 @@ import { useApp } from '../lib/appContext'
 import {
   decisionStats,
   dueText,
+  paceOf,
   planName,
   sampleFormatById,
   sampleVideoById,
 } from '../lib/clientHome'
+import type { Pace } from '../lib/clientHome'
 import { t, tp } from '../lib/i18n'
 import { ProgressRing } from './ProgressRing'
-import { Card, Empty, LaterSection, MonthCard } from './home/HomeCards'
+import { Card, Empty, MonthCard } from './home/HomeCards'
 
 interface Props {
   clients: Client[]
@@ -44,12 +46,125 @@ function AgencySection() {
   )
 }
 
+const paceOrder: Record<Pace, number> = { behind: 0, ontrack: 1, done: 2 }
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('')
+
+interface Row {
+  c: Client
+  approved: number
+  waiting: number
+  planning: number
+  sentBack: number
+  next?: SavedIdea
+  decided: number
+  decidedApproved: number
+  pace: Pace
+}
+
+// One client's month: a ring for approved against target, the three counts, a pace note in plain words,
+// what's next to film, and the one action that moves this client forward.
+function ClientCard({ row, videoById, formatById, onOpen }: { row: Row; videoById: Map<string, Video>; formatById: Map<string, Format>; onOpen: Props['onOpen'] }) {
+  const { c, approved, waiting, planning, sentBack, next, decided, decidedApproved, pace } = row
+  const target = Math.max(c.monthlyTarget, 0)
+  const pct = (n: number) => (target > 0 ? Math.min(n / target, 1) * 100 : 0)
+
+  const status = { behind: ['pill-bad', t('home.overview.statusBehind')], ontrack: ['pill-ok', t('home.overview.statusOnTrack')], done: ['pill-done', t('home.overview.statusDone')] }[pace]
+
+  // The main action: review what's waiting, find ideas when behind, otherwise open the client's Home.
+  type Action = { label: string; view: 'home' | 'review' | 'search'; primary?: boolean }
+  const actions: Action[] =
+    waiting > 0
+      ? [{ label: t('home.overview.review', { n: waiting }), view: 'review', primary: true }, { label: t('home.overview.home'), view: 'home' }]
+      : pace === 'behind'
+        ? [{ label: t('home.overview.findIdeas'), view: 'search', primary: true }, { label: t('home.overview.home'), view: 'home' }]
+        : [{ label: t('home.overview.home'), view: 'home' }, { label: t('home.overview.findIdeas'), view: 'search' }]
+
+  return (
+    <article className={`ovc ovc-${pace}`} aria-labelledby={`ovc-${c.id}-name`}>
+      <div className="ovc-top">
+        <span className="ovc-ini" aria-hidden="true">{initials(c.name)}</span>
+        <div className="ovc-name">
+          <button id={`ovc-${c.id}-name`} className="link-strong" onClick={() => onOpen(c.id, 'search')}>
+            {c.name}
+          </button>
+          <span className="small muted">{t('home.overview.cardTarget', { niche: c.niche, n: target })}</span>
+        </div>
+        <span className={`pill ${status[0]}`}>{status[1]}</span>
+      </div>
+
+      <div className="ovc-mid">
+        <div className="ovc-ring">
+          <span className="ovc-ring-wait"><ProgressRing value={pct(approved + waiting)} size={132} stroke={10} /></span>
+          <span className="ovc-ring-main"><ProgressRing value={pct(approved)} size={132} stroke={10} /></span>
+          <div className="ovc-ring-text">
+            <div>
+              <b>{approved}<small>/{target}</small></b>
+              <span>{t('home.overview.ringApproved')}</span>
+            </div>
+          </div>
+        </div>
+        <ul className="ovc-stats" aria-label={t('home.overview.colApproved')}>
+          <li className="ovc-stat ovc-stat-plan"><span>{t('home.overview.rowPlanning')}</span><b className={planning ? undefined : 'muted'}>{planning}</b></li>
+          <li className="ovc-stat ovc-stat-wait">
+            <span>{t('home.overview.rowWaiting')}</span>
+            {waiting ? (
+              <button className="link-btn" onClick={() => onOpen(c.id, 'review')} aria-label={t('home.overview.waitingAria', { n: waiting, name: c.name })}>
+                {waiting}
+              </button>
+            ) : (
+              <b className="muted">0</b>
+            )}
+          </li>
+          <li className="ovc-stat ovc-stat-ok"><span>{t('home.overview.rowApproved')}</span><b>{approved}</b></li>
+        </ul>
+      </div>
+
+
+      <div className="ovc-next">
+        <span className="label">{t('home.overview.colNext')}</span>
+        {next ? (
+          <>
+            <b>{planName(next, videoById, formatById).name}</b>
+            <span className="small muted">
+              {dueText(next.dueDate)}
+              {sentBack > 0 && ` · ${t('home.overview.sentBackNote', { plans: tp('home.count.plan', sentBack) })}`}
+            </span>
+          </>
+        ) : (
+          <>
+            <b className="muted">{t('home.overview.nothingApproved')}</b>
+            {sentBack > 0 && <span className="small muted">{t('home.overview.sentBackNote', { plans: tp('home.count.plan', sentBack) })}</span>}
+          </>
+        )}
+        <span className="small muted">
+          {t('home.overview.colDecisions')}: {decided ? t('home.overview.decisionsOf', { approved: decidedApproved, decided }) : t('home.overview.noneYet')}
+        </span>
+      </div>
+
+      <div className="ovc-act">
+        {actions.map((a) => (
+          <button key={a.view} className={`btn ${a.primary ? 'btn-primary' : ''}`} onClick={() => onOpen(c.id, a.view)}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+    </article>
+  )
+}
+
 // All clients Home: the same "before posting" numbers as one client's Home, added up across every client,
-// plus one row per client. Post-performance analytics are marked placeholders.
+// then one card per client showing where it sits against its monthly target and what to do next.
 export function OverviewScreen({ clients, ideas, videoById = sampleVideoById, formatById = sampleFormatById, onOpen, onAddClient }: Props) {
   const ids = new Set(clients.map((c) => c.id))
   const all = ideas.filter((i) => ids.has(i.clientId))
-  const rows = clients.map((c) => {
+  const rows: Row[] = clients.map((c) => {
     const mine = all.filter((i) => i.clientId === c.id)
     const approved = mine.filter((i) => i.status === 'approved').sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     const stats = decisionStats([c], ideas)
@@ -57,9 +172,12 @@ export function OverviewScreen({ clients, ideas, videoById = sampleVideoById, fo
       c,
       approved: approved.length,
       waiting: mine.filter((i) => i.status === 'waiting').length,
+      planning: mine.filter((i) => i.status === 'saved').length,
       sentBack: mine.filter((i) => i.status === 'rejected').length,
       next: approved[0],
-      stats,
+      decided: stats.decided,
+      decidedApproved: stats.approved,
+      pace: paceOf(approved.length, c.monthlyTarget),
     }
   })
   const totals = {
@@ -68,6 +186,8 @@ export function OverviewScreen({ clients, ideas, videoById = sampleVideoById, fo
     waiting: rows.reduce((s, r) => s + r.waiting, 0),
   }
   const waitingRows = rows.filter((r) => r.waiting > 0)
+  // Who needs you most first: behind, then on track, then done; more waiting plans first within each.
+  const sorted = [...rows].sort((a, b) => paceOrder[a.pace] - paceOrder[b.pace] || b.waiting - a.waiting || a.c.name.localeCompare(b.c.name))
 
   return (
     <section className="overview ch ch-wide">
@@ -118,98 +238,16 @@ export function OverviewScreen({ clients, ideas, videoById = sampleVideoById, fo
                 </ul>
               )}
             </Card>
-
           </div>
 
-          <div className="table-wrap">
-            <table className="client-table">
-              <thead>
-                <tr>
-                  <th>{t('home.overview.colClient')}</th>
-                  <th>{t('home.overview.colApproved')}</th>
-                  <th className="num">{t('home.overview.colWaiting')}</th>
-                  <th className="num">{t('home.overview.colSentBack')}</th>
-                  <th>{t('home.overview.colDecisions')}</th>
-                  <th>{t('home.overview.colNext')}</th>
-                  <th aria-label={t('home.overview.colActions')} />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ c, approved, waiting, sentBack, next, stats }) => {
-                  const pct = Math.min(approved / Math.max(c.monthlyTarget, 1), 1) * 100
-                  return (
-                    <tr key={c.id}>
-                      <td>
-                        <button className="link-strong" onClick={() => onOpen(c.id, 'search')}>
-                          {c.name}
-                        </button>
-                        <span className="small muted">{c.niche}</span>
-                      </td>
-                      <td>
-                        <div className="progress">
-                          <ProgressRing value={pct} tone={pct < 50 ? 'behind' : undefined} />
-                          <span className="small">
-                            {t('home.overview.ofTarget', { approved, target: c.monthlyTarget })}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="num">
-                        {waiting ? (
-                          <button className="link-btn" onClick={() => onOpen(c.id, 'review')} aria-label={t('home.overview.waitingAria', { n: waiting, name: c.name })}>
-                            {waiting}
-                          </button>
-                        ) : (
-                          <span className="muted">0</span>
-                        )}
-                      </td>
-                      <td className="num">{sentBack ? sentBack : <span className="muted">0</span>}</td>
-                      <td>
-                        <span className="small">
-                          {stats.decided ? t('home.overview.decisionsOf', { approved: stats.approved, decided: stats.decided }) : <span className="muted">{t('home.overview.noneYet')}</span>}
-                        </span>
-                      </td>
-                      <td>
-                        {next ? (
-                          <span className="ov-next">
-                            <span className="small">{planName(next, videoById, formatById).name}</span>
-                            <span className="small muted">{dueText(next.dueDate)}</span>
-                          </span>
-                        ) : (
-                          <span className="muted small">{t('home.overview.nothingApproved')}</span>
-                        )}
-                      </td>
-                      <td className="num">
-                        <button className="btn btn-ghost btn-sm" onClick={() => onOpen(c.id, 'home')}>
-                          {t('home.overview.home')}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div className="ovc-wrap">
+            <div className="ovc-grid">
+              {sorted.map((row) => (
+                <ClientCard key={row.c.id} row={row} videoById={videoById} formatById={formatById} onOpen={onOpen} />
+              ))}
+            </div>
+            <p className="ovc-foot">{t('home.overview.cardsSorted')}</p>
           </div>
-
-          <LaterSection
-            intro={t('home.overview.laterIntro')}
-            cards={[
-              {
-                title: t('home.overview.later1Title'),
-                what: t('home.overview.later1What'),
-                needs: t('home.overview.later1Needs'),
-              },
-              {
-                title: t('home.overview.later2Title'),
-                what: t('home.overview.later2What'),
-                needs: t('home.overview.later2Needs'),
-              },
-              {
-                title: t('home.overview.later3Title'),
-                what: t('home.overview.later3What'),
-                needs: t('home.overview.later3Needs'),
-              },
-            ]}
-          />
         </>
       )}
 

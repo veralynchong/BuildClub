@@ -1,22 +1,13 @@
 import type { ReactNode } from "react";
 import type { Client, Format, IdeaStatus, SavedIdea, Video } from "../types";
 import type { Pulse } from "../lib/clientChips";
-import { clientTopic } from "../lib/clientChips";
 import { t } from "../lib/i18n";
-import { useProduction } from "../lib/production";
+import { useManagerName } from "../lib/appContext";
 import {
-  filmNext,
+  dueText,
   planName,
-  plannedFormatIds,
-  possessive,
 } from "../lib/clientHome";
-import {
-  FilmNextCard,
-  LaterSection,
-  MonthCard,
-  NeedsApprovalCard,
-  ReadyCard,
-} from "./home/HomeCards";
+import { ProgressRing } from "./ProgressRing";
 import type { Named } from "./home/HomeCards";
 
 interface Props {
@@ -36,9 +27,8 @@ interface Props {
   search?: ReactNode;
   onSearch?: (text: string) => void;
   onFindIdeas: () => void;
-  // Videos this client saved to Research (Film next doesn't suggest their kind again).
+  // Videos this client saved to Research. Kept so App compiles; the film-next card came off this page.
   researched?: Set<string>;
-  // Film next: save a video to Research, undo that, or make its plan and open it to write the shots.
   onSave: (videoId: string, onSaved?: () => void) => void;
   onUndoSave: (videoId: string) => void;
   onPlanShots: (videoId: string) => void;
@@ -49,12 +39,38 @@ interface Props {
   onEditBrief?: () => void;
 }
 
-// One client's Home: how this client is doing before anything is posted (approved vs target, where the ideas
-// are, what's waiting for the manager, how decisions go), plus a short "film next" suggestion. Every number
-// comes from existing app data. Post-performance analytics are marked placeholders (LaterSection).
+// "Sent today", "Sent yesterday", "Sent 3 days ago"; a plan with no sent time shows its film date instead.
+function sentText(sentAt: number | undefined, dueDate: string): string {
+  if (!sentAt) return t("home.cards.filmDue", { due: dueText(dueDate) });
+  const day = (ms: number) => new Date(new Date(ms).toDateString()).getTime();
+  const days = Math.round((day(Date.now()) - day(sentAt)) / 86_400_000);
+  if (days <= 0) return t("home.client.sentToday");
+  if (days === 1) return t("home.client.sentYesterday");
+  return t("home.client.sentDaysAgo", { n: days });
+}
+
+function PlanRow({ plan, meta, right }: { plan: Named; meta: string; right: ReactNode }) {
+  return (
+    <li className="chm-row">
+      <span className="chm-cover" aria-hidden="true">
+        {plan.video?.thumbnail && <img src={plan.video.thumbnail} alt="" loading="lazy" />}
+      </span>
+      <span className="chm-row-text">
+        <b>{plan.name}</b>
+        <span className="small muted">{meta}</span>
+      </span>
+      <span className="chm-row-right">{right}</span>
+    </li>
+  );
+}
+
+// One client's Home (founder pick, 15 Nov 2026: concept A, top row only). Two cards: how this month is going
+// against the target, in the same ring and counts as the All clients dashboard, and what is waiting for the
+// manager, with what she sent back. Film-next suggestions, the ready-to-film list and the post-performance
+// placeholders came off this page. Every number comes from existing app data.
 export function ClientHome(p: Props) {
   const { client } = p;
-  const topic = clientTopic(client);
+  const manager = useManagerName();
   const mine = p.ideas.filter((i) => i.clientId === client.id);
   const named = (idea: SavedIdea): Named => ({
     idea,
@@ -63,127 +79,135 @@ export function ClientHome(p: Props) {
   });
   const by = (s: IdeaStatus) => mine.filter((i) => i.status === s);
   const waiting = by("waiting")
-    .sort(
-      (a, b) =>
-        (a.sentAt ?? 0) - (b.sentAt ?? 0) || a.dueDate.localeCompare(b.dueDate),
-    )
-    .map(named);
-  const approved = by("approved")
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .sort((a, b) => (a.sentAt ?? 0) - (b.sentAt ?? 0) || a.dueDate.localeCompare(b.dueDate))
     .map(named);
   const sentBack = by("rejected").map(named);
-  // Approved plans whose finished video the approver sent back and nobody has re-sent.
-  const signals = useProduction(client.id);
-  const videosBack = approved.flatMap((plan) => {
-    const back = signals[plan.idea.id]?.cutSentBack;
-    return back ? [{ plan, reason: back.reason }] : [];
-  });
+  const approved = by("approved").length;
+  const planning = by("saved").length;
 
-  const picks = filmNext({
-    client,
-    live: p.live,
-    pulse: p.pulse,
-    ideas: p.ideas,
-    videoById: p.videoById,
-    researched: p.researched,
-  });
-  const plannedKinds = p.live
-    ? 0
-    : plannedFormatIds(p.ideas, client.id, p.videoById).size;
+  const target = Math.max(client.monthlyTarget, 0);
+  const pct = (n: number) => (target > 0 ? Math.min(n / target, 1) * 100 : 0);
 
-  // Why "film next" might be empty, and the one thing that fixes it.
-  const empty =
-    p.live && !p.pulse
-      ? {
-          text: p.pulseLoading
-            ? t("home.client.checking", { topic })
-            : t("home.client.notChecked", { name: client.name, topic }),
-          fix: t("home.client.checkNow"),
-          onFix: p.onRefreshPulse,
-          busy: p.pulseLoading,
-        }
-      : p.live
-        ? {
-            text: t("home.client.allPlannedLive", { topic }),
-            fix: t("home.client.findIdeas", { name: client.name }),
-            onFix: p.onFindIdeas,
-          }
-        : picks.length === 0 && plannedKinds === 0
-          ? {
-              text: t("home.client.sampleOnlyTofu", { name: client.name }),
-              fix: t("home.client.findIdeas", { name: client.name }),
-              onFix: p.onFindIdeas,
-            }
-          : {
-              text: t("home.client.allPlannedSample", { name: client.name }),
-              fix: t("home.client.findIdeas", { name: client.name }),
-              onFix: p.onFindIdeas,
-            };
+
+  const fixSentBack = () =>
+    sentBack.length === 1 ? p.onOpenPlan(sentBack[0].idea.id) : p.onOpenPlans("rejected");
 
   return (
-    <section className="ch ch-wide">
+    <section className="ch ch-wide chm">
       <header className="ch-head">
         <div className="ch-id">
+          <span className="eyebrow">{client.name} · {new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(new Date())}</span>
           <h1>{t("home.client.title")}</h1>
-          <p className="muted">{t("home.client.sub", { name: client.name })}</p>
         </div>
         <button className="btn btn-primary" onClick={p.onFindIdeas}>
-          {t("home.client.findIdeas", { name: client.name })}
+          {t("shell.side.findIdeas")} <span aria-hidden="true">↗</span>
         </button>
       </header>
 
-      <div className="ch-grid">
-        <FilmNextCard
-          client={client}
-          picks={picks}
-          plannedKinds={picks.length ? plannedKinds : 0}
-          onSave={p.onSave}
-          onUndo={p.onUndoSave}
-          onPlanShots={p.onPlanShots}
-          onOpenPlans={() => p.onOpenPlans()}
-          empty={empty}
-        />
-        <NeedsApprovalCard
-          waiting={waiting}
-          sentBack={sentBack}
-          videosBack={videosBack}
-          onApprove={p.onApprove}
-          onReview={p.onReview}
-          onOpenPlan={p.onOpenPlan}
-        />
+      <div className="chm-grid">
+        <section className="chm-card" aria-labelledby="chm-month-title">
+          <div className="chm-ch">
+            <h2 id="chm-month-title">{t("home.client.monthTitle")}</h2>
+          </div>
+          <div className="chm-mid">
+            <div className="ovc-ring chm-ring">
+              <span className="ovc-ring-wait">
+                <ProgressRing value={pct(approved + waiting.length)} size={160} stroke={14} />
+              </span>
+              <span className="ovc-ring-main">
+                <ProgressRing value={pct(approved)} size={160} stroke={14} />
+              </span>
+              <div className="ovc-ring-text">
+                <div>
+                  <b>
+                    {approved}
+                    <small>/{target}</small>
+                  </b>
+                  <span>{t("home.overview.ringApproved")}<br />{t("home.dashboard.thisMonth")}</span>
+                </div>
+              </div>
+            </div>
+            <ul className="chm-stats">
+              <li className="chm-stat chm-stat-plan">
+                <span>{t("home.client.rowPlanning")}</span>
+                <b className={planning ? undefined : "muted"}>{planning}</b>
+              </li>
+              <li className="chm-stat chm-stat-wait">
+                <span>{t("home.client.rowWaiting", { manager })}</span>
+                {waiting.length ? (
+                  <button className="link-btn" onClick={p.onReview}>
+                    {waiting.length}
+                  </button>
+                ) : (
+                  <b className="muted">0</b>
+                )}
+              </li>
+              <li className="chm-stat chm-stat-ok">
+                <span>{t("home.client.rowApproved")}</span>
+                <b className={approved ? undefined : "muted"}>{approved}</b>
+              </li>
+            </ul>
+          </div>
+          <div className="chm-legend">
+            <span><i className="chm-legend-approved" />{t("home.client.rowApproved")}</span>
+            <span><i className="chm-legend-waiting" />{t("home.dashboard.waitingLegend")}</span>
+          </div>
+        </section>
 
-        <MonthCard
-          approved={approved.length}
-          target={client.monthlyTarget}
-          waiting={waiting.length}
-        />
-        <ReadyCard
-          approved={approved}
-          onOpenPlan={p.onOpenPlan}
-          onOpenPlans={() => p.onOpenPlans("approved")}
-        />
+        <section className="chm-card" aria-labelledby="chm-wait-title">
+          <div className="chm-ch">
+            <h2 id="chm-wait-title">{t("home.client.waitingTitle", { manager })}</h2>
+          </div>
+          {waiting.length === 0 && sentBack.length === 0 ? (
+            <p className="small muted chm-note">{t("home.client.waitingEmpty", { manager })}</p>
+          ) : (
+            <ul className="chm-rows">
+              {waiting.map((plan) => (
+                <PlanRow
+                  key={plan.idea.id}
+                  plan={plan}
+                  meta={sentText(plan.idea.sentAt, plan.idea.dueDate)}
+                  right={
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => p.onOpenPlan(plan.idea.id)}
+                      aria-label={t("home.client.openAria", { name: plan.name })}
+                    >
+                      {t("home.client.open")} <span aria-hidden="true">↗</span>
+                    </button>
+                  }
+                />
+              ))}
+              {sentBack.map((plan) => (
+                <PlanRow
+                  key={plan.idea.id}
+                  plan={plan}
+                  meta={t("home.client.sentBackReason", {
+                    manager,
+                    reason: plan.idea.rejectReason?.trim() || t("home.cards.noneGiven"),
+                  })}
+                  right={<span className="pill pill-bad">{t("home.client.sentBackPill")}</span>}
+                />
+              ))}
+            </ul>
+          )}
+          {(waiting.length > 0 || sentBack.length > 0) && (
+            <div className="chm-act">
+              {waiting.length > 0 && <span className="small muted chm-review-summary">{t("home.dashboard.waitingSummary", { n: waiting.length })}</span>}
+              {waiting.length > 0 && (
+                <button className="btn btn-primary" onClick={p.onReview}>
+                  {t("home.dashboard.reviewPlans")}
+                </button>
+              )}
+              {sentBack.length > 0 && (
+                <button className="btn" onClick={fixSentBack}>
+                  {sentBack.length === 1 ? t("home.client.fixOne") : t("home.client.fixMany", { n: sentBack.length })}
+                </button>
+              )}
+            </div>
+          )}
+        </section>
       </div>
-
-      <LaterSection
-        intro={t("home.client.laterIntro", { owner: possessive(client.name) })}
-        cards={[
-          {
-            title: t("home.client.later1Title"),
-            what: t("home.client.later1What", { name: client.name }),
-            needs: t("home.client.laterNeedsStats", { owner: possessive(client.name) }),
-          },
-          {
-            title: t("home.client.later2Title"),
-            what: t("home.client.later2What", { owner: possessive(client.name) }),
-            needs: t("home.client.later2Needs"),
-          },
-          {
-            title: t("home.client.later3Title"),
-            what: t("home.client.later3What", { owner: possessive(client.name) }),
-            needs: t("home.client.laterNeedsStats", { owner: possessive(client.name) }),
-          },
-        ]}
-      />
     </section>
   );
 }
