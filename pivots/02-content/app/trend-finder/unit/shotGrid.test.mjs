@@ -133,3 +133,11 @@ test('modelFor leaves a saved mock model for the first available image model (mo
 test('modelFor skips unavailable and non-image models', () => {
   assert.equal(modelFor([img('a', false), { id: 'v', kind: 'video', available: true }], 'a'), undefined)
 })
+
+test('generatingElapsed counts whole seconds and flags a slow image after 30 s', async () => {
+  const { generatingElapsed } = await import('../src/lib/shotGrid.ts')
+  assert.deepEqual(generatingElapsed(1000, 1000), { sec: 0, slow: false })
+  assert.deepEqual(generatingElapsed(1000, 30_400), { sec: 29, slow: false })
+  assert.deepEqual(generatingElapsed(1000, 31_000), { sec: 30, slow: true })
+  assert.deepEqual(generatingElapsed(5000, 1000), { sec: 0, slow: false })
+})

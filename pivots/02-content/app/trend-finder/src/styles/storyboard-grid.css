@@ -23,6 +23,7 @@
 .sg-n { left: 6px; }
 .sg-t { right: 6px; }
 .sg-status { position: absolute; left: 8px; right: 8px; bottom: 8px; text-align: center; font: 600 11.5px var(--font-sans); padding: 4px; border-radius: var(--radius-pill); background: rgb(0 0 0 / 0.6); color: #fff; }
+.sg-status small { display: block; font-weight: 400; font-size: 10.5px; opacity: 0.85; }
 .sg-status.sg-warn { background: var(--mustard); color: var(--on-mustard); }
 .sg-hover { position: absolute; inset: auto 6px 6px 6px; display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; opacity: 0; transition: opacity 0.16s; }
 .sg-status ~ .sg-hover { bottom: 38px; }

@@ -151,3 +151,9 @@ export function modelFor(models: GenModel[], savedId: string | undefined): GenMo
   const images = models.filter((m) => m.kind === 'image')
   return images.find((m) => m.id === savedId && m.available) ?? images.find((m) => m.available)
 }
+
+/** Seconds a frame has been generating, and whether it is slow enough to say images can take a while. */
+export function generatingElapsed(createdAt: number, now: number): { sec: number; slow: boolean } {
+  const sec = Math.max(0, Math.floor((now - createdAt) / 1000))
+  return { sec, slow: sec >= 30 }
+}

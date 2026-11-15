@@ -18,3 +18,10 @@ test('the grid and the Video edit picker tell the user where to approve', async 
   assert.ok(areas.grid.en['grid.approve']?.trim() && areas.grid.zhHant['grid.approve']?.trim())
   assert.match(areas.shell.en['shell.editPick.empty'], /Storyboard/)
 })
+
+test('the generating cell shows elapsed seconds and a time hint in both languages', () => {
+  for (const lang of ['en', 'zhHant']) {
+    assert.match(areas.grid[lang]['grid.generatingFor'], /\{s\}/)
+    assert.ok(areas.grid[lang]['grid.generatingSlow']?.trim())
+  }
+})

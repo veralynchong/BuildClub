@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react'
 import type { GridCell } from '../../lib/shotGrid'
-import { cameraTag } from '../../lib/shotGrid'
+import { cameraTag, generatingElapsed } from '../../lib/shotGrid'
 import { t } from '../../lib/i18n'
 
 export interface GridCardProps {
@@ -22,13 +23,20 @@ export function GridCard({ cell, selected, readOnly, showAction, showLine, showC
   const done = versions.filter((v) => v.status === 'done')
   const at = shown ? done.findIndex((v) => v.id === shown.id) + 1 : 0
   const camera = cameraTag(shot)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!pending) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [pending])
+  const wait = pending ? generatingElapsed(pending.createdAt, now) : null
   return (
     <div className={`sg-card${selected ? ' sg-sel' : ''}`}>
       <div className="sg-frame" onClick={onSelect}>
         {shown?.url ? <img src={shown.url} alt="" loading="lazy" /> : <span className="sg-empty">{t('grid.noFrame')}</span>}
         <span className="sg-badge sg-n">{index + 1}</span>
         <span className="sg-badge sg-t">{shot.time}</span>
-        {pending ? <span className="sg-status">{t('grid.generating')}</span>
+        {pending && wait ? <span className="sg-status">{t('grid.generatingFor', { s: wait.sec })}{wait.slow && <small>{t('grid.generatingSlow')}</small>}</span>
           : failed ? <span className="sg-status sg-warn">{failed.error || t('grid.failed')}</span>
           : changed ? <span className="sg-status sg-warn">{t('grid.changed')}</span> : null}
         <div className="sg-hover">
