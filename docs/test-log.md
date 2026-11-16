@@ -34,6 +34,17 @@
 
 - 
 
+### A 結果（11/16 傍晚，部分完成）
+
+- 完整記錄（含截圖）：Google Doc `2026-11-16_self-run-log_v02`（Drive `40-projects/buildclub/testing/2026-11-16_self-run/`）；原始筆記移到同資料夾 `_old/`。
+- team 站先灌了展示資料（4 個客戶、8 個企劃、15 支 pinned 豆腐影片；Research 用 console 貼入 localStorage），US$0。
+- 走到：0、1 通過；2 通過但卡；3 只看格子沒生圖；4 上傳 iPhone .mov、5 有素材的匯出、E1–E6、K1–K3 都還沒測。
+- 問題 17 個（擋 2、煩 10、小 5），只整理、未修：
+  - 擋：P9 企劃頁「Open the canvas」掉進舊 Canvas 頁；P14 Research 只存在瀏覽器 localStorage，換電腦／瀏覽器就不見。
+  - 煩：P1 首頁 PLAYING 小視窗自己跳出；P3 搜尋框 Enter 走 ASK（Claude 問答，花錢）而不是搜尋；P5 只顯示 6 of 30；P6 沒有 Video／Slideshow 篩選；P7 Save 直接進 Unsorted 不能選放哪；P8 AI shot list 沒有載入動畫；P10 企劃看板令人困惑（待使用者補充）；P11 分鏡格沒有參考畫面；P12 Video edit 側欄縮起來不能展開；P16 daphne 舊搜尋封面 404。
+  - 小：P2 拉窄視窗版面比例跑掉；P4 搜尋等待動畫位置；P13 匯出面板功能是真的（finishing.py），只是沒素材時提示不明顯、OTIO 是術語；P15 企劃標題直接用 caption（含 hashtag）；P17 `beta-instance.sh` 排除 `covers` 連 `pinned/covers` 也沒複製。
+  - 要問 Veralyn：P4 動畫位置、P6 篩選是不是她拿掉的。
+
 ### B. 明天（11/17）和 Veralyn：兩支實拍
 
 - 兩支：chicken 食譜（真的煮、真的拍）、一支 events／activities 類。
