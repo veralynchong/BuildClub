@@ -71,3 +71,74 @@
 .sg-takecell { white-space: nowrap; }
 .sg-takecell .take-add { margin-left: 8px; }
 .sg-takecell .error { white-space: normal; margin: 4px 0 0; }
+
+/* ---- Remake shell look (UI edit v1, 15 Nov 2026), restyle only: same layout and controls. ----
+   Same dotted canvas, serif heading, navy view switch, sky hover and hairline white cards as Research and Plans
+   (research.css, plans-board.css, interactive.css). Tokens only, so dark mode follows theme-remake.css. */
+:root[data-ui="altitude"] .shell-main:has(.sg) {
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, var(--line-strong) 1px, transparent 1.2px);
+  background-size: 20px 20px;
+}
+:root[data-ui="altitude"] .sg { gap: 20px; }
+:root[data-ui="altitude"] .sg-top { padding: 0 0 4px; border-bottom: 0; gap: 16px; }
+:root[data-ui="altitude"] .sg-top h1 { font: 400 40px/1.1 var(--font-serif); letter-spacing: -0.02em; }
+:root[data-ui="altitude"] .sg-budget { font: 500 12px/1.5 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+:root[data-ui="altitude"] .sg-notice,
+:root[data-ui="altitude"] .sg-note { border-radius: var(--radius); padding: 12px 16px; }
+
+/* Tools bar: one white hairline card on the dots */
+:root[data-ui="altitude"] .sg-tools {
+  padding: 10px 12px 10px 10px; gap: 16px; border: 1px solid var(--line); border-radius: var(--radius-pill, 999px);
+  background: var(--surface);
+}
+:root[data-ui="altitude"] .sg-tools .sg-bar { gap: 10px; }
+:root[data-ui="altitude"] .sg-tools .sg-muted { font: 500 11px/16px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+/* Segmented switches: the Research view switch (navy track, white pill with navy text) */
+:root[data-ui="altitude"] .sg-seg { gap: 2px; padding: 4px; border: 0; background: var(--navy); }
+:root[data-ui="altitude"] .sg-seg button {
+  min-height: 30px; padding: 0 14px; color: var(--on-navy); font: 500 13px/1 var(--font-sans);
+}
+:root[data-ui="altitude"] .sg-seg button.on { background: #ffffff; color: var(--navy); font-weight: 600; }
+:root[data-ui="altitude"] .sg-seg button:not(.on):hover { background: color-mix(in srgb, var(--sky) 20%, transparent); }
+:root[data-ui="altitude"] .sg-seg button:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+
+/* Shot cards: white hairline cards, like the Plans cards */
+:root[data-ui="altitude"] .sg-grid { gap: 20px; padding: 4px 0 24px; max-width: calc(var(--n) * 224px + (var(--n) - 1) * 20px); }
+:root[data-ui="altitude"] .sg-card {
+  gap: 10px; padding: 12px 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
+:root[data-ui="altitude"] .sg-sel { border-color: var(--sky); box-shadow: 0 0 0 1px var(--sky); }
+:root[data-ui="altitude"] .sg-frame { border-radius: var(--radius-sm); outline: 0; background-color: var(--navy);
+  background-image: radial-gradient(circle at 1px 1px, var(--navy-dot) 1px, transparent 1.5px); background-size: 12px 12px; }
+:root[data-ui="altitude"] .sg-sel .sg-frame { outline: 0; }
+:root[data-ui="altitude"] .sg-n { background: var(--sky); color: var(--navy); font-weight: 600; padding: 1px 8px; }
+:root[data-ui="altitude"] .sg-t { background: rgb(7 11 36 / 0.6); padding: 1px 8px; }
+:root[data-ui="altitude"] .sg-hover button { min-height: 28px; padding: 0 12px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); font: 500 12px/1 var(--font-sans); }
+:root[data-ui="altitude"] .sg-hover button:hover:not(:disabled) { background: color-mix(in srgb, var(--sky) 20%, var(--surface)); border-color: var(--sky); }
+:root[data-ui="altitude"] .sg-fld { gap: 2px; }
+:root[data-ui="altitude"] .sg-fld label { font: 500 10.5px/16px var(--font-mono); letter-spacing: .08em; color: var(--muted); }
+:root[data-ui="altitude"] .sg-fld p { font-size: 14px; line-height: 1.45; }
+:root[data-ui="altitude"] .sg-chip { border: 0; background: var(--surface-2); color: var(--muted); font: 400 12px/1.5 var(--font-sans); padding: 2px 10px; }
+
+/* Shot list: the table in one white card, Research's mono column heads */
+:root[data-ui="altitude"] .sg-listwrap { padding: 20px 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+:root[data-ui="altitude"] .sg-table { font-size: 14px; }
+:root[data-ui="altitude"] .sg-table th { font: 500 12px/1.5 var(--font-mono); letter-spacing: .05em; padding-bottom: 12px; }
+:root[data-ui="altitude"] .sg-table td { padding: 12px 10px; }
+:root[data-ui="altitude"] .sg-takes h2 { font: 400 22px/1.25 var(--font-serif); }
+
+/* Buttons: the sky hover Research and Plans use */
+:root[data-ui="altitude"] .sg { --hover-fill: var(--sky); --hover-soft: color-mix(in srgb, var(--sky) 20%, var(--surface)); --hover-tint: color-mix(in srgb, var(--sky) 20%, var(--surface)); }
+:root[data-ui="altitude"] .sg .btn:hover:not(:disabled, [aria-disabled="true"], .is-disabled) {
+  background-color: color-mix(in srgb, var(--sky) 20%, var(--surface)); border-color: var(--sky); color: var(--fg);
+}
+:root[data-ui="altitude"] .sg .btn.btn-primary:hover:not(:disabled, [aria-disabled="true"], .is-disabled) {
+  background-color: var(--sky); border-color: var(--sky); color: var(--navy); box-shadow: none;
+}
+:root[data-ui="altitude"] .sg .btn:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; }
+@media print {
+  :root[data-ui="altitude"] .shell-main:has(.sg) { background-image: none; }
+  :root[data-ui="altitude"] .sg-listwrap { padding: 0; border: 0; }
+}
