@@ -4,7 +4,8 @@
 
 - 一行狀態：分支 `chore/integrate-dashboard-cards`（base `feat/beta-launch`，接在 #59 後）合併 `0199dbc`，前端照 Veralyn 設計；Storyboard／Video edit 保留 beta 路由並改成她的樣式；Brief 不上側欄。
 - 最後驗證 2026-11-16：`bash bin/verify.sh full` GREEN（1259 passed、3 skipped），tsc／eslint exit 0；隔離零花費後端實點 搜尋→Research→Pick→手打 shot list→核准→Storyboard→假圖→Video edit，Research 鎖定仍在。
-- 未做：未部署到 daphne／collage（試用中，部署前先告知）；footage 上傳／匯出未在合併版重跑。
+- 部署：2026-11-16 16:49 daphne 已更新為本分支 e2bf753（先 backup 到 ~/beta/daphne/backups/2026-11-16-1649），local :8801 與 tunnel 皆 200；collage 依使用者指示未更新。
+- 未做：footage 上傳／匯出未在合併版重跑。
 - 已知問題：Canvas（advanced）、企劃看板、企劃細節仍是舊樣式；「Fill in shot order」按鈕被她的全域按鈕規則放大；側欄 logo 被裁成「Re」；`bin/verify.sh` 無參數在 bash 3.2 會因 `set -u` 失敗（帶 `full` 可跑）。
 - 下一步：Veralyn 審 #61；決定合併順序 #56→#57→#58→#59→#61、#60；Veralyn 11/04 殘留分支（research-trim、results-page-trim、remake-review）待她確認是否捨棄。
 
