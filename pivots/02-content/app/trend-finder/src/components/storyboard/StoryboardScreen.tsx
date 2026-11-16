@@ -163,6 +163,7 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
               key={cell.shot.id ?? cell.index}
               cell={cell}
               referenceCover={referenceCover}
+              ideaId={resource.kind === 'legacy-plan' ? resource.id : null}
               selected={selected === cell.index}
               readOnly={readOnly}
               showAction={show.action}

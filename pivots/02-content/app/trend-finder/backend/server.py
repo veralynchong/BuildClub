@@ -1323,6 +1323,51 @@ def get_channel_thumb(job_id: str, name: str):
     return FileResponse(path, media_type="image/jpeg")
 
 
+# A frame of a plan's reference video at a given second, for the storyboard's empty shots. The video is fetched
+# once with yt-dlp (local and free, like analyze.py) and kept in cache/refs/; each frame is kept beside it. The
+# URL comes from the saved library, never from the request, so this can only fetch a video someone saved.
+REF_DIR = CACHE_DIR / "refs"
+_ref_locks: dict[str, threading.Lock] = {}
+_ref_locks_guard = threading.Lock()
+
+
+def reference_url(idea_id: str) -> Optional[str]:
+    idea = next((i for i in load("ideas") or [] if i.get("id") == idea_id), None)
+    if not idea:
+        return None
+    video = next((v for v in (load("library") or {}).get("videos", []) if v.get("id") == idea.get("videoId")), None)
+    url = (video or {}).get("url") or ""
+    return url if re.match(r"https://(www\.)?(tiktok|instagram|youtube)\.com/", url) else None
+
+
+@app.get("/api/ideas/{idea_id}/reference-frame")
+def get_reference_frame(idea_id: str, t: float = 0.5):
+    url = reference_url(idea_id)
+    if not url:
+        return error(404, "This plan has no reference video to take a frame from.")
+    key = hashlib.sha1(url.encode()).hexdigest()[:16]
+    work = REF_DIR / key
+    t = round(min(max(t, 0.0), 600.0) * 2) / 2  # half seconds, so nearby shots share a file
+    frame = work / f"t{t:.1f}.jpg"
+    if frame.exists():
+        return FileResponse(frame, media_type="image/jpeg")
+    with _ref_locks_guard:
+        lock = _ref_locks.setdefault(key, threading.Lock())
+    with lock:
+        if not frame.exists():
+            work.mkdir(parents=True, exist_ok=True)
+            video = next((p for p in work.glob("video.*") if p.suffix != ".part"), None)
+            try:
+                video = video or analyze.download(url, work)
+            except RuntimeError:
+                return error(502, "Could not fetch the reference video.")
+            r = analyze.run(["ffmpeg", "-y", "-v", "error", "-ss", str(t), "-i", str(video),
+                             "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", str(frame)])
+            if r.returncode != 0 or not frame.exists():
+                return error(404, "No frame at that time.")
+    return FileResponse(frame, media_type="image/jpeg")
+
+
 @app.get("/api/cover/{name}")
 def get_cover(name: str):
     path = covers.find([PINNED_COVERS_DIR, COVERS_DIR], name)

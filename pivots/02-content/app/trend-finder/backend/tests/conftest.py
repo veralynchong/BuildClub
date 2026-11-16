@@ -56,6 +56,7 @@ def offline(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "DB_PATH", tmp_path / "data.db")
     monkeypatch.setattr(server, "MEDIA_DIR", tmp_path / "media")
     monkeypatch.setattr(analyze, "JOBS_DIR", tmp_path / "jobs")
+    monkeypatch.setattr(server, "REF_DIR", tmp_path / "refs")
     # Uploading a take marks it queued but never starts the background worker; tests call jobs._one() themselves.
     monkeypatch.setattr(analysis.AnalysisJobs, "_enqueue", lambda self, idea_id, take_id: None)
     monkeypatch.setattr(channels, "CHANNELS_DIR", tmp_path / "channels")

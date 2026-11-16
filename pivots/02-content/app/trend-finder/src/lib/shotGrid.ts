@@ -159,3 +159,11 @@ export function generatingElapsed(createdAt: number, now: number): { sec: number
   const sec = Math.max(0, Math.floor((now - createdAt) / 1000))
   return { sec, slow: sec >= 30 }
 }
+
+// The middle second of a shot's time ("3-9s", "0–3 s", "12s"), for the reference frame shown before a shot has
+// its own image. null when the time can't be read.
+export function shotMidSecond(time: string): number | null {
+  const nums = (time.match(/\d+(?:\.\d+)?/g) ?? []).map(Number)
+  if (!nums.length) return null
+  return nums.length === 1 ? nums[0] : (nums[0] + nums[1]) / 2
+}
