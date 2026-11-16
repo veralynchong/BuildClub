@@ -44,6 +44,10 @@
   - 煩：P1 首頁 PLAYING 小視窗自己跳出；P3 搜尋框 Enter 走 ASK（Claude 問答，花錢）而不是搜尋；P5 只顯示 6 of 30；P6 沒有 Video／Slideshow 篩選；P7 Save 直接進 Unsorted 不能選放哪；P8 AI shot list 沒有載入動畫；P10 企劃看板每張卡按鈕都不一樣、看不懂下一步（使用者 11/16 確認；Veralyn 還在改，先不修）；P11 分鏡格沒有參考畫面；P12 Video edit 側欄縮起來不能展開；P16 daphne 舊搜尋封面 404。
   - 小：P2 拉窄視窗版面比例跑掉；P4 搜尋等待動畫位置；P13 匯出面板功能是真的（finishing.py），只是沒素材時提示不明顯、OTIO 是術語；P15 企劃標題直接用 caption（含 hashtag）；P17 `beta-instance.sh` 排除 `covers` 連 `pinned/covers` 也沒複製。
   - 要問 Veralyn：P4 動畫位置、P6 篩選是不是她拿掉的。
+- 修正（11/16 晚，PR #62 `fix/beta-test-issues`，疊在 #61 上，只部署 team）：P1、P3、P4、P5、P7、P8、P9、P11、P12、P13、P14、P15、P17 已修；team 站瀏覽器檢查 P1、P5、P7、P9、P11、P12、P13、P14、P15 通過，P4（快取太快看不到）、P8（要付費拆解）沒在瀏覽器確認。
+  - 沒修：P2（1264px 最小寬度是 11/12 刻意設的，要決定）、P6（資料沒有輪播標記，要問 Veralyn）、P10（Veralyn 在改）、P16（daphne 舊封面 CDN 過期，救不回來；重新搜尋才有）。
+  - P3 實際原因：Enter 本來就是搜尋；live 模式下拉選單裡的問句（ASK）只會被當一般搜尋，而且句子裡的「right now」會把結果縮成 7 天。現在 live 不給問句。
+  - P14：Research 改存伺服器 `/api/research`；每個瀏覽器第一次同步時，本機獨有的列會合併上去一次。
 
 ### B. 明天（11/17）和 Veralyn：兩支實拍
 
