@@ -66,7 +66,7 @@ import takes
 from analyze import DEFAULT_NEEDS, Jobs, job_id_for
 from compare import CompareJobs, compare_id_for
 from models import (AnalyzeJob, ContentTypes, AnswerRequest, AnswerResult, AnalyzeRequest, AnalyzeStarted, LikeImageRequest, LikeImageResult, LikeJob, LikeRequest, ChannelJob, ChannelRequest, ChannelStarted, Brand, Client, Kit,
-                    CompareJob, CompareRequest, CompareStarted, Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, SavedIdea, SearchResult)
+                    CompareJob, CompareRequest, CompareStarted, Library, LoginRequest, Pulse, NeedsRequest, NeedsResult, Research, SavedIdea, SearchResult)
 
 HERE = Path(__file__).resolve().parent
 CACHE_DIR = HERE / "cache"
@@ -864,6 +864,37 @@ def get_library():
 def put_library(library: Library):
     save("library", library)
     return library
+
+
+# The Research tab's rows and slots, kept here so they survive a new browser or computer and every teammate sees
+# the same sheet. Like the ideas list it carries a revision: a PUT with an older If-Match gets 409 and the
+# current copy, so one tab can't silently overwrite another's rows.
+RESEARCH_REV_KEY = "research:rev"
+research_lock = threading.Lock()
+
+
+def research_rev() -> int:
+    return int(load(RESEARCH_REV_KEY) or 0)
+
+
+@app.get("/api/research", response_model=Optional[Research])
+def get_research(response: Response):
+    response.headers["ETag"] = etag(research_rev())
+    return load("research")
+
+
+@app.put("/api/research", response_model=Research)
+def put_research(research: Research, response: Response, if_match: Optional[str] = Header(None)):
+    with research_lock:
+        rev = research_rev()
+        if if_match is not None and if_match.strip().removeprefix("W/").strip('"') != str(rev):
+            return JSONResponse({"error": "The research sheet changed somewhere else.", "research": load("research")},
+                                status_code=409, headers={"ETag": etag(rev)})
+        save("research", research)
+        with db() as conn:
+            conn.execute("INSERT OR REPLACE INTO store (key, value) VALUES (?, ?)", (RESEARCH_REV_KEY, json.dumps(rev + 1)))
+        response.headers["ETag"] = etag(rev + 1)
+    return research
 
 
 # Each client's last "Trending now" check, keyed by client id.
