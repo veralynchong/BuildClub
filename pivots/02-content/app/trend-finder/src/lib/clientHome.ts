@@ -7,6 +7,7 @@ import { t, tp } from './i18n'
 import { dateLocale } from './dates'
 import type { TrendStage } from './metrics'
 import { parseQuery } from './parseQuery'
+import { videoTitle } from './videoTitle'
 
 // Everything on the two Homes (one client, all clients) is worked out here from data the app already has:
 // the sample formats and videos (or the live daily trend check), each client's ideas and their statuses, and
@@ -25,7 +26,7 @@ export interface PlanName {
 export function planName(idea: SavedIdea, videoById: Map<string, Video>, formatById: Map<string, Format>): PlanName {
   const video = videoById.get(idea.videoId)
   if (!video) return { name: t('home.plan.removedVideo') }
-  if (video.live) return { name: video.hook, copies: video.handle }
+  if (video.live) return { name: videoTitle(video.hook), copies: video.handle }
   const f = formatById.get(video.formatId)
   return { name: f?.name ?? video.hook, copies: t('home.plan.copiesBy', { hook: video.hook, handle: video.handle }) }
 }

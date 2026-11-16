@@ -445,19 +445,19 @@ body:has(.rk) { background: #ffffff; }
 @keyframes rk-caret-blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .rk-demo-caret { animation: none; } }
 
-/* Demo: hover card. On hover or keyboard focus the pick's video fades in just above its own card, with a "Playing"
+/* Demo: hover card. On a real mouse hover (li.is-hover, set on pointermove in LandingAltitude) or keyboard focus the pick's video fades in just above its own card, with a "Playing"
    tag and a progress bar that fills once; it fades out on leave. pointer-events: none, so the pick stays hovered and
    clickable; click still opens the dialog. */
 .rk-demo { overflow: visible; }
 .rk-demo-bar { border-radius: 20px 20px 0 0; }
 .rk-demo-picks > li { position: relative; }
 .rk-hovercard { --glide: cubic-bezier(0.22, 1, 0.36, 1); position: absolute; z-index: 20; left: 50%; bottom: calc(100% + 12px); width: 200px; padding: 6px; background: var(--canvas); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-float); opacity: 0; visibility: hidden; pointer-events: none; transform: translate(-50%, 6px); transition: opacity 400ms var(--glide), transform 400ms var(--glide), visibility 0s linear 400ms; }
-.rk-demo-picks > li:hover .rk-hovercard, .rk-demo-picks > li:has(.rk-pick:focus-visible) .rk-hovercard { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition: opacity 500ms var(--glide) 120ms, transform 500ms var(--glide) 120ms, visibility 0s linear 120ms; }
+.rk-demo-picks > li.is-hover .rk-hovercard, .rk-demo-picks > li:has(.rk-pick:focus-visible) .rk-hovercard { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition: opacity 500ms var(--glide) 120ms, transform 500ms var(--glide) 120ms, visibility 0s linear 120ms; }
 .rk-hovercard-video { position: relative; aspect-ratio: 9 / 16; display: grid; align-content: space-between; justify-items: start; padding: 12px; border-radius: 12px; overflow: hidden; background-color: var(--navy); background-image: radial-gradient(circle at 1px 1px, var(--navy-dot) 1px, transparent 1.5px); background-size: 16px 16px; }
 .rk-hovercard-playing { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; font: 500 10.5px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; background: rgb(244 245 255 / 0.12); color: var(--on-navy); }
 .rk-hovercard-progress { justify-self: stretch; height: 3px; border-radius: 999px; background: rgb(244 245 255 / 0.2); overflow: hidden; }
 .rk-hovercard-progress i { display: block; height: 100%; width: 100%; background: var(--on-navy); transform-origin: left; transform: scaleX(0); }
-.rk-demo-picks > li:hover .rk-hovercard-progress i, .rk-demo-picks > li:has(.rk-pick:focus-visible) .rk-hovercard-progress i { animation: rk-progress 15s linear 400ms forwards; }
+.rk-demo-picks > li.is-hover .rk-hovercard-progress i, .rk-demo-picks > li:has(.rk-pick:focus-visible) .rk-hovercard-progress i { animation: rk-progress 15s linear 400ms forwards; }
 @keyframes rk-progress { to { transform: scaleX(1); } }
 .rk-pick-meta { font: 400 12.5px/18px var(--font-mono); color: var(--ink-muted); }
 /* Touch screens and narrow layouts: no hover, tap opens the dialog */

@@ -204,11 +204,18 @@ export function PlanScreen(p: Props) {
               <h2 id="plan-shots-title">{t('plan.screen.shots')}</h2>
             </header>
             {shots.length === 0 && !editable && <p className="muted small">{t('plan.screen.noShots')}</p>}
-            {shots.length === 0 && editable && format.shotList.length === 0 && !format.why.first3s.startsWith('Breaking down') && (
-              <p className="small muted" role="status">
-                {t('plan.screen.noBreakdown')}
-              </p>
-            )}
+            {shots.length === 0 && editable && format.shotList.length === 0 && (() => {
+              // The AI shot list runs in the background and reports into format.why.first3s (App breakDown):
+              // show that progress, or its failure, instead of an empty "+ Add a shot".
+              const said = format.why.first3s
+              const busy = said.startsWith(t('shell.breakdown.progress', { step: '' }).replace(/[:：]\s*…$/, ''))
+              const failed = said.startsWith(t('shell.breakdown.failed'))
+              return (
+                <p className={`small ${failed ? 'error' : 'muted'}`} role="status">
+                  {busy || failed ? said : t('plan.screen.noBreakdown')}
+                </p>
+              )
+            })()}
             {/* Shots as numbered storyboard frames; they wrap into rows. "+ Add a shot" is the last tile. */}
             <ol className="shot-frames">
               {shots.map((s, i) => (
@@ -434,7 +441,7 @@ export function PlanScreen(p: Props) {
               {t('plan.screen.bar.approvedDue', { due: dueLabel(idea.dueDate).text })}
             </span>
             <button type="button" className="btn btn-primary" onClick={() => onOpenCanvas()}>
-              {t('canvas.open')}
+              {t('plan.screen.bar.openStoryboard')}
             </button>
           </>
         )}

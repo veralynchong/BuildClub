@@ -16,11 +16,14 @@ import '../../styles/storyboard-grid.css'
 interface Props {
   context: CanvasContext
   onShotsChange: (shots: Shot[]) => void
-  onOpenCanvas: () => void
+  // The old node canvas; left out in the beta, which keeps only the storyboard and the editor.
+  onOpenCanvas?: () => void
   onOpenEditor: () => void
   // Moves the plan to approved; absent when this person cannot approve.
   onApprove?: () => void
   onBack: () => void
+  // The reference video's cover, shown dimmed in shots that have no frame yet.
+  referenceCover?: string
 }
 
 const COLS_KEY = 'remake.storyboard.cols'
@@ -44,7 +47,7 @@ function saveCols(n: Cols): void {
   }
 }
 
-export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas, onOpenEditor, onApprove, onBack }: Props) {
+export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas, onOpenEditor, onApprove, onBack, referenceCover }: Props) {
   const [state, setState] = useState<CanvasState | null>(null)
   const [models, setModels] = useState<GenModel[]>([])
   const [budget, setBudget] = useState<Budget | null>(null)
@@ -122,7 +125,7 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
         <h1>{context.title}</h1>
         <div className="sg-bar">
           {left !== null && <span className="sg-budget">{t('grid.budget', { usd: left.toFixed(2) })}</span>}
-          <button className="btn btn-ghost btn-sm" onClick={onOpenCanvas}>{t('grid.canvas')}</button>
+          {onOpenCanvas && <button className="btn btn-ghost btn-sm" onClick={onOpenCanvas}>{t('grid.canvas')}</button>}
           <button className="btn btn-primary btn-sm" disabled={!gate.next} onClick={onOpenEditor}>{t('grid.next')}</button>
         </div>
       </header>
@@ -159,6 +162,7 @@ export default function StoryboardScreen({ context, onShotsChange, onOpenCanvas,
             <GridCard
               key={cell.shot.id ?? cell.index}
               cell={cell}
+              referenceCover={referenceCover}
               selected={selected === cell.index}
               readOnly={readOnly}
               showAction={show.action}

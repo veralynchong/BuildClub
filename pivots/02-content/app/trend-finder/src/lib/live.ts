@@ -1,3 +1,4 @@
+import type { ResearchSheet } from './researchSync.ts'
 import type { Baseline, ContentType, Format, Line, Platform, SavedIdea, Shot, Video } from '../types'
 import type { Answer } from './answer'
 import { t } from './i18n.ts'
@@ -72,7 +73,8 @@ export async function checkDemo(): Promise<boolean> {
 // Cuts by characters, not UTF-16 units, so an emoji is never split in half (the API rejects half of one).
 const cut = (s: string, n: number) => Array.from(s).slice(0, n).join('')
 
-// The first line of the caption, without hashtags: usually the hook.
+// The first line of the caption, without hashtags: usually the hook. (Titles are cleaned further at display
+// time by videoTitle; the stored hook stays as read, which the guided demo's saves check exactly.)
 function hookFrom(text: string): string {
   const line = text.split('\n').map((l) => l.replace(/#\S+/g, '').trim()).find(Boolean) ?? ''
   return Array.from(line).length > 90 ? `${cut(line, 87).trimEnd()}…` : line
@@ -518,4 +520,36 @@ export async function saveLibrary(library: Library): Promise<void> {
     body: JSON.stringify(library),
   })
   if (!r.ok) throw new SaveError(t('find.live.err.saveSaved'), r.status)
+}
+
+// The Research tab's rows and slots. Like the ideas list it carries a revision (ETag), so a tab holding an
+// old copy gets the current one back (ResearchConflict) instead of overwriting it.
+export async function loadResearch(): Promise<{ sheet: ResearchSheet | null; rev: string | null }> {
+  const r = await fetch('/api/research')
+  if (!r.ok) throw new SaveError(t('find.live.err.loadResearch'), r.status)
+  return { sheet: await r.json(), rev: r.headers.get('ETag') }
+}
+
+export class ResearchConflict extends Error {
+  sheet: ResearchSheet
+  rev: string | null
+  constructor(sheet: ResearchSheet, rev: string | null) {
+    super(t('find.live.err.researchChanged'))
+    this.sheet = sheet
+    this.rev = rev
+  }
+}
+
+export async function saveResearch(sheet: ResearchSheet, rev: string | null): Promise<string | null> {
+  const r = await fetch('/api/research', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...(rev ? { 'If-Match': rev } : {}) },
+    body: JSON.stringify(sheet),
+  })
+  if (r.status === 409) {
+    const body = await r.json().catch(() => ({}))
+    throw new ResearchConflict(body.research ?? { entries: [], slots: [] }, r.headers.get('ETag'))
+  }
+  if (!r.ok) throw new SaveError(t('find.live.err.saveResearch'), r.status)
+  return r.headers.get('ETag')
 }

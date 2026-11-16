@@ -232,7 +232,15 @@ export function ResultsScreen(p: Props) {
             {queryLabel && <>{t('find.res.forQuery', { q: queryLabel })}</>}
             {t('find.res.endStop')}
             {shown.length < byFormat.length && (
-              <span className="fd-showing">{t('find.desk.showing', { shown: shown.length, total: byFormat.length })}</span>
+              <span className="fd-showing">
+                {/* The filter panel is gone, so say what the agency's default rule hides. */}
+                {t(
+                  filters.viewsMin === DEFAULT_FILTERS.viewsMin && filters.followersMax === DEFAULT_FILTERS.followersMax
+                    ? 'find.desk.showingDefault'
+                    : 'find.desk.showing',
+                  { shown: shown.length, total: byFormat.length },
+                )}
+              </span>
             )}
             {shown.length < byFormat.length && (
               <button type="button" className="link-btn fd-showall" onClick={() => setFilters(SHOW_ALL_FILTERS)}>

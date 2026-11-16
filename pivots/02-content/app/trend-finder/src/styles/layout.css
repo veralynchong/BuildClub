@@ -33,6 +33,11 @@
     border-bottom: 1px solid var(--line);
   }
 }
+/* The canvas view's widen/shrink button for the sidebar. */
+.side-toggle { margin-left: auto; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: var(--radius-sm); }
+.side-toggle:hover { color: var(--fg); background: var(--line); }
+.shell.is-compact .side-brand { flex-direction: column; gap: 6px; padding: 0; }
+.shell.is-compact .side-toggle { margin-left: 0; }
 /* Canvas view: icon-only sidebar; full screen drops the sidebar and the phone bar altogether. */
 .shell.is-compact { grid-template-columns: 44px minmax(0, 1fr); }
 .shell.is-compact .sidebar { padding: 12px 4px; gap: var(--space-md); align-items: center; }

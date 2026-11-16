@@ -10,6 +10,8 @@ interface Props {
   slots: ResearchSlot[]
   // A slot id, or null for "Not sure yet" (Unsorted).
   onPick: (slotId: string | null) => void
+  // Makes a new video (slot) for this client and files the reference under it; absent where that can't happen.
+  onNewVideo?: () => void
   onCancel: () => void
 }
 
@@ -74,6 +76,14 @@ export function SaveToVideo(p: Props) {
               </button>
             </li>
           ))}
+          {p.onNewVideo && (
+            <li>
+              <button type="button" className="stv-option" onClick={p.onNewVideo}>
+                <span className="rs-group-num">{t('research.slot.videoNo', { n: p.slots.length + 1 })}</span>
+                <span className="stv-topic">{t('research.saveTo.newVideo')}</span>
+              </button>
+            </li>
+          )}
           <li>
             <button type="button" className="stv-option stv-unsure" onClick={() => p.onPick(null)}>
               {t('research.saveTo.unsure')}

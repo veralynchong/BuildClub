@@ -51,11 +51,14 @@ import {
   likeVideo,
   loadIdeas,
   loadLibrary,
+  loadResearch,
+  ResearchConflict,
   loadList,
   IdeasConflict,
   SaveError,
   saveIdeas,
   saveLibrary,
+  saveResearch,
   saveList,
   searchAll,
   fetchContentTypes,
@@ -89,6 +92,9 @@ import { logout, me, type Account } from './lib/auth'
 import { nextView, onUnauthorized } from './lib/authGate'
 import { markMigrated, pickInitialIdeas, wasMigrated } from './lib/migrateLocal'
 import { applyDraft, keepUnsavedDraft, rebaseIdeas, sameIdeaList, withoutSamples } from './lib/ideasSync'
+import { initialResearch, markResearchMigrated, mergeResearch, researchMigrated, withoutSampleResearch } from './lib/researchSync'
+import type { ResearchSheet } from './lib/researchSync'
+import { sampleResearchSlots } from './data/sampleResearch'
 
 // Where the user was when the session ended, so signing back in returns there (also after a reload).
 const RETURN_KEY = 'remake.return-to.v1'
@@ -228,6 +234,12 @@ export default function App() {
   const [pendingSave, setPendingSave] = useState<{ videoId: string; onSaved?: () => void; move?: boolean; guided?: boolean } | null>(null)
   const [planIdeaId, setPlanIdeaId] = useState<string | null>(null)
   const [canvasFull, setCanvasFull] = useState(readFullscreen)
+  // The canvas and editor shrink the sidebar to icons; this widens it again until the next canvas visit.
+  const [sideWide, setSideWide] = useState(false)
+  useEffect(() => {
+    if (view !== 'canvas') setSideWide(false)
+  }, [view])
+  const sideCompact = view === 'canvas' && !sideWide
   const setFull = (on: boolean) => {
     setCanvasFull(on)
     writeFullscreen(on)
@@ -269,6 +281,10 @@ export default function App() {
   useEffect(() => {
     researchNow.current = research
   }, [research])
+  const researchSlotsNow = useRef(researchSlots)
+  useEffect(() => {
+    researchSlotsNow.current = researchSlots
+  }, [researchSlots])
 
   // 'open' = the API has no accounts (demo sign-in above); otherwise the API's session decides.
   const [auth, setAuth] = useState<'checking' | 'open' | 'signed-out' | 'signed-in'>('checking')
@@ -370,7 +386,7 @@ export default function App() {
   const [syncProblem, setSyncProblem] = useState<{ key: Key; vars?: Vars } | null>(null)
   // Bumped by Retry and after signing back in, so every save effect looks again for changes the API doesn't hold.
   const [retryTick, setRetryTick] = useState(0)
-  const saveFailed = useCallback((what: 'clients' | 'ideas' | 'videos', e: unknown) => {
+  const saveFailed = useCallback((what: 'clients' | 'ideas' | 'videos' | 'research', e: unknown) => {
     // A 401 sends the user to the sign-in page; the save is tried again after that.
     if (e instanceof SaveError && e.status === 401) return
     setSyncProblem({ key: `shell.sync.save.${what}` })
@@ -381,11 +397,20 @@ export default function App() {
   const ideasQueue = useRef<Promise<unknown>>(Promise.resolve())
   const ideasGen = useRef(0)
   // What the API already holds, so the copy just loaded from it isn't written straight back.
-  const onServer = useRef<{ clients: Client[] | null; ideas: SavedIdea[] | null; library: string | null }>({
+  const onServer = useRef<{
+    clients: Client[] | null
+    ideas: SavedIdea[] | null
+    library: string | null
+    research: ResearchSheet | null
+  }>({
     clients: null,
     ideas: null,
     library: null,
+    research: null,
   })
+  // The Research sheet is saved one request at a time too, each with the revision the last one returned.
+  const researchRev = useRef<string | null>(null)
+  const researchQueue = useRef<Promise<unknown>>(Promise.resolve())
   const clientsNow = useRef(clients)
   useEffect(() => {
     clientsNow.current = clients
@@ -402,8 +427,8 @@ export default function App() {
   }, [])
   useEffect(() => {
     if (!live || !access || synced) return
-    Promise.all([loadList<Client>('clients'), loadIdeas(), loadLibrary().catch(() => null), checkDemo()])
-      .then(async ([savedClients, loadedIdeas, library, demo]) => {
+    Promise.all([loadList<Client>('clients'), loadIdeas(), loadLibrary().catch(() => null), checkDemo(), loadResearch()])
+      .then(async ([savedClients, loadedIdeas, library, demo, loadedResearch]) => {
         if (library) {
           // Add the saved videos this browser hasn't seen; its own copies stay as they are.
           setLiveStore((prev) => {
@@ -451,6 +476,17 @@ export default function App() {
         confirmedIdeas.current = held
         setIdeas(shown)
         ideasRev.current = rev
+        // Research: the API's sheet, plus (once per browser) the rows this browser kept on its own, never the samples.
+        const localSheet = withoutSampleResearch({ entries: researchNow.current, slots: researchSlotsNow.current }, sampleResearchSlots)
+        const first = initialResearch(loadedResearch.sheet, localSheet, researchMigrated())
+        const sheet = first.sheet
+        let sheetRev = loadedResearch.rev
+        if (first.upload) sheetRev = await saveResearch(sheet, sheetRev)
+        markResearchMigrated()
+        onServer.current.research = sheet
+        researchRev.current = sheetRev
+        setResearch(sheet.entries)
+        setResearchSlots(sheet.slots)
         markMigrated()
         setSynced(true)
       })
@@ -458,7 +494,7 @@ export default function App() {
         if (!(e instanceof SaveError && e.status === 401))
           setSyncProblem({ key: 'shell.sync.load' })
       })
-  }, [live, access, synced, setClients, setIdeas, setLiveStore, setWorkspaceRaw])
+  }, [live, access, synced, setClients, setIdeas, setLiveStore, setWorkspaceRaw, setResearch, setResearchSlots])
   useEffect(() => {
     if (!synced || clients === onServer.current.clients) return
     const prev = onServer.current.clients
@@ -537,6 +573,66 @@ export default function App() {
     document.addEventListener('visibilitychange', refresh)
     return () => document.removeEventListener('visibilitychange', refresh)
   }, [synced, ideas, setIdeas])
+  // The Research sheet, kept on the API so it follows the team to any browser. Another tab's newer save is merged
+  // in (this tab's rows win for the same id) and saved again.
+  useEffect(() => {
+    if (!synced) return
+    const server = onServer.current.research
+    if (server && research === server.entries && researchSlots === server.slots) return
+    const mine: ResearchSheet = { entries: research, slots: researchSlots }
+    onServer.current.research = mine
+    researchQueue.current = researchQueue.current
+      .then(async () => {
+        let attempt = mine
+        let base = server ?? { entries: [], slots: [] }
+        for (let tries = 0; ; tries++) {
+          try {
+            researchRev.current = await saveResearch(attempt, researchRev.current)
+            break
+          } catch (e) {
+            if (!(e instanceof ResearchConflict) || tries >= 3) throw e
+            researchRev.current = e.rev
+            attempt = mergeResearch(base, attempt, e.sheet)
+            base = e.sheet
+            setSyncProblem({ key: 'shell.sync.conflict' })
+          }
+        }
+        if (attempt === mine) return saved()
+        onServer.current.research = attempt
+        // Show the merged sheet unless this tab has edited again meanwhile (that edit saves on its own).
+        if (researchNow.current === mine.entries && researchSlotsNow.current === mine.slots) {
+          setResearch(attempt.entries)
+          setResearchSlots(attempt.slots)
+        }
+      })
+      .catch((e) => {
+        if (onServer.current.research === mine) onServer.current.research = server // so Retry sends it again
+        saveFailed('research', e)
+      })
+  }, [synced, research, researchSlots, retryTick, setResearch, setResearchSlots, saved, saveFailed])
+  // Coming back to this tab picks up a teammate's Research edits, when everything here is already saved.
+  useEffect(() => {
+    if (!synced) return
+    const refresh = () => {
+      const server = onServer.current.research
+      if (document.visibilityState !== 'visible' || !server) return
+      if (researchNow.current !== server.entries || researchSlotsNow.current !== server.slots) return
+      loadResearch()
+        .then((fresh) => {
+          if (!fresh.sheet || fresh.rev === researchRev.current || onServer.current.research !== server) return
+          if (researchNow.current !== server.entries || researchSlotsNow.current !== server.slots) return
+          researchRev.current = fresh.rev
+          onServer.current.research = fresh.sheet
+          setResearch(fresh.sheet.entries)
+          setResearchSlots(fresh.sheet.slots)
+        })
+        .catch(() => {
+          // The next visit tries again.
+        })
+    }
+    document.addEventListener('visibilitychange', refresh)
+    return () => document.removeEventListener('visibilitychange', refresh)
+  }, [synced, setResearch, setResearchSlots])
   // The videos and breakdowns behind saved ideas, kept on the API like the ideas themselves.
   const library = useMemo(() => {
     const ids = new Set(ideas.map((i) => i.videoId))
@@ -1115,11 +1211,7 @@ export default function App() {
   // Every Save to Research button: asks which video it's for first (when the client has any), then saves.
   const askSave = (videoId: string, onSaved?: () => void) => {
     if (!videoById.has(videoId)) return
-    if (!myVideos.length) {
-      saveToResearch(videoId)
-      onSaved?.()
-      return
-    }
+    // Always ask, even before this client has any videos: "New video" makes the first one.
     setPendingSave({ videoId, onSaved })
   }
 
@@ -1399,10 +1491,14 @@ export default function App() {
         ...chipGroups.flatMap((g) => g.chips.map((c) => ({ label: c.label, value: c.value, hint: c.hint }))),
         ...client.examples.map((e) => ({ label: e, value: e })),
       ],
-      questions: [
-        ...offered.filter((x) => x.kind === 'question').map((x) => x.value),
-        ...(asQuestion ? [t('find.desk.ways.askExample', { topic: typed })] : []),
-      ],
+      // Live search has no answer card (isQuestion is off there): a question would only run as a search, and
+      // words like "right now" in it would quietly narrow the results. So questions are offered on sample data only.
+      questions: live
+        ? []
+        : [
+            ...offered.filter((x) => x.kind === 'question').map((x) => x.value),
+            ...(asQuestion ? [t('find.desk.ways.askExample', { topic: typed })] : []),
+          ],
     })
   }
   const blockedFormatIds = new Set(
@@ -1737,7 +1833,7 @@ export default function App() {
   return (
     <AppContext.Provider value={appContext}>
     {/* Keyed by language so every screen redraws in the new one (the switch happens on Settings, which holds no work in progress). */}
-    <div className={`shell${view === 'canvas' ? ' is-compact' : ''}${view === 'canvas' && canvasFull ? ' is-full' : ''}`} key={lang}>
+    <div className={`shell${sideCompact ? ' is-compact' : ''}${view === 'canvas' && canvasFull ? ' is-full' : ''}`} key={lang}>
       <Sidebar
         clients={clients}
         workspace={workspace}
@@ -1754,7 +1850,8 @@ export default function App() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         live={live}
-        compact={view === 'canvas'}
+        compact={sideCompact}
+        onToggleWide={view === 'canvas' ? () => setSideWide((w) => !w) : undefined}
         editing={canvasEditor}
       />
 
@@ -2129,7 +2226,6 @@ export default function App() {
                   setIdeas((prev) => prev.map((idea) => idea.id === id ? { ...idea, shots } : idea))
                   setCanvasContext((ctx) => ctx?.resource.id === id ? { ...ctx, shots } : ctx)
                 }}
-                onOpenCanvas={() => openPlanCanvas(canvasContext.resource.id)}
                 onOpenEditor={() => makeVideo(canvasContext.resource.id)}
                 // The same approval the board's Approve uses (decide); the grid then unlocks without reopening.
                 onApprove={role === 'manager' ? () => {
@@ -2138,6 +2234,7 @@ export default function App() {
                   setCanvasContext((ctx) => ctx?.resource.id === id ? { ...ctx, readOnly: false } : ctx)
                 } : undefined}
                 onBack={() => setView('storyboardPick')}
+                referenceCover={videoById.get(ideas.find((i) => i.id === canvasContext.resource.id)?.videoId ?? '')?.thumbnail}
               />
             </Suspense>
           )}
@@ -2154,7 +2251,9 @@ export default function App() {
               onChange={(patch) => setIdeas((prev) => prev.map((i) => (i.id === planIdea.id ? { ...i, ...patch } : i)))}
               onBack={() => setView(planFrom)}
               backLabel={backLabel[planFrom]}
-              onOpenCanvas={(editor) => openCanvas(planIdea, planFormat.shotList, editor)}
+              // Beta: the approved plan goes on to the storyboard, not the old node canvas; the cut panel's
+              // "Make the video" still opens the editor.
+              onOpenCanvas={(editor) => (editor ? openCanvas(planIdea, planFormat.shotList, true) : openStoryboard(planIdea.id))}
               onFindMore={planAnother}
               onPlanAnother={planAnother}
               onGoApprovals={() => setView('shortlist')} // stream B: the board replaces Approvals
@@ -2216,6 +2315,17 @@ export default function App() {
             pendingSave.onSaved?.()
             setPendingSave(null)
           }}
+          onNewVideo={
+            pendingSave.guided || pendingSave.move
+              ? undefined
+              : () => {
+                  const slot = newSlot(client.id, researchSlots, '')
+                  setResearchSlots((prev) => [...prev, slot])
+                  saveToResearch(pendingSave.videoId, slot.id)
+                  pendingSave.onSaved?.()
+                  setPendingSave(null)
+                }
+          }
         />
       )}
 
