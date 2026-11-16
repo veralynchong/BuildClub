@@ -18,6 +18,7 @@ import { CutPanel } from './CutPanel'
 import { PublishPanel } from './publish/PublishPanel'
 import { newShotId } from '../lib/storyboard'
 import { t } from '../lib/i18n'
+import { videoTitle } from '../lib/videoTitle'
 
 interface Props {
   live?: boolean
@@ -159,7 +160,7 @@ export function PlanScreen(p: Props) {
             </button>
             {/* The stage's header: the video's title, its account, then followers → views */}
             <div className="plan-stage-head">
-              <h2 className="plan-stage-title">{video.hook}</h2>
+              <h2 className="plan-stage-title">{videoTitle(video.hook)}</h2>
               <span className="plan-stage-handle">{video.handle}</span>
               <span className="best-compare tile-cmp plan-stage-cmp">
                 <span className="cmp-num cmp-from">{cmp.base > 0 ? compact(cmp.base) : '–'}</span>
