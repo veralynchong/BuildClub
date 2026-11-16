@@ -41,7 +41,7 @@
 - 走到：0、1 通過；2 通過但卡；3 只看格子沒生圖；4 上傳 iPhone .mov、5 有素材的匯出、E1–E6、K1–K3 都還沒測。
 - 問題 17 個（擋 2、煩 10、小 5），只整理、未修：
   - 擋：P9 企劃頁「Open the canvas」掉進舊 Canvas 頁；P14 Research 只存在瀏覽器 localStorage，換電腦／瀏覽器就不見。
-  - 煩：P1 首頁 PLAYING 小視窗自己跳出；P3 搜尋框 Enter 走 ASK（Claude 問答，花錢）而不是搜尋；P5 只顯示 6 of 30；P6 沒有 Video／Slideshow 篩選；P7 Save 直接進 Unsorted 不能選放哪；P8 AI shot list 沒有載入動畫；P10 企劃看板令人困惑（待使用者補充）；P11 分鏡格沒有參考畫面；P12 Video edit 側欄縮起來不能展開；P16 daphne 舊搜尋封面 404。
+  - 煩：P1 首頁 PLAYING 小視窗自己跳出；P3 搜尋框 Enter 走 ASK（Claude 問答，花錢）而不是搜尋；P5 只顯示 6 of 30；P6 沒有 Video／Slideshow 篩選；P7 Save 直接進 Unsorted 不能選放哪；P8 AI shot list 沒有載入動畫；P10 企劃看板每張卡按鈕都不一樣、看不懂下一步（使用者 11/16 確認；Veralyn 還在改，先不修）；P11 分鏡格沒有參考畫面；P12 Video edit 側欄縮起來不能展開；P16 daphne 舊搜尋封面 404。
   - 小：P2 拉窄視窗版面比例跑掉；P4 搜尋等待動畫位置；P13 匯出面板功能是真的（finishing.py），只是沒素材時提示不明顯、OTIO 是術語；P15 企劃標題直接用 caption（含 hashtag）；P17 `beta-instance.sh` 排除 `covers` 連 `pinned/covers` 也沒複製。
   - 要問 Veralyn：P4 動畫位置、P6 篩選是不是她拿掉的。
 
