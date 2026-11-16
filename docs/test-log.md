@@ -1,3 +1,47 @@
+## 2026-11-16：合併版（PR #61）真實全流程 — 計畫與記錄
+
+- 測試站：**team**（:8803，tunnel https://span-discover-levitra-exhibition.trycloudflare.com，帳號 `team@remake.test`，密碼在 `~/beta/tester-accounts.txt`）。總上限 US$5、生圖每天 US$2；和 daphne／collage 的資料、預算分開。quick tunnel 網址在 cloudflared 重啟後會變，用 `bash bin/beta-instance.sh status` 查。
+- 預算（使用者 2026-11-16 同意）：今天個人跑 ≤ US$1.5；明天和 Veralyn ≤ US$3。
+- 截圖：MacBook 上的 Google Drive `My Drive/40-projects/buildclub/testing/2026-11-16_self-run/`，檔名 `s<步驟>-<編號>.png`（例如 `s3-02.png`），下面表格用檔名引用。
+
+### A. 今天（11/16）個人跑一次
+
+每一步記：開始時間、花多久、卡在哪、截圖、花費（看預算數字的變化）、嚴重度（**擋**＝走不下去／**煩**＝走得下去但很卡／**小**＝小問題）。
+
+| # | 步驟 | 通過條件 | 開始 | 花多久 | 花費 | 卡在哪／截圖 | 嚴重度 |
+|---|---|---|---|---|---|---|---|
+| 0 | 登入 | 登入後看到首頁，沒有舊資料 | | | | | |
+| 1 | 搜尋 chicken recipe（TikTok） | 有結果，封面有顯示；等待時有進度 | | | | | |
+| 2 | 選一支 → 企劃 → AI shot list | 鏡頭合理、英文、可改；核准 plan | | | | | |
+| 3 | Storyboard 分鏡圖（Seedream） | 每格有圖；生圖時看得出在跑；Regenerate 一格成功 | | | | | |
+| 4 | 上傳 take（至少一段 **iPhone 原始 .mov**） | 上傳成功、能預覽、對到正確的 shot | | | | | |
+| 5 | Video edit → AI 剪輯 → 匯出 | 下載到 1080x1920、有聲音、順序對 | | | | | |
+
+探索式（主流程走完再試，每項一行結果）：
+- [ ] 生圖途中重新整理頁面
+- [ ] 瀏覽器上一頁／下一頁在各步之間
+- [ ] 連點同一個按鈕（生圖、匯出）
+- [ ] 上傳超大檔（> 500 MB）或錯格式（.heic、.txt）
+- [ ] 登出再登入，進度還在
+- [ ] Safari 打開同一個網址走一次登入＋Storyboard
+
+複查已知問題（STATUS 2026-11-16）：
+- [ ] 「Fill in shot order」按鈕被放大
+- [ ] 側欄 logo 被裁成「Re」
+- [ ] Canvas（advanced）、企劃看板、企劃細節仍是舊樣式（記下來就好，不算新 bug）
+
+記錄（邊跑邊寫）：
+
+- 
+
+### B. 明天（11/17）和 Veralyn：兩支實拍
+
+- 兩支：chicken 食譜（真的煮、真的拍）、一支 events／activities 類。
+- 分工：Veralyn 拍片並自己操作 app，邊做邊說出她在想什麼；Tommy 只觀察和記錄，她問才回答。
+- 成功標準：兩支都不需要開發者幫忙就匯出 1080x1920；每支 ≤ US$1.5；記下每個卡住超過 1 分鐘的地方。
+- 記錄用上面 A 的同一張表（每支片一張），截圖放 `…/testing/2026-11-17_veralyn/`。
+- 事前：今天 A 的第 4 步先確認 iPhone .mov 能上傳；不能的話明天前要先處理或請她改拍 mp4。
+
 ## 2026-11-15（17:02）：已知問題第三批，兩站已部署
 
 - b04062a 去除靜音把 shot 1 切兩段：是設計上的行為（`backend/suggest.py` `first_cut` 會切掉 take 中間 ≥ 0.6 秒的停頓；那段 take 中間停了 1.77 秒），沒改門檻。問題是兩段都叫「Shot 1 · Take 1」看起來像重複，改成「Shot 1 · Take 1 · part 2」。

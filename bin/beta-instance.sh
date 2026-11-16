@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Production-like Trend Finder instance for one beta tester: launchd + Cloudflare quick tunnel + daily backups.
-# Usage: bash bin/beta-instance.sh <install|update|status|backup|add-user> [daphne|collage] [email]
+# Usage: bash bin/beta-instance.sh <install|update|status|backup|add-user> [daphne|collage|team] [email]
 #   install <name>          copy backend + dist to ~/beta/<name>/app, write .env and the LaunchAgents, load them
 #   update <name>           recopy backend + dist (keeps state/ and .env), restart the backend
 #   status                  every installed instance: launchd pid, port, tunnel URL, spend (today / total)
@@ -11,7 +11,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-usage="usage: bash bin/beta-instance.sh <install|update|status|backup|add-user> [daphne|collage] [email]"
+usage="usage: bash bin/beta-instance.sh <install|update|status|backup|add-user> [daphne|collage|team] [email]"
 TF=pivots/02-content/app/trend-finder
 home="${BETA_HOME:-$HOME/beta}"
 agents="${BETA_LAUNCHAGENTS:-$HOME/Library/LaunchAgents}"
@@ -32,7 +32,8 @@ configure() {
   case "$1" in
     daphne)  port=8801; remotion_port=8811; total_usd=12;;
     collage) port=8802; remotion_port=8812; total_usd=8;;
-    *) echo "error: name must be daphne or collage" >&2; exit 2;;
+    team)    port=8803; remotion_port=8813; total_usd=5;;  # internal test runs, kept apart from testers' data and budgets
+    *) echo "error: name must be daphne, collage or team" >&2; exit 2;;
   esac
   name="$1"; base="$home/$name"; label="com.remake.beta.$name"; uid_="$(id -u)"
 }
@@ -163,7 +164,7 @@ open_warning() {
 
 do_status() {
   local n
-  for n in daphne collage; do
+  for n in daphne collage team; do
     configure "$n"
     [ -d "$base/app" ] || continue
     local pid code url spend

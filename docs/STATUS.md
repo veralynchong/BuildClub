@@ -1,5 +1,12 @@
 # STATUS
 
+## 2026-11-16（17:05）：開 team 測試站、定測試計畫
+
+- 一行狀態：`bin/beta-instance.sh` 加 `team`（:8803、Remotion :8813、總上限 US$5），已 install 並開帳號 `team@remake.test`（密碼在 `~/beta/tester-accounts.txt`），tunnel https://span-discover-levitra-exhibition.trycloudflare.com 回 200。測試計畫和記錄表在 `docs/test-log.md` 最上段。
+- 最後驗證 2026-11-16：`bash bin/verify.sh full` GREEN（1259 passed、3 skipped）；`bin/test_beta_instance.sh` PASS。
+- 決定（使用者 2026-11-16）：內部測試用 team 站，不碰 daphne／collage；今天預算 ≤ US$1.5、明天 ≤ US$3；明天 Veralyn 操作、Tommy 觀察；截圖放 Google Drive `My Drive/40-projects/buildclub/testing/`。
+- 下一步：使用者在 team 站跑 A 表；明天和 Veralyn 跑 B。
+
 ## 2026-11-16：整合 Veralyn「UI edit v1」到 beta 線（PR #61 draft）
 
 - 一行狀態：分支 `chore/integrate-dashboard-cards`（base `feat/beta-launch`，接在 #59 後）合併 `0199dbc`，前端照 Veralyn 設計；Storyboard／Video edit 保留 beta 路由並改成她的樣式；Brief 不上側欄。
