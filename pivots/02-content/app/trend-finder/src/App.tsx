@@ -68,8 +68,8 @@ import { useSearchResolve } from './lib/useSearchResolve'
 import { LiveLoading } from './components/LiveLoading'
 import { SearchToast, type SearchNotice } from './components/SearchToast'
 import { SavedToast } from './components/find/SavedStrip'
-import { SEARCH_RUNS_KEY, cleanRuns, recentSearches, recordSearch, runFor, savedByVideo, typeAhead } from './lib/findDesk'
-import type { RecentRow, SearchRun } from './lib/findDesk'
+import { SEARCH_RUNS_KEY, cleanRuns, recordSearch, runFor, savedByVideo, typeAhead } from './lib/findDesk'
+import type { SearchRun } from './lib/findDesk'
 import { suggest } from './lib/suggest'
 import { withScreenTransition } from './lib/motion'
 import { htmlLang, readLang, setActiveLang, t, writeLang } from './lib/i18n'
@@ -1372,8 +1372,8 @@ export default function App() {
   const planClient = planIdea && clients.find((c) => c.id === planIdea.clientId)
   const mine = shownIdeas.filter((i) => i.clientId === client.id)
 
-  // Find ideas' desk: recent searches, what's saved by video, and what the results screen marks as new.
-  const recentRows: RecentRow[] = recentSearches(searchRuns, client.id, inResearch)
+  // Find ideas' desk: what's saved by video, and what the results screen marks as new. (The Recent searches
+  // list came off the Find ideas page for every client, 15 Nov 2026; the runs are still recorded.)
   const savedRows = savedByVideo(myVideos, myResearch, ideas)
   const shownRun = view === 'results' ? runFor(searchRuns, client.id, lastSearch) : undefined
   const savedRow = savedNote ? myResearch.find((e) => e.videoId === savedNote.videoId) : undefined
@@ -1404,10 +1404,6 @@ export default function App() {
         ...(asQuestion ? [t('find.desk.ways.askExample', { topic: typed })] : []),
       ],
     })
-  }
-  const openRecent = (row: RecentRow) => {
-    setQuery((q) => ({ ...q, keyword: row.run.text }))
-    runSearch(row.run.text, row.run.platforms)
   }
   const blockedFormatIds = new Set(
     [...formatById.values()].filter((f) => f.needs.some((n) => client.cannot.includes(n))).map((f) => f.id),
@@ -1747,7 +1743,6 @@ export default function App() {
         workspace={workspace}
         setWorkspace={setWorkspace}
         view={view}
-        editing={canvasEditor}
         setView={navTo}
         counts={counts}
         onLogo={() => setShowLanding(true)}
@@ -1760,6 +1755,7 @@ export default function App() {
         onClose={() => setMenuOpen(false)}
         live={live}
         compact={view === 'canvas'}
+        editing={canvasEditor}
       />
 
       <div className="shell-main">
@@ -1873,8 +1869,6 @@ export default function App() {
               target={client.monthlyTarget}
               lastSearch={lastSearch}
               onBackToResults={backToResults}
-              recent={recentRows}
-              onOpenRecent={openRecent}
               saved={savedRows}
               coverOf={(id) => videoById.get(id)?.thumbnail}
               onOpenResearch={() => setView('research')}

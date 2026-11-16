@@ -86,6 +86,8 @@
 .avatar-agency { background: var(--fg); color: var(--bg); }
 .avatar-add { background: var(--surface-2); color: var(--muted); font-size: var(--text-body); }
 .avatar-user { border-radius: 50%; background: var(--surface-2); color: var(--fg); }
+/* The client switcher's logo is round (founder sketch, 15 Nov 2026), in the button and in its menu. */
+.switcher .avatar { border-radius: 50%; }
 
 /* Sidebar links */
 .side-nav { display: grid; gap: var(--space-3xs); }

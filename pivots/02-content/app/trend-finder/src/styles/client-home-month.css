@@ -1,0 +1,166 @@
+/* One client's Home (ClientHome.tsx), 15 Nov 2026: two cards, "This month" and "Waiting for <manager>".
+   Same look and tokens as the All clients cards (overview-cards.css); the ring styles come from there. */
+
+.chm-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 20px; align-items: start; }
+
+.chm-card {
+  display: flex; flex-direction: column; gap: 20px; padding: 24px; min-width: 0;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius, 12px);
+}
+.chm-ch { display: flex; align-items: center; gap: 12px; }
+.chm-ch h2 { margin: 0; font: 400 24px/1.2 var(--font-serif); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.chm-ch .pill { margin-left: auto; flex: none; }
+
+/* Status and row pills, always with a word */
+.chm .pill {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px;
+  font: 500 12px/20px var(--font-sans); white-space: nowrap;
+}
+.chm .pill::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.chm .pill-ok { background: var(--early-soft); color: var(--early); }
+.chm .pill-bad { background: var(--no-soft); color: var(--no); }
+.chm .pill-wait { background: var(--rising-soft, #fbf3e1); color: var(--rising); }
+.chm .pill-done { background: var(--navy); color: var(--on-navy); }
+.chm .pill-done::before { display: none; }
+
+/* Ring plus the four counts */
+.chm-mid { display: flex; gap: 28px; align-items: center; }
+.chm-ring.ovc-ring, .chm-ring .ring { width: 180px; height: 180px; }
+.chm-ring .ovc-ring-text b { font-size: 48px; line-height: 48px; }
+.chm-ring .ovc-ring-text b small { font-size: 22px; }
+.chm-ring .ovc-ring-text span { font-size: 12px; margin-top: 4px; }
+.chm-stats { list-style: none; margin: 0; padding: 0; flex: 1; display: grid; gap: 10px; min-width: 0; }
+.chm-stat { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.chm-stat:last-child { border-bottom: 0; padding-bottom: 0; }
+.chm-stat > span { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.chm-stat > span::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--sky); flex: none; }
+.chm-stat-wait > span::before { background: var(--mustard); }
+.chm-stat-ok > span::before { background: var(--blue); }
+.chm-stat-bad > span::before { background: var(--no); }
+.chm-stat b, .chm-stat .link-btn { font: 400 22px/26px var(--font-serif); font-variant-numeric: tabular-nums; }
+.chm-stat .link-btn { padding: 0; border: 0; background: none; color: var(--blue); cursor: pointer; text-decoration: underline 1px transparent; text-underline-offset: 3px; }
+.chm-stat b.muted { color: var(--muted); }
+
+/* Plans waiting, one row each: cover, name and when it was sent, the action */
+.chm-rows { list-style: none; margin: 0; padding: 0; display: grid; }
+.chm-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.chm-row:first-child { border-top: 0; padding-top: 0; }
+.chm-cover { flex: none; width: 46px; height: 62px; border-radius: 7px; overflow: hidden; background: var(--blue-soft); }
+.chm-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.chm-row-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.chm-row-text b { font-weight: 500; overflow-wrap: anywhere; }
+.chm-row-text .small { overflow-wrap: anywhere; }
+.chm-row-right { margin-left: auto; flex: none; display: flex; align-items: center; gap: 10px; }
+.chm-note { margin: 0; line-height: 1.5; }
+.chm-act { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; }
+.chm-act .btn { min-height: 42px; padding-inline: 18px; }
+.chm-row .btn-sm { min-height: 34px; padding-inline: 14px; }
+
+@media (hover: hover) {
+  .chm-stat .link-btn:hover { text-decoration-color: currentColor; }
+}
+@media (max-width: 1000px) {
+  .chm-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .chm-card { padding: 18px; }
+  .chm-mid { flex-direction: column; align-items: stretch; }
+  .chm-ring.ovc-ring { margin: 0 auto; }
+}
+
+/* Approved dashboard option A: shared dotted canvas, balanced cards, and restrained ring type. */
+:root[data-ui="altitude"] .shell-main:has(.chm) {
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, var(--line-strong) 1px, transparent 1.2px);
+  background-size: 20px 20px;
+}
+:root[data-ui="altitude"] .main:has(> .chm) { padding: 40px 40px 72px; }
+:root[data-ui="altitude"] .chm { gap: 32px; }
+:root[data-ui="altitude"] .chm .ch-head { align-items: center; }
+:root[data-ui="altitude"] .chm .ch-id { gap: 10px; }
+:root[data-ui="altitude"] .chm .ch-id .eyebrow { font-size: 10px; letter-spacing: .1em; }
+:root[data-ui="altitude"] .chm .ch-id h1 { font: 400 44px/1.1 var(--font-serif); margin: 0; letter-spacing: -.025em; }
+:root[data-ui="altitude"] .chm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: stretch; }
+:root[data-ui="altitude"] .chm-card { padding: 24px; gap: 24px; }
+:root[data-ui="altitude"] .chm-ch h2 { font-size: 25px; }
+:root[data-ui="altitude"] .chm-mid { gap: 24px; }
+:root[data-ui="altitude"] .chm-ring.ovc-ring,
+:root[data-ui="altitude"] .chm-ring .ring { width: 160px; height: 160px; flex: none; }
+:root[data-ui="altitude"] .chm-ring .ovc-ring-wait .ring-fill { stroke: var(--sky); }
+:root[data-ui="altitude"] .chm-ring .ovc-ring-text { padding: 26px; }
+:root[data-ui="altitude"] .chm-ring .ovc-ring-text b { font-size: 38px; line-height: 1.1; white-space: nowrap; }
+:root[data-ui="altitude"] .chm-ring .ovc-ring-text b small { font-size: 19px; }
+:root[data-ui="altitude"] .chm-ring .ovc-ring-text span { max-width: 88px; margin: 6px auto 0; font: 400 10px/1.4 var(--font-sans); }
+:root[data-ui="altitude"] .chm-stat > span::before { content: none; }
+:root[data-ui="altitude"] .chm-stat { padding-bottom: 12px; }
+:root[data-ui="altitude"] .chm-stats { gap: 12px; }
+:root[data-ui="altitude"] .chm-stat > span { font-size: 12px; }
+:root[data-ui="altitude"] .chm-stat b { font-size: 24px; }
+.chm-legend { display: flex; flex-wrap: wrap; gap: 20px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+.chm-legend span { display: flex; align-items: center; gap: 6px; }
+.chm-legend i { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+.chm-legend .chm-legend-waiting { background: var(--sky); }
+:root[data-ui="altitude"] .chm-cover { width: 40px; height: 52px; border-radius: 8px; }
+:root[data-ui="altitude"] .chm-row { gap: 12px; padding: 16px 0; }
+:root[data-ui="altitude"] .chm-row:first-child { padding-top: 0; }
+:root[data-ui="altitude"] .chm-row-text b { font-size: 12px; font-weight: 600; }
+:root[data-ui="altitude"] .chm-row-text .small { font-size: 11px; }
+:root[data-ui="altitude"] .chm-act { padding-top: 20px; border-top: 1px solid var(--line); align-items: center; }
+.chm-review-summary { margin-right: auto; font-size: 11px; }
+:root[data-ui="altitude"] .chm .btn { min-height: 40px; font-size: 12px; padding: 9px 16px; }
+:root[data-ui="altitude"] .chm .btn.btn-primary:hover:not(:disabled) { background: var(--sky); border-color: var(--sky); color: var(--navy); box-shadow: none; }
+@media (max-width: 1200px) {
+  :root[data-ui="altitude"] .chm-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  :root[data-ui="altitude"] .main:has(> .chm) { padding: 24px 18px 40px; }
+  :root[data-ui="altitude"] .chm .ch-id h1 { font-size: 34px; }
+  :root[data-ui="altitude"] .chm-card { padding: 18px; }
+  :root[data-ui="altitude"] .chm-ring.ovc-ring { margin-inline: auto; }
+}
+
+/* Give the approved and waiting arcs more visual weight. */
+:root[data-ui="altitude"] .chm-ring .ring-fill { stroke-width: 14px; }
+
+/* Radius is calculated for the 14px arcs; retain a lighter gray track. */
+:root[data-ui="altitude"] .chm-ring .ring-track { stroke-width: 10px; }
+
+/* Dashboard reading text: 16px throughout, with display numbers and headings retaining their scale. */
+:root[data-ui="altitude"] .chm { font-size: 16px; }
+:root[data-ui="altitude"] .chm :is(.chm-row-text b, .chm-row-text .small, .chm-stat > span, .chm-legend, .chm-note, .chm-review-summary, .btn, .link-btn, .pill) {
+  font-size: 16px;
+  line-height: 1.5;
+}
+:root[data-ui="altitude"] .chm-ring .ovc-ring-text { padding: 20px; }
+:root[data-ui="altitude"] .chm-ring .ovc-ring-text span { font-size: 16px; line-height: 1.35; max-width: 112px; }
+:root[data-ui="altitude"] .chm-row { flex-wrap: wrap; }
+:root[data-ui="altitude"] .chm-row-text { min-width: 120px; }
+@media (min-width: 1201px) and (max-width: 1500px) {
+  :root[data-ui="altitude"] .chm-mid { flex-direction: column; align-items: stretch; }
+  :root[data-ui="altitude"] .chm-ring.ovc-ring { margin-inline: auto; }
+}
+
+/* Match the approved HTML's outlined Open buttons and soft sky hover. */
+:root[data-ui="altitude"] .chm .chm-row-right .btn {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  color: var(--fg);
+  box-shadow: none;
+}
+:root[data-ui="altitude"] .chm .chm-row-right .btn:hover:not(:disabled),
+:root[data-ui="altitude"] .chm .chm-row-right .btn:focus-visible {
+  background: color-mix(in srgb, var(--sky) 20%, var(--surface));
+  border-color: var(--sky);
+  color: var(--fg);
+  box-shadow: none;
+}
+
+/* Linked and static statistic counts share the same display typography. */
+:root[data-ui="altitude"] .chm .chm-stat > b,
+:root[data-ui="altitude"] .chm .chm-stat > .link-btn {
+  font: 400 24px/1.2 var(--font-serif);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dashboard brand heading uses Remake navy. */
+:root[data-ui="altitude"] .chm .ch-id .eyebrow { color: var(--navy); }

@@ -4,7 +4,7 @@
    same tokens under .rk (landing-remake.css).
    Rules for any new UI: use only these tokens. Blue = the one main action. Violet = icons and the active nav
    item. Mustard = the winner ("Best to copy", breakout) as a solid fill with navy text, never text on white.
-   Status colours always come with a word. Newsreader for headings, Inter for reading, Geist Mono for labels
+   Status colours always come with a word. Fraunces for headings, Manrope for reading (15 Nov 2026, was Newsreader + Inter), Geist Mono for labels
    and counts. Pills for buttons and badges, 12px cards, no shadow unless it floats. Nothing loops. */
 :root[data-ui="altitude"] {
   /* Design-system tokens */
@@ -26,7 +26,7 @@
   --violet-soft: #f2e9ff;
   --mustard: #f2b705;
   --on-mustard: #060a47;
-  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --shadow-card: 0 1px 2px rgb(10 12 40 / 0.04), 0 8px 24px rgb(10 12 40 / 0.06);
   --shadow-float: 0 2px 6px rgb(10 12 40 / 0.05), 0 32px 64px rgb(10 12 40 / 0.16);
@@ -63,7 +63,7 @@
   --frame-ratio: 9 / 16;
   --swatch-size: 18px;
   --swatch-ring: rgb(10 12 40 / 0.28);
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: var(--font-serif);
   --tracking-tight: -0.02em;
   --radius-xs: 4px;
@@ -175,7 +175,7 @@
 :root[data-ui="altitude"] body,
 :root[data-ui="altitude"] .shell-main { background: var(--bg); }
 
-/* Type: Newsreader headings (regular weight), Inter for reading, Geist Mono for labels and counts */
+/* Type: Fraunces headings (regular weight), Manrope for reading, Geist Mono for labels and counts */
 :root[data-ui="altitude"] h1,
 :root[data-ui="altitude"] h2,
 :root[data-ui="altitude"] h3 { font-family: var(--font-serif); font-weight: 400; letter-spacing: -0.02em; }

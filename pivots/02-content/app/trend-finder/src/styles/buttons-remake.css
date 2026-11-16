@@ -1,0 +1,46 @@
+/* Approved site-wide button contract. Loaded last; important declarations prevent
+   page-specific legacy styles from restoring additional filled button variants. */
+:root[data-ui="altitude"] :is(.btn, .rk-btn), .rk .rk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px !important;
+  padding: 10px 20px !important;
+  border: 1px solid var(--line-strong, #c9cad6) !important;
+  border-radius: 999px !important;
+  background: var(--surface, #fff) !important;
+  color: var(--fg, #1a1a22) !important;
+  font: 500 16px/1.4 var(--font-sans, 'Manrope', sans-serif) !important;
+  box-shadow: none !important;
+  text-decoration: none;
+}
+:root[data-ui="altitude"] :is(.btn-primary, .rk-btn-primary), .rk .rk-btn-primary {
+  background: #1a33f2 !important;
+  border-color: #1a33f2 !important;
+  color: #fff !important;
+}
+@media (hover: hover) {
+  :root[data-ui="altitude"] :is(.btn, .rk-btn):hover:not(:disabled, [aria-disabled="true"], .is-disabled),
+  .rk .rk-btn:hover:not(:disabled, [aria-disabled="true"], .is-disabled) {
+    background: color-mix(in srgb, #7ab8ff 20%, var(--surface, #fff)) !important;
+    border-color: #7ab8ff !important;
+    color: var(--fg, #1a1a22) !important;
+  }
+  :root[data-ui="altitude"] :is(.btn-primary, .rk-btn-primary):hover:not(:disabled, [aria-disabled="true"], .is-disabled),
+  .rk .rk-btn-primary:hover:not(:disabled, [aria-disabled="true"], .is-disabled) {
+    background: #7ab8ff !important;
+    border-color: #7ab8ff !important;
+    color: #060a47 !important;
+  }
+}
+:root[data-ui="altitude"] :is(.btn, .rk-btn):focus-visible, .rk .rk-btn:focus-visible {
+  outline: 2px solid #7ab8ff;
+  outline-offset: 3px;
+}
+:root[data-ui="altitude"] :is(.btn, .rk-btn):is(:disabled, [aria-disabled="true"], .is-disabled),
+.rk .rk-btn:is(:disabled, [aria-disabled="true"], .is-disabled) {
+  opacity: .45;
+  cursor: not-allowed;
+  transform: none;
+}

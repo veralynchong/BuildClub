@@ -257,6 +257,18 @@ export function monthLeft(now = new Date()): { days: number; month: string } {
   return { days: last - now.getDate(), month: now.toLocaleDateString(dateLocale(), { month: 'long' }) }
 }
 
+// How a client's month is going, used by both Homes (one client and All clients).
+export type Pace = 'behind' | 'ontrack' | 'done'
+
+// Behind when fewer videos are approved than the month so far should have produced at an even pace.
+// On day 12 of 30 with a target of 8, 3 should be approved (floor of 8 × 12/30).
+export function paceOf(approved: number, target: number, now = new Date()): Pace {
+  if (target > 0 && approved >= target) return 'done'
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const expected = Math.floor(target * (now.getDate() / last))
+  return approved < expected ? 'behind' : 'ontrack'
+}
+
 export const shortDate = (iso: string) =>
   new Date(`${iso}T00:00`).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })
 

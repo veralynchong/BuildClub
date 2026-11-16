@@ -553,3 +553,38 @@
 .cv-tr-input { font: inherit; font-size: 14px; padding: 0 3px; color: var(--ed-fg); background: var(--ed-canvas); border: 1px solid var(--ed-accent); border-radius: 3px; }
 .cv-ed-pro .cv-ed-ptab[aria-selected="false"] { background: transparent; color: var(--ed-muted); box-shadow: none; cursor: pointer; }
 .cv-ed-pro .cv-ed-ptab[aria-selected="false"]:hover { color: var(--ed-fg); }
+
+/* ---- Video edit inside the Remake navy shell (UI edit v1, 15 Nov 2026), restyle only ----
+   Scoped to the editor (.fc-editor), so Canvas (advanced) keeps its own compact rail. The rail stays icon-only but
+   wide enough for the shell's 44px outlined tiles; the page is the same white rounded panel as every other screen,
+   sized to the window so the timeline is never cut off. Inside: Manrope, a serif page title, pill Export, and the
+   dotted canvas behind the preview. Colours come from the --ed-* tokens, so the dark editor follows as before. */
+@media (min-width: 861px) {
+  :root[data-ui="altitude"] .shell.is-compact:not(.is-full):has(.fc-editor) { grid-template-columns: 80px minmax(0, 1fr); }
+  :root[data-ui="altitude"] .shell.is-compact:not(.is-full):has(.fc-editor) .shell-main {
+    height: calc(100dvh - 32px); min-height: 0; overflow: hidden; border-radius: var(--panel-r);
+  }
+  :root[data-ui="altitude"] .shell.is-compact:not(.is-full):has(.fc-editor) .sidebar.sidebar.sidebar { padding: 24px 14px 20px 18px; gap: 18px; }
+  :root[data-ui="altitude"] .shell.is-compact:not(.is-full):has(.fc-editor) .sidebar.sidebar.sidebar .side-link svg { width: 44px; height: 44px; padding: 12px; border-radius: 14px; }
+  :root[data-ui="altitude"] .shell.is-compact:not(.is-full):has(.fc-editor) .sidebar.sidebar.sidebar .rk-logo-btn { width: 27px; }
+  :root[data-ui="altitude"] .shell.is-compact:not(.is-full):has(.fc-editor) .sidebar.sidebar.sidebar .switcher-btn .avatar { width: 40px; height: 40px; }
+}
+:root[data-ui="altitude"] .fc-editor { background: var(--canvas); }
+:root[data-ui="altitude"] .cv-ed-pro { font-family: var(--font-sans); grid-template-rows: 52px minmax(0, 1fr) 40px auto; }
+:root[data-ui="altitude"] .cv-ed-pro .cv-ed-analysis { font-family: var(--font-sans); }
+:root[data-ui="altitude"] .cv-ed-pro .cv-ed-top { gap: 12px; padding: 0 16px 0 14px; }
+:root[data-ui="altitude"] .cv-ed-crumb { gap: 8px; font-size: 13px; }
+:root[data-ui="altitude"] .cv-ed-crumb b { font: 400 22px/1.2 var(--font-serif); letter-spacing: -0.01em; color: var(--ed-fg); }
+:root[data-ui="altitude"] .cv-ed-export-btn { height: 36px; padding: 0 16px; border-radius: 999px; font-weight: 500; font-size: 13px; }
+:root[data-ui="altitude"] .cv-ed-export-btn:hover { background: var(--sky); color: var(--navy); }
+:root[data-ui="altitude"] .cv-ed-pro .cv-ed-ib { border-radius: 999px; }
+/* Panel tabs: the active one in ink with a blue rule, Manrope weights */
+:root[data-ui="altitude"] .cv-ed-ptab { font-size: 13px; }
+:root[data-ui="altitude"] .cv-ed-pro .cv-ed-tab { font-size: 11px; }
+/* The preview sits on the dotted canvas Research, Plans and Storyboard use */
+:root[data-ui="altitude"] .cv-ed-pro .cv-ed-centre {
+  background-color: var(--ed-tl);
+  background-image: radial-gradient(circle, var(--ed-line-strong) 1px, transparent 1.2px);
+  background-size: 20px 20px;
+}
+:root[data-ui="altitude"] .cv-ed-pro .cv-ed-player > div:first-child { border-radius: var(--radius); overflow: hidden; }
