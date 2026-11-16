@@ -21,7 +21,10 @@ interface Props {
 // Clients never see the agency's client list: their login is a separate second step (not built yet).
 export function LoginScreen({ real = false, startAtLogin = false, onSignIn, startOn = 'landing', onGuidedDemo }: Props) {
   const { role: savedRole, setRole } = useApp()
-  const [mode, setMode] = useState<'landing' | 'login' | 'register' | 'client'>(startAtLogin ? 'login' : startOn)
+  // The email and password form is off for now (15 Nov 2026): without accounts on the API, "Log in" and
+  // "Try the demo" both open the sample agency straight from the landing page, and a sign-out lands back on
+  // it. The form below is kept, and still shows when the API has accounts, since the server then needs a session.
+  const [mode, setMode] = useState<'landing' | 'login' | 'register' | 'client'>(real ? (startAtLogin ? 'login' : startOn) : 'landing')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(() => googleErrorMessage(window.location.search))
@@ -53,7 +56,7 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
     setRole('member')
     onSignIn()
   }
-  if (mode === 'landing') return <LandingAltitude onGuidedDemo={onGuidedDemo} onLogIn={() => setMode('login')} onDemo={real ? () => setMode('login') : tryDemo} />
+  if (mode === 'landing') return <LandingAltitude onGuidedDemo={onGuidedDemo} onLogIn={real ? () => setMode('login') : tryDemo} onDemo={real ? () => setMode('login') : tryDemo} />
 
   const register = mode === 'register'
   const isClient = account === 'client'

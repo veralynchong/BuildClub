@@ -1,0 +1,93 @@
+/* All clients Home: one card per client, sorted by who needs you most (OverviewScreen.tsx).
+   Replaces the client ledger and the post-performance placeholders. On the theme-remake tokens. */
+
+.ovc-wrap { display: grid; gap: 16px; padding-top: 22px; border-top: 1px solid var(--es-rule, var(--ink)); }
+.ovc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+.ovc-foot { margin: 0; color: var(--muted); font-size: 12.5px; }
+
+.ovc {
+  display: flex; flex-direction: column; gap: 20px; padding: 24px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius, 12px);
+}
+.ovc-behind { border-color: var(--rising); box-shadow: inset 0 0 0 1px var(--rising); }
+
+/* Name row */
+.ovc-top { display: flex; align-items: center; gap: 12px; }
+.ovc-ini {
+  flex: none; width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center;
+  background: var(--blue-soft); color: var(--blue); font: 600 12px/1 var(--font-sans); letter-spacing: 0.02em;
+}
+.ovc-behind .ovc-ini { background: var(--navy); color: var(--on-navy); }
+.ovc-done .ovc-ini { background: var(--violet-soft); color: var(--violet); }
+.ovc-name { display: grid; gap: 2px; min-width: 0; }
+.ovc-name .link-strong {
+  padding: 0; border: 0; background: none; text-align: left; color: var(--fg); cursor: pointer;
+  font-family: var(--font-serif); font-weight: 400; font-size: 20px; line-height: 1.2; letter-spacing: -0.01em; text-wrap: balance;
+}
+.ovc-name .small { font-size: 12.5px; }
+.ovc-top .pill { margin-left: auto; flex: none; }
+
+/* Status pills, always with a word */
+.ovc .pill {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px;
+  font: 500 12px/20px var(--font-sans); white-space: nowrap;
+}
+.ovc .pill::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.ovc .pill-ok { background: var(--early-soft); color: var(--early); }
+.ovc .pill-bad { background: var(--no-soft); color: var(--no); }
+.ovc .pill-done { background: var(--navy); color: var(--on-navy); }
+.ovc .pill-done::before { display: none; }
+
+/* Ring plus the three counts */
+.ovc-mid { display: flex; gap: 20px; align-items: center; }
+.ovc-ring { position: relative; width: 120px; height: 120px; flex: none; }
+.ovc-ring .ring { width: 120px; height: 120px; }
+.ovc-stat > span { white-space: nowrap; }
+.ovc-ring .ring { position: absolute; inset: 0; }
+.ovc-ring-wait .ring-fill { stroke: var(--mustard); animation: none; }
+.ovc-ring-wait .ring-empty .ring-fill { stroke: transparent; }
+.ovc-ring-main .ring-fill { stroke: var(--blue); }
+.ovc-ring-main .ring-track { stroke: transparent; }
+.ovc-ring-main .ring-empty .ring-fill { stroke: transparent; }
+.ovc-stats { list-style: none; margin: 0; padding: 0; }
+.ovc-next > .small:last-child { margin-top: 4px; }
+.ovc-ring-text { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+.ovc-ring-text b { display: block; font: 400 36px/36px var(--font-serif); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.ovc-ring-text b small { font-size: 18px; color: var(--muted); }
+.ovc-ring-text span { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
+
+.ovc-stats { flex: 1; display: grid; gap: 10px; min-width: 0; }
+.ovc-stat { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.ovc-stat:last-child { border-bottom: 0; padding-bottom: 0; }
+.ovc-stat > span { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.ovc-stat > span::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--sky); }
+.ovc-stat-wait > span::before { background: var(--mustard); }
+.ovc-stat-ok > span::before { background: var(--blue); }
+.ovc-stat b, .ovc-stat .link-btn { font: 400 20px/24px var(--font-serif); font-variant-numeric: tabular-nums; }
+.ovc-stat .link-btn { padding: 0; border: 0; background: none; color: var(--blue); cursor: pointer; text-decoration: underline 1px transparent; text-underline-offset: 3px; }
+.ovc-stat b.muted { color: var(--muted); }
+
+/* Pace note, in plain words */
+.ovc-pace { margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--canvas-alt, var(--bg)); }
+.ovc-pace b { display: block; font-weight: 600; margin-bottom: 2px; }
+.ovc-pace span { color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+/* Next to film */
+.ovc-next { display: grid; gap: 2px; }
+.ovc-next .label { font: 500 10.5px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.ovc-next b { font-weight: 500; }
+.ovc-next .small { font-size: 12.5px; }
+
+/* Actions */
+.ovc-act { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+.ovc-act .btn { min-height: 40px; padding-inline: 18px; }
+
+@media (hover: hover) {
+  .ovc-name .link-strong:hover { color: var(--blue); }
+  .ovc-stat .link-btn:hover { text-decoration-color: currentColor; }
+}
+@media (max-width: 600px) {
+  .ovc { padding: 18px; }
+  .ovc-mid { flex-direction: column; align-items: stretch; }
+  .ovc-ring { margin: 0 auto; }
+}

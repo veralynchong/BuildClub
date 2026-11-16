@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { TypeAheadItem } from "../lib/findDesk";
 import type { Platform } from "../types";
@@ -46,7 +46,6 @@ const GROUP_KEY = {
 // Find ideas passes hideChips and shows its starting points below the card instead.
 export function SearchBox(p: Props) {
   const [listening, setListening] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
   const listId = useId();
   const past = usePastSearches(p.value, p.live);
   // One search at a time: the button waits while another runs in the background.
@@ -195,30 +194,6 @@ export function SearchBox(p: Props) {
       </div>
 
       {busy && <p className="small muted" role="note">{t('find.bg.busy')}</p>}
-
-      {p.onImage && (
-        <div className="search-upload">
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="sr-only"
-            id={`${p.inputId}-file`}
-            aria-label={t('find.box.uploadAria')}
-            // The visible "Upload screenshot" button opens this input, so it is not a second Tab stop.
-            tabIndex={-1}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (file) p.onImage?.(file);
-            }}
-          />
-          <button type="button" className="btn btn-ghost" onClick={() => fileInput.current?.click()}>
-            {t('find.box.upload')}
-          </button>
-          <span className="small muted">{t('find.box.uploadHint')}</span>
-        </div>
-      )}
 
       {!p.hideChips && (
         <ClientChips

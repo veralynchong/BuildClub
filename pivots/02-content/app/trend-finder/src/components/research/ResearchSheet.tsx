@@ -68,11 +68,9 @@ interface Props {
 // The sub-rows' columns, in order (after the No. column).
 const HEADS: Key[] = [
   'research.sheet.colVideo',
-  'research.sheet.colTitle',
   'research.col.platform',
   'research.col.followers',
   'research.col.views',
-  'research.col.keywords',
   'research.col.hook',
   'research.col.status',
 ]
@@ -92,8 +90,8 @@ const chevron = (
   </svg>
 )
 const bin = (
-  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <path d="m6 6 12 12M18 6 6 18" />
   </svg>
 )
 
@@ -110,7 +108,7 @@ export function ResearchSheet(p: Props) {
         {/* One button (founder, 4 Nov 2026): light blue "Pick this", mustard with a crown once picked. */}
         <button
           type="button"
-          className={`btn btn-sm rs-s-pick${pk.isPicked ? ' is-picked' : ''}`}
+          className={`btn btn-primary btn-sm rs-s-pick${pk.isPicked ? ' is-picked' : ''}`}
           aria-pressed={pk.isPicked}
           aria-label={t(pk.isPicked ? 'research.pick.unpickAria' : 'research.pick.pickAria', { account: e.account })}
           disabled={pk.locked || (!pk.isPicked && pk.otherLocked)}
@@ -139,14 +137,11 @@ export function ResearchSheet(p: Props) {
         </span>
         <div className="rs-s-cell rs-s-account">
           {k('research.sheet.colVideo')}
+          <span className="rs-s-text rs-s-titletext">{titleOf(e) || '—'}</span>
           {kit.accountCell(e)}
         </div>
         {/* Read-only columns (founder, 4 Nov 2026): edit on the Cards view. Status still picks. */}
         <div className="rs-s-fields">
-          <div className="rs-s-cell rs-s-title">
-            {k('research.sheet.colTitle')}
-            <span className="rs-s-text rs-s-titletext">{titleOf(e) || '—'}</span>
-          </div>
           <div className="rs-s-cell rs-s-platform">
             {k('research.col.platform')}
             {/* Round brand mark only (founder, 4 Nov 2026); the name is for hover and screen readers. */}
@@ -162,16 +157,6 @@ export function ResearchSheet(p: Props) {
           <div className="rs-s-cell rs-s-views">
             {k('research.col.views')}
             <span className="rs-s-num is-views">{count(e.views)}</span>
-          </div>
-          <div className="rs-s-cell rs-s-keywords">
-            {k('research.col.keywords')}
-            <span className="rs-chips">
-              {e.keywords.map((kw) => (
-                <span key={kw} className="rs-chip">
-                  {kw}
-                </span>
-              ))}
-            </span>
           </div>
           <div className="rs-s-cell rs-s-hook">
             {k('research.col.hook')}
@@ -305,7 +290,9 @@ export function ResearchSheet(p: Props) {
         : tp('research.index.refs', g.total)
     return (
       <li key={g.id} className={`rs-s-group${open ? ' is-open' : ''}`}>
-        <div className="rs-s-vrow">
+        <div className="rs-s-vrow" onClick={(event) => {
+          if (!(event.target as HTMLElement).closest('button, input, select, textarea, label, a')) p.onToggle(g.id)
+        }}>
           <button
             type="button"
             className="rs-s-chev"
@@ -320,8 +307,11 @@ export function ResearchSheet(p: Props) {
             {slot ? slot.number : '?'}
           </span>
           <div className="rs-s-vtitle">
-            {/* No small "VIDEO N" tag (founder, 4 Nov 2026): the number tile already says which video it is. */}
-            <span className="sr-only">{name}</span>
+            <div className="rs-video-meta">
+              <span className="rs-video-number">{name}</span>
+              <span className="rs-video-meta-sep" aria-hidden="true">|</span>
+              <span className="rs-s-vsub">{slot ? refs : t('research.unsorted.help')}</span>
+            </div>
             <div className="rs-s-topic" role="heading" aria-level={2}>
               {slot ? (
                 <EditableText
@@ -330,6 +320,7 @@ export function ResearchSheet(p: Props) {
                   label={t('research.slot.topicLabel', { n: slot.number })}
                   empty={t('research.slot.addTopic')}
                   editLabel={t('research.edit.topic')}
+                  editIcon
                   onSave={(topic) => {
                     if (topic) p.onUpdateSlot(slot.id, { topic })
                   }}
@@ -338,7 +329,6 @@ export function ResearchSheet(p: Props) {
                 t('research.unsorted')
               )}
             </div>
-            <span className="rs-s-vsub">{slot ? refs : t('research.unsorted.help')}</span>
           </div>
           {slot && (
             <label className="rs-s-due">

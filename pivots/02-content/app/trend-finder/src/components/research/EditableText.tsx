@@ -17,6 +17,7 @@ interface Props {
   children?: ReactNode
   // A visible "Edit hook" link after the text, which also starts editing (the text itself stays clickable).
   editLabel?: string
+  editIcon?: boolean
   // Called only when the text changed.
   onSave: (next: string) => void
 }
@@ -102,8 +103,8 @@ export function EditableText(p: Props) {
   return (
     <span className="rs-edit-wrap">
       {view}
-      <button type="button" className="rs-edit-link" onClick={start}>
-        {p.editLabel}
+      <button type="button" className={`rs-edit-link${p.editIcon ? ' rs-edit-icon' : ''}`} onClick={start} aria-label={p.editIcon ? `${p.editLabel} · ${p.label}` : undefined} title={p.editIcon ? p.editLabel : undefined}>
+        {p.editIcon ? <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m16 3 5 5-12 12-6 1 1-6Z" /><path d="m14 5 5 5" /></svg> : p.editLabel}
         <span className="sr-only">{` · ${p.label}`}</span>
       </button>
     </span>

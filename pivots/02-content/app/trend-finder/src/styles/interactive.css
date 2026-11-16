@@ -132,3 +132,25 @@
 @media (prefers-reduced-motion: reduce) {
   :where(button, a[href], summary, select, input, textarea, label, .board-card, .hook-option, .shot-frame, .tile-main .thumb) { transition: none; }
 }
+
+/* Research and Plans: shared sky blue interaction states. */
+:root[data-ui="altitude"] :is(.client.research, .client.board) {
+  --hover-fill: var(--sky);
+  --hover-soft: color-mix(in srgb, var(--sky) 20%, var(--surface));
+  --hover-tint: color-mix(in srgb, var(--sky) 20%, var(--surface));
+}
+:root[data-ui="altitude"] :is(.client.research, .client.board) button:hover:not(:disabled, [aria-disabled="true"], .is-disabled, [aria-pressed="true"], [aria-selected="true"], [aria-current="true"]) {
+  background-color: color-mix(in srgb, var(--sky) 20%, var(--surface));
+  border-color: var(--sky);
+  color: var(--fg);
+}
+:root[data-ui="altitude"] :is(.client.research, .client.board) .btn.btn-primary:hover:not(:disabled, [aria-disabled="true"], .is-disabled) {
+  background-color: var(--sky);
+  border-color: var(--sky);
+  color: var(--navy);
+  box-shadow: none;
+}
+:root[data-ui="altitude"] :is(.client.research, .client.board) button:focus-visible {
+  outline: 2px solid var(--sky);
+  outline-offset: 3px;
+}

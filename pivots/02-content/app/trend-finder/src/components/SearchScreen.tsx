@@ -7,8 +7,7 @@ import { SearchBox } from './SearchBox'
 import { AltitudeHero } from './themes/AltitudeHero'
 import { TopicResults } from './publish/TopicResults'
 import { t } from '../lib/i18n'
-import type { RecentRow, SavedRow, TypeAheadItem } from '../lib/findDesk'
-import { RecentSearches } from './find/RecentSearches'
+import type { SavedRow, TypeAheadItem } from '../lib/findDesk'
 
 interface Props {
   query: Query
@@ -30,9 +29,7 @@ interface Props {
   // The last search that had results, to offer a way back.
   lastSearch: string | null
   onBackToResults: () => void
-  // The desk: this client's recent searches and what is saved to Research, by video.
-  recent: RecentRow[]
-  onOpenRecent: (row: RecentRow) => void
+  // The desk: what is saved to Research, by video. (Recent searches came off this page, 15 Nov 2026.)
   saved: SavedRow[]
   coverOf: (videoId: string) => string | undefined
   onOpenResearch: () => void
@@ -43,12 +40,10 @@ interface Props {
 }
 
 // Find ideas, before searching. The first thing staff see after picking a client: the navy hero with the search
-// box (and suggestions while typing). A first visit (no searches yet) shows only that. Once the client has
-// searches, Recent searches follows at the bottom.
+// box (and suggestions while typing), and nothing else. The Recent searches list and the cost note under it
+// were taken off for every client (15 Nov 2026); recent searches still live in the browser for "Back to results".
 export function SearchScreen(props: Props) {
   const { query, setQuery, onSearch, clientName, live, error } = props
-  const returning = props.recent.length > 0
-  const recent = <RecentSearches clientName={clientName} rows={props.recent} onOpen={props.onOpenRecent} />
   return (
     <section className="search-screen find-page fd-page">
       <AltitudeHero clientName={clientName}>
@@ -88,13 +83,6 @@ export function SearchScreen(props: Props) {
       )}
 
       <TopicResults text={query.keyword} />
-
-      {/* A first visit (no searches yet) shows only the search. Coming back, Recent searches sits at the bottom.
-          Where to start and Saved to Research were taken off this page. */}
-      {returning && recent}
-
-      {/* The demo's "only has sample videos about tofu" line was taken off (4 Nov 2026); the live hint stays. */}
-      {live && <p className="hint find-hint">{t('find.search.hintLive')}</p>}
     </section>
   )
 }

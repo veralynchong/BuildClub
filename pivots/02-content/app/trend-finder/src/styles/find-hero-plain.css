@@ -1,0 +1,60 @@
+/* Find ideas, before searching (founder pick, 15 Nov 2026: "version 2, centred, floating"; mockup in
+   docs/design-review/shell-layout/find-ideas-no-hero.html). The navy hero panel is gone: a small blue eyebrow,
+   the headline and the sentence sit centred on the white page, and the search card floats on a soft shadow with
+   no border. Same words, same search box (AltitudeHero.tsx + SearchBox.tsx). Loaded after theme-remake.css. */
+
+:root[data-ui="altitude"] .alt-hero.alt-plain {
+  min-height: 0; margin: 28px 0 8px; padding: 0 16px 8px; border-radius: 0; overflow: visible;
+  background: none; color: var(--fg);
+}
+:root[data-ui="altitude"] .alt-hero.alt-plain::before { content: none; }
+:root[data-ui="altitude"] .alt-hero.alt-plain .alt-hero-inner { gap: 14px; max-width: 820px; }
+:root[data-ui="altitude"] .alt-hero.alt-plain .alt-eyebrow { margin: 0; color: var(--blue); }
+:root[data-ui="altitude"] .alt-hero.alt-plain h1 { color: var(--fg); margin: 0; }
+/* 15 Nov 2026, founder: "film" uses the same font and colour as the rest of the headline (no blue italic). */
+:root[data-ui="altitude"] .alt-hero.alt-plain h1 em { color: inherit; font: inherit; font-style: normal; letter-spacing: inherit; }
+:root[data-ui="altitude"] .alt-hero.alt-plain .alt-lede { color: var(--muted); max-width: 540px; margin: 0; }
+:root[data-ui="altitude"] .alt-hero.alt-plain .alt-search { width: 100%; max-width: 780px; margin-top: 24px; }
+:root[data-ui="altitude"] .alt-hero.alt-plain .alt-search .search-box {
+  padding: 26px 28px; border-color: transparent;
+  box-shadow: 0 28px 56px -20px rgba(6, 10, 71, 0.22), 0 2px 8px rgba(6, 10, 71, 0.06);
+}
+@media (max-width: 760px) {
+  :root[data-ui="altitude"] .alt-hero.alt-plain { margin-top: 8px; padding: 0 0 8px; }
+  :root[data-ui="altitude"] .alt-hero.alt-plain .alt-search .search-box { padding: 18px; }
+}
+
+/* Find ideas sits on the same faint dotted canvas as Research and Plans (15 Nov 2026). Same rule as research.css:
+   the white page panel gets the dots; the search card and its suggestions stay solid white on top. */
+:root[data-ui="altitude"] .shell-main:has(.search-screen.find-page) {
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, var(--line-strong) 1px, transparent 1.2px);
+  background-size: 20px 20px;
+}
+
+/* Find ideas shares the dashboard's sky blue button hover treatment. */
+:root[data-ui="altitude"] .search-screen.find-page button:hover:not(:disabled, [aria-disabled="true"], .is-disabled) {
+  background-color: color-mix(in srgb, var(--sky) 20%, var(--surface));
+  border-color: var(--sky);
+  color: var(--fg);
+}
+:root[data-ui="altitude"] .search-screen.find-page .btn.btn-primary:hover:not(:disabled, [aria-disabled="true"], .is-disabled) {
+  background-color: var(--sky);
+  border-color: var(--sky);
+  color: var(--navy);
+  box-shadow: none;
+}
+
+/* Client identity in the shared Find ideas headline. */
+:root[data-ui="altitude"] .alt-hero.alt-plain h1 .find-client-name {
+  color: var(--navy);
+  font: inherit;
+}
+
+:root[data-ui="altitude"] .alt-hero.alt-plain .alt-lede .find-trending-text { color: var(--navy); font-weight: 600; }
+
+/* Emphasise the headline's subject, rather than the client name. */
+:root[data-ui="altitude"] .alt-hero.alt-plain h1 .find-trending-heading {
+  color: var(--navy);
+  font: inherit;
+}
