@@ -57,6 +57,17 @@
 - 記錄用上面 A 的同一張表（每支片一張），截圖放 `…/testing/2026-11-17_veralyn/`。
 - 事前：今天 A 的第 4 步先確認 iPhone .mov 能上傳；不能的話明天前要先處理或請她改拍 mp4。
 
+### B 結果（11/17 傍晚，只做到搜尋）
+
+- 17:07 開始，team 站（tunnel）。只走到第 1 步搜尋，之後改開新 session 討論未修問題。花費：team 今天 US$0.54（其中 `hunan chicken` 真實搜尋約 US$0.46）。
+- P4 通過：搜尋中載入卡片在內容區左右置中。
+- 新問題 B1：滑鼠移上去影片不播（使用者 MacBook 經 tunnel）。mini 上 Playwright 重現不出來（會播）。卡片出現「Watch on TikTok」代表 TikTok 播放器 6 秒沒回 ready（`READY_TIMEOUT_MS`），疑似 TikTok 對使用者網路限流。待使用者在 MacBook 重新整理後再試，並直接開 `https://www.tiktok.com/player/v1/7404778364856192261?autoplay=1&muted=1` 看是否 overload。
+- 新問題 B2：搜「chicken recipe」秒出結果，不是真搜尋。`src/lib/parseQuery.ts` 的 stopwords 含 `recipe(s)`，送出的是 `q=chicken`（吃快取）。交接檔原本以為會付費搜尋，判斷錯誤。
+- 新問題 B3：`hunan chicken` 真實搜尋超過 110 秒，畫面寫「通常 20–60 秒」。
+- 新問題 B4：搜完顯示「Showing 0 of 30」，預設只顯示「粉絲 < 5 萬、觀看 100 萬+」，要按「Show all 30」才看得到結果。
+- 新問題 B5：多字查詢會被重排（如 `chili chicken stir fry` → `chili stir chicken fry`），因為格式 tag 的字被移到最後。
+- 參考影片候選（湖南辣椒炒雞，只看文字說明、未看畫面）：首選 @octivia_47 7517885494508719373（12.8k 觀看／79 粉絲，31s）；@leoal534 7576694676275678495（Green Pepper Chicken，554 觀看）；@dada.tastes 7528027563663396114（84.5k，但是炒肉）。
+
 ## 2026-11-15（17:02）：已知問題第三批，兩站已部署
 
 - b04062a 去除靜音把 shot 1 切兩段：是設計上的行為（`backend/suggest.py` `first_cut` 會切掉 take 中間 ≥ 0.6 秒的停頓；那段 take 中間停了 1.77 秒），沒改門檻。問題是兩段都叫「Shot 1 · Take 1」看起來像重複，改成「Shot 1 · Take 1 · part 2」。

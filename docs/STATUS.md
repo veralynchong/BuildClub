@@ -1,5 +1,13 @@
 # STATUS
 
+## 2026-11-17（18:00）：team 站實測 B（只做到搜尋）
+
+- 一行狀態：沒改程式。實測到搜尋就停，新問題 B1–B5 記在 `docs/test-log.md` 的「B 結果」；下一場 session 討論上次哪些問題還沒修（使用者的 Google Doc）。
+- 最後驗證 2026-11-17 17:07：`bash bin/verify.sh` GREEN（後端 1265 passed、3 skipped）。
+- 花費：team 今天 US$0.54，累計 US$1.16。
+- 已知問題：B1 hover 不播（只在使用者 MacBook 發生，原因未確認）；B2 `recipe` 被當 stopword；B3 搜尋 > 110 秒；B4 預設篩選顯示 0 筆；B5 查詢字序被打亂。P2／P6／P10／P16 仍未修。
+- 下一步：讀使用者的 Google Doc，對照 test-log 和 #62 列出未修問題，和使用者決定要修哪些。
+
 ## 2026-11-16（19:00）：修 11/16 自測問題（PR #62）
 
 - 一行狀態：分支 `fix/beta-test-issues`（base `chore/integrate-dashboard-cards` = #61）修了 13 個問題，PR https://github.com/veralynchong/BuildClub/pull/62 等 Veralyn 審，不合併。只部署 team（:8803，先 backup `~/beta/team/backups/2026-11-16-1827`）；daphne／collage 沒動。
