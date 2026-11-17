@@ -113,6 +113,7 @@ test('App passes the current error to results and a 429 preserves old results un
   const scope = {
     guidedRuntime: null,
     parseQuery: (text) => ({ keywords: [text], topics: [] }), formats: [],
+    searchTerms: (parsed) => parsed.keywords.join(' '),
     query: { platforms: ['tiktok'] }, client: { id: 'client' }, searchSeq: { current: 0 },
     setSearchError: (value) => { searchError = value }, setNotice: noop,
     setSearching: (value) => { searching = value },
@@ -143,7 +144,7 @@ test('App passes the current error to results and a 429 preserves old results un
   assert.equal(queryText, 'retry')
 })
 
-test('guided initial filters show the prepared reference with unknown popularity while normal defaults keep their threshold', () => {
+test('every result shows by default (11/16 P5); the 1M+/50K rule is opt-in, and guided filters still show the prepared reference', () => {
   i18n.setActiveLang('en')
   const ResultsScreen = resultsComponent()
   const props = {
@@ -156,7 +157,11 @@ test('guided initial filters show the prepared reference with unknown popularity
     savedIn: () => null, onSearch: noop,
   }
   const normal = renderToStaticMarkup(React.createElement(ResultsScreen, props))
-  assert.doesNotMatch(normal, /Prepared tofu unknown reference/)
+  assert.match(normal, /Prepared tofu unknown reference/)
+  assert.match(normal, /Only 1M\+ views from accounts under 50K/)
+  const ruleOn = renderToStaticMarkup(React.createElement(ResultsScreen, { ...props, initialFilters: filters.DEFAULT_FILTERS }))
+  assert.doesNotMatch(ruleOn, /data-tile="ig-DVp3xOdFaHL"/)
+  assert.match(ruleOn, /Show all 1/)
   const guided = renderToStaticMarkup(React.createElement(ResultsScreen, { ...props, initialFilters: { ...filters.DEFAULT_FILTERS, viewsMin: 0, followersMax: 0 } }))
   assert.match(guided, /Prepared tofu unknown reference/)
   assert.equal(filters.DEFAULT_FILTERS.viewsMin, 1_000_000)

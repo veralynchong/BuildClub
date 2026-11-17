@@ -194,7 +194,7 @@ export function ResearchSheet(p: Props) {
             onClick={() => p.onOpenVideo(e.videoId)}
           >
             {v?.thumbnail ? (
-              <img src={v.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
+              <img src={v.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} />
             ) : (
               <span className="rs-v-hook" aria-hidden="true">
                 {e.hook}

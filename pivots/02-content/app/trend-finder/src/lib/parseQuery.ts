@@ -1,5 +1,5 @@
-import type { Format, Platform, Video } from '../types'
-import { platformName } from './metrics'
+import type { Format, Platform, Video } from '../types.ts'
+import { platformName } from './metrics.ts'
 
 // What we understood from the search box. Shown back to the user as chips they can remove.
 export interface Interpretation {
@@ -101,8 +101,8 @@ const audienceRules: [RegExp, string][] = [
 const stopwords = new Set(
   `what why how which when who whom is are was were does do did should can could would will the a an for to of in on
   with and or but that this these those my our your their me us i it its about video videos content post posts trend trends
-  trending viral working work works worked blowing up right now best top ideas idea people get getting make making recipe
-  recipes like be doing going using use there any some more most so than at from as by just really still good great new
+  trending viral working work works worked blowing up right now best top ideas idea people get getting make making
+  like be doing going using use there any some more most so than at from as by just really still good great new
   popular performing perform well find show give me tell vs versus`.split(/\s+/),
 )
 
@@ -175,4 +175,20 @@ export function matchesKeyword(v: Video, format: Format | undefined, keyword: st
     v.hook.toLowerCase().includes(k) ||
     Boolean(format && (format.name.toLowerCase().includes(k) || format.tags.some((t) => t === k)))
   )
+}
+
+// The words to send the platform, in the order the user typed them ("chili chicken stir fry" stays as is,
+// even though "stir fry" was matched as a format tag first).
+export function searchTerms(parsed: Interpretation): string {
+  const text = ` ${parsed.text.toLowerCase().replace(/[^a-z0-9- ]/g, ' ').replace(/\s+/g, ' ')} `
+  const at = (w: string) => {
+    const i = text.indexOf(` ${w}`)
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i
+  }
+  const words = [...parsed.keywords, ...parsed.topics.map((t) => t.word)]
+  return words
+    .map((w, i) => ({ w, i, pos: at(w) }))
+    .sort((a, b) => a.pos - b.pos || a.i - b.i)
+    .map((x) => x.w)
+    .join(' ')
 }

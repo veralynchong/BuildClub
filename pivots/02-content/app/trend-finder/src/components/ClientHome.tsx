@@ -53,7 +53,7 @@ function PlanRow({ plan, meta, right }: { plan: Named; meta: string; right: Reac
   return (
     <li className="chm-row">
       <span className="chm-cover" aria-hidden="true">
-        {plan.video?.thumbnail && <img src={plan.video.thumbnail} alt="" loading="lazy" />}
+        {plan.video?.thumbnail && <img src={plan.video.thumbnail} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} />}
       </span>
       <span className="chm-row-text">
         <b>{plan.name}</b>

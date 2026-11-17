@@ -210,18 +210,19 @@ test('original on-screen source quotes reach native breakdown separately from ad
 test('native search parser, searchAll and saveLibrary retain the fixed analysed source and reload identity', async () => {
  const {registerHooks}=await import('node:module')
  const hook=registerHooks({resolve(specifier,context,next){return next(specifier==='./metrics'&&context.parentURL?.endsWith('/parseQuery.ts')?'./metrics.ts':specifier,context)}})
- let parseQuery
- try { ({parseQuery}=await import('../src/lib/parseQuery.ts')) } finally { hook.deregister() }
+ let parseQuery, searchTerms
+ try { ({parseQuery,searchTerms}=await import('../src/lib/parseQuery.ts')) } finally { hook.deregister() }
  const live=await import('../src/lib/live.ts')
  const s=setup(), original=globalThis.fetch, seen=[]
  globalThis.fetch=(input,init)=>{const request=input instanceof Request?input:new Request(`http://guided.test${input}`,init);seen.push(new URL(request.url).pathname);return s.data.request(request)}
  try {
   const previous=await live.loadLibrary(), parsed=parseQuery('Tofu Recipe',previous.formats)
-  const query=([...parsed.keywords,...parsed.topics.map(topic=>topic.word)].join(' ')||'Tofu Recipe').trim()
-  assert.equal(query.toLowerCase(),'tofu')
+  // "recipe" is no longer dropped (11/17 B2); the prepared search accepts both "tofu" and "tofu recipe".
+  const query=(searchTerms(parsed)||'Tofu Recipe').trim()
+  assert.equal(query.toLowerCase(),'tofu recipe')
   const results=await live.searchAll(query,['instagram']); assert.equal(results.failed.length,0); assert.equal(results.videos.length,preparedSearchResult.videos.length)
   const video=results.videos.find(v=>v.id===ids.videoId); assert.equal(video.id,ids.videoId); assert.equal(video.formatId,ids.formatId); assert.equal(video.handle,'@Ever Green reference'); assert.equal(video.lengthSec,11); assert.equal(video.daysAgo,999)
-  assert.deepEqual(video.keywords,['tofu']); assert.equal(video.views,0); assert.equal(video.followers,0)
+  assert.deepEqual(video.keywords,['tofu recipe']); assert.equal(video.views,0); assert.equal(video.followers,0)
   assert.equal(video.url,'https://www.instagram.com/reel/DVp3xOdFaHL/')
   const broken=new Map(previous.formats.filter(format=>format.shotList.length).map(format=>[format.id,format]))
   const merged={videos:results.videos,formats:results.formats.map(format=>broken.get(format.id)??format)}

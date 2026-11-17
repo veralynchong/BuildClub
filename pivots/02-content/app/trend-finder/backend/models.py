@@ -37,6 +37,8 @@ class SearchVideo(BaseModel):
     music: str
     musicOriginal: bool
     hashtags: list[str]
+    # TikTok photo post (Apify's isSlideshow). Missing on older saved searches and other platforms.
+    slideshow: Optional[bool] = None
     # Views ÷ followers, the TikTok sort order (Daphne's rule). Null when followers is.
     ratio: Optional[float] = None
     # The account's usual views (median of its latest videos) and views ÷ that.

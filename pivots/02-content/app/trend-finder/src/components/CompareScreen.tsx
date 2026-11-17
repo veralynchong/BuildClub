@@ -35,7 +35,7 @@ function Picker({ title, videos, picked, toggle, disabled }: { title: string; vi
           <label key={v.url} className={`cmp-pick ${picked.includes(v.url) ? 'cmp-pick-on' : ''}`}>
             <input type="checkbox" className="sr-only" checked={picked.includes(v.url)} onChange={() => toggle(v.url)} />
             <span className={`thumb cmp-thumb ${v.thumbnail ? 'thumb-img' : ''}`} aria-hidden="true">
-              {v.thumbnail && <img src={v.thumbnail} alt="" loading="lazy" />}
+              {v.thumbnail && <img src={v.thumbnail} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} />}
             </span>
             <span className="cmp-pick-text">{v.label}</span>
           </label>

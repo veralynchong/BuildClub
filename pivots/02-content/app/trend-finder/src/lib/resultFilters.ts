@@ -7,6 +7,8 @@ export type ViewsMin = 0 | 100_000 | 500_000 | 1_000_000 | 5_000_000
 export type FollowersMax = 0 | 5_000 | 50_000 | 1_000_000 // 0 = any
 export type UploadWithin = 0 | 7 | 30 | 90 | 365 // days, 0 = any
 export type LengthBand = 'any' | 'short' | 'mid' | 'long'
+// Slideshow = a TikTok photo post (Apify's isSlideshow).
+export type PostKind = 'any' | 'video' | 'slideshow'
 
 export interface ResultFilters {
   viewsMin: ViewsMin
@@ -15,6 +17,7 @@ export interface ResultFilters {
   brokeOut: boolean // views >= 10x followers
   within: UploadWithin
   length: LengthBand
+  kind: PostKind
   // Content types to keep; none picked means all of them.
   types: ContentType[]
 }
@@ -33,6 +36,7 @@ export const DEFAULT_FILTERS: ResultFilters = {
   brokeOut: false,
   within: 0,
   length: 'any',
+  kind: 'any',
   types: [],
 }
 
@@ -60,6 +64,8 @@ function passes(v: Video, f: ResultFilters): boolean {
   if (v.platform !== 'reddit' && v.views < f.viewsMin) return false
   // No posting date (YouTube search) or no length: can't be judged, so these stay.
   if (f.within > 0 && v.daysAgo < UNKNOWN_DAYS && v.daysAgo > f.within) return false
+  // Older saved searches don't say; they count as videos.
+  if (f.kind !== 'any' && Boolean(v.slideshow) !== (f.kind === 'slideshow')) return false
   if (f.length !== 'any' && v.lengthSec > 0 && lengthBandOf(v.lengthSec) !== f.length) return false
   if (usesFollowers(f) && !followersUnknown(v)) {
     if (f.followersMax > 0 && v.followers >= f.followersMax) return false

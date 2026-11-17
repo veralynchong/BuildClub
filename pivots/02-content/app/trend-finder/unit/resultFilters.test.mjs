@@ -97,3 +97,10 @@ test('SHOW_ALL_FILTERS keeps every video the default filters hide', () => {
   assert.deepEqual(applyFilters(vids, SHOW_ALL_FILTERS).map((v) => v.id), ['a', 'small', 'big', 'r'])
   assert.deepEqual(activeFilters(SHOW_ALL_FILTERS), [])
 })
+
+test('videos or slideshows: older saved searches without the flag count as videos (11/16 P6)', () => {
+  const vs = [vid({ id: 'v' }), vid({ id: 's', slideshow: true }), vid({ id: 'old' })]
+  assert.deepEqual(ids(applyFilters(vs, { ...any, kind: 'video' })), ['v', 'old'])
+  assert.deepEqual(ids(applyFilters(vs, { ...any, kind: 'slideshow' })), ['s'])
+  assert.deepEqual(ids(applyFilters(vs, any)), ['v', 's', 'old'])
+})

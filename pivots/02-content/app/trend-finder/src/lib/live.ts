@@ -32,6 +32,8 @@ interface LiveItem {
   music: string
   musicOriginal: boolean
   hashtags: string[]
+  // TikTok photo post; missing on older saved searches and other platforms.
+  slideshow?: boolean
   // Reddit only (backend/models.py): upvotes stand in for views, and medianUpvotes for medianViews.
   upvotes?: number | null
   community?: string | null
@@ -119,6 +121,7 @@ function toVideo(item: LiveItem, query: string, platform: Platform, search: { fe
     url: item.url,
     thumbnail: item.cover,
     caption: item.text,
+    slideshow: item.slideshow || undefined,
     music: item.music,
     hashtags: item.hashtags ?? [],
     comments: platform === 'reddit' ? item.comments : undefined,

@@ -19,7 +19,7 @@ import { SearchBox } from './SearchBox'
 import type { PulseInfo } from './ClientChips'
 import type { ChipGroup } from '../lib/clientChips'
 import { useManagerName } from '../lib/appContext'
-import { DEFAULT_FILTERS, SHOW_ALL_FILTERS, applyFilters, followersPending, type ResultFilters } from '../lib/resultFilters'
+import { DEFAULT_FILTERS, SHOW_ALL_FILTERS, applyFilters, followersPending, type PostKind, type ResultFilters } from '../lib/resultFilters'
 import type { SavedRow, TypeAheadItem } from '../lib/findDesk'
 import { DeskBlock } from './find/DeskBlock'
 import { dayWord } from './find/words'
@@ -97,8 +97,9 @@ interface Props {
 export function ResultsScreen(p: Props) {
   const { onVisibleResults } = p
   const manager = useManagerName()
-  // The default filters still apply; their tags were taken off this page.
-  const [filters, setFilters] = useState<ResultFilters>(p.initialFilters ?? DEFAULT_FILTERS)
+  // Every result shows first; the agency's 1M+/50K rule is a link to turn on (11/16 test, P5).
+  const [filters, setFilters] = useState<ResultFilters>(p.initialFilters ?? SHOW_ALL_FILTERS)
+  const ruleOn = filters.viewsMin === DEFAULT_FILTERS.viewsMin && filters.followersMax === DEFAULT_FILTERS.followersMax
   const byFormat = p.formatFilter ? p.results.filter((v) => v.formatId === p.formatFilter) : p.results
   // New since the last run first (keeping the chosen order within each part).
   const isNew = (v: Video) => p.newIds.has(v.id)
@@ -161,6 +162,16 @@ export function ResultsScreen(p: Props) {
         <option value={30}>{t('find.res.last30')}</option>
         <option value={90}>{t('find.res.last90')}</option>
         <option value={3650}>{t('find.res.anyTime')}</option>
+      </select>
+      <select
+        id="toolbar-kind"
+        aria-label={t('find.res.kind')}
+        value={filters.kind}
+        onChange={(e) => setFilters({ ...filters, kind: e.target.value as PostKind })}
+      >
+        <option value="any">{t('find.res.kindAny')}</option>
+        <option value="video">{t('find.res.kindVideo')}</option>
+        <option value="slideshow">{t('find.res.kindSlideshow')}</option>
       </select>
     </>
   )
@@ -233,18 +244,17 @@ export function ResultsScreen(p: Props) {
             {t('find.res.endStop')}
             {shown.length < byFormat.length && (
               <span className="fd-showing">
-                {/* The filter panel is gone, so say what the agency's default rule hides. */}
-                {t(
-                  filters.viewsMin === DEFAULT_FILTERS.viewsMin && filters.followersMax === DEFAULT_FILTERS.followersMax
-                    ? 'find.desk.showingDefault'
-                    : 'find.desk.showing',
-                  { shown: shown.length, total: byFormat.length },
-                )}
+                {/* The filter panel is gone, so say what the agency's rule hides. */}
+                {t(ruleOn ? 'find.desk.showingDefault' : 'find.desk.showing', { shown: shown.length, total: byFormat.length })}
               </span>
             )}
-            {shown.length < byFormat.length && (
-              <button type="button" className="link-btn fd-showall" onClick={() => setFilters(SHOW_ALL_FILTERS)}>
+            {ruleOn ? (
+              <button type="button" className="link-btn fd-showall" onClick={() => setFilters({ ...SHOW_ALL_FILTERS, kind: filters.kind })}>
                 {t('find.desk.showAll', { total: byFormat.length })}
+              </button>
+            ) : (
+              <button type="button" className="link-btn fd-showall" onClick={() => setFilters({ ...DEFAULT_FILTERS, kind: filters.kind })}>
+                {t('find.desk.onlyRule')}
               </button>
             )}
             {newCount > 0 && p.newSince !== undefined && (

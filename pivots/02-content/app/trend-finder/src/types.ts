@@ -40,6 +40,8 @@ export interface Video {
   url?: string
   thumbnail?: string
   caption?: string
+  // A TikTok photo post rather than a video; missing on older saved searches.
+  slideshow?: boolean
   music?: string
   hashtags?: string[]
   // Reddit only: it shows no views, so `views` holds the upvotes (and medianViews the subreddit's usual upvotes).

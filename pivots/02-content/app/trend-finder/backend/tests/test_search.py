@@ -407,3 +407,12 @@ def test_types_files_are_not_read_as_searches(client):
     write_search(server.CACHE_DIR, "tofu", 0, [])
     (server.CACHE_DIR / server.types_file("tofu", "tiktok")).write_text("{}")
     assert [name for name, _, _ in server.saved_files()] == [server.cache_name("tofu")]
+
+
+def test_trim_keeps_the_slideshow_flag(client):
+    """The results screen filters videos from photo posts (11/16 P6), so the flag must reach the page."""
+    photo = {**item(9, "p", 500), "isSlideshow": True}
+    assert server.trim(photo)["slideshow"] is True
+    assert server.trim(item(1, "a", 500))["slideshow"] is False
+    write_search(server.PINNED_DIR, "photos", 0, [server.trim(photo)])
+    assert client.get("/api/search", params={"q": "photos"}).json()["videos"][0]["slideshow"] is True

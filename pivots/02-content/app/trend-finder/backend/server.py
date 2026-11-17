@@ -263,6 +263,8 @@ def trim(item: dict) -> dict:
         "music": f"{music.get('musicName') or ''} · {music.get('musicAuthor') or ''}".strip() if music else "",
         "musicOriginal": bool(music and music.get("musicOriginal")),
         "hashtags": [h["name"] for h in item.get("hashtags") or [] if h and h.get("name")],
+        # A photo post, not a video; the results screen can filter on it.
+        "slideshow": bool(item.get("isSlideshow")),
         # Daphne's rule: views ÷ followers. A small account with huge views means the idea is good.
         "ratio": round(plays / max(followers, 1), 2),
     }

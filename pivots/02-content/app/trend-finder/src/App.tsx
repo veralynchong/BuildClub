@@ -11,7 +11,7 @@ import { SearchScreen } from './components/SearchScreen'
 import { ResultsScreen } from './components/ResultsScreen'
 import { PatternStrip } from './components/PatternStrip'
 import type { Chip } from './components/ResultsScreen'
-import { interpretMedia, matchesKeyword, parseQuery } from './lib/parseQuery'
+import { interpretMedia, matchesKeyword, parseQuery, searchTerms } from './lib/parseQuery'
 import type { Interpretation, MediaSource } from './lib/parseQuery'
 import { LikeThisCard } from './components/LikeThisCard'
 import { ReadingOverlay } from './components/ReadingOverlay'
@@ -790,7 +790,7 @@ export default function App() {
     }
     const parsed = parseQuery(text, formats)
     // Send the platform the meaningful words; time, platform and length words become filters instead.
-    const q = ([...parsed.keywords, ...parsed.topics.map((t) => t.word)].join(' ') || text).trim()
+    const q = (searchTerms(parsed) || text).trim()
     // Platforms named in the text ("on instagram") win over the toggles.
     const platforms = parsed.platforms?.length ? parsed.platforms : (usePlatforms ?? query.platforms)
     if (!q) return
