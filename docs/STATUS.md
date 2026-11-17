@@ -1,5 +1,13 @@
 # STATUS
 
+## 2026-11-17（19:20）：修搜尋那一步的問題（分支 `fix/search-step-issues`，疊在 #62）
+
+- 一行狀態：讀了使用者的 Google Doc（`2026-11-16_self-run-log_v03`，內容就是 P1–P17）。修了 P5/B4（預設顯示全部，1M+/50K 改成可選連結）、B2（`recipe` 不再是 stopword）、B5（照輸入字序送出）、B3（等待文字改「最多約 2 分鐘」）、P6（存 Apify `isSlideshow`，加 Videos/Slideshows 選單；舊快取當影片）、P16（Home、Compare、Research 讀不到的封面隱藏）。commit 6f57faf 已 push；PR 還沒開（`gh pr create` 被 `block-dangerous-commands.sh` 解析失敗擋下，要使用者自己開）。
+- 最後驗證 2026-11-17 19:15：`bash bin/verify.sh full` GREEN（後端 1266 passed、3 skipped；前端 unit 全過）；tsc、eslint 通過。已部署 team（先 backup `~/beta/team/backups/2026-11-17-1916`），:8803 回 200。
+- 沒驗證：結果頁沒在瀏覽器看（Playwright 被別的 session 占用）；沒有付費搜尋看真的 slideshow。
+- 沒修：P2（1264px 最小寬度，要決定）、P10（等 Veralyn）、B1（要使用者在 MacBook 開 TikTok player 網址取證）。
+- 下一步：使用者開 PR；在 team 站搜 `chicken`（有快取、免費）看結果頁預設全顯示、Videos/Slideshows 選單；決定 P2。
+
 ## 2026-11-17（18:00）：team 站實測 B（只做到搜尋）
 
 - 一行狀態：沒改程式。實測到搜尋就停，新問題 B1–B5 記在 `docs/test-log.md` 的「B 結果」；下一場 session 討論上次哪些問題還沒修（使用者的 Google Doc）。
