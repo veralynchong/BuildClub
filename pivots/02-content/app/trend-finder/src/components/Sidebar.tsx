@@ -95,6 +95,7 @@ interface Props {
   live: boolean
   editing?: boolean // the canvas is showing with its editor open: Video edit is the current item, not Canvas
   compact?: boolean // icons only (the canvas view): each item keeps its label as title and aria-label
+  onToggleWide?: () => void // the canvas view: widen the icon-only sidebar, or shrink it back
 }
 
 function ClientSwitcher({ clients, workspace, setWorkspace, onAddClient, compact }: Pick<Props, 'clients' | 'workspace' | 'setWorkspace' | 'onAddClient' | 'compact'>) {
@@ -219,6 +220,18 @@ export function Sidebar(p: Props) {
           >
             <Logo height={p.compact ? 18 : 22} />
           </button>
+          {p.onToggleWide && (
+            <button
+              type="button"
+              className="side-toggle"
+              aria-label={p.compact ? t('shell.side.expand') : t('shell.side.collapse')}
+              title={p.compact ? t('shell.side.expand') : t('shell.side.collapse')}
+              aria-expanded={!p.compact}
+              onClick={p.onToggleWide}
+            >
+              {p.compact ? '»' : '«'}
+            </button>
+          )}
         </div>
 
         {/* On phones the sidebar is a slide-out menu: close it after a pick so the new screen isn't hidden behind it. */}

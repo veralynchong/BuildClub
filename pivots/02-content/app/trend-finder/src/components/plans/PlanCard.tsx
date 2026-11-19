@@ -5,6 +5,7 @@ import { Thumb } from "../Thumb";
 import { useManagerName } from "../../lib/appContext";
 import { lastSentBack } from "../../lib/memory";
 import { t } from "../../lib/i18n";
+import { videoTitle } from "../../lib/videoTitle";
 import type { Column, DragData } from "./moves";
 
 const truncate = (s: string, max = 80) => (s.length > max ? `${s.slice(0, max).trimEnd()}…` : s);
@@ -36,7 +37,7 @@ export function PlanCardBody({
       <Thumb video={v} />
       <div className="board-card-body">
         {videoNo !== undefined && <span className="plans-card-videono">{t("plan.card.videoNo", { n: videoNo })}</span>}
-        <strong className="plans-card-hook">{v.hook}</strong>
+        <strong className="plans-card-hook">{videoTitle(v.hook)}</strong>
         <span className="small muted plans-card-handle">{v.handle}</span>
         <span className="best-compare tile-cmp">
           <span className="cmp-num cmp-from">{fromNum}</span>

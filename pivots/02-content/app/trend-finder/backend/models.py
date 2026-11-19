@@ -285,6 +285,13 @@ class Pulse(BaseModel):
     breakouts: list[Breakout]
 
 
+class Research(BaseModel):
+    """The Research tab: reference rows and the content slots they are filed under (ResearchEntry and
+    ResearchSlot in src/lib/research.ts). The front end owns their shape, so they are stored as given."""
+    entries: list[dict]
+    slots: list[dict]
+
+
 class Library(BaseModel):
     """The real videos and formats (with their breakdowns) that saved ideas point to. The front
     end owns their shape (Video and Format in src/types.ts), so they are stored as given."""

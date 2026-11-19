@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { GridCell } from '../../lib/shotGrid'
-import { cameraTag, generatingElapsed } from '../../lib/shotGrid'
+import { cameraTag, generatingElapsed, shotMidSecond } from '../../lib/shotGrid'
 import { t } from '../../lib/i18n'
 
 export interface GridCardProps {
   cell: GridCell
+  referenceCover?: string
+  // The plan's id, to fetch the reference video's frame at this shot's time (falls back to the cover).
+  ideaId?: string | null
   selected: boolean
   readOnly: boolean
   showAction: boolean
@@ -18,7 +21,7 @@ export interface GridCardProps {
   onStep: (dir: -1 | 1) => void
 }
 
-export function GridCard({ cell, selected, readOnly, showAction, showLine, showCamera, price, busy, onSelect, onRefine, onRegenerate, onStep }: GridCardProps) {
+export function GridCard({ cell, referenceCover, ideaId, selected, readOnly, showAction, showLine, showCamera, price, busy, onSelect, onRefine, onRegenerate, onStep }: GridCardProps) {
   const { shot, index, versions, shown, pending, failed, changed } = cell
   const done = versions.filter((v) => v.status === 'done')
   const at = shown ? done.findIndex((v) => v.id === shown.id) + 1 : 0
@@ -30,10 +33,19 @@ export function GridCard({ cell, selected, readOnly, showAction, showLine, showC
     return () => window.clearInterval(timer)
   }, [pending])
   const wait = pending ? generatingElapsed(pending.createdAt, now) : null
+  const mid = shotMidSecond(shot.time)
+  const frameUrl = ideaId && mid !== null ? `/api/ideas/${encodeURIComponent(ideaId)}/reference-frame?t=${mid}` : undefined
+  const [frameFailed, setFrameFailed] = useState(false)
+  const reference = frameUrl && !frameFailed ? frameUrl : referenceCover
   return (
     <div className={`sg-card${selected ? ' sg-sel' : ''}`}>
       <div className="sg-frame" onClick={onSelect}>
-        {shown?.url ? <img src={shown.url} alt="" loading="lazy" /> : <span className="sg-empty">{t('grid.noFrame')}</span>}
+        {shown?.url ? <img src={shown.url} alt="" loading="lazy" /> : (
+          <>
+            {reference && <img className="sg-ref" src={reference} alt="" loading="lazy" onError={() => setFrameFailed(true)} />}
+            <span className="sg-empty">{reference ? t('grid.noFrameRef') : t('grid.noFrame')}</span>
+          </>
+        )}
         <span className="sg-badge sg-n">{index + 1}</span>
         <span className="sg-badge sg-t">{shot.time}</span>
         {pending && wait ? <span className="sg-status">{t('grid.generatingFor', { s: wait.sec })}{wait.slow && <small>{t('grid.generatingSlow')}</small>}</span>

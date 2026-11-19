@@ -143,3 +143,37 @@ def test_medians_migration_does_not_hide_other_database_errors():
         conn.execute("CREATE TABLE medians (author TEXT PRIMARY KEY, median REAL, fetched_at REAL NOT NULL)")
         with pytest.raises(sqlite3.OperationalError, match="database is locked"):
             server.migrate_medians(conn)
+
+
+RESEARCH = {"entries": [{"id": "c1-tt-1", "clientId": "c1", "videoId": "tt-1", "account": "@a", "platform": "tiktok",
+                         "followers": 10, "views": 100, "keywords": ["tofu"], "hook": "h", "notes": "", "loggedAt": 1,
+                         "source": "search", "slotId": "c1-slot-1"}],
+            "slots": [{"id": "c1-slot-1", "clientId": "c1", "number": 1, "topic": "Crispy tofu", "createdAt": 1}]}
+
+
+def test_research_is_null_until_saved(client):
+    assert client.get("/api/research").json() is None
+
+
+def test_research_round_trip_bumps_the_revision(client):
+    first = client.get("/api/research").headers["ETag"]
+    response = client.put("/api/research", json=RESEARCH, headers={"If-Match": first})
+    assert response.status_code == 200
+    assert response.headers["ETag"] != first
+    got = client.get("/api/research")
+    assert got.json() == RESEARCH
+    assert got.headers["ETag"] == response.headers["ETag"]
+
+
+def test_research_put_with_a_stale_revision_gets_the_current_copy(client):
+    stale = client.get("/api/research").headers["ETag"]
+    client.put("/api/research", json=RESEARCH, headers={"If-Match": stale})
+    response = client.put("/api/research", json={"entries": [], "slots": []}, headers={"If-Match": stale})
+    assert response.status_code == 409
+    assert response.json()["research"] == RESEARCH
+    assert client.get("/api/research").json() == RESEARCH
+
+
+def test_research_put_without_if_match_still_saves(client):
+    assert client.put("/api/research", json=RESEARCH).status_code == 200
+    assert client.get("/api/research").json() == RESEARCH

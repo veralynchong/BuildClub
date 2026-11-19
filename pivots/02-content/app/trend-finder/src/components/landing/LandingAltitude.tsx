@@ -191,15 +191,20 @@ function MiniDemo({ onPreview }: { onPreview: (p: Preview) => void }) {
   const query = useTypedQuery(DEMO_QUERIES)
   // Which pick's video is playing in its hover card. Set after a short pause so scrolling past loads nothing; mouse only.
   const [hover, setHover] = useState<string | null>(null)
+  // Which pick's hover card is open. Only a real mouse move opens it: a pick scrolling under a resting pointer
+  // fires pointerenter (and CSS :hover) without the visitor asking for anything.
+  const [card, setCard] = useState<string | null>(null)
   const hoverTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(hoverTimer.current), [])
-  const startHover = (e: React.PointerEvent, id?: string) => {
-    if (!id || e.pointerType !== 'mouse') return
+  const startHover = (e: React.PointerEvent, key: string, id?: string) => {
+    if (e.pointerType !== 'mouse' || card === key) return
+    setCard(key)
     window.clearTimeout(hoverTimer.current)
-    hoverTimer.current = window.setTimeout(() => setHover(id), 300)
+    if (id) hoverTimer.current = window.setTimeout(() => setHover(id), 300)
   }
   const stopHover = () => {
     window.clearTimeout(hoverTimer.current)
+    setCard(null)
     setHover(null)
   }
   return (
@@ -237,7 +242,7 @@ function MiniDemo({ onPreview }: { onPreview: (p: Preview) => void }) {
         <p className="rk-demo-about">{c.about}</p>
         <ul className="rk-demo-picks">
           {c.picks.map((p, i) => (
-            <li key={p.title} style={{ '--i': i } as CSSProperties} onPointerEnter={(e) => startHover(e, p.tiktokId)} onPointerLeave={stopHover}>
+            <li key={p.title} className={card === p.title ? 'is-hover' : undefined} style={{ '--i': i } as CSSProperties} onPointerMove={(e) => startHover(e, p.title, p.tiktokId)} onPointerLeave={stopHover}>
               <button
                 type="button"
                 className={`rk-pick${p.blocked ? ' is-blocked' : ''}`}

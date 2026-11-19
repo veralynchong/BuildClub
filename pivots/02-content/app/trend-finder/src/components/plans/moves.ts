@@ -2,6 +2,7 @@ import type { KeyboardCoordinateGetter } from '@dnd-kit/core'
 import type { Format, SavedIdea, Video } from '../../types'
 import type { Step } from '../../lib/steps.ts'
 import { getActiveLang, t } from '../../lib/i18n'
+import { videoTitle } from '../../lib/videoTitle'
 
 // The Plans board's three columns, left to right. The steps of a video (lib/steps.ts) are grouped into them.
 export type Column = 'planning' | 'waiting' | 'approved'
@@ -20,7 +21,7 @@ export const columnOf = (step: Step, sent: boolean): Column =>
 export const stepOfColumn = (col: Column): Step | null => (col === 'waiting' ? 'storyboard' : col === 'approved' ? 'filming' : null)
 
 // The plan's name on the board: the format name, or how a live video starts.
-export const planName = (v: Video, f?: Format) => (v.live ? v.hook : (f?.name ?? v.hook))
+export const planName = (v: Video, f?: Format) => (v.live ? videoTitle(v.hook) : (f?.name ?? v.hook))
 
 
 // Shots the team has written. A saved idea needs its own; one already sent uses the reference's, like the plan does.

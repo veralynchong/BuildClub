@@ -203,7 +203,8 @@ export function ExportBar({ ideaId, clientId, focus = null, edit, timeline, read
         <button type="button" data-step="export" className="btn btn-primary btn-sm" disabled={readOnly || busy || active || reason !== null} onClick={() => void run()}>
           {busy || active ? t('editor.export.working') : cut?.status === 'failed' ? t('cut.common.tryAgain') : t('editor.export.button')}
         </button>
-        {reason && !readOnly && <span className="muted small">{t(reason)}</span>}
+        {/* The only thing that says why Export is greyed out, so it reads as normal text, not muted. */}
+        {reason && !readOnly && <span className="small" role="status">{t(reason)}</span>}
         {focus === 'send' && !output && !active && !readOnly && <span className="muted small" role="status">{t('editor.export.needFirst')}</span>}
       </div>
       {active && cut && (

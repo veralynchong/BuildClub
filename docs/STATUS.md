@@ -1,5 +1,21 @@
 # STATUS
 
+## 2026-11-17（18:00）：team 站實測 B（只做到搜尋）
+
+- 一行狀態：沒改程式。實測到搜尋就停，新問題 B1–B5 記在 `docs/test-log.md` 的「B 結果」；下一場 session 討論上次哪些問題還沒修（使用者的 Google Doc）。
+- 最後驗證 2026-11-17 17:07：`bash bin/verify.sh` GREEN（後端 1265 passed、3 skipped）。
+- 花費：team 今天 US$0.54，累計 US$1.16。
+- 已知問題：B1 hover 不播（只在使用者 MacBook 發生，原因未確認）；B2 `recipe` 被當 stopword；B3 搜尋 > 110 秒；B4 預設篩選顯示 0 筆；B5 查詢字序被打亂。P2／P6／P10／P16 仍未修。
+- 下一步：讀使用者的 Google Doc，對照 test-log 和 #62 列出未修問題，和使用者決定要修哪些。
+
+## 2026-11-16（19:00）：修 11/16 自測問題（PR #62）
+
+- 一行狀態：分支 `fix/beta-test-issues`（base `chore/integrate-dashboard-cards` = #61）修了 13 個問題，PR https://github.com/veralynchong/BuildClub/pull/62 等 Veralyn 審，不合併。只部署 team（:8803，先 backup `~/beta/team/backups/2026-11-16-1827`）；daphne／collage 沒動。
+- 最後驗證 2026-11-16：`bash bin/verify.sh full` GREEN（後端 1263 passed、3 skipped；前端 unit 875 passed）；tsc 通過；team 站瀏覽器檢查見 `docs/test-log.md` A 結果。
+- Research（P14）改存伺服器：`GET/PUT /api/research`，ETag + If-Match 409，跟 ideas 一樣；store 是每個站一份，不分使用者。
+- 已知問題：P2、P6、P10、P16 沒修（原因見 test-log）；#62 動到 Veralyn 也在改的前端檔，合併會有衝突。11/16 瀏覽器檢查時 team 帳號密碼曾出現在 session 記錄裡，建議換密碼。
+- 下一步：Veralyn 審 #61 再審 #62；確認後再決定要不要部署到 daphne（先 backup）；11/17 和 Veralyn 跑 B。
+
 ## 2026-11-16（17:05）：開 team 測試站、定測試計畫
 
 - 一行狀態：`bin/beta-instance.sh` 加 `team`（:8803、Remotion :8813、總上限 US$5），已 install 並開帳號 `team@remake.test`（密碼在 `~/beta/tester-accounts.txt`），tunnel https://span-discover-levitra-exhibition.trycloudflare.com 回 200。測試計畫和記錄表在 `docs/test-log.md` 最上段。
