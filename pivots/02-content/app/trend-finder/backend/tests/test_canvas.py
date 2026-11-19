@@ -62,6 +62,15 @@ def test_reconcile_input_is_not_changed():
     assert first == before
 
 
+def test_new_storyboard_node_defaults_to_the_frame_model_when_usable(monkeypatch):
+    monkeypatch.setattr(generations, "frame_model_id", lambda: "seedream-4.5")
+    doc, _ = canvas.reconcile(None, shots("s1"), set(), [])
+    assert node(doc, "n_sb_s1")["data"]["model"] == "seedream-4.5"
+    monkeypatch.setattr(generations, "frame_model_id", lambda: "")
+    doc, _ = canvas.reconcile(None, shots("s1"), set(), [])
+    assert node(doc, "n_sb_s1")["data"]["model"] == "mock-image"
+
+
 def test_frame_image_imported_once():
     s = shots("s1", frame={"s1": "/api/frame/a.svg"})
     _, imports = canvas.reconcile(None, s, set(), [])

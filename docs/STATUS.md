@@ -1,5 +1,63 @@
 # STATUS
 
+## 2026-11-15（下午）：Beta 完整流程測試 A+B 完成，可給試用者
+
+- 一行狀態：分鏡圖片生成已開（Seedream 4.5，每站每天 US$2），Daphne 站真實走完五步兩次：搜尋 → AI shot list → 分鏡生圖 → 上傳 take → AI 剪輯匯出 1080x1920。過程修了 6 個擋流程 bug，兩站都已部署最新版（14:15）。
+- Commits（`feat/beta-launch`，都已 push，沒合併）：874bb71 開圖片生成、58eaca7 分鏡格 Approve plan、6cb91f6 board 上傳改指向 Add take、2b95cb8／79aa2a2 Beta 不提供 mock 圖片模型，分鏡格自動用 Seedream、6a560ca 企劃補上 AI shot list、2d544d1 Fill in shot order 看得到 Video edit 上傳的 take、5a5920b 搜尋結果「Show all N」。
+- 最後驗證：2026-11-15，`bash bin/verify.sh full` GREEN（1256 passed、3 skipped）；tsc、eslint、vite build 通過；兩站 local 和 tunnel 回 200。詳細在 `docs/test-log.md`。
+- 今天花費：Daphne 約 US$1.0（A 0.16、B 0.83）。Daphne 今天圖片預算剩 US$1.56。
+- 已知問題：見 test-log 最新兩段（封面 404、生圖沒進度、供應商拒絕訊息、Retired model、Hook/CTA/EDL/LUFS 術語、登入頁 agency 文字等）。
+- 15:18 收尾：兩站備份後，舊 state 整包移到 `~/beta/<name>/state-pretest-2026-11-15`（沒刪），換成空的資料庫；開了 `daphne@remake.test`、`collage@remake.test`（使用者選用假帳號名稱，不用真 email），密碼在 `~/beta/tester-accounts.txt`（mode 600）。兩個帳號經 tunnel 登入 200，每站 1 個帳號，預算計數歸零。Tester Kit 已填網址、帳號，並改正「AI 圖片已開」。
+- 下一步：
+  1. 使用者私訊密碼、寄出訊息；寄出前確認兩個 tunnel 網址還開得起來。
+  2. Google Form 和回饋截止日（Tester Kit 的 {FORM}、{DATE}）。
+  4. 和 Veralyn 確認 PR #56→#57→#58→#59、#60 的合併順序（未合併）。
+
+## 2026-11-15：Beta 修復並合入分鏡格（`feat/beta-launch`）
+
+- 一行狀態：Orca 今天把所有 BuildClub worktree 刪了（不是搬到 T7），兩個 Beta backend 因為用 `lunch` worktree 的 venv 和 node_modules 而 500。已改成 `~/beta/.venv`（Python）和 `~/beta/deps/node_modules`（npm ci），不再依賴任何 worktree；合入 `origin/feat/storyboard-grid`（a9526d8），兩站已 update。
+- Commits：a9526d8 merge storyboard-grid（只有本檔衝突，兩段都留）、95fb042 `beta-instance.sh` 預設 venv 改 `/Users/tommy/beta/.venv`、`copy.test.mjs` 用 `fileURLToPath`（路徑有空格會壞）。
+- 最後驗證：2026-11-15，`bash bin/verify.sh full` GREEN（後端 1253 passed、3 skipped；前端 unit；beta instance script）；tsc、eslint、vite build 通過。部署前兩站各備份一次（`backups/2026-11-15-1158`）。經 tunnel 瀏覽器（daphne，1440x900，US$0）：Storyboard 格、每列 3/6、Show 開關、Refine 浮窗、Shot list、Canvas (advanced) 一鍵返回、Next: edit video → 再一鍵回格 PASS；只有一個企劃時側欄直接進格，選擇頁沒點到（程式碼確認 `hideCreate` 已部署）。
+- 網址（quick tunnel，未重啟）：daphne https://wonderful-parker-abilities-seconds.trycloudflare.com、collage https://encouraging-flexible-memories-vary.trycloudflare.com。
+- 以後 worktree 的 `backend/.venv` 和 `node_modules` 用 symlink 接到 `~/beta/.venv`、`~/beta/deps/node_modules`。
+- 已知缺口：匯出在換 node_modules 後還沒重測；付費 Seedream 重生一格仍沒驗；3 張一列時卡片只佔約 2/3 寬。
+
+## 2026-11-12：Beta 上線準備（`feat/beta-launch`，PR #59 draft，base `feat/canvas-restore`）
+
+- 一行狀態：Mac mini 上兩個 beta instance 已上線（daphne :8801、collage :8802，各自的 DB／media／預算），launchd 自動重啟，Cloudflare quick tunnel 對外，每天 03:00 備份；匯出修好，長搜尋碰到 tunnel 的 100 秒逾時改成等快取。計畫在 `docs/beta-launch-plan.md`，試用者文件草稿在 claude.ai Doc「Remake Beta — Tester Kit (draft)」。
+- Commits：849c843 計畫、4087b4f `BETA_TOTAL_USD` 跨天總上限、8de1042/c9e28b8/460824c/253e0dc `bin/beta-instance.sh`（install/update/status/backup/add-user）、最新一筆 search 逾時修正（TikTok 預設、錯誤文字不再叫人跑 npm run api）。
+- 最後驗證：2026-11-12，`bash bin/verify.sh full` GREEN（後端 1249 passed、3 skipped；前端 unit；beta instance script）；tsc、eslint、build 通過。live：兩個 tunnel 從外部回 200；kill 後端 launchd 幾秒內拉回；備份 `pragma integrity_check` ok；兩邊 API 匯出成功（daphne 17.5 秒、collage 3 秒，1080x1920，有音軌）。E2E（Playwright，經 tunnel）：登入、建立 client、搜尋、企劃、storyboard、上傳、剪輯 PASS；兩個 instance 資料互相看不到 PASS；登出、密碼錯誤 PASS；https 下 Secure cookie 正常。截圖在 session scratchpad 的 `beta-e2e/`。花費：daphne US$0.55、collage US$0.16。
+- 踩到的坑：
+  - launchd 啟動的程式讀 `~/Desktop` 底下的 venv 會被 macOS TCC 擋住，uvicorn 卡在啟動、log 是空的。預設 venv 改成 lunch worktree 的 `.venv`（之後可考慮做一個 `~/beta` 專用 venv）。
+  - 沒有任何帳號時，backend 不需要登入就能進。`install` 和 `status` 現在會印 WARNING。兩個 instance 都已經開了 `team+<name>@remake.test`。
+  - 匯出需要 `package-lock.json`（render-reel.mjs 用它算 bundle key），已經改成會複製。
+- 已知缺口：
+  - 搜尋逾時的修正只有 unit test，還沒用真的新搜尋（約 US$0.45）走過 tunnel。
+  - 畫布上付費模型的提示寫「Configure its account before running.」，試用者沒辦法照做；畫布歸剪輯 agent，這次沒改。
+  - Assistant「Preview plan」、「Write new ways to start」仍會花 Claude 的錢（每次約 US$0.01），有總上限擋著。
+  - 兩個 instance 裡留著 E2E 的測試資料（Daphne Only Bakery、Collage Club Only），寄出前要清空 state 重開。
+  - quick tunnel 的網址只要 cloudflared 重啟就會變；沒有測過 mini 真的重開機。
+- 2026-11-12 追加：合入 `feat/canvas-restore` 最新剪輯器修正（a49f0a1），`verify.sh full` GREEN（1250 passed、3 skipped），build 後 `beta-instance.sh update daphne` 和 `collage` 完成，兩個 tunnel 外部回 200。經 tunnel 的瀏覽器 E2E（daphne）：Video edit 開剪輯器、3 段素材、修剪、隱藏／靜音切換、匯出（約 15 秒）、下載 PASS，ffprobe 1080x1920、有音軌、16.6 秒。付費搜尋一次（TikTok，花 US$0.46，daphne 累計 US$1.01）：`/api/search` 在約 116 秒回 200，超過 tunnel 100 秒仍正常出 30 筆結果，逾時修正有效。
+- 新發現：文字稿裡換行後的第一個字（例如 "perfect"、"boil"）第一次點不跳播放頭，反而選取一整段（12、13 個字）；行中間的字正常。Playwright 每次重現，真人滑鼠還沒確認。
+- 決定（使用者 2026-11-12）：Beta 畫布上的 AI 生成節點保留，按了會被預算擋；mini 重開機測試先不做。
+- 下一步：使用者給試用者 email、決定要不要買網域；週末把剪輯 agent 的修正併進來（`beta-instance.sh update`），清掉測試資料、開正式帳號，週一寄出。
+
+## 2026-11-12：分鏡格 Storyboard grid（`feat/storyboard-grid`，疊在 `feat/canvas-restore`）
+
+- 一行狀態：側欄「Storyboard（分鏡）」打開每個企劃的鏡頭格（每列 3/4/6、Action/Line/Camera 顯示開關）、Refine 浮窗（prompt、size/angle/movement/lens/gear/length）、Regenerate、版本箭頭、Shot list 分頁（含 Print）、「Canvas (advanced)」和「Next: edit video →」。Task 1-7 完成，最終 review（opus）後一波修正（f0040e8）：防連點重複扣款、prompt 打字 0.8 秒自動存、畫布產的圖不再誤標「已改」、返回改為「返回企劃列表」、換版本遇 409 會重載重試、Regenerate 一律用最新存的 prompt。已 push，draft PR 見下一步。
+- 最後驗證：2026-11-12，`bash bin/verify.sh` GREEN；:8797 零花費後端（mock 圖片模型）桌面 1440x900 跑 E1-E10：E1、E2、E4、E5、E6（mock）、E7、E8、E9、E10 PASS；E3 三項 PASS、「Plan 頁顯示鏡頭」一項不成立（見已知問題）。詳細在 `docs/test-log.md`。
+- 付費 smoke（Seedream 4.5 重生一格，約 US$0.04）：**沒跑，花費 US$0.00**。隔離後端預算全為 0；真 fal 要用 `bin/real-fal-backend.sh`，它會讀 `.env`，本次規則禁止碰 `.env`（hook 也擋）。所以「預算數字下降」未驗。
+- 已知問題：
+  - E3：Plan 頁（唯讀鏡頭列）只顯示 shot 名稱，不顯示 lens；lens 有存進計畫的 shot（`/api/ideas` 回 `lens: "50mm"`），只是 Plan 頁沒有地方顯示。計畫文件 E3 的驗收寫「Plan page shows the lens」與現況不符，需決定要補顯示或改驗收。
+  - E5（已修 cf23d46）：prompt 改成打字後約 0.8 秒、關閉浮窗、離開頁面時存；離開頁面那次是盡力而為。
+  - 重新整理會回到 Plans（沒有路由），要再從側欄點 Storyboard；每列數會保留，Show 開關重設為全開。
+  - 返回鍵已改為「返回企劃列表」（cf23d46），點了到 chooser。
+  - E9：過期分頁存檔會收到 409（主控台一條 Failed to load resource），UI 合併後保留兩邊文字，無崩潰。
+  - E8：剪輯器打開的是每鏡「已選用的 take」時間軸，不顯示分鏡圖。
+- 2026-11-12 追加（b6f7d1f、c5e0b17）：分鏡選擇頁拿掉「建立 workspace」表單（`CanvasPick` 加 `hideCreate`，Canvas 選擇頁保留）。點測時發現並修好：在剪輯器點側欄 Storyboard 沒反應或跑到節點畫布、剪輯器回畫布後 ‹ 要點兩次才回分鏡格。原因是側欄和畫布 Back 已經跑過離開 guard，又經 `setView` 再跑一次，剪輯器開著時第二次會失敗；改成直接 `setViewRaw`（同 `enterClient` 寫法）。:8797 零花費後端 1440x900：無建立表單、Canvas 選擇頁仍有、prompt 0.8 秒自動存、連點 Regenerate 只多 1 版（1 個 POST /gen）、N1-N7 導覽都一次到位、無 JS 錯誤。verify GREEN（1246 passed）。
+- 小發現（沒修）：畫布 Editor & output 節點的「Open editor ↗」按鈕初始位置在頂列後面（y=-7），要先平移畫布才點得到。
+- 下一步：等 Veralyn review draft PR（不自己合併）；決定 E3 的 Plan 頁顯示；有需要時用 `bin/real-fal-backend.sh` 在使用者自己的終端機跑一次付費 smoke 確認預算下降。
+
 ## 2026-11-12：初剪圖釘跟著剪輯、軌道隱藏／靜音套用到匯出（`feat/canvas-restore`）
 
 - 一行狀態：兩個剪輯器已知問題修好，已 push（14b7371、fc8cf15），未合併。

@@ -14,7 +14,7 @@ import { pollGen } from '../../lib/canvas/api'
 import { getPendingVoices, getVoices, importTts, startTts, type PendingVoice, type VoiceInfo } from '../../lib/editor/api'
 import { useTakeAnalysis } from '../../lib/editor/useTakeAnalysis'
 import { fillShotIds } from '../../lib/storyboard'
-import { addVoice, clipLength, clipStarts, clipStatus, FPS, moveClip, newClipId, reelDurationInFrames, removeClip, sourceKey, sourcesWithShots, splitAt, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
+import { addVoice, clipLength, clipStarts, clipStatus, FPS, moveClip, newClipId, reelDurationInFrames, removeClip, sourceKey, sourcesWithShots, shotRanges, splitAt, totalLength, MAX_TOTAL } from '../../lib/editor/timeline'
 import type { EditProject, ReelInput, VoiceSeg } from '../../lib/editor/types'
 import { reelBrand, reelInput, shotLines } from '../../lib/editor/preview'
 import { Reel } from '../../remotion/Reel'
@@ -46,7 +46,7 @@ import { BrandTool } from './tools/BrandTool'
 import { HEAD_PX, Timeline, type Selection } from './Timeline'
 import { Transport } from './Transport'
 import { Icon } from './icons'
-import { clipLabel } from './clipName'
+import { clipPartLabel } from './clipName'
 import { ErrorText } from '../ErrorText'
 import { ExportBar } from './ExportBar'
 import { Transcript } from './Transcript'
@@ -460,14 +460,14 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
   const pages = projectPages(project, lines, words)
   const pageLines = pages.map((pg) => ({ start: pg.startMs / 1000, end: (pg.startMs + pg.durationMs) / 1000, text: pg.text }))
   const zoneWarnings = safeZoneWarnings(project, pages, settings.preset)
-  const fill = async () => setSkipped(await timeline.fill())
+  const fill = async () => setSkipped(await timeline.fill(allTakes))
 
   const steps = stepsDone({ project, clientHasLogo: !!kit?.logo, cut })
   const done = tabsDone(
     { project, clientHasLogo: !!kit?.logo, cut, texts: project.texts.length, voices: project.voiceover.length, music: !!musicFile && project.music !== null },
     visited,
   )
-  const nameOf = (c: (typeof project.clips)[number]) => clipLabel(c.source, filled, gens, allTakes)
+  const nameOf = (c: (typeof project.clips)[number]) => clipPartLabel(c, project.clips, filled, gens, allTakes)
   const nodeOf = (c: (typeof project.clips)[number]) => clipNode(doc, c.source)
   const selClip = project.clips.find((c) => c.id === selected) ?? null
   // Picking a bar on the timeline opens the inspector tab that edits it.
@@ -787,16 +787,14 @@ export function EditorPanel({ ideaId, clientId, shots, edit, sources: footage, t
             </button>}
           </div>
         )}
-        {skipped.length > 0 && (
-          <ul className="cv-ed-skipped" role="status">
-            {skipped
-              .map((id) => ({ id, n: shots.findIndex((s) => s.id === id) + 1 }))
-              .filter((x) => x.n > 0)
-              .map(({ id, n }) => (
-                <li key={id}>{t('editor.fill.skipped', { n })}</li>
-              ))}
-          </ul>
-        )}
+        {skipped.length > 0 && (() => {
+          const nums = skipped.map((id) => shots.findIndex((s) => s.id === id) + 1).filter((n) => n > 0)
+          return nums.length > 0 && (
+            <ul className="cv-ed-skipped" role="status">
+              <li>{nums.length === 1 ? t('editor.fill.skipped', { n: nums[0] }) : t('editor.fill.skippedMany', { count: nums.length, range: shotRanges(nums) })}</li>
+            </ul>
+          )
+        })()}
         <Timeline
           project={project}
           lanes={lanes}

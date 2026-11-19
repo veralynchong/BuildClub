@@ -61,6 +61,17 @@ def test_first_cut_without_a_line_cleans_the_whole_take():
     assert total < 7.0 - 2.0
 
 
+def test_first_cut_splits_a_shot_only_at_a_long_mid_take_pause_and_keeps_every_piece_on_that_shot():
+    # the live Daphne take: speech, a 1.8 s pause, speech. Cut by design (>= SILENCE_ITEM_MIN), both pieces belong to shot 1.
+    words = speak("First boil the water", start=0.2, step=0.4) + speak("then add the tea", start=4.4, step=0.4)
+    got = suggest.first_cut(shots(None), {"s1": [cand("m", words, [(2.0, 4.3)], duration=7.0)]}, 4)
+    assert len(got["clips"]) == 2
+    assert {(c["source"]["id"], c["source"]["shotId"]) for c in got["clips"]} == {("m", "s1")}
+    # a short breath between words is natural speech and never splits the shot
+    short = suggest.first_cut(shots(None), {"s1": [cand("m", words, [(2.0, 2.4)], duration=7.0)]}, 4)
+    assert len(short["clips"]) == 1
+
+
 def test_first_cut_places_shots_in_plan_order_and_skips_shots_without_footage():
     a, b = cand("a", CLEAN, duration=3.0), cand("b", speak("Then add the leaves", start=0.2, step=0.4), duration=3.0)
     got = suggest.first_cut(shots(LINE, "Boil it", "Then add the leaves"), {"s3": [b], "s1": [a]}, 4)

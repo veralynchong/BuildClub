@@ -154,17 +154,37 @@ function toFormat(item: LiveItem, v: Video): Format {
   }
 }
 
+// A tunnel in front of the API (Cloudflare gives up after 100 s) can time out a search that takes minutes, while the
+// API carries on and caches the result. Its timeout page is not our JSON, so it carries no `error`.
+const GATEWAY_POLL_MS = 10_000
+const GATEWAY_POLLS = 48 // 8 minutes
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
 export async function searchLive(
   query: string,
   fresh = false,
   platform: Platform = 'tiktok',
   cachedOnly = false,
+  wait: (ms: number) => Promise<void> = sleep,
 ): Promise<LiveSearch> {
-  const r = await fetch(
-    `/api/search?q=${encodeURIComponent(query)}&platform=${platform}${fresh ? '&fresh=1' : ''}${cachedOnly ? '&cachedOnly=1' : ''}`,
-  )
-  const body = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(body.error ?? t('find.live.err.search'))
+  const url = (only: boolean) =>
+    `/api/search?q=${encodeURIComponent(query)}&platform=${platform}${fresh && !only ? '&fresh=1' : ''}${only ? '&cachedOnly=1' : ''}`
+  const r = await fetch(url(cachedOnly))
+  let body = await r.json().catch(() => ({}))
+  if (!r.ok && body.error === undefined && r.status >= 502 && !cachedOnly) {
+    // Wait on the free cached read; a refresh waits for a newer result than the one it replaces.
+    let replaced: number | undefined
+    for (let i = 0; ; i++) {
+      if (i >= GATEWAY_POLLS) throw new Error(t('find.live.err.searchSlow'))
+      await wait(GATEWAY_POLL_MS)
+      const poll = await fetch(url(true)).then((p) => p.json()).catch(() => ({}))
+      if (!poll.fetchedAt) continue
+      if (fresh && (replaced === undefined || poll.fetchedAt === replaced)) { replaced ??= poll.fetchedAt; continue }
+      body = poll
+      break
+    }
+  } else if (!r.ok) throw new Error(body.error ?? t('find.live.err.search'))
   const videos: Video[] = []
   const formats: Format[] = []
   for (const item of body.videos as LiveItem[]) {

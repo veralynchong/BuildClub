@@ -3,7 +3,7 @@ import type { Key } from './i18n.ts'
 import { inLang, t } from './i18n.ts'
 import { classifyHookEmotion, hookEmotion as hookEmotionOf } from './hookEmotion.ts'
 import type { HookEmotion } from './hookEmotion.ts'
-import { editLine } from './storyboard.ts'
+import { editLine, fillShotIds } from './storyboard.ts'
 import type { WrittenShot } from './storyboard.ts'
 
 // How the plan screen opens: how the copied video starts, ways to start the client's own version, then the shots.
@@ -116,6 +116,16 @@ export function pickHook(shots: Shot[], text: string): Shot[] {
   if (!line) return shots
   if (shots.length === 0) return [{ time: '0-3s', shot: '', line, purpose: 'hook', edited: true }]
   return editLine(shots, 0, line).map((s, i) => (i === 0 ? { ...s, purpose: s.purpose ?? 'hook' } : s))
+}
+
+// A plan started before its AI breakdown arrived holds only what pickHook made: no shots, or one shot with no
+// description. Once the breakdown is in, those shots become the AI shots; the picked line stays on shot 1. Any plan
+// with a shot the user described, or more than one shot, is theirs and is left alone (null).
+export function adoptBreakdownShots(shots: Shot[] | undefined, ai: Shot[]): Shot[] | null {
+  if (!shots || ai.length === 0 || shots.length > 1 || shots[0]?.shot.trim()) return null
+  const line = shots[0]?.line
+  const next = fillShotIds(ai)
+  return line ? next.map((s, i) => (i === 0 ? { ...s, line, edited: true } : s)) : next
 }
 
 // New openings from the writer (/api/ideas/{id}/shots/0/script) become the first shot's options. The line itself

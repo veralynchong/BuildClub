@@ -542,6 +542,20 @@ test('genView: normal model can generate with its price; retired or keyless cann
   assert.equal(genView(node('video', { model: 'vid', duration: 7 }), list, null, null).seconds, 5)
 })
 
+test('genView: a node saved with a mock image model that is off the menu uses the first available image model', () => {
+  const list = [
+    { id: 'real', kind: 'image', available: true, price: { per: 'image', usd: 0.04 } },
+    { id: 'mock-video', kind: 'video', available: true, price: { per: 'second', usd: 0 }, durations: [4] },
+  ]
+  const node = (type, model) => ({ id: 'n', type, shotId: 's1', position: { x: 0, y: 0 }, data: { model } })
+  const v = genView(node('storyboard', 'mock-image'), list, null, null)
+  assert.equal(v.retired, false)
+  assert.equal(v.model.id, 'real')
+  assert.equal(v.canGenerate, true)
+  assert.equal(genView(node('storyboard', 'gone'), list, null, null).retired, true) // a real retired model still says so
+  assert.equal(genView(node('video', 'mock-image'), list, null, null).retired, true)
+})
+
 test('priceLabel: free for a zero price, otherwise the cost to two decimals', () => {
   assert.equal(priceLabel({ price: { per: 'image', usd: 0 } }, undefined), t('canvas.gen.free'))
   assert.equal(priceLabel({ price: { per: 'image', usd: 0.04 } }, undefined), t('canvas.gen.cost', { usd: '0.04' }))

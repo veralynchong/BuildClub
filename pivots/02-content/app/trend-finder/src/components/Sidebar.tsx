@@ -18,6 +18,9 @@ export type View =
   | 'plan'
   | 'canvas'
   | 'canvasPick'
+  // The Storyboard grid for a plan, and its plan chooser (the sidebar's Storyboard).
+  | 'storyboard'
+  | 'storyboardPick'
   // Pick an approved plan to open in the video editor (the sidebar's Video edit).
   | 'editPick'
   // Pick a plan's legacy planning board.
@@ -248,8 +251,8 @@ export function Sidebar(p: Props) {
               {item('research', 'research', t('shell.side.research'), p.counts.research)}
               {/* Plans = the board of plans + review (batch mode) + one plan */}
               {item('shortlist', 'plans', t('shell.side.plans'), p.counts.plans, ['shortlist', 'review', 'plan'].includes(p.view))}
-              {/* "Canvas" opens the freeform canvas (12 Nov 2026), via the canvas chooser; the planning board stays on the Plan page. */}
-              {item('canvas', 'canvas', t('shell.side.canvas'), undefined, ['board', 'boardPick', 'canvasPick'].includes(p.view) || (p.view === 'canvas' && !p.editing))}
+              {/* "Storyboard" opens the shot grid; the freeform canvas is one click behind it ("Canvas (advanced)"), so it keeps this item lit. */}
+              {item('storyboard', 'canvas', t('shell.side.storyboard'), undefined, ['board', 'boardPick', 'canvasPick', 'storyboard', 'storyboardPick'].includes(p.view) || (p.view === 'canvas' && !p.editing))}
               {/* "Video edit" opens a plan's canvas with the editor already open, like the Plans board's "Make the video". */}
               {item('editPick', 'edit', t('shell.side.edit'), undefined, p.view === 'editPick' || (p.view === 'canvas' && !!p.editing))}
               <div className="side-sep" />

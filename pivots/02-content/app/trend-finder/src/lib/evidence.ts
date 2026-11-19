@@ -79,8 +79,8 @@ export const COPY = {
   hitRate: (hits: number, counted: number) => t('home.evidence.hitRate', { hits, counted }),
 }
 
-// One decimal below 100 (22.9×), whole numbers above. metrics.times rounds from 10 up, which would hide the .9.
-export const times = (n: number) => `${n >= 100 ? Math.round(n).toLocaleString() : n.toFixed(1).replace(/\.0$/, '')}×`
+// One decimal below 10, whole numbers above: the same rounding as the breakdown panel (23×).
+export const times = (n: number) => `${n >= 10 ? Math.round(n).toLocaleString() : n.toFixed(1).replace(/\.0$/, '')}×`
 
 // Same rule as the backend, so videos from old cache files get a denominator too.
 export function denominatorOf(v: Video): Denominator | null {

@@ -7,7 +7,7 @@ import { previewInput, shotLines } from '../../../lib/editor/preview'
 import type { Clip } from '../../../lib/editor/types'
 import { Reel } from '../../../remotion/Reel'
 import { fillShotIds } from '../../../lib/storyboard'
-import { clipLabel } from '../../editor/clipName'
+import { clipLabel, clipPartLabel } from '../../editor/clipName'
 import { useCanvas } from './ctx'
 
 const EMPTY_FLEX = 3 // a shot with no clip yet takes about a typical shot's room in the strip
@@ -29,7 +29,7 @@ export function TimelineNode() {
   order.forEach((id, i) => {
     const mine = clips.filter((c) => c.source.shotId === id)
     if (!mine.length) blocks.push({ key: `empty-${id}`, flex: EMPTY_FLEX, label: t('editor.clip.shot', { n: i + 1 }), line: lines[id] ?? '', clip: null })
-    for (const c of mine) blocks.push({ key: c.id, flex: clipLength(c), label: clipLabel(c.source, shots, gens, takes), line: lines[id] ?? '', clip: c })
+    for (const c of mine) blocks.push({ key: c.id, flex: clipLength(c), label: clipPartLabel(c, clips, shots, gens, takes), line: lines[id] ?? '', clip: c })
   })
   for (const c of clips) {
     if (!c.source.shotId || !order.includes(c.source.shotId)) blocks.push({ key: c.id, flex: clipLength(c), label: clipLabel(c.source, shots, gens, takes), line: '', clip: c })

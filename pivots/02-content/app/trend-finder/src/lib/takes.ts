@@ -1,5 +1,5 @@
 import type { IdeaStatus } from '../types'
-import { areas, t } from './i18n.ts'
+import { areas, t, tp } from './i18n.ts'
 import { serverText } from './serverText.ts'
 
 // One uploaded video for a shot of an approved plan. One take per shot is chosen. A take belongs to a shot by its
@@ -73,6 +73,12 @@ export function takesByShot(takes: Take[], shotCount: number): Take[][] {
 export function checklistProgress(shotCount: number, takes: Take[]): { done: number; total: number } {
   const done = takesByShot(takes, shotCount).filter((g) => g.some((t) => t.chosen)).length
   return { done, total: shotCount }
+}
+
+// The short note beside a shot: how many takes it has, with a tick once one is chosen. Empty with no takes.
+export function takeCountLabel(shotTakes: Take[]): string {
+  if (shotTakes.length === 0) return ''
+  return `${shotTakes.some((tk) => tk.chosen) ? '✓ ' : ''}${tp('plan.takes.count', shotTakes.length)}`
 }
 
 // Takes can be added, chosen or deleted only while the plan is approved; reopened plans keep them read-only.

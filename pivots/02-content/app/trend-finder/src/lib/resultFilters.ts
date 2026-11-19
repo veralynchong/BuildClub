@@ -36,6 +36,9 @@ export const DEFAULT_FILTERS: ResultFilters = {
   types: [],
 }
 
+// Every filter off: the "Show all" link on the results screen uses this to reveal what the defaults hide.
+export const SHOW_ALL_FILTERS: ResultFilters = { ...DEFAULT_FILTERS, viewsMin: 0, followersMax: 0 }
+
 const SMALL_ACCOUNT = 5_000
 const SMALL_ACCOUNT_VIEWS = 1_000_000
 const BROKE_OUT_TIMES = 10

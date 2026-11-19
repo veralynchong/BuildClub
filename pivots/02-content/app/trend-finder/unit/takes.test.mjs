@@ -104,3 +104,25 @@ test('isNothingToCut: only the "no speech" and "no fillers" refusals are results
   assert.equal(isNothingToCut('This take has no sound, so there is nothing to clean.'), false)
   assert.equal(isNothingToCut(undefined), false)
 })
+
+test('takeCountLabel says how many takes a shot has, and ticks once one is chosen', async () => {
+  const { takeCountLabel } = await import('../src/lib/takes.ts')
+  const take = (id, chosen) => ({ id, chosen, shot: 0 })
+  assert.equal(takeCountLabel([]), '')
+  assert.equal(takeCountLabel([take('a', false)]), '1 take')
+  assert.equal(takeCountLabel([take('a', false), take('b', false)]), '2 takes')
+  assert.equal(takeCountLabel([take('a', true)]), '✓ 1 take')
+  assert.equal(takeCountLabel([take('a', false), take('b', true)]), '✓ 2 takes')
+})
+
+test('the Storyboard shot list row has an Add take control that shares the plan page upload code', async () => {
+  const { readFileSync } = await import('node:fs')
+  const table = readFileSync(new URL('../src/components/storyboard/ShotListTable.tsx', import.meta.url), 'utf8')
+  const checklist = readFileSync(new URL('../src/components/ShotChecklist.tsx', import.meta.url), 'utf8')
+  assert.match(table, /useTakes\(/)
+  assert.match(table, /TakeAddButton/)
+  assert.match(checklist, /useTakes\(/)
+  assert.match(checklist, /TakeAddButton/)
+  assert.doesNotMatch(table, /uploadTake/)
+  assert.doesNotMatch(checklist, /uploadTake/)
+})

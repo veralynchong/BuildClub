@@ -1,3 +1,79 @@
+## 2026-11-15（17:02）：已知問題第三批，兩站已部署
+
+- b04062a 去除靜音把 shot 1 切兩段：是設計上的行為（`backend/suggest.py` `first_cut` 會切掉 take 中間 ≥ 0.6 秒的停頓；那段 take 中間停了 1.77 秒），沒改門檻。問題是兩段都叫「Shot 1 · Take 1」看起來像重複，改成「Shot 1 · Take 1 · part 2」。
+- 73cb26f 企劃卡、企劃頁的比較基準改用結果頁同一個 `headline()`（平常觀看數優先）；evidence chip 22.9× 改成和面板一樣顯示 23×。
+- 驗證：`verify.sh full` GREEN（1259 passed、3 skipped）；tsc、eslint、build 通過。瀏覽器沒點（只有 unit test）。部署前兩站沒有使用中、先 backup（`backups/2026-11-15-1702`），部署後 tunnel 200。
+
+## 2026-11-15（16:24）：已知問題第二批修正，兩站已部署
+
+- 09ce592 介面術語換白話：Hook → Opening、Body → Middle、CTA → Call to action、Payoff → result、EDL → edit list、LUFS 拿掉單位只留數字（資料 enum 和 AI prompt 不動；首頁行銷文案仍寫 Hook）。
+- 368bf2f 分鏡格 Shot list 分頁每列加「Add take」和 take 數（與企劃頁共用 `useTakes`／`TakeAddButton`）。
+- 2ad673b Find ideas 選片後的面板加「Plan video」，直接開企劃（沿用 `planNow`）。
+- 4adb342 登入頁改成「Sign in with the account we sent you.」，拿掉 Client 選項。
+- 05b9215 結果頁同一支影片只顯示一個倍數（優先用「× 平常觀看數」，沒有才用粉絲數）。PlanCard／PlanScreen 仍用粉絲數為基準（未改）。
+- 驗證：`verify.sh full` GREEN（後端 1258 passed、3 skipped；前端 unit 867）；tsc、eslint、build 通過。本機 :8798 瀏覽器四項都看過（截圖 `/Volumes/Huang T7/playwright-mcp/batch2/`）。部署前兩站沒有使用中、先 backup（`backups/2026-11-15-1624`），部署後兩站 bundle 有新登入文字、tunnel 200。
+
+## 2026-11-15（16:00）：已知問題第一批修正，兩站已部署
+
+- 169e8ec 封面 404：`beta-instance.sh update` 的 rsync `--delete` 每次都清掉 `backend/covers/`，改成排除 covers（測試 `update keeps saved covers`）。之前已被清掉的封面要重新搜尋才會回來。
+- 7f918cd 分鏡格生圖顯示「Generating… 45s」，30 秒後加「Images can take up to 2 minutes.」。
+- 466fb1a 供應商拒絕訊息加上「Try removing brand names or people's names from the prompt, then regenerate.」（暫時性錯誤也會顯示同一句）。
+- e2037a3 新分鏡節點預設 frame model（Seedream），Canvas 舊 mock 節點不再顯示 Retired model。
+- 67e5269 Fill in shot order 的跳過清單收成一行（「9 shots have no take yet: 5–13」）。
+- 驗證：`verify.sh full` GREEN（1258 passed、3 skipped），tsc、eslint、build 通過；部署前兩站沒有使用中、先 backup（`backups/2026-11-15-1600`），部署後 local 401（要登入）、tunnel 200。第 1、3 項只有測試，live 尚未看到；第 2 項瀏覽器沒看到（本機沒有企劃）。
+
+## 2026-11-15：Beta 完整流程測試 B — Daphne 站真實跑兩輪（共約 US$0.83）
+
+- 第一輪（約 US$0.59：Apify 搜尋 0.45、Claude 分析 0.10、Seedream 1 張 0.04）：新搜尋「croissant」30 支 → 選 11 秒 POV 影片 → 企劃只有 1 格空白範本「Watch this: POV…」。分析其實成功（library 有正確 1 鏡 shotList；影片本身是一個長鏡頭）。匯出 1080x1920、有音軌、4.1 秒。截圖 `/Volumes/Huang T7/playwright-mcp/plan-b/`。
+- 找到並修好三個擋流程 bug：
+  - 6a560ca：分析還沒完成就按 Plan video／選 hook，`pickHook` 先寫一格空白 shot，之後分析回來不會補進企劃。改成分析回來（或打開企劃時）若企劃只有空白範本，就換成 AI shot list，保留選的 hook 台詞。
+  - 2d544d1：Video edit 裡上傳的 take，Fill in shot order 看不到（只讀畫布的 takes），報「Shot 1 has no video, skipped」。改成用 EditorPanel 的 `allTakes`。
+  - 5a5920b：搜尋結果的預設篩選（100 萬觀看、粉絲 5 萬以下）沒有標籤也關不掉，croissant 30 支只顯示 1 支。加「Show all N」連結（使用者 2026-11-15 選這個做法），預設篩選不變。
+- 第二輪（約 US$0.24，沒有新搜尋）：Show all 後 30 支都在 PASS；選「CROISSANT DOS SONHOS」（46 秒）→ 企劃 13 個 AI shot（有 framing、lens），沒有空白範本 PASS（分析在打開企劃前已完成，所以「先建企劃再等分析」的時序在 live 沒測到，unit test 和本機有測）；分鏡格 13 格都顯示「Regenerate ≈ US$0.04」，試 10 張成功 6 張，4 張被供應商拒絕（可能是 Magnum 等品牌字），失敗的有退款，預算 US$1.80 → 1.56；Add take 2 格 + Video edit 上傳 2 格，Fill in shot order 4 格都放上 PASS；匯出 ffprobe 1080x1920、有音軌、18.0 秒；重新整理後都在 PASS。截圖 `/Volumes/Huang T7/playwright-mcp/plan-b3/`。
+- 沒修（已知問題）：封面圖 `/api/cover/tiktok-*.jpg` 回 404（縮圖空白）；第一張圖超過 90 秒沒有進度提示；供應商拒絕時只寫「The model provider didn't accept this request」，沒說可以改 prompt；沒 take 的格子在 Fill 時列一長串 skipped；Storyboard 的 Shot list 分頁只有表格，Add take 在企劃頁下方，不好找；Find ideas 選片後沒有 Plan video 按鈕，要經 Research → Send to plan；Canvas (advanced) 舊 mock 節點顯示「Retired model」。
+
+## 2026-11-15：Beta 完整流程測試 A — Daphne 站真實驗收（Seedream 4.5，US$0.16）
+
+- 環境：Daphne beta（:8801，tunnel），臨時帳號 `claude-e2e@remake.test`，Playwright 1440x900，子代理點測。截圖 `/Volumes/Huang T7/playwright-mcp/daphne-accept/`。
+- 五步 PASS：沿用企劃「Ranking The Best Sourdough Bread Wins」（Daphne Only Bakery）；Seedream 生 4 張，今日圖片預算 US$2.00 → 1.84（記帳正確）；Shot list 第 3–8 格上傳 6 段 take；新 first cut、匯出 1080x1920、有音軌、35.8 秒；登出後 API 回 401。Shot list 縮圖在真圖時正常，BODY 只在佔位圖出現。
+- 擋流程 bug（已修，2b95cb8、79aa2a2）：分鏡格 Refine／Regenerate 預設 Mock 模型、沒有換模型的地方，要進 Canvas (advanced) 一格一格改。修法：`FRAME_IMAGE_MODEL` 可用時，選單不列 mock 圖片模型、POST /gen 拒收 mock-image（422）；分鏡格自動用第一個可用圖片模型（Seedream）。本機（變數未設）mock 照常。部署後 Daphne `/api/gen/models` 第一個是 `seedream-4.5`（US$0.04），沒有 `mock-image`。
+- 沒修（已知問題）：舊 mock 節點在 Canvas (advanced) 顯示不可用，第一次在分鏡格重生後才換成 Seedream；瀏覽器自動填入把錯的密碼帶進登入框；靜音移除把 shot 1 切成兩段；一張封面圖 404。
+- 測試資料（4 張圖、6 段 take、first cut、匯出）留在 Daphne 站，Task 6 清。
+
+## 2026-11-15：Beta 完整流程測試 A（本機，US$0）
+
+- 環境：`isolated-backend.sh 8797`（demo 資料取自 Daphne 的 1 份 breakdown，mock 圖片，預算全 0），Playwright 1440x900，子代理點測。素材：ffmpeg 產生 6 段（4 直 2 橫，3–6 秒，有音軌）。截圖 `scratchpad/e2e-local/`、`/Volumes/Huang T7/playwright-mcp/persona/`。
+- E2E 五步：搜尋 PASS（只能用 cache）；分析新影片 BLOCKED（本機關 Claude，429，屬測試環境限制），改用 sample reference 建 4 鏡企劃；分鏡改角度／焦段／prompt、mock 重生、版本箭頭 PASS；Shot list「Add take」每格上傳（含橫式）PASS；Fill in shot order + Make the first cut + 匯出 PASS，ffprobe 1080x1920、有音軌、18.0 秒；重新整理後分鏡、編輯、take、時間軸都在 PASS。
+- AI 試用者（咖啡店老闆 Mia，不給步驟）：有做出 22 秒影片，但三處完全卡住：①企劃沒核准時分鏡格不能生圖、「Next: edit video →」進到只寫 "Only an approved plan can be cut." 的頁面；②board 抽屜的上傳只存在本機，剪輯器看不到；③因為②，「Fill in shot order」每格都跳過。
+- 修正（58eaca7、6cb91f6、7764bde）：分鏡格加「Approve plan」按鈕（沿用 `decide`，後端檢查不動），未核准時 Next 停用；board 的上傳改成指向 Shot list「Add take」；③確認是②造成的，補 unit test。修後 :8798 點測：Approve → 可重生 → Next 進到剪輯器，4 格 take 依序上時間軸。`verify.sh full` GREEN（1253 passed、3 skipped），tsc、eslint、vite build 通過。
+- 沒修（記成已知問題）：Hook／CTA／EDL／LUFS 等詞試用者看不懂；登入頁寫「agency 幫你設定的帳號」、Client 選項 Coming soon；同畫面觀看倍數兩個數字不一致（273× vs 2,214 倍）；搜尋顯示「Showing 1 of 30」；分鏡格每格 badge 顯示 BODY 與 Shot list 縮圖欄空白（mock 圖時，待真圖確認）；非 manager 角色看不到 Approve 按鈕。
+
+## 2026-11-12：分鏡選擇頁去掉建立表單、剪輯器→分鏡導覽修正（`feat/storyboard-grid`，c5e0b17 的 build）
+
+- 環境：`isolated-backend.sh 8797`（state `~/.local/state/buildclub-test-8797`，mock 圖片模型，US$0），Playwright 1440x900，子代理點測。截圖 `/Volumes/Huang T7/playwright-mcp/sb-check-*`、`sb-nav*-*`。
+- PASS：分鏡選擇頁沒有 `form.fc-new-workspace`、Canvas 選擇頁有；Refine prompt 打字 3 秒不失焦後重新整理仍在；連點 Regenerate 只新增 1 版（只有 1 個 POST /api/ideas/idea1/gen）；剪輯器→側欄 Storyboard、Next: edit video→Back to canvas→‹、Canvas (advanced)→‹、畫布 Open editor→Back→‹ 都一次回到分鏡格；剪輯器→側欄 Plans 正常；console 只有 Remotion 授權警告。
+- 修前：剪輯器點側欄 Storyboard 跑到節點畫布（第二版變成沒反應）、剪輯器回畫布後 ‹ 要點兩次。
+- 付費 smoke（Seedream 4.5）：仍未跑，等使用者開 `bin/real-fal-backend.sh 8798`。
+
+## 2026-11-12：分鏡格 E2E（`feat/storyboard-grid`，HEAD 99ce68c 的 build）
+
+- 環境：`npm run build` 後 `bin/isolated-backend.sh 8797 --user test@example.com:pw-for-e2e --state ~/.local/state/buildclub-test-8797`（MOCK_GEN_DELAY_S=3，預算全 0，mock-image 免費），Playwright 1440x900，一個核准計畫 idea1（3 鏡），E4 暫時加一個 `saved` 計畫後已移除。證據截圖在 `/Volumes/Huang T7/playwright-mcp/storyboard-grid/`。
+
+| # | 結果 | 證據 |
+| --- | --- | --- |
+| E1 | PASS | 一個核准計畫，點側欄 Storyboard 直接進格；`.sg-grid` 4 欄、3 張卡、編號 1/2/3、長度 1s/2s/3s 與計畫相同。`E1-grid.png` |
+| E2 | PASS | 每列 3 → 3 欄、6 → 6 欄；Line、Camera 開關會隱藏對應文字；重新整理後（回到 Plans，再點 Storyboard）每列仍是 6，Show 開關重設為全開。`E2-row3.png`、`E2-row6-toggles.png`、`E2-after-reload.png` |
+| E3 | FAIL（只差一項） | lens 選 85mm：卡片 camera 標籤 85mm、popover prompt 自動加 "Camera: 85mm lens"、`generations` 仍 0（沒有新生成列）；有 frame 後改 50mm 出現「Changed · not regenerated」、generations 仍 2。計畫資料 `/api/ideas` shot 有 `lens: "50mm"`。但 Plan 頁（唯讀 shot 列）不顯示 lens，只顯示 shot 名稱，所以「Plan page shows the lens」無法觀察。`E3-refine-open.png`、`E3-after-lens.png`、`E3-changed-tag.png`、`E3-plan-page.png` |
+| E4 | PASS | chooser 選 `saved` 計畫：顯示「Approve the plan to make frames.」；所有 Refine 與 Regenerate 按鈕 disabled（popover 打不開）。`E4-chooser.png`、`E4-unapproved.png` |
+| E5 | PASS | 輸入 own prompt 後按 Close，重新整理再開：文字保留、顯示「Reset to automatic」；按下後回到自動 prompt，節點 `prompt` 為空。註：在輸入框內直接重新整理（未失焦）會丟掉文字，因為失焦才存。`E5-own-after-reload.png`、`E5-reset.png` |
+| E6 | PASS（mock）；預算下降未驗 | 按 Regenerate：卡片顯示 Generating…，約 3 秒後出現新 frame，版本 v1/1；再按一次 v2/2；‹ 切到 v1/2，重新整理後仍是 v1/2（節點 `selected` 指向第一個）。Mock 模型 US$0，所以預算數字沒變，無法驗「drops」。`E6-generating.png`、`E6-done.png`、`E6-v1-selected.png` |
+| E7 | PASS | Shot list 分頁 10 欄（縮圖、#、Action、Line、Size、Angle、Movement、Lens、Gear、Length），值與卡片相同（shot 1 lens 50mm、長度 1s/2s/3s）；清單的 Add take 上傳 ai-s1.mp4 成功（takes 3→4，測完用 API 刪除）；print 媒體模擬只剩表格。`E7-shotlist.png`、`E7-upload.png`、`E7-print-preview.png` |
+| E8 | PASS | Canvas (advanced) 開在這個計畫（3 個 Shot 節點、圖像節點 1/2）；Back 回到 Storyboard；Next: edit video 開剪輯器，3 鏡 take 都在時間軸。剪輯器用的是已選用 take，不顯示分鏡圖。`E8-canvas.png`、`E8-editor.png` |
+| E9 | PASS | 兩個分頁：A 改鏡 3 的 prompt，B（過期版本）改鏡 1；B 存檔收到 409，畫面重載後兩邊文字都在（鏡 1 為 B、鏡 3 為 A），伺服器狀態相同，無崩潰。`E9-tabB.png` |
+| E10 | PASS | 沒有 JS 例外。console 只有：登入前的兩條 401（landing）、E9 的一條 409 Failed to load resource（預期的衝突回應）、剪輯器的 Remotion license 警告。 |
+
+- 付費 smoke：沒跑，花費 US$0.00（預算開始與結束皆 0，所有生成都是免費 mock 模型）。真 fal 的唯一入口 `bin/real-fal-backend.sh` 會讀 `.env`，本次規則禁止，hook 也擋 `.env` 的存取檢查，所以不繞過。要補這項，請使用者在自己的終端機跑 `bash bin/real-fal-backend.sh 8797 --user test@example.com:pw-for-e2e`，Seedream 4.5 重生一格（約 US$0.04）並看預算數字。
+
 ## 2026-11-07：Plan a shoot直接進Canvas，移除重複Next（本機未提交）
 
 - 使用者要求4/7 Plan a shoot步驟不再顯示Next；已隱藏該步Next，Plan a shoot按鈕直接要求canvas/shoot/shots，不需第二次點擊。說明文案同步改為點Plan a shoot進入，Previous與其餘步驟Next保留。

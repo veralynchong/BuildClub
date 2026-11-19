@@ -19,7 +19,7 @@ export interface Workspace {
 }
 
 export function hasMissingLegacyPlan(view: string, resource: ResourceRef | undefined, planReady: boolean): boolean {
-  return (view === 'plan' || view === 'board' || (view === 'canvas' && resource?.kind !== 'workspace')) && !planReady
+  return (view === 'plan' || view === 'board' || view === 'storyboard' || (view === 'canvas' && resource?.kind !== 'workspace')) && !planReady
 }
 
 // Strings keep existing callers on the legacy route, even if an id resembles a workspace.

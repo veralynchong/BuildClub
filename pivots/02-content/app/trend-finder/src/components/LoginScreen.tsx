@@ -26,7 +26,7 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(() => googleErrorMessage(window.location.search))
   const [busy, setBusy] = useState(false)
-  const [account, setAccount] = useState<'staff' | 'client'>('staff')
+  const [account] = useState<'staff' | 'client'>('staff')
   // There is no role picker on this page: staff log in with the role saved on this device.
   const staffRole = savedRole === 'manager' ? 'manager' : 'member'
 
@@ -102,7 +102,7 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
             )}
           </h1>
           {/* The demo's "no password" note was taken off (4 Nov 2026); real sign-in still explains itself. */}
-          {real && <p className="rk-auth-lede">Use the email and password your agency set up for you.</p>}
+          {real && <p className="rk-auth-lede">Sign in with the account we sent you.</p>}
         </header>
 
         {mode === 'client' ? (
@@ -116,13 +116,13 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
         ) : (
           <form className="rk-auth-card" onSubmit={submit}>
             <label className="rk-field">
-              <span className="rk-field-label">{isClient ? 'Email' : 'Work email'}</span>
+              <span className="rk-field-label">{isClient ? 'Email' : 'Email'}</span>
               <input
                 id="login-email"
                 className="rk-input"
                 type="email"
                 autoComplete="email"
-                placeholder={isClient ? 'you@company.com' : 'you@agency.com'}
+                placeholder={isClient ? 'you@company.com' : 'you@company.com'}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -141,22 +141,6 @@ export function LoginScreen({ real = false, startAtLogin = false, onSignIn, star
                 />
               </label>
             )}
-            <fieldset className="rk-fieldset">
-              <legend className="rk-field-label">Log in as</legend>
-              <div className="rk-choices">
-                <label className="rk-choice">
-                  <input type="radio" name="account" checked={!isClient} onChange={() => setAccount('staff')} />
-                  <strong>Staff</strong>
-                  <span>Find videos, plan them and approve them.</span>
-                </label>
-                {/* Client login is turned off for now (4 Nov 2026): shown, but can't be picked. */}
-                <label className="rk-choice is-disabled">
-                  <input type="radio" name="account" checked={isClient} disabled onChange={() => setAccount('client')} />
-                  <strong>Client</strong>
-                  <span>See your plans and how the month is going. Coming soon.</span>
-                </label>
-              </div>
-            </fieldset>
             {error && (
               <p className="field-error" role="alert">
                 {error}

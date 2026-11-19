@@ -122,9 +122,9 @@ test('kitSpot is left of the leftmost frame', () => {
 })
 
 test('shotChip joins purpose and length', () => {
-  assert.equal(shotChip({ time: '0-3s', shot: '', purpose: 'hook' }), 'Hook · 3s')
+  assert.equal(shotChip({ time: '0-3s', shot: '', purpose: 'hook' }), 'Opening · 3s')
   assert.equal(shotChip({ time: '3-8s', shot: '' }), '5s')
-  assert.equal(shotChip({ time: '', shot: '', purpose: 'hook' }), 'Hook')
+  assert.equal(shotChip({ time: '', shot: '', purpose: 'hook' }), 'Opening')
   assert.equal(shotChip({ time: '1s', shot: '' }), null)
 })
 

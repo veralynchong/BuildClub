@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { hookUsed, pickHook, sampleHooks, subjectOf, suggestedHooks, withHookOptions } from '../src/lib/hooks.ts'
+import { adoptBreakdownShots, hookUsed, pickHook, sampleHooks, subjectOf, suggestedHooks, withHookOptions } from '../src/lib/hooks.ts'
 import { inLang } from '../src/lib/i18n.ts'
 
 const format = (over = {}) => ({
@@ -111,4 +111,31 @@ test('captionless TikTok keeps its brand casing in subjects and sample openings'
   assert.equal(subjectOf(f, v), 'TikTok video')
   assert.equal(inLang('en', () => sampleHooks(f, v, client, 1))[0], 'Did you know TikTok video could look like this?')
   assert.equal(subjectOf(format({ short: 'TikTok recipes' }), video), 'TikTok recipes')
+})
+
+// The plan was started (a hook picked) before the AI breakdown arrived: its only shot is that placeholder.
+const aiShots = [
+  { time: '0-4s', shot: 'Man bites croissant', framing: 'medium' },
+  { time: '4-8s', shot: 'Close-up of the crumb' },
+]
+
+test('adoptBreakdownShots: the one-shot placeholder becomes the AI shots, keeping the picked hook line on shot 1', () => {
+  const seed = [{ id: 's1', time: '0-3s', shot: '', line: 'Watch this', purpose: 'hook', edited: true }]
+  const next = adoptBreakdownShots(seed, aiShots)
+  assert.deepEqual(next.map((s) => [s.id, s.shot]), [['s1', 'Man bites croissant'], ['s2', 'Close-up of the crumb']])
+  assert.equal(next[0].line, 'Watch this')
+  assert.equal(next[0].edited, true)
+  assert.equal(next[1].line, undefined)
+  assert.equal(next[0].framing, 'medium')
+})
+
+test('adoptBreakdownShots: an empty plan takes the AI shots; nothing to adopt returns null', () => {
+  assert.equal(adoptBreakdownShots([], aiShots).length, 2)
+  assert.equal(adoptBreakdownShots([], []), null)
+  assert.equal(adoptBreakdownShots(undefined, aiShots), null) // the plan already shows the breakdown
+})
+
+test('adoptBreakdownShots: shots the user described or added are never replaced', () => {
+  assert.equal(adoptBreakdownShots([{ time: '0-3s', shot: 'My own shot', line: 'Hi', edited: true }], aiShots), null)
+  assert.equal(adoptBreakdownShots([{ time: '0-3s', shot: '' }, { time: '3-6s', shot: '' }], aiShots), null)
 })

@@ -44,7 +44,7 @@ def _row(shot_id: str, y: int, with_footage: bool) -> tuple[list[dict], list[dic
         {"id": shot, "type": "shot", "shotId": shot_id, "position": {"x": LAYOUT["x"]["shot"], "y": y},
          "data": {"removed": False}},
         {"id": sb, "type": "storyboard", "shotId": shot_id, "position": {"x": LAYOUT["x"]["storyboard"], "y": y},
-         "data": {"primary": True, "model": "mock-image", "prompt": "", "selected": None, "stale": False}},
+         "data": {"primary": True, "model": generations.frame_model_id() or "mock-image", "prompt": "", "selected": None, "stale": False}},
     ]
     edges = [_edge(shot, sb)]
     if with_footage:

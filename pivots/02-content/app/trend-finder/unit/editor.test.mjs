@@ -245,6 +245,15 @@ test('fillByShotOrder: 3 shots, the second has nothing -> 2 clips in shot order 
   assert.deepEqual(skipped, ['s2'])
 })
 
+test('fillByShotOrder: every shot has a chosen take -> all shots placed in order, none skipped', () => {
+  const shots = [{ id: 's1' }, { id: 's2' }, { id: 's3' }]
+  const takes = [take('t1', 's1', true), take('t2', 's2', true), take('t3', 's3', true)]
+  const sources = [info('take', 't1', 2), info('take', 't2', 3), info('take', 't3', 4)]
+  const { project: out, skipped } = fillByShotOrder(project([]), shots, doc([]), [], takes, sources)
+  assert.deepEqual(out.clips.map((c) => [c.source.id, c.source.shotId]), [['t1', 's1'], ['t2', 's2'], ['t3', 's3']])
+  assert.deepEqual(skipped, [])
+})
+
 test('fillByShotOrder: a primary without length info is skipped; a non-empty timeline is left alone', () => {
   const shots = [{ id: 's1' }]
   const d = doc([vnode('n1', 's1', 'g1')])

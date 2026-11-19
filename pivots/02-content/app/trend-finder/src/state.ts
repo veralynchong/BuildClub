@@ -17,7 +17,7 @@ export interface Query {
 export const defaultQuery: Query = {
   // Starts empty so the search page shows example searches first.
   keyword: '',
-  platforms: ['tiktok', 'instagram'],
+  platforms: ['tiktok'],
   days: 30,
   maxLength: 0,
   clientId: 'evergreen',

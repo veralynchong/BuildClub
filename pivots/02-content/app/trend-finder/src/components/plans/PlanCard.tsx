@@ -1,6 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import type { Format, SavedIdea, Video } from "../../types";
-import { byFollowers, compact, scoreBase } from "../../lib/metrics";
+import { compareOf, compact } from "../../lib/metrics";
 import { Thumb } from "../Thumb";
 import { useManagerName } from "../../lib/appContext";
 import { lastSentBack } from "../../lib/memory";
@@ -28,8 +28,7 @@ export function PlanCardBody({
 }) {
   const manager = useManagerName();
   const last = idea.status !== "rejected" ? lastSentBack(idea) : undefined;
-  const followers = byFollowers(v);
-  const base = followers ? v.followers : scoreBase(v);
+  const { base, followers } = compareOf(v);
   const fromNum = base > 0 ? compact(base) : "–";
   const fromCap = followers ? t("find.res.cmpFollowers") : t("find.res.cmpUsual");
   return (

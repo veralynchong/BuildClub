@@ -12,20 +12,17 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { BoardPos, Client, Format, SavedIdea, Shot, Video } from '../../types'
-import { t, tp } from '../../lib/i18n'
+import { t } from '../../lib/i18n'
 import {
   NODE_H,
   NODE_W,
-  addLoose,
   boardEditable,
   boardFromShots,
   boardShots,
   edgeAt,
   edgesOf,
-  footageShot,
   idMaker,
   indexOf,
-  insertAt,
   insertBetween,
   moveNode,
   placeLoose,
@@ -39,7 +36,6 @@ import {
   type Board,
 } from '../../lib/shotBoard'
 import { MAX_PROMPT, insertShot, rewriteShots, type Assisted } from '../../lib/boardAssist'
-import { footageFromFile } from '../../lib/boardMedia'
 import { hookCards, type HookCard } from '../../lib/hooks'
 import { savedScript, scriptOutOfDate } from '../../lib/script'
 import { ShotNode } from './ShotNode'
@@ -132,8 +128,7 @@ function BoardScreen({ idea, format, client, video, live, onSave, onBack, onSend
   const [inserting, setInserting] = useState<{ before: string; after: string } | null>(null)
   const [insertText, setInsertText] = useState('')
   const [insertErr, setInsertErr] = useState('')
-  const [busy, setBusy] = useState<'rewrite' | 'insert' | 'upload' | null>(null)
-  const fileInput = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState<'rewrite' | 'insert' | null>(null)
   const { fitView } = useReactFlow()
   // The drawer: Esc closes it from anywhere on the page, and focus moves into it when it opens.
   const toolsClose = useRef<HTMLButtonElement>(null)
@@ -159,8 +154,6 @@ function BoardScreen({ idea, format, client, video, live, onSave, onBack, onSend
     if (text !== undefined) setMessage({ text, note: opts.note, undo: opts.undoable })
     if (opts.refit) requestAnimationFrame(() => fitView({ padding: 0.2, maxZoom: 1 }))
   }
-
-  const selectedId = rfNodes.find((n) => n.selected)?.id ?? null
 
   const edges: (SeqFlowEdge | Edge)[] = useMemo(
     () => [
@@ -286,43 +279,6 @@ function BoardScreen({ idea, format, client, video, live, onSave, onBack, onSend
       setInserting(null)
     } finally {
       setBusy(null)
-    }
-  }
-
-  // Uploads go straight after the selected shot (in order), or sit loose under the board until placed.
-  const onFiles = async (files: FileList | null) => {
-    if (!files?.length) return
-    setBusy('upload')
-    try {
-      let b = boardRef.current
-      let afterId = selectedId && indexOf(b, selectedId) >= 0 ? selectedId : null
-      const skipped: string[] = []
-      let looseCount = 0
-      let placed: { name: string; n: number } | null = null
-      for (const file of Array.from(files)) {
-        const f = await footageFromFile(file)
-        if (!f) {
-          skipped.push(t('board.upload.skipped', { name: file.name }))
-          continue
-        }
-        const shot = footageShot(f, t('board.upload.shotLabel', { name: f.name }))
-        if (afterId) {
-          const id = makeId()
-          b = insertAt(b, indexOf(b, afterId) + 1, shot, makeId, id)
-          afterId = id
-          placed = { name: f.name, n: indexOf(b, id) + 1 }
-        } else {
-          b = addLoose(b, shot, makeId)
-          looseCount += 1
-        }
-      }
-      const text = placed ? t('board.upload.after', placed) : looseCount ? tp('board.upload.added', looseCount) : skipped.join(' ')
-      const note = placed || looseCount ? skipped.join(' ') || undefined : undefined
-      if (b === boardRef.current) setMessage({ text })
-      else commit(b, text, { undoable: true, save: !!placed, note, refit: looseCount > 0 })
-    } finally {
-      setBusy(null)
-      if (fileInput.current) fileInput.current.value = ''
     }
   }
 
@@ -457,23 +413,7 @@ function BoardScreen({ idea, format, client, video, live, onSave, onBack, onSend
               </button>
             </form>
 
-            <div className="board-tool">
-              <label htmlFor="board-upload">{t('board.upload.label')}</label>
-              <span className="small muted" id="board-upload-hint">
-                {t('board.upload.hint')}
-              </span>
-              <input
-                ref={fileInput}
-                id="board-upload"
-                className="board-file"
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                disabled={!editable || busy === 'upload'}
-                aria-describedby="board-upload-hint"
-                onChange={(e) => void onFiles(e.target.files)}
-              />
-            </div>
+            <p className="small muted board-tool">{t('board.upload.moved')}</p>
 
             <button
               type="button"

@@ -4,11 +4,7 @@ import {
   clientFit,
   compact,
   hasDate,
-  byFollowers,
-  hasScore,
-  scoreBase,
-  usualMultiple,
-  outlierScore,
+  headline,
   scoreLine,
   platformName,
   shareSaveRate,
@@ -42,6 +38,8 @@ interface Props {
   onSave: () => void
   // Opens the video's plan.
   onPlan: () => void
+  // Makes this video's plan and opens it (the same action as "Plan shots" on a saved idea).
+  onPlanNow: () => void
   // Goes to the Research tab (left out when the drawer is open on Research itself).
   onGoResearch?: () => void
   // Run the AI breakdown again (live videos whose saved breakdown lacks newer fields).
@@ -55,7 +53,7 @@ const emotions: Emotion[] = ['curious', 'excited', 'craving', 'funny', 'angry_co
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, cohort, formatAccounts: sampleAccounts, client, status, inResearch, onClose, onSave, onPlan, onGoResearch, onReanalyse, reanalysis }: Props) {
+export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, cohort, formatAccounts: sampleAccounts, client, status, inResearch, onClose, onSave, onPlan, onPlanNow, onGoResearch, onReanalyse, reanalysis }: Props) {
   const manager = useManagerName()
   // Play the slide-out before App unmounts the panel (skipped under reduced motion).
   const [closing, setClosing] = useState(false)
@@ -108,9 +106,9 @@ export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, c
     return () => window.clearTimeout(timer)
   }, [closing, onClose])
 
-  const score = outlierScore(video)
+  const head = headline(video)
   // Count up once when the panel opens (final value straight away under reduced motion).
-  const shownScore = useCountUp(score)
+  const shownScore = useCountUp(head?.multiple ?? 0)
   const shownViews = useCountUp(video.views)
   const fit = clientFit(format, client)
   const formatAccounts = video.live ? (cohort?.accounts ?? 1) : sampleAccounts
@@ -196,21 +194,16 @@ export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, c
           </div>
 
           <section className="stats" aria-label={t('find.bd.numbers')}>
-            {hasScore(video) ? (
+            {head ? (
               <div className="stat-card stat-score">
-                <span className="stat-label">{byFollowers(video) ? t('find.bd.vsFollowers') : t('find.bd.vsUsual')}</span>
+                <span className="stat-label">{head.kind === 'followers' ? t('find.bd.vsFollowers') : t('find.bd.vsUsual')}</span>
                 <div className="stat-score-row">
                   <span className="stat-big">{timesNumber(shownScore)}×</span>
                 </div>
                 <span className="stat-note">{beatUsual(video)}</span>
                 <span className="stat-compare">
-                  {compact(scoreBase(video))} → <strong>{compact(shownViews)}</strong>
+                  {compact(head.base)} → <strong>{compact(shownViews)}</strong>
                 </span>
-                {byFollowers(video) && usualMultiple(video) !== null && (
-                  <span className="stat-note small muted">
-                    {t('find.bd.usualMultiple', { x: timesNumber(usualMultiple(video) as number) })}
-                  </span>
-                )}
               </div>
             ) : (
               <div className="stat-card stat-score">
@@ -360,7 +353,7 @@ export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, c
 
         <footer className="drawer-foot">
           {!status && !inResearch && (
-            <button className="btn btn-primary" onClick={onSave}>
+            <button className="btn btn-ghost" onClick={onSave}>
               {t('find.saveFor', { client: client.name })}
             </button>
           )}
@@ -370,11 +363,16 @@ export function BreakdownPanel({ localPlayback, unknownMetrics, video, format, c
                 {t('find.savedMark')}
               </button>
               {onGoResearch && (
-                <button className="btn btn-primary" onClick={onGoResearch}>
+                <button className="btn btn-ghost" onClick={onGoResearch}>
                   {t('find.openResearch')}
                 </button>
               )}
             </>
+          )}
+          {!status && (
+            <button className="btn btn-primary" onClick={onPlanNow}>
+              {t('plan.common.planVideo')}
+            </button>
           )}
           {status && (
             <button className="btn btn-primary" onClick={onPlan}>

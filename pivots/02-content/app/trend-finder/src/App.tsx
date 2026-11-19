@@ -39,6 +39,7 @@ import { DEFAULT_FILTERS } from './lib/resultFilters'
 import { GuidedTour } from './components/demo/GuidedTour'
 import type { CanvasGuideActions, CanvasGuideState } from './components/canvas/CanvasScreen'
 import type { Client, ContentType, Format, Platform, Shot, Video } from './types'
+import { adoptBreakdownShots } from './lib/hooks'
 import {
   analyzeVideo,
   applyBreakdown,
@@ -78,7 +79,7 @@ import type { AppContextValue } from './lib/appContext'
 import { ShortlistBoard } from './components/ShortlistBoard'
 import { CanvasPick } from './components/CanvasPick'
 import { BoardPick } from './components/BoardPick'
-import { approvedPlans, boardPlans } from './lib/canvasPick'
+import { approvedPlans, boardPlans, storyboardTarget } from './lib/canvasPick'
 import type { CanvasContext as CanvasResource, Workspace as CanvasWorkspace } from './lib/canvas/resource'
 import { hasMissingLegacyPlan } from './lib/canvas/resource'
 import { readFullscreen, writeFullscreen } from './lib/canvas/shell'
@@ -133,12 +134,13 @@ function restoreTab(workspace: Workspace): View {
   }
   if (workspace === 'all') return 'overview'
   if (saved === 'results') return 'search'
-  if (saved === 'plan' || saved === 'canvas' || saved === 'board' || saved === 'review') return 'shortlist'
+  if (saved === 'plan' || saved === 'canvas' || saved === 'storyboard' || saved === 'storyboardPick' || saved === 'board' || saved === 'review') return 'shortlist'
   if (saved === 'home' || saved === 'search' || saved === 'research' || saved === 'shortlist' || saved === 'settings' || saved === 'boardPick') return saved
   return 'search'
 }
 
 const CanvasScreen = lazy(() => import('./components/canvas/CanvasScreen'))
+const StoryboardScreen = lazy(() => import('./components/storyboard/StoryboardScreen'))
 
 function matchesCanvasFocus(observed: CanvasGuideState, focus: GuidedFocusRequest): boolean {
   return observed.demoAction === focus.demoAction && focus.nodeIds.every((id) => observed.focusedNodeIds?.includes(id)) &&
@@ -991,9 +993,16 @@ export default function App() {
   // Saving or planning a real video asks the API for its AI breakdown (about a minute the first time).
   // It replaces the placeholder shot list and "why it works".
   const analyzing = useRef(new Set<string>())
+  // Plans of this video that were started before the breakdown (only a picked hook) take its shots.
+  const adoptShots = (videoId: string, shotList: Shot[]) =>
+    setIdeas((prev) => prev.map((i) => {
+      const next = i.videoId === videoId ? adoptBreakdownShots(i.shots, shotList) : null
+      return next ? { ...i, shots: next } : i
+    }))
   const breakDown = (videoId: string) => {
     const v = videoById.get(videoId)
     const f = v && formatById.get(v.formatId)
+    if (f?.shotList.length && ideas.some((i) => i.videoId === videoId && adoptBreakdownShots(i.shots, f.shotList))) adoptShots(videoId, f.shotList)
     if (!v?.live || !v.url || !f || f.shotList.length || analyzing.current.has(videoId)) return
     analyzing.current.add(videoId)
     const patchFormat = (update: (x: Format) => Format) =>
@@ -1002,6 +1011,7 @@ export default function App() {
     analyzeVideo(v.url, (step) => say(t('shell.breakdown.progress', { step: step || t('shell.breakdown.waiting') })))
       .then((b) => {
         patchFormat((x) => applyBreakdown(x, b))
+        adoptShots(videoId, b.shotList)
         // Ideas saved before the breakdown still carry the placeholder editor notes.
         setIdeas((prev) => prev.map((i) => (i.videoId === videoId && i.notes === f.editorNotes ? { ...i, notes: b.editorNotes } : i)))
       })
@@ -1185,6 +1195,22 @@ export default function App() {
     setPlanFrom(view)
     setPlanIdeaId(ideaId)
     openCanvas(idea, idea.shots ?? format?.shotList ?? [], false)
+  }
+
+  // The sidebar's Storyboard: the plan's shot grid. It shares the canvas context; "Canvas (advanced)" goes on to the canvas itself.
+  const openStoryboard = (ideaId: string) => {
+    const idea = ideas.find((i) => i.id === ideaId)
+    const format = idea && formatById.get(videoById.get(idea.videoId)?.formatId ?? '')
+    if (!idea) return
+    const formatShots = idea.shots ?? format?.shotList ?? []
+    if (!idea.shots) setIdeas((prev) => prev.map((i) => (i.id === idea.id ? { ...i, shots: fillShotIds(formatShots) } : i)))
+    const v = videoById.get(idea.videoId)
+    setPlanFrom(view)
+    setPlanIdeaId(ideaId)
+    setCanvasContext({ resource: { kind: 'legacy-plan', id: idea.id }, clientId: idea.clientId, title: v ? planName(v, formatById.get(v.formatId)) : idea.id, readOnly: idea.status !== 'approved', shots: idea.shots ?? fillShotIds(formatShots) })
+    // Not setView: the sidebar already ran the canvas leave guard, and a second run fails while the editor is open.
+    // The editor flag flips with the view, so an open canvas never remounts as the node canvas first.
+    withScreenTransition(() => { setCanvasEditor(false); setViewRaw('storyboard') })
   }
 
   // The Plans board's "Make the video": the plan's canvas, with the editor already open.
@@ -1395,6 +1421,8 @@ export default function App() {
     plan: t('shell.back.plan'),
     canvas: t('shell.back.canvas'),
     canvasPick: t('shell.back.canvas'),
+    storyboard: t('shell.back.storyboard'),
+    storyboardPick: t('shell.back.storyboard'),
     editPick: t('shell.back.editPick'),
     boardPick: t('shell.back.boardPick'),
     board: t('board.backLabel'),
@@ -1452,6 +1480,12 @@ export default function App() {
     if (v === 'board') {
       const plans = boardPlans(shownIdeas, client.id)
       return plans.length === 1 ? openPlanBoard(plans[0].id) : setView('boardPick')
+    }
+    if (v === 'storyboard') {
+      const target = storyboardTarget(boardPlans(shownIdeas, client.id))
+      if (target === 'pick') return setView('storyboardPick')
+      if (view === 'storyboard' && canvasContext?.resource.kind === 'legacy-plan' && canvasContext.resource.id === target.open) return
+      return withCanvasLeave(() => openStoryboard(target.open))
     }
     if (v === 'canvas') {
       const plans = boardPlans(shownIdeas, client.id)
@@ -2025,6 +2059,20 @@ export default function App() {
             />
           )}
 
+          {inClient && view === 'storyboardPick' && (
+            <CanvasPick
+              clientId={client.id}
+              clientName={client.name}
+              plans={shownIdeas.filter((i) => i.clientId === client.id)}
+              videoById={videoById}
+              formatById={formatById}
+              onPick={openStoryboard}
+              onWorkspace={openWorkspace}
+              copy={{ title: t('shell.storyboardPick.title'), intro: t('shell.storyboardPick.intro') }}
+              hideCreate
+            />
+          )}
+
           {inClient && view === 'editPick' && (
             <BoardPick
               clientName={client.name}
@@ -2063,11 +2111,39 @@ export default function App() {
                   setIdeas((prev) => prev.map((idea) => idea.id === id ? { ...idea, shots } : idea))
                   setCanvasContext((ctx) => ctx?.resource.id === id ? { ...ctx, shots } : ctx)
                 }}
-                onBack={() => setView('canvasPick')}
+                onBack={() => {
+                  // Opened from the storyboard: Back returns to that plan's storyboard.
+                  // The canvas already ran its leave guard; flipping the editor flag through setView would remount it first.
+                  if (planFrom === 'storyboard') withScreenTransition(() => { setCanvasEditor(false); setViewRaw('storyboard') })
+                  else setView('canvasPick')
+                }}
                 openEditor={canvasEditor}
                 clientName={clients.find((c) => c.id === canvasContext.clientId)?.name ?? client.name}
                 fullscreen={canvasFull}
                 onFullscreen={setFull}
+              />
+            </Suspense>
+          )}
+
+          {inClient && view === 'storyboard' && canvasContext && canvasContext.resource.kind === 'legacy-plan' && (
+            <Suspense fallback={<p className="muted">{t('canvas.loading')}</p>}>
+              <StoryboardScreen
+                key={canvasContext.resource.id}
+                context={canvasContext}
+                onShotsChange={(shots) => {
+                  const id = canvasContext.resource.id
+                  setIdeas((prev) => prev.map((idea) => idea.id === id ? { ...idea, shots } : idea))
+                  setCanvasContext((ctx) => ctx?.resource.id === id ? { ...ctx, shots } : ctx)
+                }}
+                onOpenCanvas={() => openPlanCanvas(canvasContext.resource.id)}
+                onOpenEditor={() => makeVideo(canvasContext.resource.id)}
+                // The same approval the board's Approve uses (decide); the grid then unlocks without reopening.
+                onApprove={role === 'manager' ? () => {
+                  const id = canvasContext.resource.id
+                  decide(id, { kind: 'approved' })
+                  setCanvasContext((ctx) => ctx?.resource.id === id ? { ...ctx, readOnly: false } : ctx)
+                } : undefined}
+                onBack={() => setView('storyboardPick')}
               />
             </Suspense>
           )}
@@ -2162,6 +2238,7 @@ export default function App() {
           onClose={() => setOpenVideoId(null)}
           onSave={() => guidedRuntime && openVideo.id === GUIDED_IDS.videoId ? askGuideSave() : toggleSave(openVideo.id)}
           onPlan={() => planFromVideo(openVideo.id)}
+          onPlanNow={() => planNow(openVideo.id)}
           onGoResearch={
             view === 'research'
               ? undefined
